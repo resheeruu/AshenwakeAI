@@ -19,6 +19,7 @@ import { taskEngine, initializeTaskEngine } from "./agent/tasks";
 import { messageRateLimiter } from "./security";
 import { config } from "./config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
+import { guardAIOutput } from "./security/output-guard";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
@@ -785,11 +786,23 @@ client.on(
       );
 
       /*
+       * Final application-level security check.
+       * Never send raw AI output directly to Discord.
+       */
+      const guarded = guardAIOutput(response.text);
+
+      if (!guarded.allowed) {
+        logger.warn(
+          `🛡️ Interactive output blocked: ${guarded.reason ?? "security_policy"}`
+        );
+      }
+
+      /*
        * Discord message size protection.
        */
       const reply =
         truncateForDiscord(
-          response.text
+          guarded.text
         );
 
       /*

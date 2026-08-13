@@ -11,6 +11,7 @@ import { ConversationMemory } from "../ai/memory";
 import { AshenCommand } from "./definitions";
 import { config } from "../config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
+import { guardAIOutput } from "../security/output-guard";
 
 const SYSTEM_PROMPT = `
 You are AshenAI, a helpful Discord AI assistant.
