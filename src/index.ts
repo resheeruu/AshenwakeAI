@@ -20,6 +20,7 @@ import { messageRateLimiter } from "./security";
 import { config } from "./config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
 import { guardAIOutput } from "./security/output-guard";
+import { wrapUntrustedContent } from "./security/context";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
@@ -599,11 +600,20 @@ client.on(
        * Build special context when the user is
        * commenting on another Discord message.
        */
-      const interactiveContent =
+      const rawInteractiveContent =
         await buildInteractiveContext(
           message,
           content,
           botId
+        );
+
+      /*
+       * Discord/user-provided context is DATA, not instructions.
+       */
+      const interactiveContent =
+        wrapUntrustedContent(
+          "DISCORD CONVERSATION",
+          rawInteractiveContent
         );
 
       /*
