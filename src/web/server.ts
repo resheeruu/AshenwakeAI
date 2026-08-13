@@ -86,7 +86,7 @@ app.post(
 );
 
 app.get(
-  "*",
+  "/{*splat}",
   (_req: Request, res: Response) => {
     res.sendFile(
       path.join(
