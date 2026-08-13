@@ -4,18 +4,19 @@ set -u
 
 PROJECT_DIR="$HOME/AshenAI"
 BRANCH="main"
+HEALTH_URL="https://ashenwakeai.onrender.com/api/health"
 
 cd "$PROJECT_DIR" || exit 1
 
 echo "================================="
-echo "🔥 AshenAI Update Controller"
+echo "🔥 AshenAI Deployment Controller"
 echo "================================="
 
-echo "🧪 Checking TypeScript build..."
+echo "🧪 Running build..."
 
 if ! npm run build; then
     echo "❌ Build failed."
-    echo "🚫 Update cancelled."
+    echo "🚫 Nothing will be pushed."
     exit 1
 fi
 
@@ -26,12 +27,14 @@ if [ -z "$(git status --porcelain)" ]; then
     exit 0
 fi
 
+echo "📦 Preparing Git commit..."
+
 git add .
 
 COMMIT_MESSAGE="Update AshenAI $(date '+%Y-%m-%d %H:%M:%S')"
 
 if ! git commit -m "$COMMIT_MESSAGE"; then
-    echo "❌ Commit failed."
+    echo "❌ Git commit failed."
     exit 1
 fi
 
@@ -43,20 +46,76 @@ if ! git push origin "$BRANCH"; then
 fi
 
 echo "✅ GitHub updated."
-echo "☁️ Render should automatically deploy the new commit."
+echo "☁️ Waiting for Render..."
 
-echo ""
-echo "🔎 Waiting briefly for Render..."
-sleep 10
+check_render() {
+    HTTP_CODE="$(
+        curl \
+            --silent \
+            --show-error \
+            --output /dev/null \
+            --write-out "%{http_code}" \
+            --max-time 15 \
+            "$HEALTH_URL"
+    )"
 
-if [ -n "${RENDER_DEPLOY_HOOK:-}" ]; then
-    echo "ℹ️ Emergency Render hook available."
-    echo "   Use ./scripts/render-deploy.sh if Render does not start."
-else
-    echo "⚠️ Render hook is not loaded in this shell."
-fi
+    [ "$HTTP_CODE" = "200" ]
+}
+
+echo "🔎 Checking Render..."
+
+for attempt in 1 2 3 4 5 6; do
+
+    echo "   Attempt $attempt/6..."
+
+    if check_render; then
+        echo "✅ Render is responding."
+        break
+    fi
+
+    if [ "$attempt" = "6" ]; then
+        echo "⚠️ Render did not respond normally."
+
+        if [ -n "${RENDER_DEPLOY_HOOK:-}" ]; then
+            echo "🚀 Triggering emergency Render deployment..."
+
+            HOOK_CODE="$(
+                curl \
+                    --silent \
+                    --show-error \
+                    --output /dev/null \
+                    --write-out "%{http_code}" \
+                    --max-time 20 \
+                    --request POST \
+                    "$RENDER_DEPLOY_HOOK"
+            )"
+
+            if [ "$HOOK_CODE" = "200" ] ||
+               [ "$HOOK_CODE" = "201" ] ||
+               [ "$HOOK_CODE" = "202" ]; then
+
+                echo "✅ Emergency Render deployment triggered."
+                echo "🔎 Waiting for Render recovery..."
+
+            else
+                echo "❌ Emergency deployment trigger failed."
+                echo "HTTP status: $HOOK_CODE"
+            fi
+        else
+            echo "⚠️ Render Deploy Hook is not loaded."
+        fi
+
+        break
+    fi
+
+    sleep 10
+done
 
 echo ""
 echo "================================="
-echo "✅ UPDATE COMPLETE"
+echo "✅ DEPLOYMENT PROCESS COMPLETE"
 echo "================================="
+echo "🐙 GitHub: UPDATED"
+echo "☁️ Render: CHECKED"
+echo "📱 Termux: READY AS BACKUP"
+echo ""
