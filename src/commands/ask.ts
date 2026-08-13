@@ -12,6 +12,7 @@ import { AshenCommand } from "./definitions";
 import { config } from "../config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
 import { guardAIOutput } from "../security/output-guard";
+import { wrapUntrustedContent } from "../security/context";
 
 const SYSTEM_PROMPT = `
 You are AshenAI, a helpful Discord AI assistant.
@@ -182,11 +183,20 @@ export function createAskCommand(
               SYSTEM_PROMPT,
           },
 
-          ...history,
+          ...history.map((entry) => ({
+            ...entry,
+            content: wrapUntrustedContent(
+              "CONVERSATION HISTORY",
+              entry.content
+            ),
+          })),
 
           {
             role: "user" as const,
-            content: prompt,
+            content: wrapUntrustedContent(
+              "USER PROMPT",
+              prompt
+            ),
           },
         ];
 
