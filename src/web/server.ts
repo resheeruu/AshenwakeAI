@@ -46,7 +46,7 @@ app.get(
       ok: true,
       name: "AshenAI",
       version: VERSION,
-      providers: router.getAvailableProviders(),
+      providers: router.getAvailableProviders().map((provider) => provider.name),
     });
   }
 );
