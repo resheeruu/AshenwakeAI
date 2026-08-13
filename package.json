@@ -8,7 +8,8 @@
     "agent": "tsx src/agent/index.ts",
     "test": "tsx scripts/test-router.ts && tsx scripts/test-core.ts && tsx scripts/test-commands.ts && tsx scripts/test-rate-limit.ts && tsx scripts/test-security.ts",
     "check": "tsx scripts/check.ts && npm test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
   },
   "keywords": [
     "discord",
