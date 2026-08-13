@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>AshenAI</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      background: #0b0b10;
+      color: #f5f5f7;
+    }
+
+    body {
+      padding-bottom: 110px;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      padding: 14px 18px;
+
+      background: rgba(15, 15, 22, .94);
+      border-bottom: 1px solid #292933;
+
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      font-size: 25px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    header p {
+      margin: 2px 0 0;
+      color: #888894;
+      font-size: 12px;
+    }
+
+    #reset {
+      border: 1px solid #363640;
+      background: #191922;
+      color: #ddd;
+
+      border-radius: 10px;
+      padding: 9px 12px;
+
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    #reset:hover {
+      background: #23232e;
+    }
+
+    #chat {
+      width: 100%;
+      max-width: 900px;
+
+      margin: auto;
+      padding: 20px 16px 30px;
+    }
+
+    .message {
+      max-width: 85%;
+
+      margin: 12px 0;
+      padding: 12px 15px;
+
+      border-radius: 16px;
+
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    .user {
+      margin-left: auto;
+
+      background: #29293b;
+      border-bottom-right-radius: 5px;
+    }
+
+    .assistant {
+      margin-right: auto;
+
+      background: #17171f;
+      border: 1px solid #292933;
+
+      border-bottom-left-radius: 5px;
+    }
+
+    .error {
+      color: #ff7b7b;
+    }
+
+    .typing {
+      opacity: .65;
+    }
+
+    form {
+      position: fixed;
+
+      bottom: 0;
+      left: 0;
+      right: 0;
+
+      z-index: 20;
+
+      padding: 10px;
+
+      background: rgba(14, 14, 20, .96);
+      border-top: 1px solid #292933;
+
+      backdrop-filter: blur(12px);
+    }
+
+    .input-row {
+      width: 100%;
+      max-width: 900px;
+
+      margin: auto;
+
+      display: flex;
+      align-items: flex-end;
+
+      gap: 8px;
+    }
+
+    textarea {
+      flex: 1;
+
+      resize: none;
+
+      min-height: 48px;
+      max-height: 150px;
+
+      border: 1px solid #353541;
+      border-radius: 14px;
+
+      background: #181820;
+      color: #fff;
+
+      padding: 13px;
+
+      font: inherit;
+
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: #606074;
+    }
+
+    #send {
+      min-height: 48px;
+
+      border: 0;
+      border-radius: 14px;
+
+      padding: 0 18px;
+
+      background: #fff;
+      color: #111;
+
+      font-weight: 700;
+
+      cursor: pointer;
+    }
+
+    #send:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+
+    .welcome {
+      text-align: center;
+      margin: 45px 0;
+
+      color: #777783;
+    }
+
+    .welcome strong {
+      display: block;
+
+      margin-bottom: 7px;
+
+      color: #ddd;
+
+      font-size: 21px;
+    }
+
+    @media (max-width: 600px) {
+      header {
+        padding: 12px;
+      }
+
+      #chat {
+        padding: 15px 10px 25px;
+      }
+
+      .message {
+        max-width: 92%;
+      }
+
+      #reset {
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+
+      textarea {
+        font-size: 16px;
+      }
+
+      #send {
+        padding: 0 15px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">🔥</div>
+
+    <div>
+      <h1>AshenAI</h1>
+      <p>AI assistant</p>
+    </div>
+  </div>
+
+  <button id="reset" type="button">
+    New Chat
+  </button>
+</header>
+
+<main id="chat">
+
+  <div class="welcome">
+    <strong>Welcome to AshenAI</strong>
+    Your conversation is remembered automatically.
+  </div>
+
+</main>
+
+<form id="form">
+
+  <div class="input-row">
+
+    <textarea
+      id="input"
+      placeholder="Message AshenAI..."
+      maxlength="4000"
+      autocomplete="off"
+    ></textarea>
+
+    <button
+      id="send"
+      type="submit"
+    >
+      Send
+    </button>
+
+  </div>
+
+</form>
+
+<script>
+  const form = document.getElementById("form");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
+  const reset = document.getElementById("reset");
+  const chat = document.getElementById("chat");
+
+  const SESSION_KEY = "ashenai_web_session";
+
+  let sessionId =
+    localStorage.getItem(SESSION_KEY);
+
+  if (!sessionId) {
+    sessionId =
+      crypto.randomUUID().replaceAll("-", "");
+
+    localStorage.setItem(
+      SESSION_KEY,
+      sessionId
+    );
+  }
+
+  function addMessage(text, type) {
+    const div =
+      document.createElement("div");
+
+    div.className =
+      "message " + type;
+
+    div.textContent = text;
+
+    chat.appendChild(div);
+
+    window.scrollTo(
+      0,
+      document.body.scrollHeight
+    );
+
+    return div;
+  }
+
+  function headers() {
+    return {
+      "Content-Type": "application/json",
+      "x-session-id": sessionId
+    };
+  }
+
+  async function loadHistory() {
+    try {
+      const response =
+        await fetch("/api/history", {
+          headers: headers()
+        });
+
+      const data =
+        await response.json();
+
+      if (!response.ok || !data.ok) {
+        return;
+      }
+
+      if (
+        Array.isArray(data.history) &&
+        data.history.length
+      ) {
+        chat.innerHTML = "";
+
+        for (const message of data.history) {
+          addMessage(
+            message.content,
+            message.role === "user"
+              ? "user"
+              : "assistant"
+          );
+        }
+      }
+    } catch {
+      // History is optional.
+    }
+  }
+
+  form.addEventListener(
+    "submit",
+    async (event) => {
+      event.preventDefault();
+
+      const message =
+        input.value.trim();
+
+      if (!message || send.disabled) {
+        return;
+      }
+
+      addMessage(
+        message,
+        "user"
+      );
+
+      input.value = "";
+      send.disabled = true;
+      reset.disabled = true;
+      send.textContent = "...";
+
+      const thinking =
+        addMessage(
+          "AshenAI is thinking...",
+          "assistant"
+        );
+
+      thinking.classList.add("typing");
+
+      try {
+        const response =
+          await fetch("/api/chat", {
+            method: "POST",
+            headers: headers(),
+            body: JSON.stringify({
+              message
+            })
+          });
+
+        const data =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !data.ok
+        ) {
+          throw new Error(
+            data.error ||
+            "Request failed."
+          );
+        }
+
+        thinking.classList.remove(
+          "typing"
+        );
+
+        thinking.textContent =
+          data.text || "No response.";
+      } catch (error) {
+        thinking.classList.remove(
+          "typing"
+        );
+
+        thinking.classList.add(
+          "error"
+        );
+
+        thinking.textContent =
+          "❌ " +
+          (
+            error instanceof Error
+              ? error.message
+              : "Something went wrong."
+          );
+      } finally {
+        send.disabled = false;
+        reset.disabled = false;
+        send.textContent = "Send";
+
+        input.focus();
+      }
+    }
+  );
+
+  reset.addEventListener(
+    "click",
+    async () => {
+      if (
+        !confirm(
+          "Start a new conversation?"
+        )
+      ) {
+        return;
+      }
+
+      reset.disabled = true;
+
+      try {
+        await fetch(
+          "/api/reset",
+          {
+            method: "POST",
+            headers: headers()
+          }
+        );
+
+        chat.innerHTML = "";
+
+        addMessage(
+          "👋 New conversation started. How can I help?",
+          "assistant"
+        );
+      } catch {
+        addMessage(
+          "❌ Could not reset the conversation.",
+          "assistant error"
+        );
+      } finally {
+        reset.disabled = false;
+        input.focus();
+      }
+    }
+  );
+
+  input.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+
+        form.requestSubmit();
+      }
+    }
+  );
+
+  loadHistory();
+  input.focus();
+</script>
+
+</body>
+</html>

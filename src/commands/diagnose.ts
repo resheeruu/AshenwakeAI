@@ -1,0 +1,181 @@
+import {
+  ChatInputCommandInteraction,
+  Client,
+  MessageFlags,
+  SlashCommandBuilder,
+} from "discord.js";
+
+import { AIRouter } from "../ai/router";
+import { ConversationMemory } from "../ai/memory";
+import { AshenCommand } from "./definitions";
+import { scanAshenAI } from "../diagnostics/health-scanner";
+import { generateOptimizations } from "../diagnostics/optimizer";
+
+export function createDiagnoseCommand(
+  client: Client,
+  router: AIRouter,
+  memory: ConversationMemory,
+  getCommandCount: () => number,
+): AshenCommand {
+  return {
+    data: new SlashCommandBuilder()
+      .setName("diagnose")
+      .setDescription("Run a detailed AshenAI health check"),
+
+    async execute(
+      interaction: ChatInputCommandInteraction,
+    ): Promise<void> {
+      try {
+        const discordReady = client.isReady();
+        const ping = client.ws.ping;
+
+        const providers = router.getAvailableProviders();
+        const health = router.getHealth();
+        const memoryStats = memory.stats();
+
+        // Project health scan — read-only.
+        const healthReport = scanAshenAI();
+        const optimizations =
+          generateOptimizations(healthReport);
+
+        const available = providers.length;
+        const total = health.length;
+
+        const disabled = health.filter(
+          (provider) =>
+            provider.disabledUntil > Date.now(),
+        );
+
+        const tested = health
+          .filter(
+            (provider) =>
+              provider.successes > 0,
+          )
+          .sort(
+            (a, b) =>
+              (a.score ?? 999999) -
+              (b.score ?? 999999),
+          );
+
+        const fastest =
+          tested.length > 0
+            ? `${tested[0].provider} (${tested[0].averageLatencyMs}ms avg)`
+            : "No successful provider data yet";
+
+        const providerStatus =
+          total === 0
+            ? "⚠️ No providers configured"
+            : available > 0
+              ? `✅ ${available}/${total} available`
+              : "❌ No providers available";
+
+        const disabledText =
+          disabled.length > 0
+            ? disabled
+                .map(
+                  (provider) =>
+                    `• ${provider.provider} — ${
+                      provider.disabledReason ??
+                      "temporarily disabled"
+                    }`,
+                )
+                .join("\n")
+            : "None";
+
+        const content = [
+          "🔍 **AshenAI Diagnostics**",
+          "",
+          `${discordReady ? "✅" : "❌"} Discord connection`,
+          `⚡ WebSocket latency: ${
+            ping >= 0 ? `${ping}ms` : "unknown"
+          }`,
+          "✅ Command handler",
+          `📦 Commands loaded: ${getCommandCount()}`,
+          "",
+          "🤖 **AI Router**",
+          "✅ Router operational",
+          `📡 Providers: ${providerStatus}`,
+          `🏆 Fastest known: ${fastest}`,
+          "",
+          "🚫 **Disabled Providers**",
+          disabledText,
+          "",
+          "🧠 **Memory**",
+          "✅ Memory system operational",
+          `💬 Conversations: ${memoryStats.conversations}`,
+          `📝 Messages: ${memoryStats.messages}`,
+          `💾 Persistent: ${
+            memoryStats.persistent ? "Yes" : "No"
+          }`,
+          "",
+          "🩺 **Project Health**",
+          `📁 Files scanned: ${healthReport.filesScanned}`,
+          `⏱️ Scan time: ${healthReport.durationMs}ms`,
+          ...(healthReport.findings.length > 0
+            ? healthReport.findings.map(
+                (finding) =>
+                  `${finding.level === "error" ? "❌" : finding.level === "warning" ? "⚠️" : "✅"} ${finding.area}: ${finding.message}`,
+              )
+            : ["✅ No structural problems detected."]),
+          "",
+          "💡 **Optimization Suggestions**",
+          ...optimizations.map(
+            (item) =>
+              `${item.priority === "high" ? "🔴" : item.priority === "medium" ? "🟡" : "🟢"} ${item.area}: ${item.suggestion}`,
+          ),
+          "",
+          "🔐 **Security**",
+          "🔒 API keys: hidden",
+          "🔒 Secrets: hidden",
+          "",
+          discordReady && available > 0
+            ? "🎉 **AshenAI is healthy.**"
+            : "⚠️ **AshenAI needs attention.**",
+        ].join("\n");
+
+        if (
+          interaction.deferred ||
+          interaction.replied
+        ) {
+          await interaction.editReply({
+            content,
+          });
+        } else {
+          await interaction.reply({
+            content,
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      } catch (error) {
+        console.error(
+          "❌ /diagnose failed:",
+          error,
+        );
+
+        try {
+          if (
+            interaction.deferred ||
+            interaction.replied
+          ) {
+            await interaction.editReply({
+              content:
+                "❌ Diagnostics failed. Check the Termux logs.",
+            });
+          } else {
+            await interaction.reply({
+              content:
+                "❌ Diagnostics failed. Check the Termux logs.",
+              flags: MessageFlags.Ephemeral,
+            });
+          }
+        } catch (replyError) {
+          console.error(
+            "❌ Could not send diagnostics result:",
+            replyError,
+          );
+        }
+      }
+    },
+  };
+}
+
