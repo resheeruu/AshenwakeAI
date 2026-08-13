@@ -16,7 +16,7 @@ echo "🧪 Running build..."
 
 if ! npm run build; then
     echo "❌ Build failed."
-    echo "🚫 Nothing will be pushed."
+    echo "🚫 Deployment cancelled."
     exit 1
 fi
 
@@ -27,17 +27,18 @@ if [ -z "$(git status --porcelain)" ]; then
     exit 0
 fi
 
-echo "📦 Preparing Git commit..."
-
 git add .
 
 COMMIT_MESSAGE="Update AshenAI $(date '+%Y-%m-%d %H:%M:%S')"
 
 if ! git commit -m "$COMMIT_MESSAGE"; then
-    echo "❌ Git commit failed."
+    echo "❌ Commit failed."
     exit 1
 fi
 
+EXPECTED_VERSION="$(git rev-parse --short HEAD)"
+
+echo "📌 New version: $EXPECTED_VERSION"
 echo "🐙 Pushing to GitHub..."
 
 if ! git push origin "$BRANCH"; then
@@ -46,76 +47,81 @@ if ! git push origin "$BRANCH"; then
 fi
 
 echo "✅ GitHub updated."
-echo "☁️ Waiting for Render..."
+echo "☁️ Waiting for Render deployment..."
 
-check_render() {
-    HTTP_CODE="$(
+get_render_version() {
+    curl -sS \
+        --max-time 15 \
+        "$HEALTH_URL" |
+        grep -o '"version":"[^"]*"' |
+        head -n 1 |
+        cut -d '"' -f 4
+}
+
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+
+    echo "🔎 Render check $attempt/10..."
+
+    RENDER_VERSION="$(get_render_version || true)"
+
+    if [ "$RENDER_VERSION" = "$EXPECTED_VERSION" ]; then
+        echo "================================="
+        echo "✅ DEPLOYMENT VERIFIED"
+        echo "================================="
+        echo "🐙 GitHub: $EXPECTED_VERSION"
+        echo "☁️ Render: $RENDER_VERSION"
+        echo "🔐 Version match confirmed."
+        exit 0
+    fi
+
+    if [ -n "$RENDER_VERSION" ]; then
+        echo "   Render currently running: $RENDER_VERSION"
+        echo "   Waiting for: $EXPECTED_VERSION"
+    else
+        echo "   Render health endpoint unavailable."
+    fi
+
+    sleep 15
+done
+
+echo ""
+echo "⚠️ Render did not reach the expected version."
+
+if [ -n "${RENDER_DEPLOY_HOOK:-}" ]; then
+
+    echo "🚀 Triggering emergency Render deployment..."
+
+    HOOK_CODE="$(
         curl \
             --silent \
             --show-error \
             --output /dev/null \
             --write-out "%{http_code}" \
-            --max-time 15 \
-            "$HEALTH_URL"
+            --max-time 20 \
+            --request POST \
+            "$RENDER_DEPLOY_HOOK"
     )"
 
-    [ "$HTTP_CODE" = "200" ]
-}
+    if [ "$HOOK_CODE" = "200" ] ||
+       [ "$HOOK_CODE" = "201" ] ||
+       [ "$HOOK_CODE" = "202" ]; then
 
-echo "🔎 Checking Render..."
+        echo "✅ Emergency deployment triggered."
+        echo "🔎 Render will be checked again by the failover monitor."
 
-for attempt in 1 2 3 4 5 6; do
-
-    echo "   Attempt $attempt/6..."
-
-    if check_render; then
-        echo "✅ Render is responding."
-        break
+    else
+        echo "❌ Emergency deployment failed."
+        echo "HTTP status: $HOOK_CODE"
     fi
 
-    if [ "$attempt" = "6" ]; then
-        echo "⚠️ Render did not respond normally."
+else
 
-        if [ -n "${RENDER_DEPLOY_HOOK:-}" ]; then
-            echo "🚀 Triggering emergency Render deployment..."
+    echo "❌ Render Deploy Hook is not loaded."
+    echo "Run:"
+    echo "source ~/.ashennai-secrets"
 
-            HOOK_CODE="$(
-                curl \
-                    --silent \
-                    --show-error \
-                    --output /dev/null \
-                    --write-out "%{http_code}" \
-                    --max-time 20 \
-                    --request POST \
-                    "$RENDER_DEPLOY_HOOK"
-            )"
-
-            if [ "$HOOK_CODE" = "200" ] ||
-               [ "$HOOK_CODE" = "201" ] ||
-               [ "$HOOK_CODE" = "202" ]; then
-
-                echo "✅ Emergency Render deployment triggered."
-                echo "🔎 Waiting for Render recovery..."
-
-            else
-                echo "❌ Emergency deployment trigger failed."
-                echo "HTTP status: $HOOK_CODE"
-            fi
-        else
-            echo "⚠️ Render Deploy Hook is not loaded."
-        fi
-
-        break
-    fi
-
-    sleep 10
-done
+fi
 
 echo ""
-echo "================================="
-echo "✅ DEPLOYMENT PROCESS COMPLETE"
-echo "================================="
-echo "🐙 GitHub: UPDATED"
-echo "☁️ Render: CHECKED"
-echo "📱 Termux: READY AS BACKUP"
-echo ""
+echo "⚠️ Deployment could not be verified."
+exit 1
