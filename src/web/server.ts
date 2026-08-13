@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
 import path from "node:path";
-
+import { execSync } from "node:child_process";
 import { AIRouter } from "../ai/router";
 import { providers } from "../ai/providers";
 
@@ -14,7 +14,17 @@ const PORT = Number(
 );
 
 const router = new AIRouter(providers);
+function getVersion(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return process.env.RENDER_GIT_COMMIT?.slice(0, 7) || "unknown";
+  }
+}
 
+const VERSION = getVersion();
 app.use(
   express.json({
     limit: "64kb",
@@ -32,20 +42,14 @@ app.use(
 app.get(
   "/api/health",
   (_req: Request, res: Response) => {
-    const providerNames =
-      router
-        .getAvailableProviders()
-        .map((provider: any) => provider.name);
-
     res.json({
       ok: true,
       name: "AshenAI",
-      uptime: process.uptime(),
-      providers: providerNames,
+      version: VERSION,
+      providers: router.getAvailableProviders(),
     });
   }
 );
-
 app.post(
   "/api/chat",
   async (req: Request, res: Response) => {
