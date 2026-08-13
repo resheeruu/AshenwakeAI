@@ -21,3 +21,11 @@ src.v4-backup/
 src/index.working.ts
 
 src/index.working.ts
+
+# AshenAI runtime files
+.ashennai-mode
+.failover-monitor.pid
+.termux-backup.pid
+termux-backup.log
+failover-boot.log
+boot-test.log
