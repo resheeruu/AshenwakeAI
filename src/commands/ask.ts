@@ -10,6 +10,7 @@ import { AIRouter } from "../ai/router";
 import { ConversationMemory } from "../ai/memory";
 import { AshenCommand } from "./definitions";
 import { config } from "../config/env";
+import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
 
 const SYSTEM_PROMPT = `
 You are AshenAI, a helpful Discord AI assistant.
@@ -177,13 +178,7 @@ export function createAskCommand(
           {
             role: "system" as const,
             content:
-              SYSTEM_PROMPT +
-              `
-
-Creator name: ${config.creator.name}
-Creator Discord: ${
-                config.creator.discord ?? "not configured"
-              }`,
+              SYSTEM_PROMPT,
           },
 
           ...history,
