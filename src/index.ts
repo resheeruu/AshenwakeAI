@@ -25,6 +25,7 @@ import { wrapUntrustedContent } from "./security/context";
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
 import { ConversationMemory } from "./ai/memory";
+import { UserProfileMemory } from "./ai/user-profile";
 
 import { AshenCommand } from "./commands/definitions";
 import { CommandHandler } from "./commands/handler";
