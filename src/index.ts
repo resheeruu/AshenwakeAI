@@ -738,7 +738,13 @@ client.on(
           content: ASHENAI_SYSTEM_PROMPT,
         },
 
-        ...history,
+        ...history.map((entry) => ({
+          ...entry,
+          content: wrapUntrustedContent(
+            "CONVERSATION HISTORY",
+            entry.content
+          ),
+        })),
 
         {
           role: "user" as const,
