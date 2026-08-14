@@ -1,4 +1,5 @@
 import { config } from "./config/env";
+import { recordLog } from "./log-stream";
 
 const levels = {
   silent: 0,
@@ -21,18 +22,34 @@ function enabled(level: LogLevel): boolean {
 
 export const logger = {
   error(...args: unknown[]) {
-    if (enabled("error")) console.error(...args);
+    recordLog("error", ...args);
+
+    if (enabled("error")) {
+      console.error(...args);
+    }
   },
 
   warn(...args: unknown[]) {
-    if (enabled("warn")) console.warn(...args);
+    recordLog("warn", ...args);
+
+    if (enabled("warn")) {
+      console.warn(...args);
+    }
   },
 
   info(...args: unknown[]) {
-    if (enabled("info")) console.log(...args);
+    recordLog("info", ...args);
+
+    if (enabled("info")) {
+      console.log(...args);
+    }
   },
 
   debug(...args: unknown[]) {
-    if (enabled("debug")) console.log(...args);
+    recordLog("debug", ...args);
+
+    if (enabled("debug")) {
+      console.log(...args);
+    }
   },
 };

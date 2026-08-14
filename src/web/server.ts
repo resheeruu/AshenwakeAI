@@ -3,6 +3,10 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { AIRouter } from "../ai/router";
 import { providers } from "../ai/providers";
+import {
+  getRecentLogs,
+  subscribeLogs,
+} from "../log-stream";
 
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -122,6 +126,64 @@ app.get(
       )
     );
   }
+);
+
+// Protected live log stream for Termux/admin monitoring.
+app.get(
+  "/api/logs/stream",
+  (req: Request, res: Response) => {
+    const token = process.env.LOG_STREAM_TOKEN?.trim();
+
+    if (!token) {
+      res.status(503).json({
+        ok: false,
+        error: "Log stream is not configured.",
+      });
+      return;
+    }
+
+    const suppliedToken =
+      typeof req.query.token === "string"
+        ? req.query.token
+        : req.headers.authorization?.startsWith("Bearer ")
+          ? req.headers.authorization.slice(7)
+          : "";
+
+    if (suppliedToken !== token) {
+      res.status(401).json({
+        ok: false,
+        error: "Unauthorized.",
+      });
+      return;
+    }
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const send = (entry: ReturnType<typeof getRecentLogs>[number]) => {
+      res.write(`event: log\n`);
+      res.write(`data: ${JSON.stringify(entry)}\n\n`);
+    };
+
+    for (const entry of getRecentLogs(100)) {
+      send(entry);
+    }
+
+    const unsubscribe = subscribeLogs(send);
+
+    const heartbeat = setInterval(() => {
+      res.write(": heartbeat\n\n");
+    }, 15_000);
+
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+      res.end();
+    });
+  },
 );
 
 // Express 5 compatible catch-all.
