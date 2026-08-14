@@ -2,11 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#09090b">
   <title>AshenAI</title>
 
   <style>
@@ -17,516 +14,692 @@
     html,
     body {
       margin: 0;
-      min-height: 100%;
+      width: 100%;
+      height: 100%;
       font-family:
+        Inter,
         system-ui,
         -apple-system,
         BlinkMacSystemFont,
         "Segoe UI",
         sans-serif;
-
-      background: #0b0b10;
-      color: #f5f5f7;
+      background: #09090b;
+      color: #f4f4f5;
     }
 
-    body {
-      padding-bottom: 110px;
+    button,
+    textarea {
+      font: inherit;
     }
 
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 10;
+    button {
+      cursor: pointer;
+    }
 
+    .app {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
 
-      padding: 14px 18px;
+    /* SIDEBAR */
 
-      background: rgba(15, 15, 22, .94);
-      border-bottom: 1px solid #292933;
-
-      backdrop-filter: blur(12px);
+    .sidebar {
+      width: 270px;
+      background: #0f0f12;
+      border-right: 1px solid #27272a;
+      display: flex;
+      flex-direction: column;
+      padding: 18px;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      margin-bottom: 24px;
     }
 
-    .logo {
-      font-size: 25px;
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      box-shadow: 0 8px 25px rgba(99, 102, 241, .25);
     }
 
-    header h1 {
-      margin: 0;
-      font-size: 19px;
+    .brand-name {
+      font-size: 18px;
+      font-weight: 800;
     }
 
-    header p {
-      margin: 2px 0 0;
-      color: #888894;
+    .brand-subtitle {
+      font-size: 11px;
+      color: #71717a;
+      margin-top: 2px;
+    }
+
+    .new-chat {
+      border: 1px solid #3f3f46;
+      background: #18181b;
+      color: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      font-weight: 700;
+      transition: .2s;
+    }
+
+    .new-chat:hover {
+      background: #27272a;
+      border-color: #52525b;
+    }
+
+    .sidebar-section {
+      margin-top: 24px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .section-title {
+      color: #71717a;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 10px;
+    }
+
+    .conversation {
+      padding: 10px 12px;
+      border-radius: 9px;
+      color: #a1a1aa;
+      font-size: 13px;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .conversation.active {
+      background: #18181b;
+      color: #fff;
+    }
+
+    .sidebar-footer {
+      border-top: 1px solid #27272a;
+      padding-top: 15px;
+      margin-top: 15px;
+    }
+
+    .status-small {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #a1a1aa;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34, 197, 94, .7);
+    }
+
+    /* MAIN */
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(circle at top right, rgba(124, 58, 237, .08), transparent 30%),
+        #09090b;
+    }
+
+    .topbar {
+      height: 64px;
+      border-bottom: 1px solid #27272a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      flex-shrink: 0;
+    }
+
+    .topbar-title {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .topbar-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #a1a1aa;
       font-size: 12px;
     }
 
-    #reset {
-      border: 1px solid #363640;
-      background: #191922;
-      color: #ddd;
-
-      border-radius: 10px;
-      padding: 9px 12px;
-
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    #reset:hover {
-      background: #23232e;
-    }
-
-    #chat {
-      width: 100%;
-      max-width: 900px;
-
-      margin: auto;
-      padding: 20px 16px 30px;
-    }
-
-    .message {
-      max-width: 85%;
-
-      margin: 12px 0;
-      padding: 12px 15px;
-
-      border-radius: 16px;
-
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-
-      line-height: 1.5;
-      font-size: 15px;
-    }
-
-    .user {
-      margin-left: auto;
-
-      background: #29293b;
-      border-bottom-right-radius: 5px;
-    }
-
-    .assistant {
-      margin-right: auto;
-
-      background: #17171f;
-      border: 1px solid #292933;
-
-      border-bottom-left-radius: 5px;
-    }
-
-    .error {
-      color: #ff7b7b;
-    }
-
-    .typing {
-      opacity: .65;
-    }
-
-    form {
-      position: fixed;
-
-      bottom: 0;
-      left: 0;
-      right: 0;
-
-      z-index: 20;
-
-      padding: 10px;
-
-      background: rgba(14, 14, 20, .96);
-      border-top: 1px solid #292933;
-
-      backdrop-filter: blur(12px);
-    }
-
-    .input-row {
-      width: 100%;
-      max-width: 900px;
-
-      margin: auto;
-
-      display: flex;
-      align-items: flex-end;
-
-      gap: 8px;
-    }
-
-    textarea {
-      flex: 1;
-
-      resize: none;
-
-      min-height: 48px;
-      max-height: 150px;
-
-      border: 1px solid #353541;
-      border-radius: 14px;
-
-      background: #181820;
-      color: #fff;
-
-      padding: 13px;
-
-      font: inherit;
-
-      outline: none;
-    }
-
-    textarea:focus {
-      border-color: #606074;
-    }
-
-    #send {
-      min-height: 48px;
-
+    .mobile-menu {
+      display: none;
       border: 0;
-      border-radius: 14px;
-
-      padding: 0 18px;
-
-      background: #fff;
-      color: #111;
-
-      font-weight: 700;
-
-      cursor: pointer;
+      background: transparent;
+      color: white;
+      font-size: 21px;
+      margin-right: 10px;
     }
 
-    #send:disabled {
-      opacity: .5;
-      cursor: default;
+    /* CHAT */
+
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 35px 20px;
+    }
+
+    .chat-inner {
+      width: min(850px, 100%);
+      margin: auto;
     }
 
     .welcome {
       text-align: center;
-      margin: 45px 0;
-
-      color: #777783;
+      padding: 80px 20px 40px;
     }
 
-    .welcome strong {
-      display: block;
-
-      margin-bottom: 7px;
-
-      color: #ddd;
-
-      font-size: 21px;
+    .welcome-logo {
+      width: 64px;
+      height: 64px;
+      border-radius: 20px;
+      margin: 0 auto 18px;
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
     }
 
-    @media (max-width: 600px) {
-      header {
-        padding: 12px;
+    .welcome h1 {
+      font-size: clamp(28px, 6vw, 42px);
+      margin: 0;
+      letter-spacing: -.03em;
+    }
+
+    .welcome p {
+      color: #71717a;
+      margin-top: 12px;
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      margin: 22px 0;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .avatar.ai {
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+    }
+
+    .avatar.user {
+      background: #27272a;
+    }
+
+    .message-content {
+      max-width: calc(100% - 50px);
+      line-height: 1.65;
+      color: #d4d4d8;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message-name {
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    /* COMPOSER */
+
+    .composer-area {
+      padding: 15px 20px 22px;
+      flex-shrink: 0;
+    }
+
+    .composer {
+      width: min(850px, 100%);
+      margin: auto;
+      border: 1px solid #3f3f46;
+      background: #18181b;
+      border-radius: 16px;
+      padding: 10px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, .25);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 52px;
+      max-height: 180px;
+      resize: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: #fff;
+      padding: 8px;
+      line-height: 1.5;
+    }
+
+    textarea::placeholder {
+      color: #71717a;
+    }
+
+    .composer-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px;
+    }
+
+    .composer-hint {
+      color: #52525b;
+      font-size: 11px;
+    }
+
+    .send {
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 11px;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      color: white;
+      font-weight: 900;
+      transition: .2s;
+    }
+
+    .send:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.1);
+    }
+
+    .send:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .typing {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      color: #71717a;
+      font-size: 12px;
+      margin: 12px 0 20px 46px;
+    }
+
+    .typing.show {
+      display: flex;
+    }
+
+    .typing span {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #71717a;
+      animation: bounce 1s infinite;
+    }
+
+    .typing span:nth-child(2) {
+      animation-delay: .15s;
+    }
+
+    .typing span:nth-child(3) {
+      animation-delay: .3s;
+    }
+
+    @keyframes bounce {
+      0%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(-5px);
+      }
+    }
+
+    /* MOBILE */
+
+    @media (max-width: 720px) {
+      .sidebar {
+        position: fixed;
+        z-index: 20;
+        left: -280px;
+        top: 0;
+        bottom: 0;
+        transition: left .25s ease;
       }
 
-      #chat {
-        padding: 15px 10px 25px;
+      .sidebar.open {
+        left: 0;
       }
 
-      .message {
-        max-width: 92%;
+      .mobile-menu {
+        display: inline-block;
       }
 
-      #reset {
-        padding: 8px 10px;
-        font-size: 12px;
+      .topbar {
+        padding: 0 14px;
       }
 
-      textarea {
-        font-size: 16px;
+      .chat {
+        padding: 20px 13px;
       }
 
-      #send {
-        padding: 0 15px;
+      .welcome {
+        padding: 55px 10px 30px;
+      }
+
+      .composer-area {
+        padding: 10px 10px 15px;
+      }
+
+      .composer-hint {
+        display: none;
+      }
+
+      .message-content {
+        font-size: 14px;
       }
     }
   </style>
 </head>
 
 <body>
+  <div class="app">
 
-<header>
-  <div class="brand">
-    <div class="logo">🔥</div>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-icon">A</div>
+        <div>
+          <div class="brand-name">AshenAI</div>
+          <div class="brand-subtitle">AI Assistant</div>
+        </div>
+      </div>
 
-    <div>
-      <h1>AshenAI</h1>
-      <p>AI assistant</p>
-    </div>
+      <button class="new-chat" onclick="newChat()">
+        ＋ New conversation
+      </button>
+
+      <div class="sidebar-section">
+        <div class="section-title">Conversations</div>
+        <div id="conversationList">
+          <div class="conversation active">New conversation</div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="status-small">
+          <span class="status-dot"></span>
+          <span id="statusText">Checking AshenAI...</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <header class="topbar">
+        <div style="display:flex;align-items:center;">
+          <button class="mobile-menu" onclick="toggleSidebar()">☰</button>
+          <span class="topbar-title">AshenAI</span>
+        </div>
+
+        <div class="topbar-status">
+          <span class="status-dot"></span>
+          <span id="topStatus">Online</span>
+        </div>
+      </header>
+
+      <section class="chat" id="chat">
+        <div class="chat-inner" id="chatInner">
+
+          <div class="welcome" id="welcome">
+            <div class="welcome-logo">A</div>
+            <h1>How can I help?</h1>
+            <p>Ask AshenAI anything.</p>
+          </div>
+
+        </div>
+      </section>
+
+      <div class="typing" id="typing">
+        AshenAI is thinking
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+
+      <section class="composer-area">
+        <form class="composer" id="chatForm">
+
+          <textarea
+            id="messageInput"
+            placeholder="Message AshenAI..."
+            autocomplete="off"
+            rows="1"
+          ></textarea>
+
+          <div class="composer-bottom">
+            <span class="composer-hint">
+              Enter to send · Shift + Enter for new line
+            </span>
+
+            <button class="send" id="sendButton" type="submit">
+              ↑
+            </button>
+          </div>
+
+        </form>
+      </section>
+
+    </main>
   </div>
 
-  <button id="reset" type="button">
-    New Chat
-  </button>
-</header>
+  <script>
+    const form = document.getElementById("chatForm");
+    const input = document.getElementById("messageInput");
+    const chatInner = document.getElementById("chatInner");
+    const chat = document.getElementById("chat");
+    const welcome = document.getElementById("welcome");
+    const typing = document.getElementById("typing");
+    const sendButton = document.getElementById("sendButton");
 
-<main id="chat">
+    let messages = [];
 
-  <div class="welcome">
-    <strong>Welcome to AshenAI</strong>
-    Your conversation is remembered automatically.
-  </div>
+    function toggleSidebar() {
+      document.getElementById("sidebar").classList.toggle("open");
+    }
 
-</main>
+    function scrollBottom() {
+      chat.scrollTop = chat.scrollHeight;
+    }
 
-<form id="form">
+    function addMessage(role, text) {
+      if (welcome) {
+        welcome.style.display = "none";
+      }
 
-  <div class="input-row">
+      const wrapper = document.createElement("div");
+      wrapper.className = "message";
 
-    <textarea
-      id="input"
-      placeholder="Message AshenAI..."
-      maxlength="4000"
-      autocomplete="off"
-    ></textarea>
+      const avatar = document.createElement("div");
+      avatar.className = "avatar " + (role === "user" ? "user" : "ai");
+      avatar.textContent = role === "user" ? "U" : "A";
 
-    <button
-      id="send"
-      type="submit"
-    >
-      Send
-    </button>
+      const content = document.createElement("div");
+      content.className = "message-content";
 
-  </div>
+      const name = document.createElement("div");
+      name.className = "message-name";
+      name.textContent = role === "user" ? "You" : "AshenAI";
 
-</form>
+      const textNode = document.createElement("div");
+      textNode.textContent = text;
 
-<script>
-  const form = document.getElementById("form");
-  const input = document.getElementById("input");
-  const send = document.getElementById("send");
-  const reset = document.getElementById("reset");
-  const chat = document.getElementById("chat");
+      content.appendChild(name);
+      content.appendChild(textNode);
 
-  const SESSION_KEY = "ashenai_web_session";
+      wrapper.appendChild(avatar);
+      wrapper.appendChild(content);
 
-  let sessionId =
-    localStorage.getItem(SESSION_KEY);
+      chatInner.appendChild(wrapper);
 
-  if (!sessionId) {
-    sessionId =
-      crypto.randomUUID().replaceAll("-", "");
+      scrollBottom();
+    }
 
-    localStorage.setItem(
-      SESSION_KEY,
-      sessionId
-    );
-  }
+    async function sendMessage(message) {
+      addMessage("user", message);
 
-  function addMessage(text, type) {
-    const div =
-      document.createElement("div");
+      messages.push({
+        role: "user",
+        content: message
+      });
 
-    div.className =
-      "message " + type;
+      typing.classList.add("show");
+      sendButton.disabled = true;
 
-    div.textContent = text;
+      scrollBottom();
 
-    chat.appendChild(div);
-
-    window.scrollTo(
-      0,
-      document.body.scrollHeight
-    );
-
-    return div;
-  }
-
-  function headers() {
-    return {
-      "Content-Type": "application/json",
-      "x-session-id": sessionId
-    };
-  }
-
-  async function loadHistory() {
-    try {
-      const response =
-        await fetch("/api/history", {
-          headers: headers()
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message
+          })
         });
 
-      const data =
-        await response.json();
+        const data = await response.json();
 
-      if (!response.ok || !data.ok) {
-        return;
-      }
-
-      if (
-        Array.isArray(data.history) &&
-        data.history.length
-      ) {
-        chat.innerHTML = "";
-
-        for (const message of data.history) {
-          addMessage(
-            message.content,
-            message.role === "user"
-              ? "user"
-              : "assistant"
+        if (!response.ok || !data.ok) {
+          throw new Error(
+            data.error || "AshenAI could not process the request."
           );
         }
-      }
-    } catch {
-      // History is optional.
-    }
-  }
 
-  form.addEventListener(
-    "submit",
-    async (event) => {
+        addMessage("assistant", data.text);
+
+        messages.push({
+          role: "assistant",
+          content: data.text
+        });
+
+      } catch (error) {
+        addMessage(
+          "assistant",
+          "Sorry, I couldn't complete that request. Please try again."
+        );
+
+        console.error(error);
+
+      } finally {
+        typing.classList.remove("show");
+        sendButton.disabled = false;
+        input.focus();
+        scrollBottom();
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
 
-      const message =
-        input.value.trim();
+      const message = input.value.trim();
 
-      if (!message || send.disabled) {
+      if (!message || sendButton.disabled) {
         return;
       }
-
-      addMessage(
-        message,
-        "user"
-      );
 
       input.value = "";
-      send.disabled = true;
-      reset.disabled = true;
-      send.textContent = "...";
+      input.style.height = "auto";
 
-      const thinking =
-        addMessage(
-          "AshenAI is thinking...",
-          "assistant"
-        );
+      await sendMessage(message);
+    });
 
-      thinking.classList.add("typing");
-
-      try {
-        const response =
-          await fetch("/api/chat", {
-            method: "POST",
-            headers: headers(),
-            body: JSON.stringify({
-              message
-            })
-          });
-
-        const data =
-          await response.json();
-
-        if (
-          !response.ok ||
-          !data.ok
-        ) {
-          throw new Error(
-            data.error ||
-            "Request failed."
-          );
-        }
-
-        thinking.classList.remove(
-          "typing"
-        );
-
-        thinking.textContent =
-          data.text || "No response.";
-      } catch (error) {
-        thinking.classList.remove(
-          "typing"
-        );
-
-        thinking.classList.add(
-          "error"
-        );
-
-        thinking.textContent =
-          "❌ " +
-          (
-            error instanceof Error
-              ? error.message
-              : "Something went wrong."
-          );
-      } finally {
-        send.disabled = false;
-        reset.disabled = false;
-        send.textContent = "Send";
-
-        input.focus();
-      }
-    }
-  );
-
-  reset.addEventListener(
-    "click",
-    async () => {
-      if (
-        !confirm(
-          "Start a new conversation?"
-        )
-      ) {
-        return;
-      }
-
-      reset.disabled = true;
-
-      try {
-        await fetch(
-          "/api/reset",
-          {
-            method: "POST",
-            headers: headers()
-          }
-        );
-
-        chat.innerHTML = "";
-
-        addMessage(
-          "👋 New conversation started. How can I help?",
-          "assistant"
-        );
-      } catch {
-        addMessage(
-          "❌ Could not reset the conversation.",
-          "assistant error"
-        );
-      } finally {
-        reset.disabled = false;
-        input.focus();
-      }
-    }
-  );
-
-  input.addEventListener(
-    "keydown",
-    (event) => {
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey
-      ) {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-
         form.requestSubmit();
       }
+    });
+
+    input.addEventListener("input", () => {
+      input.style.height = "auto";
+      input.style.height =
+        Math.min(input.scrollHeight, 180) + "px";
+    });
+
+    async function checkHealth() {
+      try {
+        const response = await fetch("/api/health");
+        const data = await response.json();
+
+        if (response.ok && data.ok) {
+          document.getElementById("statusText").textContent =
+            "AshenAI online";
+
+          document.getElementById("topStatus").textContent =
+            "Online";
+        } else {
+          throw new Error();
+        }
+
+      } catch {
+        document.getElementById("statusText").textContent =
+          "Connection unavailable";
+
+        document.getElementById("topStatus").textContent =
+          "Offline";
+      }
     }
-  );
 
-  loadHistory();
-  input.focus();
-</script>
+    function newChat() {
+      chatInner.innerHTML = `
+        <div class="welcome" id="welcome">
+          <div class="welcome-logo">A</div>
+          <h1>How can I help?</h1>
+          <p>Ask AshenAI anything.</p>
+        </div>
+      `;
 
+      messages = [];
+      input.value = "";
+      input.focus();
+
+      document
+        .getElementById("sidebar")
+        .classList.remove("open");
+    }
+
+    checkHealth();
+    input.focus();
+  </script>
 </body>
 </html>
