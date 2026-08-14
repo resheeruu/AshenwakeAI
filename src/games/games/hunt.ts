@@ -171,16 +171,17 @@ export async function hunt(
 
   const levelUp = applyLevelUp(player);
 
+  if (event.rarity === "legendary") {
+    player.legendaryHunts =
+      (player.legendaryHunts ?? 0) + 1;
+  }
+
+
   const beforeAchievements = new Set(player.achievements);
   updateAchievements(player);
   const newAchievements = player.achievements.filter(
     (id) => !beforeAchievements.has(id),
   );
-
-  if (event.rarity === "legendary") {
-    player.legendaryHunts =
-      (player.legendaryHunts ?? 0) + 1;
-  }
 
   const lootItem = getLootForRarity(event.rarity);
 
