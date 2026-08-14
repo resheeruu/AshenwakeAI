@@ -1362,6 +1362,11 @@
               : "assistant"
           );
         }
+
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: "instant"
+        });
       }
     } catch {
       // History is optional.
