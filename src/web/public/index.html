@@ -111,6 +111,24 @@
     }
 
     .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: #111118;
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 0 24px rgba(255,100,40,.18);
+    }
+
+    .logo img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+
       width: 40px;
       height: 40px;
 
@@ -521,14 +539,24 @@
         padding-bottom: 112px;
       }
     }
-  </style>
+
+    .welcome-logo img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      border-radius: inherit;
+    }
+
+</style>
+  <link rel="icon" type="image/png" href="/assets/logo-1.png">
 </head>
 
 <body>
 
 <header>
   <div class="brand">
-    <div class="logo">🔥</div>
+    <div class="logo"><img src="/assets/logo-1.png" alt="AshenAI logo"></div>
 
     <div>
       <h1>AshenAI</h1>
@@ -543,7 +571,7 @@
 
 <main id="chat">
   <section class="welcome">
-    <div class="welcome-logo">🔥</div>
+    <div class="welcome-logo"><img src="/assets/logo-1.png" alt="AshenAI logo"></div>
 
     <div class="eyebrow">
       <span class="status-dot"></span>
