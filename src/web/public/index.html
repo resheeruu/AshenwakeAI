@@ -1527,6 +1527,21 @@
     }
   );
 
+
+  document.querySelectorAll(".quick-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const prompt = card.dataset.prompt;
+
+      if (!prompt || send.disabled) {
+        return;
+      }
+
+      input.value = prompt;
+      input.focus();
+      form.requestSubmit();
+    });
+  });
+
   loadHistory();
   input.focus();
 </script>
