@@ -10,6 +10,7 @@ import {
 } from "../ai/types";
 
 import { AGENT_SYSTEM_PROMPT } from "./prompt";
+import { wrapUntrustedContent } from "../security/context";
 
 import {
   readFile,
@@ -593,20 +594,20 @@ Return exactly ONE JSON action.
         );
       }
 
-      conversation.push({
-        role: "user",
-        content: `
-TOOL RESULT:
-${result.slice(0, 30000)}
+        conversation.push({
+          role: "user",
+          content: wrapUntrustedContent(
+            "TOOL RESULT",
+            `${result.slice(0, 30000)}
 
 Remember:
 - Do not invent facts.
 - Do not repeat completed checks.
 - If verification failed, diagnose the actual failure.
 - If verification succeeded, use that evidence.
-- Never claim health without verification.
-`,
-      });
+- Never claim health without verification.`
+          ),
+        });
     } catch (error) {
       const message =
         error instanceof Error
@@ -617,15 +618,15 @@ Remember:
         `   ❌ Tool failed: ${message}`,
       );
 
-      conversation.push({
-        role: "user",
-        content: `
-TOOL ERROR:
-${message}
+        conversation.push({
+          role: "user",
+          content: wrapUntrustedContent(
+            "TOOL ERROR",
+            `${message}
 
-Diagnose the actual error and choose the next safe action.
-`,
-      });
+Diagnose the actual error and choose the next safe action.`
+          ),
+        });
     }
   }
 

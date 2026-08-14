@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { isSecretPath } from "../security/tool-permissions";
 
 const execFileAsync = promisify(execFile);
 
@@ -37,13 +38,29 @@ async function exec(
 function safePath(
   filePath: string,
 ): string {
+  const requestedPath = String(
+    filePath ?? "",
+  ).trim();
+
+  if (!requestedPath) {
+    throw new Error(
+      "File path is empty.",
+    );
+  }
+
+  if (isSecretPath(requestedPath)) {
+    throw new Error(
+      "Access to private configuration and secret files is blocked.",
+    );
+  }
+
   const root =
     path.resolve(PROJECT_ROOT);
 
   const full =
     path.resolve(
       PROJECT_ROOT,
-      filePath,
+      requestedPath,
     );
 
   if (
@@ -54,6 +71,16 @@ function safePath(
   ) {
     throw new Error(
       "Path outside project is blocked.",
+    );
+  }
+
+  const relative =
+    path.relative(root, full)
+      .replace(/\\/g, "/");
+
+  if (isSecretPath(relative)) {
+    throw new Error(
+      "Access to private configuration and secret files is blocked.",
     );
   }
 
