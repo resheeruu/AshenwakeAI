@@ -404,6 +404,49 @@ export async function installPackage(
     );
   }
 
+  const packageJson = JSON.parse(
+    await readFile("package.json"),
+  );
+
+  const declaredInDependencies =
+    Boolean(packageJson.dependencies?.[packageName]);
+
+  const declaredInDevDependencies =
+    Boolean(packageJson.devDependencies?.[packageName]);
+
+  const declared =
+    declaredInDependencies ||
+    declaredInDevDependencies;
+
+  if (declared) {
+    try {
+      const installed = await exec(
+        "npm",
+        [
+          "ls",
+          packageName,
+          "--depth=0",
+          "--json",
+        ],
+        30_000,
+      );
+
+      const data = JSON.parse(installed);
+      const version =
+        data?.dependencies?.[packageName]?.version;
+
+      if (version) {
+        return [
+          `ℹ️ Package already installed: ${packageName}@${version}`,
+          `No installation needed.`,
+        ].join("\n");
+      }
+    } catch {
+      // Declared but not installed correctly.
+      // Continue with npm install below.
+    }
+  }
+
   const args = [
     "install",
     packageName,
