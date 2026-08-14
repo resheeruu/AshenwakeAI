@@ -84,6 +84,7 @@ const client = new Client({
 
 const router = new AIRouter(providers);
 const memory = new ConversationMemory();
+const userProfiles = new UserProfileMemory();
 const commandHandler = new CommandHandler();
 const agentManager = new AgentManager();
 startWebServer();
