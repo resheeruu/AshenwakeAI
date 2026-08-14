@@ -219,7 +219,22 @@ export function createAskCommand(
         }
 
         /*
-         * Save conversation only after successful generation.
+         * Final application-level security check.
+         * Never send raw AI output directly to Discord.
+         */
+        const guarded = guardAIOutput(response.text);
+
+        if (!guarded.allowed) {
+          logger.warn(
+            `🛡️ /ask output blocked: ${guarded.reason ?? "security_policy"}`
+          );
+        }
+
+        const reply = cleanResponse(guarded.text);
+
+        /*
+         * Save conversation only after successful generation
+         * and after output has passed the application security guard.
          */
         memory.add(
           userId,
@@ -233,11 +248,9 @@ export function createAskCommand(
           userId,
           {
             role: "assistant",
-            content: response.text,
+            content: guarded.text,
           }
         );
-
-        const reply = cleanResponse(response.text);
 
         /*
          * Interaction was already deferred, so editReply()
