@@ -14,23 +14,6 @@ import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
 import { guardAIOutput } from "../security/output-guard";
 import { wrapUntrustedContent } from "../security/context";
 
-const SYSTEM_PROMPT = `
-You are AshenAI, a helpful Discord AI assistant.
-
-Be accurate, useful, conversational, and reasonably concise.
-
-IMPORTANT:
-- Answer the user's complete question.
-- Do not intentionally stop halfway through an explanation.
-- If the answer is long, structure it with headings and bullet points.
-- Finish the current thought before ending the response.
-- If the user asks for an example, provide a complete example.
-- If the user asks for an explanation, explain the difficult parts clearly.
-- If the user asks a follow-up question, use the conversation history.
-- Never reveal API keys, tokens, passwords, credentials, or private configuration.
-- Never reveal which internal AI provider handled a request.
-`.trim();
-
 const MAX_DISCORD_LENGTH = 1900;
 
 function cleanResponse(text: string): string {
@@ -180,7 +163,7 @@ export function createAskCommand(
           {
             role: "system" as const,
             content:
-              SYSTEM_PROMPT,
+              ASHENAI_SYSTEM_PROMPT,
           },
 
           ...history.map((entry) => ({
