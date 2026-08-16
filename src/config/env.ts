@@ -102,6 +102,8 @@ export const config = {
   discord: {
     token: required("DISCORD_TOKEN"),
     clientId: required("DISCORD_CLIENT_ID"),
+    clientSecret: optional("DISCORD_CLIENT_SECRET"),
+    redirectUri: optional("DISCORD_REDIRECT_URI"),
     guildId: optional("DISCORD_GUILD_ID"),
   },
 
@@ -134,6 +136,8 @@ export const config = {
 
   ai: loadRuntimeConfig().ai,
 
+  sessionSecret: optional("SESSION_SECRET"),
+
   logLevel:
     process.env.LOG_LEVEL?.trim() ||
     "info",
@@ -141,6 +145,8 @@ export const config = {
   discord: {
     token: string;
     clientId: string;
+    clientSecret?: string;
+    redirectUri?: string;
     guildId?: string;
   };
 
@@ -172,6 +178,8 @@ export const config = {
   };
 
   ai: RuntimeConfig["ai"];
+
+  sessionSecret?: string;
 
   logLevel: string;
 };

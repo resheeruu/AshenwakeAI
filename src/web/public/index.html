@@ -1093,6 +1093,85 @@
       }
     }
 
+
+    /* AUTH UI */
+    .auth-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .auth-btn {
+      border: 1px solid rgba(139,108,255,.35);
+      background: rgba(139,108,255,.10);
+      color: #fff;
+      border-radius: 11px;
+      padding: 9px 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      transition: .18s ease;
+    }
+
+    .auth-btn:hover {
+      background: rgba(139,108,255,.18);
+      transform: translateY(-1px);
+    }
+
+    .user-menu {
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(255,255,255,.14);
+      background: #171720;
+    }
+
+    .user-name {
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #ddd;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .logout-btn {
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      color: #aaa;
+      border-radius: 9px;
+      padding: 7px 9px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+
+    .logout-btn:hover {
+      color: #fff;
+      background: rgba(255,255,255,.08);
+    }
+
+    @media (max-width: 600px) {
+      .user-name {
+        display: none;
+      }
+
+      .auth-btn {
+        padding: 8px 9px;
+        font-size: 11px;
+      }
+    }
+    /* END AUTH UI */
+
 </style>
   <link rel="icon" type="image/png" href="/assets/logo-1.png">
 </head>
@@ -1109,9 +1188,29 @@
     </div>
   </div>
 
-  <button id="reset" type="button">
-    New Chat
-  </button>
+  <div class="auth-area">
+    <button id="loginDiscord" class="auth-btn" type="button">
+      Login with Discord
+    </button>
+
+    <div id="userMenu" class="user-menu">
+      <img
+        id="userAvatar"
+        class="user-avatar"
+        src="/assets/logo-1.png"
+        alt="User"
+      >
+      <span id="userName" class="user-name"></span>
+
+      <button id="logout" class="logout-btn" type="button">
+        Logout
+      </button>
+    </div>
+
+    <button id="reset" type="button">
+      New Chat
+    </button>
+  </div>
 </header>
 
 <main id="chat">
@@ -1198,6 +1297,87 @@
   const send = document.getElementById("send");
   const reset = document.getElementById("reset");
   const chat = document.getElementById("chat");
+
+  const loginDiscord =
+    document.getElementById("loginDiscord");
+
+  const userMenu =
+    document.getElementById("userMenu");
+
+  const userAvatar =
+    document.getElementById("userAvatar");
+
+  const userName =
+    document.getElementById("userName");
+
+  const logout =
+    document.getElementById("logout");
+
+  async function loadAuth() {
+    try {
+      const response =
+        await fetch("/api/me", {
+          credentials: "include"
+        });
+
+      const data =
+        await response.json();
+
+      if (
+        response.ok &&
+        data.authenticated &&
+        data.user
+      ) {
+        loginDiscord.style.display = "none";
+        userMenu.style.display = "flex";
+
+        userName.textContent =
+          data.user.global_name ||
+          data.user.username ||
+          "Discord User";
+
+        if (data.user.avatar) {
+          userAvatar.src =
+            `https://cdn.discordapp.com/avatars/${data.user.id}/${data.user.avatar}.png?size=64`;
+        }
+      } else {
+        loginDiscord.style.display =
+          "inline-flex";
+
+        userMenu.style.display = "none";
+      }
+    } catch (error) {
+      console.error(
+        "Auth status error:",
+        error
+      );
+    }
+  }
+
+  loginDiscord.addEventListener(
+    "click",
+    () => {
+      window.location.href =
+        "/auth/discord";
+    }
+  );
+
+  logout.addEventListener(
+    "click",
+    async () => {
+      try {
+        await fetch(
+          "/logout",
+          {
+            method: "POST",
+            credentials: "include"
+          }
+        );
+      } finally {
+        window.location.reload();
+      }
+    }
+  );
 
   const SESSION_KEY = "ashenai_web_session";
 
@@ -1333,6 +1513,8 @@
     return fragment;
   }
 
+
+  loadAuth();
 
   async function loadHistory() {
     try {

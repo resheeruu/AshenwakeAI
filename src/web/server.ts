@@ -1,4 +1,5 @@
 import express, { Request, Response } from "express";
+import session from "express-session";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { AIRouter } from "../ai/router";
@@ -16,6 +17,17 @@ import { wrapUntrustedContent } from "../security/context";
 
 const __dirname = path.dirname(__filename);
 const app = express();
+
+declare module "express-session" {
+  interface SessionData {
+    discordUser?: {
+      id: string;
+      username: string;
+      global_name?: string | null;
+      avatar?: string | null;
+    };
+  }
+}
 
 const PORT = Number(
   process.env.PORT ||
@@ -41,6 +53,25 @@ app.use(
   })
 );
 
+const sessionSecret =
+  process.env.SESSION_SECRET?.trim();
+
+if (sessionSecret) {
+  app.use(
+    session({
+      secret: sessionSecret,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      },
+    })
+  );
+}
+
 app.use(
   express.static(
     path.join(__dirname, "public")
@@ -60,6 +91,205 @@ app.get(
     });
   }
 );
+app.get(
+  "/auth/discord",
+  (_req: Request, res: Response) => {
+    const clientId = process.env.DISCORD_CLIENT_ID?.trim();
+    const redirectUri =
+      process.env.DISCORD_REDIRECT_URI?.trim() ||
+      "https://ashenwakeai.onrender.com/auth/discord/callback";
+
+    if (!clientId) {
+      res.status(503).send(
+        "Discord web login is not configured."
+      );
+      return;
+    }
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "identify",
+    });
+
+    res.redirect(
+      `https://discord.com/oauth2/authorize?${params.toString()}`
+    );
+  }
+);
+
+app.get(
+  "/auth/discord/callback",
+  async (req: Request, res: Response) => {
+    try {
+      const code =
+        typeof req.query.code === "string"
+          ? req.query.code
+          : "";
+
+      if (!code) {
+        res.status(400).send(
+          "Discord authorization code is missing."
+        );
+        return;
+      }
+
+      const clientId =
+        process.env.DISCORD_CLIENT_ID?.trim();
+
+      const clientSecret =
+        process.env.DISCORD_CLIENT_SECRET?.trim();
+
+      const redirectUri =
+        process.env.DISCORD_REDIRECT_URI?.trim() ||
+        "https://ashenwakeai.onrender.com/auth/discord/callback";
+
+      if (!clientId || !clientSecret) {
+        res.status(503).send(
+          "Discord web login is not configured."
+        );
+        return;
+      }
+
+      const tokenResponse = await fetch(
+        "https://discord.com/api/oauth2/token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: redirectUri,
+          }),
+        }
+      );
+
+      if (!tokenResponse.ok) {
+        console.error(
+          "Discord OAuth token exchange failed:",
+          await tokenResponse.text()
+        );
+
+        res.status(401).send(
+          "Discord login could not be completed."
+        );
+        return;
+      }
+
+      const tokenData =
+        (await tokenResponse.json()) as {
+          access_token?: string;
+          token_type?: string;
+        };
+
+      if (!tokenData.access_token) {
+        res.status(401).send(
+          "Discord did not provide an access token."
+        );
+        return;
+      }
+
+      const userResponse = await fetch(
+        "https://discord.com/api/users/@me",
+        {
+          headers: {
+            Authorization:
+              `${tokenData.token_type || "Bearer"} ` +
+              tokenData.access_token,
+          },
+        }
+      );
+
+      if (!userResponse.ok) {
+        res.status(401).send(
+          "Could not retrieve your Discord account."
+        );
+        return;
+      }
+
+      const discordUser =
+        (await userResponse.json()) as {
+          id: string;
+          username: string;
+          global_name?: string | null;
+          avatar?: string | null;
+        };
+
+      if (!req.session) {
+        res.status(503).send(
+          "Login session is not configured."
+        );
+        return;
+      }
+
+      req.session.discordUser = {
+        id: discordUser.id,
+        username: discordUser.username,
+        global_name: discordUser.global_name,
+        avatar: discordUser.avatar,
+      };
+
+      res.redirect("/");
+    } catch (error) {
+      console.error(
+        "Discord OAuth callback error:",
+        error
+      );
+
+      res.status(500).send(
+        "Discord login failed."
+      );
+    }
+  }
+);
+
+app.get(
+  "/api/me",
+  (req: Request, res: Response) => {
+    const user = req.session?.discordUser;
+
+    res.json({
+      ok: true,
+      authenticated: Boolean(user),
+      user: user || null,
+    });
+  }
+);
+
+app.post(
+  "/logout",
+  (req: Request, res: Response) => {
+    if (!req.session) {
+      res.json({ ok: true });
+      return;
+    }
+
+    req.session.destroy((error) => {
+      if (error) {
+        console.error(
+          "Logout error:",
+          error
+        );
+
+        res.status(500).json({
+          ok: false,
+          error: "Could not log out.",
+        });
+        return;
+      }
+
+      res.clearCookie("connect.sid");
+      res.json({ ok: true });
+    });
+  }
+);
+
 app.post(
   "/api/chat",
   async (req: Request, res: Response) => {
