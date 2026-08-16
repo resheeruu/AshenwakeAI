@@ -3,6 +3,7 @@
 set -u
 
 echo "🔥 Starting AshenAI..."
-echo "🌐 Render PORT: ${PORT:-10000}"
+export PORT="${PORT:-10000}"
+echo "🌐 Render PORT: $PORT"
 
 exec npx tsx src/index.ts
