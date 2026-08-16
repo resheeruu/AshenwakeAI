@@ -3,12 +3,31 @@ import {
 } from "discord.js";
 
 import { AshenCommand } from "./definitions";
+import { logger } from "../logger";
+import { UsageStats } from "../analytics/usage-stats";
+
+const ACTIVITY_INTERVAL_MS = 5 * 60 * 1000;
 
 export class CommandHandler {
   private readonly commands = new Map<string, AshenCommand>();
+  private readonly activity = new Map<string, number>();
+  private readonly usageStats: UsageStats;
 
-  constructor(commands: AshenCommand[] = []) {
+  private activityTimer: ReturnType<typeof setInterval>;
+
+  constructor(
+    commands: AshenCommand[] = [],
+    usageStats: UsageStats,
+  ) {
+    this.usageStats = usageStats;
     this.registerMany(commands);
+
+    this.activityTimer = setInterval(
+      () => this.flushActivity(),
+      ACTIVITY_INTERVAL_MS,
+    );
+
+    this.activityTimer.unref();
   }
 
   register(command: AshenCommand): void {
@@ -24,87 +43,81 @@ export class CommandHandler {
   async handle(
     interaction: ChatInputCommandInteraction,
   ): Promise<void> {
-    const command = this.commands.get(
-      interaction.commandName,
-    );
+    const commandName = interaction.commandName;
+
+    const command = this.commands.get(commandName);
 
     if (!command) {
-      await this.safeReply(
-        interaction,
-        "❌ Command not found.",
+      throw new Error(
+        `Command not found: /${commandName}`,
       );
-      return;
     }
 
-    const startedAt = Date.now();
+    /*
+     * index.ts owns the initial Discord acknowledgement.
+     * This handler must NEVER call reply() or deferReply().
+     */
+    if (
+      !interaction.deferred &&
+      !interaction.replied
+    ) {
+      throw new Error(
+        `/${commandName} reached CommandHandler without being acknowledged.`,
+      );
+    }
 
-    console.log(
-      `⚡ Received /${interaction.commandName} interaction.`,
+    this.activity.set(
+      commandName,
+      (this.activity.get(commandName) ?? 0) + 1,
     );
 
-    if (
-      !interaction.replied &&
-      !interaction.deferred
-    ) {
-      try {
-        await interaction.deferReply();
-
-        console.log(
-          `✅ /${interaction.commandName} acknowledged in ${
-            Date.now() - startedAt
-          }ms.`,
-        );
-      } catch (error) {
-        console.error(
-          `❌ Failed to acknowledge /${interaction.commandName}:`,
-          error,
-        );
-        return;
-      }
-    }
+    this.usageStats.recordCommand(
+      interaction.user.id,
+    );
 
     try {
       await command.execute(interaction);
-
-      console.log(
-        `✅ /${interaction.commandName} completed in ${
-          Date.now() - startedAt
-        }ms.`,
-      );
     } catch (error) {
-      console.error(
-        `❌ Error executing /${interaction.commandName}:`,
-        error,
+      logger.error(
+        `❌ /${commandName} failed:`,
+        error instanceof Error
+          ? error.message
+          : String(error),
       );
 
-      await this.safeReply(
-        interaction,
-        "❌ Something went wrong while executing that command.",
-      );
+      throw error;
     }
   }
 
-  private async safeReply(
-    interaction: ChatInputCommandInteraction,
-    content: string,
-  ): Promise<void> {
-    try {
-      if (interaction.replied) {
-        await interaction.followUp({ content });
-      } else if (interaction.deferred) {
-        await interaction.editReply({ content });
-      } else {
-        await interaction.reply({ content });
-      }
-    } catch (error) {
-      console.error(
-        "❌ Could not send command response:",
-        error,
-      );
+  private flushActivity(): void {
+    if (this.activity.size === 0) {
+      return;
     }
+
+    const summary = [...this.activity.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(
+        ([command, count]) =>
+          `/${command}=${count}`,
+      )
+      .join(" | ");
+
+    logger.info(
+      `📊 Command activity (last 5m) | ${summary}`,
+    );
+
+    this.activity.clear();
   }
 
   getCommands(): Map<string, AshenCommand> {
     return this.commands;
+  }
+
+  getActivity(): Map<string, number> {
+    return new Map(this.activity);
+  }
+
+  destroy(): void {
+    clearInterval(this.activityTimer);
   }
 }

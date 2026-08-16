@@ -6,6 +6,7 @@ import {
   GatewayIntentBits,
   Partials,
   Message,
+  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -36,6 +37,21 @@ import { createStatusCommand } from "./commands/status";
 import { createConfigCommand } from "./commands/config";
 import { createDiagnoseCommand } from "./commands/diagnose";
 import { createTaskCommand } from "./commands/task";
+import { createGameCommand } from "./commands/game";
+import { getBlackjackGame, hitBlackjack, standBlackjack, handText, calculateTotal,
+} from "./games/games/blackjack";
+
+import {
+  getMinesGame,
+  revealMinesTile,
+  cashOutMines,
+} from "./games/games/mines";
+
+import {
+  getQuickDraw,
+  reactQuickDraw,
+} from "./games/games/quickdraw";
+import { getPlayer } from "./games/store";
 import { syncCommands } from "./commands/register";
 import { detectActionIntent } from "./discord/action-router";
 import { executeInteractiveModeration } from "./discord/interactive-moderation";
@@ -59,6 +75,7 @@ import {
 } from "./commands/server";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
+import { UsageStats } from "./analytics/usage-stats";
 
 /* =====================================================
    DISCORD CLIENT
@@ -85,9 +102,17 @@ const client = new Client({
 const router = new AIRouter(providers);
 const memory = new ConversationMemory();
 const userProfiles = new UserProfileMemory();
-const commandHandler = new CommandHandler();
+const usageStats = new UsageStats();
+
+const usageStatsTimer = setInterval(
+  () => usageStats.logSummary(),
+  5 * 60 * 1000,
+);
+
+usageStatsTimer.unref();
+
+const commandHandler = new CommandHandler([], usageStats);
 const agentManager = new AgentManager();
-startWebServer();
 
 // Initialize autonomous task actions once at startup.
 initializeTaskEngine();
@@ -100,6 +125,7 @@ initializeTaskEngine();
 const commands: AshenCommand[] = [
   createAskCommand(router, memory),
   createTaskCommand(router),
+  createGameCommand(),
   createResetCommand(memory),
   createHelpCommand(),
   createStatusCommand(router, memory, agentManager),
@@ -339,8 +365,488 @@ client.once(
 
 
 /* =====================================================
+   BLACKJACK BUTTONS
+   ===================================================== */
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton()) {
+    return;
+  }
+
+  if (
+    interaction.customId !== "ashen_blackjack_hit" &&
+    interaction.customId !== "ashen_blackjack_stand"
+  ) {
+    return;
+  }
+
+  try {
+    const player = await getPlayer(
+      interaction.user.id,
+      interaction.user.username,
+    );
+
+    const game = getBlackjackGame(player.userId);
+
+    if (!game) {
+      await interaction.reply({
+        content: "🃏 You don't have an active Blackjack game.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (interaction.customId === "ashen_blackjack_hit") {
+      hitBlackjack(game);
+
+      const playerTotal = calculateTotal(game.playerCards);
+
+      if (playerTotal > 21) {
+        const result = await standBlackjack(player, game);
+
+        const embed = new EmbedBuilder()
+          .setTitle("🃏 Ashen Blackjack")
+          .setDescription(
+            `**Your Cards**\n${handText(game.playerCards)}\n` +
+              `**Total:** ${result.playerTotal}\n\n` +
+              `**Dealer Cards**\n${handText(game.dealerCards)}\n` +
+              `**Total:** ${result.dealerTotal}`,
+          )
+          .addFields(
+            {
+              name: "🏆 Result",
+              value:
+                result.result === "blackjack"
+                  ? "🎉 **BLACKJACK!**"
+                  : result.result,
+            },
+            {
+              name: "💰 Payout",
+              value: `+${result.payout} coins`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${result.xp}`,
+              inline: true,
+            },
+            {
+              name: "🪙 Balance",
+              value: `${player.coins}`,
+              inline: true,
+            },
+          );
+
+        await interaction.update({
+          embeds: [embed],
+          components: [],
+        });
+
+        return;
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle("🃏 Ashen Blackjack")
+        .setDescription(
+          `**Your Cards**\n${handText(game.playerCards)}\n\n` +
+            `**Your Total:** ${playerTotal}\n\n` +
+            `**Dealer**\n${handText([game.dealerCards[0]])} ❓\n\n` +
+            `🪙 Bet: **${game.bet} coins**`,
+        );
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ashen_blackjack_hit")
+          .setLabel("Hit")
+          .setEmoji("🟢")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("ashen_blackjack_stand")
+          .setLabel("Stand")
+          .setEmoji("🔴")
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await interaction.update({
+        embeds: [embed],
+        components: [row],
+      });
+
+      return;
+    }
+
+    const result = await standBlackjack(player, game);
+
+    const embed = new EmbedBuilder()
+      .setTitle("🃏 Ashen Blackjack")
+      .setDescription(
+        `**Your Cards**\n${handText(game.playerCards)}\n` +
+          `**Total:** ${result.playerTotal}\n\n` +
+          `**Dealer Cards**\n${handText(game.dealerCards)}\n` +
+          `**Total:** ${result.dealerTotal}`,
+      )
+      .addFields(
+        {
+          name: "🏆 Result",
+          value:
+            result.result === "blackjack"
+              ? "🎉 **BLACKJACK!**"
+              : result.result,
+        },
+        {
+          name: "💰 Payout",
+          value: `+${result.payout} coins`,
+          inline: true,
+        },
+        {
+          name: "✨ XP",
+          value: `+${result.xp}`,
+          inline: true,
+        },
+        {
+          name: "🪙 Balance",
+          value: `${player.coins}`,
+          inline: true,
+        },
+      );
+
+    await interaction.update({
+      embeds: [embed],
+      components: [],
+    });
+  } catch (error) {
+    logger.error(
+      "❌ Blackjack button handler failed:",
+      error,
+    );
+
+    const message =
+      error instanceof Error ? error.message : String(error);
+
+    if (message === "BLACKJACK_FINISHED") {
+      await interaction.reply({
+        content: "🃏 This Blackjack game has already finished.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: "❌ Something went wrong while processing Blackjack.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  }
+});
+
+/* =====================================================
+   MINES + QUICKDRAW BUTTONS
+   ===================================================== */
+
+function buildMinesButtons(
+  revealed: Set<number>,
+): ActionRowBuilder<ButtonBuilder>[] {
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+
+  for (let row = 0; row < 4; row++) {
+    const buttons = new ActionRowBuilder<ButtonBuilder>();
+
+    for (let col = 0; col < 4; col++) {
+      const tile = row * 4 + col;
+      const isRevealed = revealed.has(tile);
+
+      buttons.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`ashen_mines:reveal:${tile}`)
+          .setLabel(isRevealed ? "✅" : `${tile + 1}`)
+          .setStyle(
+            isRevealed
+              ? ButtonStyle.Secondary
+              : ButtonStyle.Primary,
+          )
+          .setDisabled(isRevealed),
+      );
+    }
+
+    rows.push(buttons);
+  }
+
+  rows.push(
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("ashen_mines:cashout")
+        .setLabel("Cash Out")
+        .setEmoji("💰")
+        .setStyle(ButtonStyle.Success),
+    ),
+  );
+
+  return rows;
+}
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton()) {
+    return;
+  }
+
+  const isMines =
+    interaction.customId.startsWith("ashen_mines:");
+  const isQuickDraw =
+    interaction.customId === "ashen_quickdraw:draw";
+
+  if (!isMines && !isQuickDraw) {
+    return;
+  }
+
+  try {
+    const player = await getPlayer(
+      interaction.user.id,
+      interaction.user.username,
+    );
+
+    /* ---------------- MINES ---------------- */
+
+    if (isMines) {
+      const game = getMinesGame(player.userId);
+
+      if (!game) {
+        await interaction.reply({
+          content: "💣 You don't have an active Mines game.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      // Prevent another user's button from controlling this game.
+      if (game.playerId !== interaction.user.id) {
+        await interaction.reply({
+          content: "❌ This Mines game belongs to another player.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === "ashen_mines:cashout") {
+        const result = await cashOutMines(player, game);
+
+        const embed = new EmbedBuilder()
+          .setTitle("💣 Ashen Mines")
+          .setDescription(
+            `💰 **Cashed out!**\n\n` +
+            `Multiplier: **${game.multiplier.toFixed(2)}x**`,
+          )
+          .addFields(
+            {
+              name: "💰 Payout",
+              value: `+${result.payout} coins`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${result.xp}`,
+              inline: true,
+            },
+            {
+              name: "🪙 Balance",
+              value: `${player.coins}`,
+              inline: true,
+            },
+          );
+
+        if (result.levelUp) {
+          embed.addFields({
+            name: "🎉 Level Up!",
+            value: `You reached **Level ${player.level}**!`,
+          });
+        }
+
+        await interaction.update({
+          embeds: [embed],
+          components: [],
+        });
+
+        return;
+      }
+
+      const parts = interaction.customId.split(":");
+      const tile = Number(parts[2]);
+
+      const result = await revealMinesTile(
+        player,
+        game,
+        tile,
+      );
+
+      if (result.mine) {
+        const embed = new EmbedBuilder()
+          .setTitle("💣 Ashen Mines")
+          .setDescription(
+            `💥 **BOOM! You hit a mine.**\n\n` +
+            `Tile: **${result.tile + 1}**\n` +
+            `Multiplier: **0x**\n\n` +
+            `You lost your **${game.bet} coin** bet.`,
+          )
+          .addFields({
+            name: "✨ XP",
+            value: "+5",
+            inline: true,
+          });
+
+        await interaction.update({
+          embeds: [embed],
+          components: [],
+        });
+
+        return;
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle("💣 Ashen Mines")
+        .setDescription(
+          `✅ **Safe tile!**\n\n` +
+          `Tile: **${result.tile + 1}**\n` +
+          `Multiplier: **${result.multiplier.toFixed(2)}x**\n` +
+          `Potential payout: **${result.payout} coins**\n\n` +
+          `Keep going or cash out.`,
+        );
+
+      await interaction.update({
+        embeds: [embed],
+        components: buildMinesButtons(game.revealed),
+      });
+
+      return;
+    }
+
+    /* ---------------- QUICKDRAW ---------------- */
+
+    const quickDraw = getQuickDraw(player.userId);
+
+    if (!quickDraw) {
+      await interaction.reply({
+        content: "⚡ You don't have an active QuickDraw game.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (quickDraw.playerId !== interaction.user.id) {
+      await interaction.reply({
+        content: "❌ This QuickDraw game belongs to another player.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const result = await reactQuickDraw(
+      player,
+      quickDraw,
+    );
+
+    const embed = new EmbedBuilder()
+      .setTitle("⚡ Ashen QuickDraw");
+
+    if (result.reactionTime === 0) {
+      embed
+        .setDescription(
+          "💀 **Too early!**\n\n" +
+          "You drew before the signal.",
+        )
+        .addFields(
+          {
+            name: "🪙 Coins",
+            value: `${result.coins} coins`,
+            inline: true,
+          },
+          {
+            name: "✨ XP",
+            value: `+${result.xp}`,
+            inline: true,
+          },
+          {
+            name: "🪙 Balance",
+            value: `${player.coins}`,
+            inline: true,
+          },
+        );
+    } else {
+      embed
+        .setDescription(
+          result.won
+            ? `🎯 **DRAW! You were fast enough!**\n\nReaction time: **${result.reactionTime}ms**`
+            : `💀 **Too slow!**\n\nReaction time: **${result.reactionTime}ms**`,
+        )
+        .addFields(
+          {
+            name: "🪙 Coins",
+            value: `${result.coins >= 0 ? "+" : ""}${result.coins}`,
+            inline: true,
+          },
+          {
+            name: "✨ XP",
+            value: `+${result.xp}`,
+            inline: true,
+          },
+          {
+            name: "🪙 Balance",
+            value: `${player.coins}`,
+            inline: true,
+          },
+        );
+    }
+
+    if (result.levelUp) {
+      embed.addFields({
+        name: "🎉 Level Up!",
+        value: `You reached **Level ${player.level}**!`,
+      });
+    }
+
+    await interaction.update({
+      embeds: [embed],
+      components: [],
+    });
+  } catch (error) {
+    logger.error(
+      "❌ Mines/QuickDraw button handler failed:",
+      error,
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    let content =
+      "❌ Something went wrong while processing the game.";
+
+    if (message === "MINES_FINISHED") {
+      content = "💣 This Mines game has already finished.";
+    } else if (message === "MINES_TILE_ALREADY_REVEALED") {
+      content = "💣 That tile has already been revealed.";
+    } else if (message === "INVALID_MINES_TILE") {
+      content = "💣 Invalid Mines tile.";
+    } else if (message === "MINES_NO_REVEALS") {
+      content = "💣 Reveal at least one safe tile before cashing out.";
+    } else if (message === "QUICKDRAW_FINISHED") {
+      content = "⚡ This QuickDraw game has already finished.";
+    }
+
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  }
+});
+
+/* =====================================================
    MODERATION CONFIRMATION BUTTONS
    ===================================================== */
+
+
 
 client.on(
   Events.InteractionCreate,
@@ -475,6 +981,7 @@ client.on(
 client.on(
   Events.MessageCreate,
   async (message) => {
+    console.log(`📨 MessageCreate received: author=${message.author.tag} content=${JSON.stringify(message.content).slice(0, 200)}`);
     try {
       /*
        * Never respond to bots.
@@ -504,10 +1011,14 @@ client.on(
       const referencedMessage =
         await getReferencedMessage(message);
 
-      if (referencedMessage) {
-        isReplyToBot =
-          referencedMessage.author.id === botId;
-      }
+        if (referencedMessage) {
+          console.log(
+            `🔎 Referenced author=${referencedMessage.author.tag} id=${referencedMessage.author.id} botId=${botId}`,
+          );
+
+          isReplyToBot =
+            referencedMessage.author.id === botId;
+        }
 
       /*
        * Only interact when:
@@ -871,16 +1382,24 @@ client.on(
       return;
     }
 
+    const startedAt = Date.now();
+
     try {
       await commandHandler.handle(
         interaction
+      );
+
+      logger.info(
+        `✅ /${interaction.commandName} completed in ${
+          Date.now() - startedAt
+        }ms.`,
       );
     } catch (error) {
       logger.error(
         `❌ Command /${interaction.commandName} failed:`,
         error instanceof Error
           ? error.message
-          : String(error)
+          : String(error),
       );
 
       try {
@@ -900,7 +1419,7 @@ client.on(
         }
       } catch {
         logger.debug(
-          "⚠️ Could not send command error response."
+          "⚠️ Could not send command error response.",
         );
       }
     }

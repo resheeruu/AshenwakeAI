@@ -6,11 +6,13 @@
   "scripts": {
     "start": "bash scripts/render-start.sh",
     "agent": "tsx src/agent/index.ts",
-    "test": "tsx scripts/test-router.ts && tsx scripts/test-core.ts && tsx scripts/test-commands.ts && tsx scripts/test-rate-limit.ts && tsx scripts/test-security.ts",
+    "test": "tsx scripts/test-router.ts && tsx scripts/test-core.ts && tsx scripts/test-commands.ts && tsx scripts/test-rate-limit.ts && tsx scripts/test-security.ts && tsx scripts/test-tasks.ts && tsx scripts/test-settlement.ts",
     "check": "tsx scripts/check.ts && npm test",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "bot": "tsx src/index.ts"
+    "bot": "tsx src/index.ts",
+    "agents": "tsx scripts/check-coding-agents.ts",
+    "test-agents": "tsx scripts/test-coding-agents.ts"
   },
   "keywords": [
     "discord",
@@ -29,5 +31,8 @@
     "@types/node": "^26.2.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }
