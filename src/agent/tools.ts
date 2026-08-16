@@ -118,6 +118,20 @@ export async function writeFile(
     },
   );
 
+  /*
+   * Create a backup BEFORE modifying an existing file.
+   * Never overwrite the backup until the current file has
+   * been safely copied.
+   */
+  if (fs.existsSync(fullPath)) {
+    const backupPath = `${fullPath}.agent-backup`;
+
+    await fs.promises.copyFile(
+      fullPath,
+      backupPath,
+    );
+  }
+
   await fs.promises.writeFile(
     fullPath,
     content,
@@ -484,6 +498,12 @@ export async function runCommand(
     );
   }
 
+  /*
+   * Safe command boundary.
+   *
+   * These commands are intentionally limited to diagnostics and
+   * project verification. Arbitrary shell execution is blocked.
+   */
   const allowedCommands =
     new Set([
       "npm",
@@ -503,6 +523,36 @@ export async function runCommand(
   ) {
     throw new Error(
       `Command not allowed: ${parts[0]}`,
+    );
+  }
+
+  /*
+   * Block shell metacharacters and command chaining.
+   * The executor uses execFile, but rejecting these explicitly
+   * keeps the policy clear and prevents accidental shell-like
+   * command construction.
+   */
+  const forbiddenTokens = [
+    ";",
+    "&&",
+    "||",
+    "|",
+    ">",
+    ">>",
+    "<",
+    "$(",
+    "`",
+  ];
+
+  if (
+    parts.some((part) =>
+      forbiddenTokens.some((token) =>
+        part.includes(token),
+      ),
+    )
+  ) {
+    throw new Error(
+      "Unsafe shell syntax is not allowed.",
     );
   }
 

@@ -5,8 +5,18 @@ export interface UsageStatsSnapshot {
   totalUsers: number;
   activeToday: number;
   activeThisWeek: number;
+
+  // User-facing activity
   totalMessages: number;
   totalCommands: number;
+  totalFailures: number;
+
+  // Failure breakdown
+  commandFailures: number;
+  chatFailures: number;
+
+  // Per-command usage
+  commandUsage: Record<string, number>;
 }
 
 interface UserUsage {
@@ -18,9 +28,15 @@ interface UsageStatsData {
   totalUsers: number;
   totalMessages: number;
   totalCommands: number;
+  totalFailures: number;
+  commandFailures: number;
+  chatFailures: number;
+
   users: Record<string, UserUsage>;
   dailyUsers: Record<string, string[]>;
   weeklyUsers: Record<string, string[]>;
+
+  commandUsage: Record<string, number>;
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -65,9 +81,16 @@ export class UsageStats {
           totalUsers: parsed.totalUsers ?? 0,
           totalMessages: parsed.totalMessages ?? 0,
           totalCommands: parsed.totalCommands ?? 0,
+
+          totalFailures: parsed.totalFailures ?? 0,
+          commandFailures: parsed.commandFailures ?? 0,
+          chatFailures: parsed.chatFailures ?? 0,
+
           users: parsed.users ?? {},
           dailyUsers: parsed.dailyUsers ?? {},
           weeklyUsers: parsed.weeklyUsers ?? {},
+
+          commandUsage: parsed.commandUsage ?? {},
         };
       }
     } catch {
@@ -78,9 +101,16 @@ export class UsageStats {
       totalUsers: 0,
       totalMessages: 0,
       totalCommands: 0,
+
+      totalFailures: 0,
+      commandFailures: 0,
+      chatFailures: 0,
+
       users: {},
       dailyUsers: {},
       weeklyUsers: {},
+
+      commandUsage: {},
     };
   }
 
@@ -122,6 +152,9 @@ export class UsageStats {
     this.save();
   }
 
+  /**
+   * Records a normal chat interaction that AshenAI actually processes.
+   */
   recordMessage(userId: string): void {
     this.recordUser(userId);
 
@@ -130,10 +163,41 @@ export class UsageStats {
     this.save();
   }
 
-  recordCommand(userId: string): void {
+  /**
+   * Records a slash command invocation.
+   */
+  recordCommand(userId: string, commandName?: string): void {
     this.recordUser(userId);
 
     this.stats.totalCommands += 1;
+
+    if (commandName) {
+      this.stats.commandUsage[commandName] =
+        (this.stats.commandUsage[commandName] ?? 0) + 1;
+    }
+
+    this.save();
+  }
+
+  /**
+   * Records a user-facing failure.
+   *
+   * This is intentionally separate from provider health.
+   * The AI router already tracks provider-level failures.
+   */
+  recordFailure(
+    userId: string,
+    type: "command" | "chat",
+  ): void {
+    this.recordUser(userId);
+
+    this.stats.totalFailures += 1;
+
+    if (type === "command") {
+      this.stats.commandFailures += 1;
+    } else {
+      this.stats.chatFailures += 1;
+    }
 
     this.save();
   }
@@ -146,12 +210,23 @@ export class UsageStats {
 
     return {
       totalUsers: this.stats.totalUsers,
+
       activeToday:
         this.stats.dailyUsers[today]?.length ?? 0,
+
       activeThisWeek:
         this.stats.weeklyUsers[week]?.length ?? 0,
+
       totalMessages: this.stats.totalMessages,
       totalCommands: this.stats.totalCommands,
+
+      totalFailures: this.stats.totalFailures,
+      commandFailures: this.stats.commandFailures,
+      chatFailures: this.stats.chatFailures,
+
+      commandUsage: {
+        ...this.stats.commandUsage,
+      },
     };
   }
 
@@ -164,7 +239,20 @@ export class UsageStats {
       `${stats.activeToday} today | ` +
       `${stats.activeThisWeek} this week | ` +
       `${stats.totalMessages} messages | ` +
-      `${stats.totalCommands} commands`,
+      `${stats.totalCommands} commands | ` +
+      `${stats.totalFailures} failures`,
     );
+
+    const commandUsage = Object.entries(stats.commandUsage)
+      .sort((a, b) => b[1] - a[1]);
+
+    if (commandUsage.length > 0) {
+      console.log(
+        `📊 Command usage | ` +
+        commandUsage
+          .map(([command, count]) => `/${command}=${count}`)
+          .join(" | "),
+      );
+    }
   }
 }

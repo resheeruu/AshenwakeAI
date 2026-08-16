@@ -73,11 +73,17 @@ export class CommandHandler {
 
     this.usageStats.recordCommand(
       interaction.user.id,
+      commandName,
     );
 
     try {
       await command.execute(interaction);
     } catch (error) {
+      this.usageStats.recordFailure(
+        interaction.user.id,
+        "command",
+      );
+
       logger.error(
         `❌ /${commandName} failed:`,
         error instanceof Error

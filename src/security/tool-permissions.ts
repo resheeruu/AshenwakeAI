@@ -9,6 +9,7 @@
 export type ToolAccess =
   | "public"
   | "agent"
+  | "fix"
   | "admin";
 
 const SECRET_PATH_PATTERNS = [
@@ -41,6 +42,19 @@ const AGENT_TOOLS = new Set([
   "diagnoseProject",
 ]);
 
+/*
+ * FIX mode gets the minimum additional permissions required to repair
+ * the project. Secret paths remain blocked by canReadPath/canWritePath.
+ */
+const FIX_TOOLS = new Set([
+  ...AGENT_TOOLS,
+  "readFile",
+  "writeFile",
+  "searchProject",
+  "runCommand",
+  "installPackage",
+]);
+
 export function isSecretPath(filePath: string): boolean {
   const normalized = String(filePath ?? "")
     .replace(/\\/g, "/")
@@ -69,6 +83,10 @@ export function canUseTool(
     return AGENT_TOOLS.has(toolName);
   }
 
+  if (access === "fix") {
+    return FIX_TOOLS.has(toolName);
+  }
+
   return false;
 }
 
@@ -80,7 +98,11 @@ export function canReadPath(
     return false;
   }
 
-  if (access === "admin" || access === "agent") {
+  if (
+    access === "admin" ||
+    access === "agent" ||
+    access === "fix"
+  ) {
     return true;
   }
 
@@ -95,7 +117,11 @@ export function canWritePath(
     return false;
   }
 
-  return access === "agent" || access === "admin";
+  return (
+    access === "agent" ||
+    access === "fix" ||
+    access === "admin"
+  );
 }
 
 export function getToolDeniedMessage(): string {

@@ -43,6 +43,9 @@ export interface RuntimeConfig {
     name: string;
     discord?: string;
   };
+  admin: {
+    discordIds: string[];
+  };
 
   logLevel: string;
 }
@@ -80,6 +83,13 @@ function loadRuntimeConfig(): RuntimeConfig {
         "Xykel",
 
       discord: optional("CREATOR_DISCORD"),
+    },
+
+    admin: {
+      discordIds: (process.env.ADMIN_DISCORD_IDS || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
     },
 
     logLevel:
@@ -137,6 +147,9 @@ export const config = {
   creator: {
     name: string;
     discord?: string;
+  };
+  admin: {
+    discordIds: string[];
   };
 
   providers: {

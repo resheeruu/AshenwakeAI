@@ -11,6 +11,12 @@ import {
 
 import { AGENT_SYSTEM_PROMPT } from "./prompt";
 import { wrapUntrustedContent } from "../security/context";
+import {
+  canUseTool,
+  canReadPath,
+  canWritePath,
+  getToolDeniedMessage,
+} from "../security/tool-permissions";
 
 import {
   readFile,
@@ -28,6 +34,34 @@ import {
 } from "./tools";
 
 import { startSelfHealer } from "./selfHeal";
+
+// ─────────────────────────────────────────────────────────────
+// AshenAI logging policy
+//
+// Normal mode:
+//   Important verification/repair results remain visible.
+//   Internal agent diagnostics are suppressed.
+//
+// Verbose mode:
+//   ASHENAI_VERBOSE_LOGS=1
+//   Shows detailed agent diagnostics.
+//
+// Module-scoped so every agent function, including Self-Healer,
+// can safely use agentLog.
+// ─────────────────────────────────────────────────────────────
+const verboseLogs =
+  process.env.ASHENAI_VERBOSE_LOGS === "1" ||
+  process.env.ASHENAI_VERBOSE_LOGS === "true";
+
+const agentLog = (...args: unknown[]): void => {
+  if (verboseLogs) console.log(...args);
+};
+
+const importantLog = (...args: unknown[]): void => {
+  console.log(...args);
+};
+
+
 
 const router = new AIRouter(providers, {
   persistentHealth: true,
@@ -241,6 +275,57 @@ function isVerificationAction(
 async function executeAction(
   action: AgentAction,
 ): Promise<string> {
+  /*
+   * SECURITY BOUNDARY
+   *
+   * This is the final authorization check immediately before
+   * an agent action reaches the actual tool implementation.
+   */
+  const toolNameMap: Record<AgentAction["action"], string> = {
+    read_file: "readFile",
+    search_project: "searchProject",
+    write_file: "writeFile",
+    run_command: "runCommand",
+    project_status: "projectStatus",
+    typecheck: "typecheck",
+    run_tests: "runTests",
+    check_project: "checkProject",
+    check_dependencies: "checkDependencies",
+    diagnose_project: "diagnoseProject",
+    test_providers: "testProviders",
+    install_dependency: "installPackage",
+    finish: "finish",
+  };
+
+  const toolName = toolNameMap[action.action];
+
+  /*
+   * CHECK mode gets the read/verification-only agent permission set.
+   * FIX mode gets the narrowly expanded repair permission set.
+   */
+  const toolAccess =
+    agentMode === "FIX"
+      ? "fix"
+      : "agent";
+
+  if (!canUseTool(toolName, toolAccess)) {
+    throw new Error(getToolDeniedMessage());
+  }
+
+  if (
+    action.action === "read_file" &&
+    !canReadPath(action.path, toolAccess)
+  ) {
+    throw new Error(getToolDeniedMessage());
+  }
+
+  if (
+    action.action === "write_file" &&
+    !canWritePath(action.path, toolAccess)
+  ) {
+    throw new Error(getToolDeniedMessage());
+  }
+
   switch (action.action) {
     case "read_file":
       return await readFile(action.path);
@@ -343,6 +428,8 @@ Return exactly ONE JSON action.
    * CHECK mode performs those dedicated verification tools
    * directly instead of relying on the AI to select them.
    */
+  
+  // ─────────────────────────────────────────────────────────────
   const verificationRequested =
     mode === "check" &&
     /\b(verify|verification|typecheck|type-check|tests?|test suite)\b/i.test(
@@ -703,11 +790,18 @@ Do not use markdown fences.`,
     try {
       const response = await router.generate(repairRequest);
 
-      console.log("");
-      console.log("🧾 ===== SELF-HEALER AI RESPONSE =====");
-      console.log(response.text.slice(0, 20000));
-      console.log("🧾 ===== END AI RESPONSE =====");
-      console.log("");
+      agentLog("");
+      agentLog("🧾 ===== SELF-HEALER AI RESPONSE =====");
+      if (verboseLogs) {
+        console.log(response.text.slice(0, 4000));
+        if (response.text.length > 4000) {
+          console.log(`… truncated ${response.text.length - 4000} characters`);
+        }
+      } else {
+        console.log(`🧾 Self-Healer response received (${response.text.length} chars)`);
+      }
+      agentLog("🧾 ===== END SELF-HEALER RESPONSE =====");
+      agentLog("");
 
       let action: AgentAction;
 

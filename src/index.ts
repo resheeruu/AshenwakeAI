@@ -981,7 +981,6 @@ client.on(
 client.on(
   Events.MessageCreate,
   async (message) => {
-    console.log(`📨 MessageCreate received: author=${message.author.tag} content=${JSON.stringify(message.content).slice(0, 200)}`);
     try {
       /*
        * Never respond to bots.
@@ -989,6 +988,10 @@ client.on(
       if (message.author.bot) {
         return;
       }
+
+      console.log(
+        `📨 MessageCreate received: author=${message.author.tag} content=${JSON.stringify(message.content).slice(0, 200)}`
+      );
 
       const botId = client.user?.id;
 
@@ -1037,6 +1040,9 @@ client.on(
 
       const userId = message.author.id;
       const channelId = message.channel.id;
+
+      // Record only messages that AshenAI actually handles.
+      usageStats.recordMessage(userId);
 
       /*
        * Remove AshenAI's mention.
@@ -1343,6 +1349,11 @@ client.on(
         `✅ Interactive reply sent using ${response.provider} in ${response.latencyMs}ms.`
       );
     } catch (error) {
+      usageStats.recordFailure(
+        message.author.id,
+        "chat",
+      );
+
       logger.error(
         "❌ Interactive message response failed:",
         error instanceof Error
@@ -1385,6 +1396,11 @@ client.on(
     const startedAt = Date.now();
 
     try {
+      // Acknowledge the Discord interaction before CommandHandler executes it.
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply();
+      }
+
       await commandHandler.handle(
         interaction
       );

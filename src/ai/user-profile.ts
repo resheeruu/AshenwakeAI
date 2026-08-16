@@ -2,13 +2,24 @@ import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 
+export type ToneLevel = "low" | "medium" | "high";
+export type UserLanguage = "en" | "fil" | "taglish";
+
 export interface UserProfile {
   userId: string;
   username: string;
   displayName: string;
   firstSeen: number;
   lastSeen: number;
-  language?: "en" | "fil" | "taglish";
+
+  language?: UserLanguage;
+
+  // Adaptive personality
+  humor?: ToneLevel;
+  formality?: ToneLevel;
+  verbosity?: ToneLevel;
+  emoji?: ToneLevel;
+  technicalLevel?: "beginner" | "intermediate" | "advanced";
 }
 
 type StoredProfiles = Record<string, UserProfile>;
@@ -85,7 +96,6 @@ export class UserProfileMemory {
 
   get(userId: string): UserProfile | undefined {
     const profile = this.profiles.get(userId);
-
     return profile ? { ...profile } : undefined;
   }
 
@@ -103,7 +113,13 @@ export class UserProfileMemory {
       displayName,
       firstSeen: existing?.firstSeen ?? now,
       lastSeen: now,
+
       language: existing?.language,
+      humor: existing?.humor,
+      formality: existing?.formality,
+      verbosity: existing?.verbosity,
+      emoji: existing?.emoji,
+      technicalLevel: existing?.technicalLevel,
     };
 
     this.profiles.set(userId, profile);
@@ -114,7 +130,7 @@ export class UserProfileMemory {
 
   setLanguage(
     userId: string,
-    language: UserProfile["language"],
+    language: UserLanguage | undefined,
   ): void {
     const profile = this.profiles.get(userId);
 
@@ -123,6 +139,33 @@ export class UserProfileMemory {
     }
 
     profile.language = language;
+    profile.lastSeen = Date.now();
+
+    this.profiles.set(userId, profile);
+    this.save();
+  }
+
+  updateSignals(
+    userId: string,
+    signals: Partial<
+      Pick<
+        UserProfile,
+        | "language"
+        | "humor"
+        | "formality"
+        | "verbosity"
+        | "emoji"
+        | "technicalLevel"
+      >
+    >,
+  ): void {
+    const profile = this.profiles.get(userId);
+
+    if (!profile) {
+      return;
+    }
+
+    Object.assign(profile, signals);
     profile.lastSeen = Date.now();
 
     this.profiles.set(userId, profile);

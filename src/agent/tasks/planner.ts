@@ -99,7 +99,6 @@ export function validateTaskPlan(
     "check_project",
     "typecheck",
     "search_project",
-    "repair_file",
   ]);
 
   let diagnosticCompleted = false;
@@ -125,13 +124,30 @@ export function validateTaskPlan(
         );
       }
 
-      const match = step.description.match(
-        /^FILE:\s*(.+?)\s*\nERROR:\s*([\s\S]+)$/i,
+      const description = step.description.trim();
+
+      const match = description.match(
+        /^FILE:\s*([^\\n]+?)\s*\\nERROR:\s*([\\s\\S]+)$/i,
       );
 
       if (!match) {
         throw new Error(
-          "Unsafe repair step: expected FILE and ERROR.",
+          "Unsafe repair step: expected exactly 'FILE: <path>' followed by 'ERROR: <actual verification error>'.",
+        );
+      }
+
+      const filePath = match[1].trim();
+      const errorOutput = match[2].trim();
+
+      if (!filePath || !errorOutput) {
+        throw new Error(
+          "Unsafe repair step: file path and verification error cannot be empty.",
+        );
+      }
+
+      if (filePath.startsWith("/") || filePath.includes("..")) {
+        throw new Error(
+          `Unsafe repair step: invalid project-relative file path "${filePath}".`,
         );
       }
 

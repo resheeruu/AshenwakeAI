@@ -1,5 +1,8 @@
 import { logger } from "../logger";
-import { UserRateLimiter } from "../security";
+import {
+  UserRateLimiter,
+  inspectUserInput,
+} from "../security";
 
 import {
   ChatInputCommandInteraction,
@@ -113,6 +116,17 @@ export function createAskCommand(
           "prompt",
           true
         ).trim();
+
+        // Security boundary: inspect untrusted Discord input before AI processing.
+        const security = inspectUserInput(prompt);
+
+        if (security.decision === "BLOCK") {
+          await interaction.editReply(
+            security.safeResponse ||
+              "I can't process that request."
+          );
+          return;
+        }
 
         if (!prompt) {
           await interaction.editReply(

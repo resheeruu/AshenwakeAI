@@ -7,6 +7,12 @@ import {
   getRecentLogs,
   subscribeLogs,
 } from "../log-stream";
+import {
+  inspectUserInput,
+} from "../security/gateway";
+import { guardAIOutput } from "../security/output-guard";
+import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
+import { wrapUntrustedContent } from "../security/context";
 
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -79,24 +85,50 @@ app.post(
         return;
       }
 
+      // Security boundary: inspect untrusted web input before AI processing.
+      const security = inspectUserInput(message);
+
+      if (security.decision === "BLOCK") {
+        res.status(400).json({
+          ok: false,
+          error:
+            security.safeResponse ||
+            "I can't process that request.",
+        });
+        return;
+      }
+
       const response =
         await router.generate({
           messages: [
             {
               role: "system",
-              content:
-                "You are AshenAI, a helpful AI assistant. Answer clearly and naturally.",
+              content: ASHENAI_SYSTEM_PROMPT,
             },
             {
               role: "user",
-              content: message,
+              content: wrapUntrustedContent(
+                "WEB USER PROMPT",
+                message,
+              ),
             },
           ],
         });
 
+      // Security boundary: never send raw model output to the client.
+      const guarded = guardAIOutput(response.text);
+
+      if (!guarded.allowed) {
+        console.warn(
+          `🛡️ Web chat output blocked: ${
+            guarded.reason ?? "security_policy"
+          }`,
+        );
+      }
+
       res.json({
         ok: true,
-        text: response.text,
+        text: guarded.text,
       });
     } catch (error) {
       console.error(

@@ -66,24 +66,21 @@ export function createConfigCommand(): AshenCommand {
       interaction: ChatInputCommandInteraction
     ): Promise<void> {
       try {
-        const creatorId =
-          config.creator.discord;
+        const creatorId = config.creator.discord?.trim();
 
-        /*
-         * /config remains creator-only.
-         */
-        if (
-          creatorId &&
-          interaction.user.id !== creatorId
-        ) {
-          await interaction.editReply(
-            "❌ You are not authorized to manage AshenAI configuration."
-          );
+      /*
+       * /config is creator-only and fails closed.
+       * Never allow configuration management when the creator
+       * identity is missing or the requester is not the creator.
+       */
+      if (!creatorId || interaction.user.id !== creatorId) {
+        await interaction.editReply(
+          "❌ You are not authorized to manage AshenAI configuration."
+        );
+        return;
+      }
 
-          return;
-        }
-
-        const action =
+      const action =
           interaction.options.getSubcommand();
 
         /*

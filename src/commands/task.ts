@@ -131,7 +131,6 @@ export function createTaskCommand(
         interaction.options.getSubcommand();
 
       try {
-        await interaction.deferReply();
 
         if (subcommand === "run") {
           const goal =
