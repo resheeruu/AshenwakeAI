@@ -44,6 +44,20 @@ export async function handleMusicCommand(
   }
 
   try {
+    console.log(`🎵 !p received: ${args}`);
+
+    try {
+      const { execFileSync } = await import("child_process");
+      const version = execFileSync("ffmpeg", ["-version"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }).split("\\n")[0];
+
+      console.log(`🎵 Music FFmpeg: ${version}`);
+    } catch {
+      console.log("❌ Music FFmpeg: NOT AVAILABLE");
+    }
+
     await message.reply(`🔎 Searching for **${args}**...`);
 
     const result = await player.search(args, {
