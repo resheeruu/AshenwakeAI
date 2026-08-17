@@ -104,6 +104,30 @@ const client = new Client({
    ===================================================== */
 
 const musicPlayer = new Player(client);
+
+musicPlayer.events.on("connection", (queue) => {
+  console.log(`🎵 MUSIC CONNECTION: guild=${queue.guild.id}`);
+});
+
+musicPlayer.events.on("playerStart", (queue, track) => {
+  console.log(`🎵 MUSIC START: ${track.title}`);
+});
+
+musicPlayer.events.on("playerError", (queue, error, track) => {
+  console.error(`❌ MUSIC PLAYER ERROR: ${track.title}: ${error.message}`);
+});
+
+musicPlayer.events.on("error", (queue, error) => {
+  console.error(`❌ MUSIC QUEUE ERROR: ${error.message}`);
+});
+
+musicPlayer.events.on("disconnect", (queue) => {
+  console.log(`⚠️ MUSIC DISCONNECT: guild=${queue.guild.id}`);
+});
+
+musicPlayer.events.on("playerFinish", (queue, track) => {
+  console.log(`🏁 MUSIC FINISH: ${track.title}`);
+});
 musicPlayer.extractors.loadMulti(DefaultExtractors);
 
 musicPlayer.events.on("playerStart", (queue, track) => {
