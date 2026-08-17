@@ -18,6 +18,8 @@ import { wrapUntrustedContent } from "../security/context";
 const __dirname = path.dirname(__filename);
 const app = express();
 
+app.set("trust proxy", 1);
+
 declare module "express-session" {
   interface SessionData {
     discordUser?: {
@@ -47,6 +49,29 @@ function getVersion(): string {
 }
 
 const VERSION = getVersion();
+
+type AshenAIRole = "creator" | "admin" | "user";
+
+function getUserRole(userId: string): AshenAIRole {
+  const creatorId =
+    process.env.CREATOR_DISCORD_USER_ID?.trim();
+
+  const adminIds =
+    (process.env.ADMIN_DISCORD_USER_IDS || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+  if (creatorId && userId === creatorId) {
+    return "creator";
+  }
+
+  if (adminIds.includes(userId)) {
+    return "admin";
+  }
+
+  return "user";
+}
 app.use(
   express.json({
     limit: "64kb",
@@ -235,7 +260,15 @@ app.get(
         avatar: discordUser.avatar,
       };
 
-      res.redirect("/");
+      req.session.save((error) => {
+        if (error) {
+          console.error("Failed to save Discord login session:", error);
+          res.status(500).send("Login session could not be saved.");
+          return;
+        }
+
+        res.redirect("/");
+      });
     } catch (error) {
       console.error(
         "Discord OAuth callback error:",
@@ -249,6 +282,48 @@ app.get(
   }
 );
 
+function requireAdmin(
+  req: Request,
+  res: Response,
+  next: () => void,
+) {
+  const user = req.session?.discordUser;
+
+  if (!user) {
+    res.status(401).json({
+      ok: false,
+      error: "Authentication required.",
+    });
+    return;
+  }
+
+  const role = getUserRole(user.id);
+
+  if (role !== "creator" && role !== "admin") {
+    res.status(403).json({
+      ok: false,
+      error: "Admin access required.",
+    });
+    return;
+  }
+
+  next();
+}
+
+app.get(
+  "/api/admin",
+  requireAdmin,
+  (req: Request, res: Response) => {
+    const user = req.session?.discordUser;
+
+    res.json({
+      ok: true,
+      role: user ? getUserRole(user.id) : "user",
+      message: "AshenAI admin access granted.",
+    });
+  },
+);
+
 app.get(
   "/api/me",
   (req: Request, res: Response) => {
@@ -258,6 +333,7 @@ app.get(
       ok: true,
       authenticated: Boolean(user),
       user: user || null,
+      role: user ? getUserRole(user.id) : "user",
     });
   }
 );
