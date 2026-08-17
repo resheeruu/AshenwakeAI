@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install
+        run: |
+          cd xykana
+          npm ci
+      - name: Typecheck
+        run: |
+          cd xykana
+          npm run typecheck
+      - name: Lint
+        run: |
+          cd xykana
+          npm run lint || true
+      - name: Test
+        run: |
+          cd xykana
+          npm run test
+      - name: Build
+        run: |
+          cd xykana
+          npm run build
