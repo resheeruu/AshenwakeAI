@@ -1172,6 +1172,130 @@
     }
     /* END AUTH UI */
 
+
+/* ===== Unified AshenAI Role Dashboard ===== */
+#unifiedAdminPanel {
+  display: none;
+  margin: 18px auto 24px;
+  width: min(1100px, calc(100% - 24px));
+}
+
+#unifiedAdminPanel .role-panel {
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 18px;
+  padding: 18px;
+  background: linear-gradient(145deg, rgba(25,25,37,.96), rgba(13,13,20,.96));
+  box-shadow: 0 14px 45px rgba(0,0,0,.25);
+}
+
+#unifiedAdminPanel .role-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#unifiedAdminPanel .role-title {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+#unifiedAdminPanel .role-subtitle {
+  color: #9292a3;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+#unifiedAdminPanel .role-badge {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(139,108,255,.15);
+  border: 1px solid rgba(139,108,255,.35);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+#unifiedAdminPanel .role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+}
+
+#unifiedAdminPanel .role-card {
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.035);
+}
+
+#unifiedAdminPanel .role-card.full {
+  grid-column: 1 / -1;
+}
+
+#unifiedAdminPanel .role-card h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+#unifiedAdminPanel .role-value {
+  font-size: 25px;
+  font-weight: 800;
+}
+
+#unifiedAdminPanel .role-muted {
+  color: #9292a3;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+#unifiedAdminPanel .provider-list {
+  display: grid;
+  gap: 7px;
+}
+
+#unifiedAdminPanel .provider-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.035);
+}
+
+#unifiedAdminPanel .online {
+  color: #61e294;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#unifiedAdminPanel .creator-tools {
+  display: none;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+
+#unifiedAdminPanel .creator-tools strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 650px) {
+  #unifiedAdminPanel .role-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #unifiedAdminPanel .role-card.full {
+    grid-column: auto;
+  }
+
+  #unifiedAdminPanel .role-header {
+    align-items: flex-start;
+  }
+}
+
 </style>
   <link rel="icon" type="image/png" href="/assets/logo-1.png">
 </head>
@@ -1731,6 +1855,189 @@
 
   loadHistory();
   input.focus();
+</script>
+
+
+<!-- ===== Unified AshenAI Role Dashboard ===== -->
+<section id="unifiedAdminPanel">
+  <div class="role-panel">
+
+    <div class="role-header">
+      <div>
+        <div class="role-title">🔥 AshenAI Control Panel</div>
+        <div class="role-subtitle" id="roleWelcome">
+          Loading account permissions...
+        </div>
+      </div>
+
+      <div class="role-badge" id="roleBadge">
+        Checking...
+      </div>
+    </div>
+
+    <div class="role-grid">
+
+      <div class="role-card">
+        <h3>Authentication</h3>
+        <div class="role-value" id="roleAuth">—</div>
+        <div class="role-muted">Current account</div>
+      </div>
+
+      <div class="role-card">
+        <h3>Web Server</h3>
+        <div class="role-value">🟢 Online</div>
+        <div class="role-muted">AshenAI web service</div>
+      </div>
+
+      <div class="role-card">
+        <h3>Version</h3>
+        <div class="role-value" id="roleVersion">—</div>
+        <div class="role-muted">Current deployment</div>
+      </div>
+
+      <div class="role-card">
+        <h3>AI Providers</h3>
+        <div class="role-value" id="roleProviderCount">—</div>
+        <div class="role-muted">Available providers</div>
+      </div>
+
+      <div class="role-card full">
+        <h3>AI Provider Status</h3>
+        <div class="provider-list" id="roleProviders">
+          Loading...
+        </div>
+      </div>
+
+      <div class="role-card full creator-tools" id="creatorTools">
+        <strong>👑 Creator Controls</strong>
+        <div class="role-muted">
+          Creator-level controls are enabled for this account.
+          Advanced controls can be added here without exposing them
+          to normal users or administrators.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<script>
+/* ===== Unified AshenAI Role Dashboard ===== */
+(async function loadUnifiedRoleDashboard() {
+  const panel = document.getElementById("unifiedAdminPanel");
+
+  if (!panel) return;
+
+  try {
+    const response = await fetch("/api/me", {
+      credentials: "include",
+      cache: "no-store"
+    });
+
+    if (!response.ok) return;
+
+    const me = await response.json();
+
+    const role = me.role || "user";
+
+    /* Only admin and creator see the control panel. */
+    if (
+      !me.authenticated ||
+      !me.user ||
+      (role !== "admin" && role !== "creator")
+    ) {
+      return;
+    }
+
+    panel.style.display = "block";
+
+    const badge = document.getElementById("roleBadge");
+    const welcome = document.getElementById("roleWelcome");
+    const auth = document.getElementById("roleAuth");
+    const creatorTools = document.getElementById("creatorTools");
+
+    const displayName =
+      me.user.global_name ||
+      me.user.username ||
+      "Discord User";
+
+    const roleLabel =
+      role === "creator"
+        ? "👑 Creator"
+        : "🛡️ Admin";
+
+    badge.textContent = roleLabel;
+    welcome.textContent =
+      `Welcome, ${displayName}. Your ${role} controls are available.`;
+    auth.textContent = displayName;
+
+    if (role === "creator") {
+      creatorTools.style.display = "block";
+    }
+
+    /* Backend authorization is still required. */
+    const adminResponse = await fetch("/api/admin", {
+      credentials: "include",
+      cache: "no-store"
+    });
+
+    if (!adminResponse.ok) {
+      panel.style.display = "none";
+      return;
+    }
+
+    const healthResponse = await fetch("/api/health", {
+      cache: "no-store"
+    });
+
+    if (!healthResponse.ok) return;
+
+    const health = await healthResponse.json();
+
+    document.getElementById("roleVersion").textContent =
+      health.version || "unknown";
+
+    const providers =
+      Array.isArray(health.providers)
+        ? health.providers
+        : [];
+
+    document.getElementById("roleProviderCount").textContent =
+      String(providers.length);
+
+    const container =
+      document.getElementById("roleProviders");
+
+    if (!providers.length) {
+      container.innerHTML =
+        '<div class="role-muted">No providers reported.</div>';
+      return;
+    }
+
+    container.innerHTML = providers.map((name) => {
+      const safe = String(name)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+      return `
+        <div class="provider-row">
+          <span>${safe}</span>
+          <span class="online">● Available</span>
+        </div>
+      `;
+    }).join("");
+
+  } catch (error) {
+    console.error(
+      "Unified role dashboard error:",
+      error
+    );
+  }
+})();
 </script>
 
 </body>
