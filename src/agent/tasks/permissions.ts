@@ -14,6 +14,7 @@ const ACTION_PERMISSIONS: Record<
   typecheck: "test",
   run_tests: "test",
   repair_file: "diagnose",
+  coding_agent: "diagnose",
 };
 
 export function getActionPermission(

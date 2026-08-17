@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { AgentTask } from "../agent/tasks/types";
-import { AgentHandoff, CodingAgentRole } from "./types";
+import { AgentHandoff, CodingAgentExecutionMode, CodingAgentRole } from "./types";
 import { CodingAgentRegistry } from "./registry";
 import { recordHandoff, getLatestHandoff } from "./handoff";
 
@@ -86,6 +86,7 @@ export class CodingAgentCoordinator {
     agent: {
       readonly name: string;
       readonly command: string;
+      readonly executionMode?: CodingAgentExecutionMode;
     },
     prompt: string,
     timeoutMs = 300_000,
@@ -94,9 +95,20 @@ export class CodingAgentCoordinator {
 
     return new Promise(
       (resolve, reject) => {
+      const executionMode = agent.executionMode ?? "stdin";
+
+      const executionArgs =
+        executionMode === "prompt_arg"
+          ? ["-p", prompt]
+          : executionMode === "print_arg"
+            ? ["--print", prompt]
+            : executionMode === "text_arg"
+              ? [prompt]
+              : [];
+
         const child = spawn(
           agent.command,
-          [],
+          executionArgs,
           {
             cwd: process.cwd(),
             stdio: [
@@ -182,26 +194,45 @@ export class CodingAgentCoordinator {
           },
         );
 
-        child.once(
-          "exit",
-          code => {
-            finish(() => {
-              resolve({
-                agent: agent.name,
-                output:
-                  `${stdout}${stderr}`.trim(),
-                exitCode:
-                  typeof code === "number"
-                    ? code
-                    : 1,
-                durationMs:
-                  Date.now() - startedAt,
-              });
-            });
-          },
-        );
+      child.once(
+        "exit",
+        code => {
+          finish(() => {
+            const output = `${stdout}${stderr}`.trim();
 
-        child.stdin.write(prompt);
+            const providerFailurePatterns = [
+              /\b503\b/i,
+              /UNAVAILABLE/i,
+              /_ApiError/i,
+              /resource exhausted/i,
+              /rate limit/i,
+              /quota exceeded/i,
+              /temporarily unavailable/i,
+              /high demand/i,
+            ];
+
+            const providerFailure = providerFailurePatterns.some(
+              pattern => pattern.test(output),
+            );
+
+            resolve({
+              agent: agent.name,
+              output,
+              exitCode:
+                typeof code === "number" && code !== 0
+                  ? code
+                  : providerFailure
+                    ? 1
+                    : 0,
+              durationMs: Date.now() - startedAt,
+            });
+          });
+        },
+      );
+
+        if (executionMode === "stdin") {
+          child.stdin.write(prompt);
+        }
         child.stdin.end();
       },
     );

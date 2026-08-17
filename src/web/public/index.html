@@ -348,68 +348,6 @@
       font-size: 14px;
     }
 
-    .quick-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      max-width: 680px;
-      margin: auto;
-    }
-
-    .quick-card {
-      display: flex;
-      align-items: center;
-      gap: 13px;
-      padding: 15px;
-      text-align: left;
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 16px;
-      background: rgba(24,24,34,.72);
-      color: #fff;
-      cursor: pointer;
-      transition:
-        transform .18s ease,
-        border-color .18s ease,
-        background .18s ease;
-    }
-
-    .quick-card:hover {
-      transform: translateY(-2px);
-      border-color: rgba(145,125,255,.35);
-      background: rgba(38,35,55,.82);
-    }
-
-    .quick-card:active {
-      transform: translateY(0);
-    }
-
-    .quick-icon {
-      width: 40px;
-      height: 40px;
-      flex: 0 0 40px;
-      display: grid;
-      place-items: center;
-      border-radius: 12px;
-      background: rgba(255,255,255,.06);
-      font-size: 19px;
-    }
-
-    .quick-card strong,
-    .quick-card small {
-      display: block;
-    }
-
-    .quick-card strong {
-      margin-bottom: 3px;
-      font-size: 13px;
-    }
-
-    .quick-card small {
-      color: #7f7f8c;
-      font-size: 11px;
-      line-height: 1.4;
-    }
-
     @media (max-width: 600px) {
       .welcome {
         margin-top: 38px;
@@ -613,65 +551,6 @@
     }
 
 
-    .quick-grid {
-      position: relative;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      max-width: 680px;
-      margin: 0 auto;
-    }
-
-    .quick-card {
-      display: flex;
-      align-items: center;
-      gap: 13px;
-      min-height: 82px;
-      padding: 15px;
-      text-align: left;
-      color: var(--text);
-      background: rgba(255,255,255,.035);
-      border: 1px solid var(--border);
-      border-radius: 17px;
-      cursor: pointer;
-      transition: .2s ease;
-    }
-
-    .quick-card:hover {
-      transform: translateY(-3px);
-      background: rgba(139,108,255,.10);
-      border-color: rgba(139,108,255,.35);
-      box-shadow: 0 12px 35px rgba(0,0,0,.20);
-    }
-
-    .quick-card:active {
-      transform: translateY(0);
-    }
-
-    .quick-icon {
-      flex: 0 0 42px;
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 13px;
-      background: rgba(139,108,255,.12);
-      font-size: 20px;
-    }
-
-    .quick-card strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 14px;
-    }
-
-    .quick-card small {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.4;
-    }
-
     @media (max-width: 600px) {
       .welcome {
         padding: 32px 15px !important;
@@ -684,72 +563,6 @@
     }
 
 
-    .quick-grid {
-      position: relative;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      max-width: 680px;
-      margin: 0 auto;
-    }
-
-    .quick-card {
-      display: flex;
-      align-items: center;
-      gap: 13px;
-      min-height: 82px;
-      padding: 15px;
-      text-align: left;
-      color: var(--text);
-      background: rgba(255,255,255,.035);
-      border: 1px solid var(--border);
-      border-radius: 17px;
-      cursor: pointer;
-      transition: .2s ease;
-    }
-
-    .quick-card:hover {
-      transform: translateY(-3px);
-      background: rgba(139,108,255,.10);
-      border-color: rgba(139,108,255,.35);
-      box-shadow: 0 12px 35px rgba(0,0,0,.20);
-    }
-
-    .quick-card:active {
-      transform: translateY(0);
-    }
-
-    .quick-icon {
-      flex: 0 0 42px;
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 13px;
-      background: rgba(139,108,255,.12);
-      font-size: 20px;
-    }
-
-    .quick-card strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 14px;
-    }
-
-    .quick-card small {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.4;
-    }
-
-    @media (max-width: 600px) {
-      .welcome {
-        padding: 32px 15px !important;
-        border-radius: 23px;
-      }
-
-      .quick-grid {
         grid-template-columns: 1fr;
       }
     }

@@ -11,6 +11,7 @@ codingAgentRegistry.register(
     "gemini",
     "0.55.1",
     "primary",
+    "prompt_arg",
   ),
 );
 
@@ -19,7 +20,8 @@ codingAgentRegistry.register(
     "Qwen Code",
     "qwen",
     "0.21.12",
-    "fallback",
+    "general",
+    "prompt_arg",
   ),
 );
 
@@ -28,7 +30,8 @@ codingAgentRegistry.register(
     "Pi Coding Agent",
     "pi",
     "0.84.2",
-    "long_task",
+    "fallback",
+    "print_arg",
   ),
 );
 
@@ -38,6 +41,7 @@ codingAgentRegistry.register(
     "fabric",
     "1.4.470",
     "analysis",
+    "stdin",
   ),
 );
 
@@ -47,6 +51,7 @@ codingAgentRegistry.register(
     "aichat",
     "0.30.0",
     "general",
+    "text_arg",
   ),
 );
 

@@ -11,6 +11,12 @@ export type CodingAgentRole =
   | "long_task"
   | "general";
 
+export type CodingAgentExecutionMode =
+  | "prompt_arg"
+  | "print_arg"
+  | "stdin"
+  | "text_arg";
+
 export interface CodingAgent {
   readonly name: string;
   readonly command: string;

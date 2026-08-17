@@ -1,4 +1,5 @@
 import { repairFile } from "../selfHeal";
+import { codingAgentCoordinator } from "../../coding-agents";
 import { taskEngine } from "./index";
 import {
   checkProject,
@@ -79,6 +80,24 @@ export function initializeTaskEngine(): void {
       return repaired
         ? `✅ Repair succeeded: ${filePath}`
         : `❌ Repair rejected or rolled back: ${filePath}`;
+    },
+  );
+
+  taskEngine.registerAction(
+    "coding_agent",
+    async ({ task, step }) => {
+      const result = await codingAgentCoordinator.executeWithFailover(
+        task,
+        step.description,
+      );
+
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `Coding agent ${result.agent} failed: ${result.output}`,
+        );
+      }
+
+      return `Agent: ${result.agent}\n${result.output}`;
     },
   );
 

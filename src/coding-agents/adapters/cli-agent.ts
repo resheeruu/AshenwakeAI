@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { CodingAgent, CodingAgentRole } from "../types";
+import { CodingAgent, CodingAgentExecutionMode, CodingAgentRole } from "../types";
 
 export class CliCodingAgent implements CodingAgent {
   constructor(
@@ -7,6 +7,7 @@ export class CliCodingAgent implements CodingAgent {
     public readonly command: string,
     public readonly version: string,
     public readonly role: CodingAgentRole,
+    public readonly executionMode: CodingAgentExecutionMode = "stdin",
   ) {}
 
   async isAvailable(): Promise<boolean> {

@@ -16,6 +16,7 @@ import {
 
 import { logger } from "./logger";
 import { AgentManager } from "./agent/manager";
+import { createSelfHealerCallback } from "./agent/selfHealCallback";
 import { taskEngine, initializeTaskEngine } from "./agent/tasks";
 import { messageRateLimiter } from "./security";
 import { config } from "./config/env";
@@ -36,7 +37,6 @@ import { createHelpCommand } from "./commands/help";
 import { createStatusCommand } from "./commands/status";
 import { createConfigCommand } from "./commands/config";
 import { createDiagnoseCommand } from "./commands/diagnose";
-import { createTaskCommand } from "./commands/task";
 import { createGameCommand } from "./commands/game";
 import { getBlackjackGame, hitBlackjack, standBlackjack, handText, calculateTotal,
 } from "./games/games/blackjack";
@@ -112,7 +112,7 @@ const usageStatsTimer = setInterval(
 usageStatsTimer.unref();
 
 const commandHandler = new CommandHandler([], usageStats);
-const agentManager = new AgentManager();
+const agentManager = new AgentManager(router);
 
 // Initialize autonomous task actions once at startup.
 initializeTaskEngine();
@@ -124,7 +124,6 @@ initializeTaskEngine();
 
 const commands: AshenCommand[] = [
   createAskCommand(router, memory),
-  createTaskCommand(router),
   createGameCommand(),
   createResetCommand(memory),
   createHelpCommand(),
@@ -328,12 +327,9 @@ client.once(
        * Start Discord command synchronization and the
        * AshenAI background agent together.
        */
-      await Promise.all([
-        syncCommands(
+      await syncCommands(
           commands.map((command) => command.data)
-        ),
-        agentManager.start(),
-      ]);
+        );
 
       logger.info(
         `✅ Slash commands synchronized: ${commands.length}`

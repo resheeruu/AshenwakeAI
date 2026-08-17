@@ -133,18 +133,46 @@ export function createDiagnoseCommand(
             : "⚠️ **AshenAI needs attention.**",
         ].join("\n");
 
+        const chunks: string[] = [];
+        let current = "";
+
+        for (const line of content.split("\n")) {
+          if (current.length + line.length + 1 > 1900) {
+            if (current) chunks.push(current);
+            current = line;
+          } else {
+            current += (current ? "\n" : "") + line;
+          }
+        }
+
+        if (current) chunks.push(current);
+
         if (
           interaction.deferred ||
           interaction.replied
         ) {
           await interaction.editReply({
-            content,
+            content: chunks[0] ?? "Diagnostics completed.",
           });
+
+          for (const chunk of chunks.slice(1)) {
+            await interaction.followUp({
+              content: chunk,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
         } else {
           await interaction.reply({
-            content,
+            content: chunks[0] ?? "Diagnostics completed.",
             flags: MessageFlags.Ephemeral,
           });
+
+          for (const chunk of chunks.slice(1)) {
+            await interaction.followUp({
+              content: chunk,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
         }
       } catch (error) {
         console.error(

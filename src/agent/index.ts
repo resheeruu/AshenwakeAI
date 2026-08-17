@@ -34,6 +34,11 @@ import {
 } from "./tools";
 
 import { startSelfHealer } from "./selfHeal";
+import {
+  taskEngine,
+  initializeTaskEngine,
+} from "./tasks";
+import { planTask } from "./tasks/aiPlanner";
 
 // ─────────────────────────────────────────────────────────────
 // AshenAI logging policy
@@ -849,6 +854,179 @@ Do not use markdown fences.`,
       return false;
     }
   });
+
+
+  // ─────────────────────────────────────────────────────────────
+  // TERMUX TASK CLI
+  // These commands are intentionally outside Discord.
+  // ─────────────────────────────────────────────────────────────
+  const cliArgs = process.argv.slice(2);
+
+  if (cliArgs[0] === "task") {
+    initializeTaskEngine();
+
+    const operation = cliArgs[1];
+
+    try {
+      if (operation === "add") {
+        const goal = cliArgs.slice(2).join(" ").trim();
+
+        if (!goal) {
+          console.log('Usage: task add "your goal"');
+          process.exit(1);
+        }
+
+        console.log(`🧠 Planning task: ${goal}`);
+
+        const planned = await planTask(router, goal);
+
+        const task = await taskEngine.create(
+          planned.goal,
+          planned.steps.map((step) => ({
+            title: step.title,
+            description: step.description,
+            action: step.action,
+            maxAttempts: step.maxAttempts,
+          })),
+        );
+
+        console.log(`💾 Task saved: ${task.id}`);
+
+        console.log("");
+        console.log("✅ Task created");
+        console.log(`🆔 ${task.id}`);
+        console.log(`🎯 ${task.goal}`);
+        console.log(`📊 ${task.steps.length} steps`);
+        console.log("");
+        console.log(`Run:    npx tsx src/agent/index.ts task run ${task.id}`);
+        console.log(`Status: npx tsx src/agent/index.ts task status ${task.id}`);
+        console.log(`Cancel: npx tsx src/agent/index.ts task cancel ${task.id}`);
+
+        process.exit(0);
+      }
+
+      if (operation === "list") {
+        const tasks = await taskEngine.list();
+
+        if (tasks.length === 0) {
+          console.log("📭 No tasks.");
+          process.exit(0);
+        }
+
+        console.log("🤖 AshenAI Tasks");
+        console.log("");
+
+        for (const task of tasks.slice(-20).reverse()) {
+          console.log(
+            `${task.status === "completed" ? "✅" :
+              task.status === "cancelled" ? "🛑" :
+              task.status === "failed" ? "❌" :
+              task.status === "running" ? "🔄" : "⏳"} ` +
+            `${task.id} — ${task.status} — ${task.goal}`,
+          );
+        }
+
+        process.exit(0);
+      }
+
+      if (operation === "status") {
+        const id = cliArgs[2]?.trim();
+
+        if (!id) {
+          console.log("Usage: task status <task-id>");
+          process.exit(1);
+        }
+
+        const task = await taskEngine.get(id);
+
+        if (!task) {
+          console.log(`❌ Task not found: ${id}`);
+          process.exit(1);
+        }
+
+        console.log("🤖 Task Status");
+        console.log(`🆔 ${task.id}`);
+        console.log(`📌 ${task.status}`);
+        console.log(`🎯 ${task.goal}`);
+        console.log("");
+
+        task.steps.forEach((step, index) => {
+          const icon =
+            step.status === "completed" ? "✅" :
+            step.status === "failed" ? "❌" :
+            step.status === "running" ? "🔄" :
+            step.status === "skipped" ? "⏭️" : "⏳";
+
+          console.log(`${icon} ${index + 1}. ${step.title}`);
+        });
+
+        if (task.error) {
+          console.log("");
+          console.log(`❌ ${task.error}`);
+        }
+
+        process.exit(0);
+      }
+
+      if (operation === "run") {
+        const id = cliArgs[2]?.trim();
+
+        if (!id) {
+          console.log("Usage: task run <task-id>");
+          process.exit(1);
+        }
+
+        const task = await taskEngine.get(id);
+
+        if (!task) {
+          console.log(`❌ Task not found: ${id}`);
+          process.exit(1);
+        }
+
+        console.log(`🚀 Running task ${task.id}`);
+        console.log(`🎯 ${task.goal}`);
+        console.log("");
+
+        const result = await taskEngine.run(task.id);
+
+        console.log("");
+        console.log(
+          result.status === "completed"
+            ? "✅ TASK COMPLETED"
+            : `⚠️ TASK ${result.status.toUpperCase()}`,
+        );
+        console.log(`🆔 ${result.id}`);
+
+        process.exit(result.status === "completed" ? 0 : 1);
+      }
+
+      if (operation === "cancel") {
+        const id = cliArgs[2]?.trim();
+
+        if (!id) {
+          console.log("Usage: task cancel <task-id>");
+          process.exit(1);
+        }
+
+        const result = await taskEngine.cancel(id);
+
+        console.log(`🛑 Task ${result.id} is now ${result.status}.`);
+
+        process.exit(0);
+      }
+
+      console.log(
+        "Usage: task <add|list|status|run|cancel> [arguments]",
+      );
+      process.exit(1);
+    } catch (error) {
+      console.error(
+        "❌ Task CLI error:",
+        error instanceof Error ? error.message : String(error),
+      );
+      process.exit(1);
+    }
+  }
 
   console.log("");
   console.log(

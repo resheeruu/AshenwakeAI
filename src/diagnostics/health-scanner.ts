@@ -50,7 +50,11 @@ function collectTypeScriptFiles(
     if (
       entry.name === "node_modules" ||
       entry.name === ".git" ||
-      entry.name === "dist"
+      entry.name === "dist" ||
+      entry.name.includes(".backup") ||
+      entry.name.includes(".before-") ||
+      entry.name.includes(".final-backup-") ||
+      entry.name.endsWith(".broken")
     ) {
       continue;
     }

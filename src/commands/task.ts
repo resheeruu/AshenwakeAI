@@ -138,14 +138,67 @@ export function createTaskCommand(
               .getString("goal", true)
               .trim();
 
-          const task =
-            await taskEngine.planAndRun(
-              router,
-              goal,
+          /*
+           * Plan first, but do not wait for execution.
+           * This lets Discord receive the task ID immediately.
+           */
+          const { planTask } =
+            await import("../agent/tasks/aiPlanner");
+
+          const task = await planTask(router, goal);
+
+          /*
+           * Save the exact task returned by the planner.
+           */
+          await taskEngine.create(
+            task.goal,
+            task.steps.map((step) => ({
+              title: step.title,
+              description: step.description,
+              action: step.action,
+              maxAttempts: step.maxAttempts,
+            })),
+          );
+
+          /*
+           * The task created above has a new ID, so retrieve
+           * the most recently saved task with the matching goal.
+           */
+          const tasks = await taskEngine.list();
+          const savedTask =
+            tasks
+              .filter((candidate) => candidate.goal === task.goal)
+              .at(-1);
+
+          if (!savedTask) {
+            throw new Error(
+              "Task was planned but could not be saved.",
             );
+          }
+
+          /*
+           * Start execution in the background.
+           * Do NOT await this.
+           */
+          void taskEngine.run(savedTask.id).catch((error) => {
+            console.error(
+              `❌ Background task ${savedTask.id} failed:`,
+              error instanceof Error
+                ? error.message
+                : String(error),
+            );
+          });
 
           await interaction.editReply(
-            taskText(task),
+            [
+              "🤖 **Task started**",
+              `🆔 \`${savedTask.id}\``,
+              `🎯 ${savedTask.goal}`,
+              `📊 ${savedTask.steps.length} steps planned`,
+              "",
+              `📌 Check: \`/task status id:${savedTask.id}\``,
+              `🛑 Cancel: \`/task cancel id:${savedTask.id}\``,
+            ].join("\n").slice(0, MAX),
           );
 
           return;

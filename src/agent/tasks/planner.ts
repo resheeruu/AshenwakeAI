@@ -127,7 +127,7 @@ export function validateTaskPlan(
       const description = step.description.trim();
 
       const match = description.match(
-        /^FILE:\s*([^\\n]+?)\s*\\nERROR:\s*([\\s\\S]+)$/i,
+        /^FILE:\s*([^\n]+?)\s*\nERROR:\s*([\s\S]+)$/i,
       );
 
       if (!match) {
