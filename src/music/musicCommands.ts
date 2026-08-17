@@ -92,6 +92,53 @@ export async function handleMusicCommand(
       requestedBy: track.requestedBy?.id ?? null,
     }));
 
+    const extractor = track.extractor;
+
+    console.log("🎵 EXTRACTOR INFO:", JSON.stringify({
+      extractor: extractor?.constructor?.name ?? null,
+      extractorIdentifier: extractor?.identifier ?? null,
+      trackSource: track.source,
+      trackUrl: track.url,
+    }));
+
+    if (extractor) {
+      const originalStream = extractor.stream.bind(extractor);
+
+      extractor.stream = async (streamTrack: any) => {
+        console.log("🎵 EXTRACTOR STREAM REQUEST:", JSON.stringify({
+          title: streamTrack.title,
+          url: streamTrack.url,
+          source: streamTrack.source,
+        }));
+
+        try {
+          const stream = await originalStream(streamTrack);
+
+          const isReadable =
+            !!stream &&
+            typeof stream === "object" &&
+            "on" in stream &&
+            typeof (stream as any).on === "function";
+
+          console.log("🎵 EXTRACTOR STREAM RESULT:", JSON.stringify({
+            type: typeof stream,
+            constructor: stream?.constructor?.name ?? null,
+            isString: typeof stream === "string",
+            isReadable,
+            hasFmt:
+              !!stream &&
+              typeof stream === "object" &&
+              "$fmt" in stream,
+          }));
+
+          return stream;
+        } catch (error) {
+          console.error("❌ EXTRACTOR STREAM ERROR:", error);
+          throw error;
+        }
+      };
+    }
+
     const playResult = await player.play(voiceChannel, track, {
       nodeOptions: {
         metadata: {
