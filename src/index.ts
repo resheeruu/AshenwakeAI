@@ -105,6 +105,44 @@ const client = new Client({
 
 const musicPlayer = new Player(client);
 musicPlayer.extractors.loadMulti(DefaultExtractors);
+
+musicPlayer.events.on("playerStart", (queue, track) => {
+  console.log(`🎵 PLAYER START: ${track.title}`);
+});
+
+musicPlayer.events.on("playerError", (queue, error, track) => {
+  console.error(
+    `❌ PLAYER ERROR: ${track.title} | ${error.message}`,
+    error,
+  );
+});
+
+musicPlayer.events.on("error", (queue, error) => {
+  console.error(
+    `❌ MUSIC QUEUE ERROR: ${error.message}`,
+    error,
+  );
+});
+
+musicPlayer.events.on("connection", (queue) => {
+  console.log(`🔊 MUSIC CONNECTION: ${queue.guild.name}`);
+});
+
+musicPlayer.events.on("connectionDestroyed", (queue) => {
+  console.log(`🔌 MUSIC CONNECTION DESTROYED: ${queue.guild.name}`);
+});
+
+musicPlayer.events.on("disconnect", (queue) => {
+  console.log(`📴 MUSIC DISCONNECTED: ${queue.guild.name}`);
+});
+
+musicPlayer.events.on("emptyQueue", (queue) => {
+  console.log(`📭 MUSIC QUEUE EMPTY: ${queue.guild.name}`);
+});
+
+musicPlayer.events.on("emptyChannel", (queue) => {
+  console.log(`📭 MUSIC CHANNEL EMPTY: ${queue.guild.name}`);
+});
 const router = new AIRouter(providers);
 const memory = new ConversationMemory();
 const userProfiles = new UserProfileMemory();
