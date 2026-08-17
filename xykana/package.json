@@ -7,8 +7,10 @@
     "build": "vite build",
     "preview": "vite preview --strictPort",
     "typecheck": "tsc --noEmit",
-    "test": "vitest",
-    "lint": "eslint . --ext .ts,.tsx"
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts,.tsx",
+    "check": "npm run typecheck && npm run test"
   },
   "dependencies": {
     "dexie": "^3.2.3",
