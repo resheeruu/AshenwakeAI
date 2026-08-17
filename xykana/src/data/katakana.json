@@ -1,0 +1,7 @@
+[
+  { "char": "ア", "romaji": "a", "example": "アイス", "meaning": "ice cream" },
+  { "char": "イ", "romaji": "i", "example": "イケメン", "meaning": "good-looking man" },
+  { "char": "ウ", "romaji": "u", "example": "ウーロン", "meaning": "oolong" },
+  { "char": "エ", "romaji": "e", "example": "エレベーター", "meaning": "elevator" },
+  { "char": "オ", "romaji": "o", "example": "オフィス", "meaning": "office" }
+]

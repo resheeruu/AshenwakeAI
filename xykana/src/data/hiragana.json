@@ -1,0 +1,9 @@
+[
+  { "char": "あ", "romaji": "a", "example": "あさ", "meaning": "morning" },
+  { "char": "い", "romaji": "i", "example": "いえ", "meaning": "house" },
+  { "char": "う", "romaji": "u", "example": "うみ", "meaning": "sea" },
+  { "char": "え", "romaji": "e", "example": "えき", "meaning": "station" },
+  { "char": "お", "romaji": "o", "example": "おかね", "meaning": "money" },
+  { "char": "か", "romaji": "ka", "example": "かさ", "meaning": "umbrella" },
+  { "char": "き", "romaji": "ki", "example": "きっぷ", "meaning": "ticket" }
+]
