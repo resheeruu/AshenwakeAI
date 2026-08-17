@@ -325,25 +325,6 @@ app.get(
 );
 
 app.get(
-  "/api/session-debug",
-  (req: Request, res: Response) => {
-    res.json({
-      hasSession: Boolean(req.session),
-      sessionID: req.sessionID || null,
-      authenticated: Boolean(req.session?.discordUser),
-      user: req.session?.discordUser || null,
-      cookie: req.session?.cookie
-        ? {
-            secure: req.session.cookie.secure,
-            sameSite: req.session.cookie.sameSite,
-            httpOnly: req.session.cookie.httpOnly,
-          }
-        : null,
-    });
-  }
-);
-
-app.get(
   "/api/me",
   (req: Request, res: Response) => {
     const user = req.session?.discordUser;
