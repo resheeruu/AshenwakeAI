@@ -72,13 +72,25 @@ export async function handleMusicCommand(
 
     const track = result.tracks[0];
 
-    await player.play(voiceChannel, track, {
+    const playResult = await player.play(voiceChannel, track, {
       nodeOptions: {
         metadata: {
           channel: message.channel,
           requestedBy: message.author,
         },
       },
+    });
+
+    console.log("🎵 PLAY RESULT:", playResult);
+
+    const queue = player.nodes.get(message.guild.id);
+
+    console.log("🎵 QUEUE STATE:", {
+      exists: Boolean(queue),
+      connected: Boolean(queue?.connection),
+      playing: queue?.isPlaying() ?? false,
+      empty: queue?.isEmpty() ?? true,
+      deleted: queue?.deleted ?? false,
     });
 
     await message.reply(
