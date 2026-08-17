@@ -454,6 +454,20 @@ app.post(
 );
 
 app.get(
+  "/admin",
+  requireAdmin,
+  (_req: Request, res: Response) => {
+    res.sendFile(
+      path.join(
+        __dirname,
+        "public",
+        "admin.html"
+      )
+    );
+  }
+);
+
+app.get(
   "/",
   (_req: Request, res: Response) => {
     res.sendFile(

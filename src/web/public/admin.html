@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AshenAI Admin</title>
+
+  <style>
+    :root {
+      --bg: #07070b;
+      --panel: #11111a;
+      --panel2: #181824;
+      --border: rgba(255,255,255,.09);
+      --text: #f7f7fb;
+      --muted: #9292a3;
+      --accent: #8b6cff;
+      --green: #61e294;
+      --red: #ff6f7d;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family:
+        Inter,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+      background:
+        radial-gradient(
+          circle at 50% -10%,
+          rgba(123,92,255,.18),
+          transparent 38%
+        ),
+        var(--bg);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: rgba(7,7,11,.82);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(18px);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 13px;
+      color: white;
+      background: rgba(255,255,255,.05);
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: rgba(139,108,255,.15);
+      border-color: rgba(139,108,255,.4);
+    }
+
+    main {
+      width: min(1100px, 100%);
+      margin: auto;
+      padding: 24px 16px 50px;
+    }
+
+    .welcome {
+      margin-bottom: 20px;
+    }
+
+    .welcome h2 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .welcome p {
+      color: var(--muted);
+      margin: 7px 0 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      background:
+        linear-gradient(
+          145deg,
+          rgba(25,25,37,.92),
+          rgba(13,13,20,.92)
+        );
+    }
+
+    .card h3 {
+      margin: 0 0 12px;
+      font-size: 14px;
+    }
+
+    .value {
+      font-size: 27px;
+      font-weight: 800;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px rgba(97,226,148,.7);
+    }
+
+    .error {
+      color: var(--red);
+    }
+
+    .providers {
+      display: grid;
+      gap: 8px;
+    }
+
+    .provider {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid var(--border);
+    }
+
+    @media (max-width: 650px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      main {
+        padding: 18px 12px 40px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div>
+    <h1>🔥 AshenAI Admin</h1>
+    <div class="subtitle">Creator Control Panel</div>
+  </div>
+
+  <button onclick="location.href='/'">
+    ← Chat
+  </button>
+</header>
+
+<main>
+
+  <section class="welcome">
+    <h2 id="welcome">Loading...</h2>
+    <p>System overview and AI infrastructure status.</p>
+  </section>
+
+  <section class="grid">
+
+    <div class="card">
+      <h3>Authentication</h3>
+      <div id="auth" class="status">
+        <span class="dot"></span>
+        Checking...
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Web Server</h3>
+      <div id="webStatus" class="status">
+        <span class="dot"></span>
+        Online
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Version</h3>
+      <div id="version" class="value">—</div>
+      <div class="muted">Current deployment</div>
+    </div>
+
+    <div class="card">
+      <h3>AI Providers</h3>
+      <div id="providerCount" class="value">—</div>
+      <div class="muted">Available providers</div>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1">
+      <h3>Provider Status</h3>
+      <div id="providers" class="providers">
+        Loading...
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+async function loadAdmin() {
+  try {
+    const meResponse = await fetch("/api/admin", {
+      credentials: "include"
+    });
+
+    if (!meResponse.ok) {
+      location.href = "/";
+      return;
+    }
+
+    const me = await meResponse.json();
+
+    document.getElementById("welcome").textContent =
+      `Welcome, ${me.role}`;
+
+    document.getElementById("auth").innerHTML =
+      '<span class="dot"></span>Authenticated';
+
+    const healthResponse =
+      await fetch("/api/health");
+
+    const health =
+      await healthResponse.json();
+
+    document.getElementById("version").textContent =
+      health.version || "unknown";
+
+    const providers =
+      Array.isArray(health.providers)
+        ? health.providers
+        : [];
+
+    document.getElementById("providerCount").textContent =
+      providers.length;
+
+    const container =
+      document.getElementById("providers");
+
+    if (!providers.length) {
+      container.innerHTML =
+        '<div class="muted">No providers reported.</div>';
+      return;
+    }
+
+    container.innerHTML =
+      providers.map(name => `
+        <div class="provider">
+          <span>${escapeHtml(name)}</span>
+          <span class="status">
+            <span class="dot"></span>
+            Available
+          </span>
+        </div>
+      `).join("");
+
+  } catch (error) {
+    console.error(error);
+
+    document.getElementById("webStatus").innerHTML =
+      '<span class="error">Unable to load system data.</span>';
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+loadAdmin();
+</script>
+
+</body>
+</html>
