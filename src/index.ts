@@ -1508,13 +1508,7 @@ process.on("SIGTERM", async () => {
 });
 
 startWebServer();
-
-console.log("🚀 About to connect AshenAI to Discord...");
-console.log("🔐 Discord token configured:", Boolean(token));
-
-client.login(token).then(() => {
-  console.log("✅ Discord login promise resolved.");
-}).catch((error) => {
+client.login(token).catch((error) => {
   logger.error(
     "❌ Discord login failed:",
     error instanceof Error
