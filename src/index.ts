@@ -76,6 +76,9 @@ import {
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { UsageStats } from "./analytics/usage-stats";
+import { handleMusicCommand } from "./music/musicCommands";
+import { Player } from "discord-player";
+import { DefaultExtractors } from "@discord-player/extractor";
 
 /* =====================================================
    DISCORD CLIENT
@@ -87,6 +90,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 
   partials: [
@@ -99,6 +103,8 @@ const client = new Client({
    AI SYSTEM
    ===================================================== */
 
+const musicPlayer = new Player(client);
+musicPlayer.extractors.loadMulti(DefaultExtractors);
 const router = new AIRouter(providers);
 const memory = new ConversationMemory();
 const userProfiles = new UserProfileMemory();
@@ -982,6 +988,12 @@ client.on(
        * Never respond to bots.
        */
       if (message.author.bot) {
+        return;
+      }
+
+      // Handle music prefix commands before the AI mention/reply filter.
+      if (message.content.trim().toLowerCase().startsWith("!p")) {
+        await handleMusicCommand(message, musicPlayer);
         return;
       }
 

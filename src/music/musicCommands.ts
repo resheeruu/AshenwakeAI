@@ -1,0 +1,85 @@
+import {
+  Message,
+  GuildMember,
+  TextChannel,
+} from "discord.js";
+import { Player } from "discord-player";
+
+const PREFIX = "!";
+
+export async function handleMusicCommand(
+  message: Message,
+  player: Player,
+): Promise<boolean> {
+  if (message.author.bot) return false;
+
+  const content = message.content.trim();
+
+  if (!content.toLowerCase().startsWith(`${PREFIX}p`)) {
+    return false;
+  }
+
+  const args = content.slice(2).trim();
+
+  if (!args) {
+    await message.reply("🎵 Usage: `!p <song>`");
+    return true;
+  }
+
+  if (!message.guild) {
+    await message.reply("❌ Music commands can only be used in a server.");
+    return true;
+  }
+
+  const member = message.member as GuildMember | null;
+  const voiceChannel = member?.voice.channel;
+
+  if (!voiceChannel) {
+    await message.reply("❌ Join a voice channel first.");
+    return true;
+  }
+
+  if (!message.channel.isTextBased() || !("send" in message.channel)) {
+    return true;
+  }
+
+  try {
+    await message.reply(`🔎 Searching for **${args}**...`);
+
+    const result = await player.search(args, {
+      requestedBy: message.author,
+    });
+
+    if (!result.hasTracks()) {
+      await message.reply("❌ I couldn't find that track.");
+      return true;
+    }
+
+    const track = result.tracks[0];
+
+    await player.play(voiceChannel, track, {
+      nodeOptions: {
+        metadata: {
+          channel: message.channel,
+          requestedBy: message.author,
+        },
+      },
+    });
+
+    await message.reply(
+      `🎵 Added **${track.title}**${track.author ? ` — ${track.author}` : ""}`,
+    );
+
+    return true;
+  } catch (error) {
+    console.error("Music playback error:", error);
+
+    await message.reply(
+      `❌ Music playback failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+
+    return true;
+  }
+}
