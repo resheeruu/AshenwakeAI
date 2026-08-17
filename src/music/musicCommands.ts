@@ -85,13 +85,13 @@ export async function handleMusicCommand(
 
     const queue = player.nodes.get(message.guild.id);
 
-    console.log("🎵 QUEUE STATE:", {
+    console.log("🎵 QUEUE STATE:", JSON.stringify({
       exists: Boolean(queue),
       connected: Boolean(queue?.connection),
       playing: queue?.isPlaying() ?? false,
       empty: queue?.isEmpty() ?? true,
       deleted: queue?.deleted ?? false,
-    });
+    }));
 
     await message.reply(
       `🎵 Added **${track.title}**${track.author ? ` — ${track.author}` : ""}`,
