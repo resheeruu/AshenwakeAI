@@ -62,6 +62,7 @@ export async function handleMusicCommand(
 
     const result = await player.search(args, {
       requestedBy: message.author,
+      searchEngine: "soundcloud",
     });
 
     if (!result.hasTracks()) {
