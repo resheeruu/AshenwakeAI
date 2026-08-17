@@ -1,12 +1,20 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import Home from './features/home/Home'
 import HiraganaList from './features/learn/HiraganaList'
 import KatakanaList from './features/learn/KatakanaList'
 import Flashcards from './features/flashcards/Flashcards'
 import Review from './features/review/Review'
+import { seedContentIfNeeded } from './lib/database/seed'
 
 export default function App() {
+  useEffect(() => {
+    // seed content on first app load
+    ;(async () => {
+      try { await seedContentIfNeeded() } catch (e) { console.error('Seed failed', e) }
+    })()
+  }, [])
+
   return (
     <BrowserRouter>
       <div className="app">
