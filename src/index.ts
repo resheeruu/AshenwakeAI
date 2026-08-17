@@ -984,6 +984,8 @@ client.on(
   Events.MessageCreate,
   async (message) => {
     try {
+      console.log(`📨 MESSAGE EVENT: ${message.author.tag} -> ${message.content}`);
+
       /*
        * Never respond to bots.
        */
