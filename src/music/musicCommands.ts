@@ -72,6 +72,26 @@ export async function handleMusicCommand(
 
     const track = result.tracks[0];
 
+    console.log("🎵 TRACK DEBUG:", JSON.stringify({
+      title: track.title,
+      author: track.author,
+      duration: track.duration,
+      durationMS: track.durationMS,
+      source: track.source,
+      url: track.url,
+      requestedBy: track.requestedBy?.id ?? null,
+    }));
+
+    console.log("🎵 TRACK DEBUG:", JSON.stringify({
+      title: track.title,
+      author: track.author,
+      duration: track.duration,
+      durationMS: track.durationMS,
+      source: track.source,
+      url: track.url,
+      requestedBy: track.requestedBy?.id ?? null,
+    }));
+
     const playResult = await player.play(voiceChannel, track, {
       nodeOptions: {
         metadata: {
