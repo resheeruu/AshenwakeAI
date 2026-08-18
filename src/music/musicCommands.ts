@@ -129,6 +129,10 @@ export async function handleMusicCommand(
               !!stream &&
               typeof stream === "object" &&
               "$fmt" in stream,
+            streamUrl:
+              typeof stream === "string"
+                ? stream.slice(0, 500)
+                : null,
           }));
 
           return stream;
