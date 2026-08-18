@@ -390,6 +390,7 @@ async function buildInteractiveContext(
 client.once(
   Events.ClientReady,
   async (readyClient) => {
+    console.log("🚨 DIRECT CLIENT READY:", readyClient.user.tag);
     logger.info("🔥 Starting AshenAI...");
     logger.info(
       `✅ Logged in as ${readyClient.user.tag}`
@@ -432,6 +433,162 @@ client.once(
   }
 );
 
+
+/* =====================================================
+   DISCORD GATEWAY WATCHDOG
+   ===================================================== */
+
+let discordWatchdogStarted = false;
+let discordReadyAt = 0;
+
+client.once(Events.ClientReady, () => {
+  discordReadyAt = Date.now();
+
+  if (discordWatchdogStarted) return;
+  discordWatchdogStarted = true;
+
+  console.log("🩺 DISCORD GATEWAY WATCHDOG STARTED");
+
+  const watchdog = setInterval(() => {
+    const now = Date.now();
+
+    /*
+     * Give Discord.js time to finish normal startup.
+     */
+    if (now - discordReadyAt < 120_000) {
+      return;
+    }
+
+    if (!client.isReady()) {
+      logger.error(
+        "🚨 DISCORD WATCHDOG: client is no longer ready. Exiting for Render restart."
+      );
+
+      clearInterval(watchdog);
+      process.exit(1);
+    }
+
+    const ws = client.ws;
+
+    if (!ws || ws.shards.size === 0) {
+      logger.error(
+        "🚨 DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Exiting."
+      );
+
+      clearInterval(watchdog);
+      process.exit(1);
+    }
+
+    for (const [shardId, shard] of ws.shards) {
+      const shardStatus = shard.status;
+      const ping = shard.ping;
+      const lastPing = shard.lastPingTimestamp;
+
+      /*
+       * A shard that isn't ready/connected should normally recover
+       * through discord.js. We only terminate if it remains unhealthy
+       * for a sustained period.
+       */
+      if (!Number.isFinite(lastPing) || lastPing <= 0) {
+        logger.warn(
+          `⚠️ DISCORD WATCHDOG: shard=${shardId} has no heartbeat timestamp; status=${shardStatus}`
+        );
+        continue;
+      }
+
+      const heartbeatAge = now - lastPing;
+
+      console.log(
+        `🩺 Discord gateway check: shard=${shardId} status=${shardStatus} ping=${ping}ms heartbeatAge=${heartbeatAge}ms`
+      );
+
+      /*
+       * Discord normally heartbeats frequently. A heartbeat older
+       * than 5 minutes is treated as a genuinely stale gateway.
+       */
+      if (heartbeatAge > 300_000) {
+        logger.error(
+          `🚨 DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Exiting for Render restart.`
+        );
+
+        clearInterval(watchdog);
+        process.exit(1);
+      }
+    }
+  }, 30_000);
+
+  console.log(
+    "🩺 DISCORD GATEWAY WATCHDOG ACTIVE: checking every 30s, stale threshold 5m"
+  );
+});
+
+/*
+ * Useful gateway lifecycle logging.
+ */
+client.on(Events.ShardReady, (id) => {
+  console.log(`🟢 DISCORD SHARD ${id} READY`);
+});
+
+client.on(Events.ShardReconnecting, (id) => {
+  console.log(`🔄 DISCORD SHARD ${id} RECONNECTING`);
+});
+
+client.on(Events.ShardResume, (id, replayedEvents) => {
+  console.log(
+    `♻️ DISCORD SHARD ${id} RESUMED | replayed=${replayedEvents}`
+  );
+});
+
+client.on(Events.ShardDisconnect, (event, id) => {
+  console.error(
+    `🔴 DISCORD SHARD ${id} DISCONNECTED | code=${event.code} | reason=${event.reason || "none"}`
+  );
+});
+
+client.on(Events.ShardError, (error, id) => {
+  console.error(
+    `❌ DISCORD SHARD ${id} ERROR:`,
+    error
+  );
+});
+
+client.on(Events.Invalidated, () => {
+  console.error(
+    "💀 DISCORD SESSION INVALIDATED"
+  );
+});
+
+client.on(Events.Error, (error) => {
+  console.error(
+    "❌ DISCORD CLIENT ERROR:",
+    error
+  );
+});
+
+client.on(Events.ShardResume, (id) => {
+  logger.info(`🔄 Discord shard ${id} resumed.`);
+});
+
+client.on(Events.ShardReconnecting, (id) => {
+  logger.warn(`🔄 Discord shard ${id} reconnecting...`);
+});
+
+client.on(Events.ShardDisconnect, (event, id) => {
+  logger.warn(
+    `⚠️ Discord shard ${id} disconnected: code=${event.code}`
+  );
+});
+
+client.on(Events.Error, (error) => {
+  logger.error(
+    "❌ Discord client error:",
+    error instanceof Error ? error.message : String(error)
+  );
+});
+
+client.on(Events.Warn, (warning) => {
+  logger.warn(`⚠️ Discord warning: ${warning}`);
+});
 
 /* =====================================================
    BLACKJACK BUTTONS
