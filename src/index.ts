@@ -130,6 +130,11 @@ musicPlayer.events.on("playerFinish", (queue, track) => {
 });
 musicPlayer.extractors.loadMulti(DefaultExtractors);
 
+console.log(
+  "🎵 MUSIC EXTRACTORS:",
+  musicPlayer.extractors.store.map((x: any) => x.identifier),
+);
+
 musicPlayer.events.on("playerStart", (queue, track) => {
   console.log(`🎵 PLAYER START: ${track.title}`);
 });
