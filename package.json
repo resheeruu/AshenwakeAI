@@ -23,6 +23,7 @@
   "dependencies": {
     "@discord-player/extractor": "^4.5.1",
     "@discordjs/voice": "^0.19.2",
+    "@distube/ytdl-core": "^4.16.12",
     "chokidar": "^5.0.0",
     "discord-player": "^6.6.6",
     "discord.js": "^14.27.0",

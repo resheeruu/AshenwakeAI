@@ -75,6 +75,7 @@ import {
 } from "./commands/server";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
+import { InternalSupervisor } from "./core/internalSupervisor";
 import { UsageStats } from "./analytics/usage-stats";
 import { handleMusicCommand } from "./music/musicCommands";
 import { Player } from "discord-player";
@@ -1738,6 +1739,7 @@ if (!token) {
 }
 
 process.on("SIGINT", async () => {
+  internalSupervisor.stop();
   logger.info("🛑 Shutdown signal received.");
 
   try {
@@ -1764,6 +1766,7 @@ process.on("SIGINT", async () => {
 });
 
 process.on("SIGTERM", async () => {
+  internalSupervisor.stop();
   logger.info("🛑 Termination signal received.");
 
   try {
@@ -1779,6 +1782,40 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 
+const internalSupervisor = new InternalSupervisor({
+  intervalMs: 30_000,
+  failureThreshold: 3,
+
+  checks: () => {
+    const reasons: string[] = [];
+
+    if (!client.isReady()) {
+      reasons.push("Discord client is not ready");
+    }
+
+    // AI providers are intentionally NOT treated as a fatal
+    // process-health failure. The AIRouter handles provider
+    // cooldowns, retries, and fallback independently.
+
+    return {
+      healthy: reasons.length === 0,
+      reasons,
+    };
+  },
+
+  onUnhealthy: (reason) => {
+    logger.error(
+      `🚨 INTERNAL SUPERVISOR: sustained unhealthy state — ${reason}`,
+    );
+
+    logger.error(
+      "🔄 Exiting so Render can restart AshenAI.",
+    );
+
+    process.exit(1);
+  },
+});
+
 async function startMusicAndDiscord(): Promise<void> {
   try {
     await initializeMusic();
@@ -1787,6 +1824,8 @@ async function startMusicAndDiscord(): Promise<void> {
     }));
 
     await client.login(token);
+
+    internalSupervisor.start();
   } catch (error) {
     logger.error(
       "❌ Discord startup failed:",
