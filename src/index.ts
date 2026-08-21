@@ -134,17 +134,42 @@ musicPlayer.events.on("disconnect", (queue) => {
 musicPlayer.events.on("playerFinish", (queue, track) => {
   console.log(`🏁 MUSIC FINISH: ${track.title}`);
 });
-async function initializeMusic(): Promise<void> {
-  await musicPlayer.extractors.register(SoundCloudExtractor, {});
-  await musicPlayer.extractors.register(SpotifyExtractor, {});
-  await musicPlayer.extractors.register(YouTubeExtractor, {});
-  await musicPlayer.extractors.register(VimeoExtractor, {});
-  await musicPlayer.extractors.register(AttachmentExtractor, {});
+let musicReady = false;
+let musicInitError: string | null = null;
 
-  console.log(
-    "🎵 MUSIC EXTRACTORS:",
-    musicPlayer.extractors.store.map((x: any) => x.identifier),
-  );
+async function initializeMusic(): Promise<void> {
+  try {
+    await musicPlayer.extractors.register(SoundCloudExtractor, {});
+    await musicPlayer.extractors.register(SpotifyExtractor, {});
+    await musicPlayer.extractors.register(YouTubeExtractor, {});
+    await musicPlayer.extractors.register(VimeoExtractor, {});
+    await musicPlayer.extractors.register(AttachmentExtractor, {});
+
+    musicReady = true;
+    musicInitError = null;
+
+    console.log(
+      "🎵 MUSIC EXTRACTORS:",
+      musicPlayer.extractors.store.map((x: any) => x.identifier),
+    );
+
+    console.log("🟢 MUSIC SYSTEM READY");
+  } catch (error) {
+    musicReady = false;
+    musicInitError =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    console.error(
+      "⚠️ MUSIC SYSTEM DISABLED: extractor initialization failed:",
+      musicInitError,
+    );
+
+    console.error(
+      "⚠️ AshenAI will continue without music functionality.",
+    );
+  }
 }
 
 console.log(
@@ -1236,7 +1261,11 @@ client.on(
 
       // Handle music prefix commands before the AI mention/reply filter.
       if (message.content.trim().toLowerCase().startsWith("!p")) {
-        await handleMusicCommand(message, musicPlayer);
+        await handleMusicCommand(
+          message,
+          musicPlayer,
+          musicReady,
+        );
         return;
       }
 

@@ -10,10 +10,21 @@ const PREFIX = "!";
 export async function handleMusicCommand(
   message: Message,
   player: Player,
+  musicReady = true,
 ): Promise<boolean> {
   if (message.author.bot) return false;
 
   const content = message.content.trim();
+
+  if (
+    content.toLowerCase().startsWith(`${PREFIX}p`) &&
+    !musicReady
+  ) {
+    await message.reply(
+      "⚠️ The music system is currently unavailable. AshenAI's AI and Discord systems are still online.",
+    );
+    return true;
+  }
 
   if (!content.toLowerCase().startsWith(`${PREFIX}p`)) {
     return false;
