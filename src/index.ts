@@ -78,7 +78,13 @@ import { startWebServer } from "./web/server";
 import { UsageStats } from "./analytics/usage-stats";
 import { handleMusicCommand } from "./music/musicCommands";
 import { Player } from "discord-player";
-import { DefaultExtractors } from "@discord-player/extractor";
+import {
+  SoundCloudExtractor,
+  SpotifyExtractor,
+  YouTubeExtractor,
+  VimeoExtractor,
+  AttachmentExtractor,
+} from "@discord-player/extractor";
 
 /* =====================================================
    DISCORD CLIENT
@@ -128,7 +134,18 @@ musicPlayer.events.on("disconnect", (queue) => {
 musicPlayer.events.on("playerFinish", (queue, track) => {
   console.log(`🏁 MUSIC FINISH: ${track.title}`);
 });
-musicPlayer.extractors.loadMulti(DefaultExtractors);
+async function initializeMusic(): Promise<void> {
+  await musicPlayer.extractors.register(SoundCloudExtractor, {});
+  await musicPlayer.extractors.register(SpotifyExtractor, {});
+  await musicPlayer.extractors.register(YouTubeExtractor, {});
+  await musicPlayer.extractors.register(VimeoExtractor, {});
+  await musicPlayer.extractors.register(AttachmentExtractor, {});
+
+  console.log(
+    "🎵 MUSIC EXTRACTORS:",
+    musicPlayer.extractors.store.map((x: any) => x.identifier),
+  );
+}
 
 console.log(
   "🎵 MUSIC EXTRACTORS:",
@@ -1733,14 +1750,20 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 
-startWebServer();
-client.login(token).catch((error) => {
-  logger.error(
-    "❌ Discord login failed:",
-    error instanceof Error
-      ? error.message
-      : String(error)
-  );
+async function startMusicAndDiscord(): Promise<void> {
+  try {
+    await initializeMusic();
+    startWebServer();
 
-  process.exit(1);
-});
+    await client.login(token);
+  } catch (error) {
+    logger.error(
+      "❌ Discord startup failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+
+    process.exit(1);
+  }
+}
+
+startMusicAndDiscord();

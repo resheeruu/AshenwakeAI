@@ -4,9 +4,7 @@ function required(name: string): string {
   const value = process.env[name]?.trim();
 
   if (!value) {
-    throw new Error(
-      `Missing required environment variable: ${name}`
-    );
+    throw new Error(`Missing required environment variable: ${name}`);
   }
 
   return value;
@@ -20,7 +18,7 @@ function optional(name: string): string | undefined {
 function numberEnv(
   name: string,
   fallback: number,
-  min = 0
+  min = 0,
 ): number {
   const value = Number(process.env[name]);
 
@@ -43,6 +41,7 @@ export interface RuntimeConfig {
     name: string;
     discord?: string;
   };
+
   admin: {
     discordIds: string[];
   };
@@ -56,24 +55,25 @@ function loadRuntimeConfig(): RuntimeConfig {
       timeoutMs: numberEnv(
         "AI_TIMEOUT_MS",
         30_000,
-        1_000
+        1_000,
       ),
 
       maxRetries: numberEnv(
         "AI_MAX_RETRIES",
         2,
-        0
+        0,
       ),
 
       maxContextMessages: numberEnv(
         "AI_MAX_CONTEXT_MESSAGES",
         20,
-        2
+        2,
       ),
+
       memoryIdleMinutes: numberEnv(
         "AI_MEMORY_IDLE_MINUTES",
         30,
-        1
+        1,
       ),
     },
 
@@ -107,12 +107,26 @@ export const config = {
     guildId: optional("DISCORD_GUILD_ID"),
   },
 
+  lavalink: {
+    url: required("LAVALINK_URL"),
+    auth: required("LAVALINK_PASSWORD"),
+    secure: optional("LAVALINK_SECURE") === "true",
+    name: optional("LAVALINK_NAME") || "main",
+  },
+
   creator: {
     name:
       process.env.CREATOR_NAME?.trim() ||
       "Xykel",
 
     discord: optional("CREATOR_DISCORD"),
+  },
+
+  admin: {
+    discordIds: (process.env.ADMIN_DISCORD_IDS || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
   },
 
   providers: {
@@ -150,10 +164,18 @@ export const config = {
     guildId?: string;
   };
 
+  lavalink: {
+    url: string;
+    auth: string;
+    secure: boolean;
+    name: string;
+  };
+
   creator: {
     name: string;
     discord?: string;
   };
+
   admin: {
     discordIds: string[];
   };
@@ -197,12 +219,17 @@ export class ConfigManager {
 
     Object.assign(
       config.ai,
-      this.runtime.ai
+      this.runtime.ai,
     );
 
     Object.assign(
       config.creator,
-      this.runtime.creator
+      this.runtime.creator,
+    );
+
+    Object.assign(
+      config.admin,
+      this.runtime.admin,
     );
 
     config.logLevel =

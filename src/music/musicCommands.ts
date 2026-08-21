@@ -150,29 +150,7 @@ export async function handleMusicCommand(
           requestedBy: message.author,
         },
 
-        onStreamExtracted: async (stream, extractedTrack) => {
-          console.log("🎵 STREAM EXTRACTED:", JSON.stringify({
-            title: extractedTrack.title,
-            type: typeof stream,
-            constructor: stream?.constructor?.name ?? null,
-            isString: typeof stream === "string",
-            isReadable: !!stream && typeof (stream as any).on === "function",
-          }));
 
-          if (stream && typeof (stream as any).on === "function") {
-            const readable = stream as any;
-
-            readable.once("end", () => {
-              console.log("🏁 STREAM END:", extractedTrack.title);
-            });
-
-            readable.once("error", (error: Error) => {
-              console.error("❌ STREAM ERROR:", extractedTrack.title, error);
-            });
-          }
-
-          return stream;
-        },
       },
     });
 
