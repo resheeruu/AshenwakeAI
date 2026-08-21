@@ -1753,7 +1753,9 @@ process.on("SIGTERM", async () => {
 async function startMusicAndDiscord(): Promise<void> {
   try {
     await initializeMusic();
-    startWebServer();
+    startWebServer(router, () => ({
+      discordReady: client.isReady(),
+    }));
 
     await client.login(token);
   } catch (error) {

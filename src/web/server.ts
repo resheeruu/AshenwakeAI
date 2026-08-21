@@ -37,7 +37,10 @@ const PORT = Number(
   3000
 );
 
-const router = new AIRouter(providers);
+let router: AIRouter;
+let getHealthStatus: (() => {
+  discordReady: boolean;
+}) | null = null;
 function getVersion(): string {
   try {
     return execSync("git rev-parse --short HEAD", {
@@ -108,11 +111,28 @@ app.use(
 app.get(
   "/api/health",
   (_req: Request, res: Response) => {
-    res.json({
-      ok: true,
+    const health = getHealthStatus
+      ? getHealthStatus()
+      : { discordReady: false };
+
+    const providers = router.getAvailableProviders();
+
+    const ok =
+      health.discordReady &&
+      providers.length > 0;
+
+    res.status(ok ? 200 : 503).json({
+      ok,
       name: "AshenAI",
       version: VERSION,
-      providers: router.getAvailableProviders().map((provider) => provider.name),
+      uptime: Math.floor(process.uptime()),
+      discord: {
+        ready: health.discordReady,
+      },
+      providers: {
+        available: providers.length,
+        names: providers.map((provider) => provider.name),
+      },
     });
   }
 );
@@ -553,7 +573,12 @@ app.get(
 );
 
 // This is what src/index.ts expects.
-export function startWebServer(): void {
+export function startWebServer(
+  webRouter: AIRouter,
+  healthStatus: () => { discordReady: boolean },
+): void {
+  router = webRouter;
+  getHealthStatus = healthStatus;
   app.listen(
     PORT,
     "0.0.0.0",
