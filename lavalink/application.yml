@@ -2,10 +2,22 @@ server:
   port: 2333
   address: 0.0.0.0
 
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
+    allowDirectPlaylistIds: true
+
 lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+      snapshot: false
+
   server:
-    bufferDurationMs: 0
+    bufferDurationMs: 400
     password: "ashenai-local"
+
     sources:
       youtube: false
       bandcamp: true
@@ -14,6 +26,7 @@ lavalink:
       vimeo: true
       http: true
       local: false
+
     filters:
       volume: true
       equalizer: true
@@ -30,11 +43,3 @@ logging:
   level:
     root: INFO
     lavalink: INFO
-
-
-plugins:
-  youtube:
-    enabled: true
-    allowSearch: true
-    allowDirectVideoIds: true
-    allowDirectPlaylistIds: true
