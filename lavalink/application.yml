@@ -30,3 +30,11 @@ logging:
   level:
     root: INFO
     lavalink: INFO
+
+
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
+    allowDirectPlaylistIds: true

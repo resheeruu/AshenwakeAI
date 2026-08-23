@@ -15,19 +15,17 @@ export async function handleMusicCommand(
   if (message.author.bot) return false;
 
   const content = message.content.trim();
+  const lower = content.toLowerCase();
 
-  if (
-    content.toLowerCase().startsWith(`${PREFIX}p`) &&
-    !musicReady
-  ) {
+  if (!lower.startsWith(`${PREFIX}p`)) {
+    return false;
+  }
+
+  if (!musicReady) {
     await message.reply(
       "⚠️ The music system is currently unavailable. AshenAI's AI and Discord systems are still online.",
     );
     return true;
-  }
-
-  if (!content.toLowerCase().startsWith(`${PREFIX}p`)) {
-    return false;
   }
 
   const args = content.slice(2).trim();
@@ -62,7 +60,7 @@ export async function handleMusicCommand(
       const version = execFileSync("ffmpeg", ["-version"], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
-      }).split("\\n")[0];
+      }).split("\n")[0];
 
       console.log(`🎵 Music FFmpeg: ${version}`);
     } catch {
@@ -83,68 +81,68 @@ export async function handleMusicCommand(
 
     const track = result.tracks[0];
 
-    console.log("🎵 TRACK DEBUG:", JSON.stringify({
-      title: track.title,
-      author: track.author,
-      duration: track.duration,
-      durationMS: track.durationMS,
-      source: track.source,
-      url: track.url,
-      requestedBy: track.requestedBy?.id ?? null,
-    }));
-
-    console.log("🎵 TRACK DEBUG:", JSON.stringify({
-      title: track.title,
-      author: track.author,
-      duration: track.duration,
-      durationMS: track.durationMS,
-      source: track.source,
-      url: track.url,
-      requestedBy: track.requestedBy?.id ?? null,
-    }));
+    console.log(
+      "🎵 TRACK DEBUG:",
+      JSON.stringify({
+        title: track.title,
+        author: track.author,
+        duration: track.duration,
+        durationMS: track.durationMS,
+        source: track.source,
+        url: track.url,
+        requestedBy: track.requestedBy?.id ?? null,
+      }),
+    );
 
     const extractor = track.extractor;
 
-    console.log("🎵 EXTRACTOR INFO:", JSON.stringify({
-      extractor: extractor?.constructor?.name ?? null,
-      extractorIdentifier: extractor?.identifier ?? null,
-      trackSource: track.source,
-      trackUrl: track.url,
-    }));
+    console.log(
+      "🎵 EXTRACTOR INFO:",
+      JSON.stringify({
+        extractor: extractor?.constructor?.name ?? null,
+        extractorIdentifier: extractor?.identifier ?? null,
+        trackSource: track.source,
+        trackUrl: track.url,
+      }),
+    );
 
     if (extractor) {
       const originalStream = extractor.stream.bind(extractor);
 
       extractor.stream = async (streamTrack: any) => {
-        console.log("🎵 EXTRACTOR STREAM REQUEST:", JSON.stringify({
-          title: streamTrack.title,
-          url: streamTrack.url,
-          source: streamTrack.source,
-        }));
+        console.log(
+          "🎵 EXTRACTOR STREAM REQUEST:",
+          JSON.stringify({
+            title: streamTrack.title,
+            url: streamTrack.url,
+            source: streamTrack.source,
+          }),
+        );
 
         try {
           const stream = await originalStream(streamTrack);
 
-          const isReadable =
-            !!stream &&
-            typeof stream === "object" &&
-            "on" in stream &&
-            typeof (stream as any).on === "function";
-
-          console.log("🎵 EXTRACTOR STREAM RESULT:", JSON.stringify({
-            type: typeof stream,
-            constructor: stream?.constructor?.name ?? null,
-            isString: typeof stream === "string",
-            isReadable,
-            hasFmt:
-              !!stream &&
-              typeof stream === "object" &&
-              "$fmt" in stream,
-            streamUrl:
-              typeof stream === "string"
-                ? stream.slice(0, 500)
-                : null,
-          }));
+          console.log(
+            "🎵 EXTRACTOR STREAM RESULT:",
+            JSON.stringify({
+              type: typeof stream,
+              constructor: stream?.constructor?.name ?? null,
+              isString: typeof stream === "string",
+              isReadable:
+                !!stream &&
+                typeof stream === "object" &&
+                "on" in stream &&
+                typeof (stream as any).on === "function",
+              hasFmt:
+                !!stream &&
+                typeof stream === "object" &&
+                "$fmt" in stream,
+              streamUrl:
+                typeof stream === "string"
+                  ? stream.slice(0, 500)
+                  : null,
+            }),
+          );
 
           return stream;
         } catch (error) {
@@ -160,8 +158,6 @@ export async function handleMusicCommand(
           channel: message.channel,
           requestedBy: message.author,
         },
-
-
       },
     });
 
@@ -169,13 +165,16 @@ export async function handleMusicCommand(
 
     const queue = player.nodes.get(message.guild.id);
 
-    console.log("🎵 QUEUE STATE:", JSON.stringify({
-      exists: Boolean(queue),
-      connected: Boolean(queue?.connection),
-      playing: queue?.isPlaying() ?? false,
-      empty: queue?.isEmpty() ?? true,
-      deleted: queue?.deleted ?? false,
-    }));
+    console.log(
+      "🎵 QUEUE STATE:",
+      JSON.stringify({
+        exists: Boolean(queue),
+        connected: Boolean(queue?.connection),
+        playing: queue?.isPlaying() ?? false,
+        empty: queue?.isEmpty() ?? true,
+        deleted: queue?.deleted ?? false,
+      }),
+    );
 
     await message.reply(
       `🎵 Added **${track.title}**${track.author ? ` — ${track.author}` : ""}`,
@@ -194,3 +193,4 @@ export async function handleMusicCommand(
     return true;
   }
 }
+
