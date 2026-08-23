@@ -79,6 +79,7 @@ import { InternalSupervisor } from "./core/internalSupervisor";
 import { UsageStats } from "./analytics/usage-stats";
 import { handleMusicCommand } from "./music/musicCommands";
 import { Player } from "discord-player";
+import { ShoukakuMusicManager } from "./music/ShoukakuMusicManager";
 import {
   SoundCloudExtractor,
   SpotifyExtractor,
@@ -111,6 +112,14 @@ const client = new Client({
    ===================================================== */
 
 const musicPlayer = new Player(client);
+
+const shoukakuMusic = new ShoukakuMusicManager(client, {
+  url: process.env.LAVALINK_URL!,
+  auth: process.env.LAVALINK_PASSWORD!,
+  secure: process.env.LAVALINK_SECURE === "true",
+  name: process.env.LAVALINK_NAME || "main",
+});
+
 
 musicPlayer.events.on("connection", (queue) => {
   console.log(`🎵 MUSIC CONNECTION: guild=${queue.guild.id}`);
