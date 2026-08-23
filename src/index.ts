@@ -1834,6 +1834,13 @@ async function startMusicAndDiscord(): Promise<void> {
 
     await client.login(token);
 
+    if (!client.isReady()) {
+      throw new Error("Discord client did not become ready after login");
+    }
+
+    console.log(`🟢 Discord ready: ${client.user?.tag ?? client.user?.id}`);
+    console.log("🎵 Shoukaku Lavalink connection initialized.");
+
     internalSupervisor.start();
   } catch (error) {
     logger.error(

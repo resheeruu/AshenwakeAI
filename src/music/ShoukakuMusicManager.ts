@@ -31,8 +31,8 @@ export class ShoukakuMusicManager {
       moveOnDisconnect: true,
     });
 
-    this.shoukaku.on("ready", (name) => {
-      console.log(`🟢 LAVALINK READY: ${name}`);
+    this.shoukaku.on("ready", (name, resumed) => {
+      console.log(`🟢 LAVALINK READY: ${name} resumed=${resumed}`);
     });
 
     this.shoukaku.on("error", (name, error) => {
