@@ -2021,8 +2021,46 @@ logger.info("🚀 AshenAI startup beginning...");
     }
 
     if (!client.isReady()) {
+      logger.warn(
+        "🟡 Discord login() resolved but client is not ready yet. Waiting for READY event...",
+      );
+
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+
+        const onReady = () => {
+          logger.info("🟢 Discord READY event received.");
+          finish();
+        };
+
+        const finish = (error?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          client.off("ready", onReady);
+
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        };
+
+        const timeout = setTimeout(() => {
+          finish(
+            new Error(
+              "Discord READY event was not received within 30 seconds after login().",
+            ),
+          );
+        }, 30_000);
+
+        client.once("ready", onReady);
+      });
+    }
+
+    if (!client.isReady()) {
       throw new Error(
-        "Discord login resolved but Discord client is not ready.",
+        "Discord READY event completed but client is still not ready.",
       );
     }
 
