@@ -1900,17 +1900,13 @@ client.on("shardReady", (shardId) => {
 
 async function startMusicAndDiscord(): Promise<void> {
   try {
-    // Render web service must bind to PORT immediately.
-    // Discord/Lavalink must never block Render port detection.
+    // Render HTTP server must start immediately.
     startWebServer(router, () => ({
       discordReady: client.isReady(),
     }));
 
     logger.info("🌐 Web server started. Waiting for Discord...");
-logger.info("🚀 AshenAI startup beginning...");
-
-    // Discord connects FIRST.
-    // Nothing else is allowed to block Discord Gateway startup.
+    logger.info("🚀 AshenAI startup beginning...");
     logger.info("🔐 Attempting Discord login...");
 
     logger.info("🧪 Discord client diagnostics:");
@@ -1918,126 +1914,44 @@ logger.info("🚀 AshenAI startup beginning...");
     logger.info(`   Client ws status before login: ${client.ws.status}`);
     logger.info(`   Client shard count: ${client.ws.shards.size}`);
 
-
     logger.info(`🔐 Discord token present: ${Boolean(token)}`);
     logger.info(`🔐 Discord token length: ${token?.length ?? 0}`);
 
-    logger.info("🧪 Creating direct Discord Gateway WebSocket test...");
+    // Discord.js is the ONLY Discord Gateway connection.
+    // The previous raw WebSocket diagnostic connection has been removed.
+    logger.info("🔌 Using discord.js Gateway connection only.");
 
-    try {
-      const WebSocket = (await import("ws")).default;
+    await client.login(token);
+    logger.info("🔐 Discord login() completed.");
 
-      await new Promise<void>((resolve) => {
-        const ws = new WebSocket(
-          "wss://gateway.discord.gg/?v=10&encoding=json",
-          {
-            handshakeTimeout: 15_000,
-          },
-        );
-
-        let finished = false;
-
-        const finish = () => {
-          if (finished) return;
-          finished = true;
-          clearTimeout(timer);
-          resolve();
-        };
-
-        const timer = setTimeout(() => {
-          logger.error(
-            "❌ DIRECT GATEWAY TEST: timeout waiting for connection/HELLO",
-          );
-          try {
-            ws.close();
-          } catch {}
-          finish();
-        }, 20_000);
-
-        ws.on("open", () => {
-          logger.info(
-            "✅ DIRECT GATEWAY TEST: WebSocket connected",
-          );
-        });
-
-        ws.on("message", (data) => {
-          try {
-            const packet = JSON.parse(data.toString());
-
-            logger.info(
-              `📨 DIRECT GATEWAY TEST: received opcode ${packet.op}`,
-            );
-
-            if (packet.op === 10) {
-              logger.info(
-                "✅ DIRECT GATEWAY TEST: Discord HELLO received",
-              );
-              try {
-                ws.close();
-              } catch {}
-              finish();
-            }
-          } catch (error) {
-            logger.error(
-              "❌ DIRECT GATEWAY TEST: invalid packet:",
-              error instanceof Error ? error.message : String(error),
-            );
-          }
-        });
-
-        ws.on("error", (error) => {
-          logger.error(
-            "❌ DIRECT GATEWAY TEST: WebSocket error:",
-            error instanceof Error ? error.message : String(error),
-          );
-          finish();
-        });
-
-        ws.on("close", (code, reason) => {
-          logger.error(
-            `🔴 DIRECT GATEWAY TEST: closed code=${code} reason=${reason.toString() || "none"}`,
-          );
-          finish();
-        });
-      });
-    } catch (error) {
-      logger.error(
-        "❌ DIRECT GATEWAY TEST failed:",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-
-    const discordLoginTimeout = setTimeout(() => {
-      logger.error("❌ Discord login timeout after 45 seconds.");
-      logger.error(`❌ Discord ready: ${client.isReady()}`);
-      logger.error(`❌ Discord websocket status: ${client.ws.status}`);
-    }, 45_000);
-
-    try {
-      await client.login(token);
-      logger.info("🔐 Discord login() completed.");
-    } finally {
-      clearTimeout(discordLoginTimeout);
-    }
-
+    // discord.js login() can resolve before the READY event.
     if (!client.isReady()) {
       logger.warn(
-        "🟡 Discord login() resolved but client is not ready yet. Waiting for READY event...",
+        "🟡 Discord login() resolved but client is not READY yet. Waiting for READY..."
       );
 
       await new Promise<void>((resolve, reject) => {
         let settled = false;
 
-        const onReady = () => {
-          logger.info("🟢 Discord READY event received.");
-          finish();
+        const timeout = setTimeout(() => {
+          finish(
+            new Error(
+              "Discord READY event was not received within 45 seconds."
+            )
+          );
+        }, 45_000);
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          client.off("ready", onReady);
+          client.off("error", onError);
         };
 
         const finish = (error?: Error) => {
           if (settled) return;
+
           settled = true;
-          clearTimeout(timeout);
-          client.off("ready", onReady);
+          cleanup();
 
           if (error) {
             reject(error);
@@ -2046,49 +1960,52 @@ logger.info("🚀 AshenAI startup beginning...");
           }
         };
 
-        const timeout = setTimeout(() => {
-          finish(
-            new Error(
-              "Discord READY event was not received within 30 seconds after login().",
-            ),
-          );
-        }, 30_000);
+        const onReady = () => {
+          logger.info("🟢 Discord READY event received.");
+          finish();
+        };
+
+        const onError = (error: Error) => {
+          finish(error);
+        };
 
         client.once("ready", onReady);
+        client.once("error", onError);
       });
     }
 
     if (!client.isReady()) {
       throw new Error(
-        "Discord READY event completed but client is still not ready.",
+        "Discord READY wait completed but client is still not ready."
       );
     }
 
     logger.info(
-      `🟢 Discord READY: ${client.user?.tag ?? client.user?.id}`,
+      `🟢 Discord READY: ${client.user?.tag ?? client.user?.id ?? "unknown"}`
     );
 
-    // Only start the web server AFTER Discord is ready.
-    startWebServer(router, () => ({
-      discordReady: client.isReady(),
-    }));
+    logger.info(
+      `🏠 Guild count: ${client.guilds.cache.size}`
+    );
 
-    logger.info("🌐 Web server started after Discord became ready.");
+    // Only initialize systems that depend on Discord after READY.
+    await startAgent();
 
-    // Lavalink is optional for Discord availability.
-    // A Lavalink failure must NEVER prevent Discord from staying online.
-    logger.info("🎵 Shoukaku Lavalink initialized.");
+    logger.info("🧠 AshenAI agent started.");
 
-    internalSupervisor.start();
+    await initializeTaskEngine();
 
-    logger.info("🟢 AshenAI startup completed successfully.");
+    logger.info("⚙️ Task engine initialized.");
+
   } catch (error) {
     logger.error(
       "❌ Discord startup failed:",
-      error instanceof Error ? error.message : String(error),
+      error instanceof Error
+        ? error.stack ?? error.message
+        : String(error)
     );
 
-    process.exit(1);
+    throw error;
   }
 }
 startMusicAndDiscord();
