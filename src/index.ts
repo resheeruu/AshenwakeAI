@@ -1921,7 +1921,29 @@ async function loginDiscordWithTimeout(): Promise<void> {
   let timeoutHandle: NodeJS.Timeout | undefined;
 
   try {
+    logger.info("🧪 Calling discord.js client.login()...");
+    const loginStartedAt = Date.now();
+
     const loginPromise = client.login(token);
+
+    loginPromise.then(
+      () => {
+        logger.info(
+          `🟢 client.login() RESOLVED after ${Date.now() - loginStartedAt}ms.`,
+        );
+        logger.info(
+          `🧪 Post-login state: ready=${client.isReady()} wsStatus=${client.ws.status}`,
+        );
+      },
+      (error) => {
+        logger.error(
+          "🔴 client.login() REJECTED:",
+          error instanceof Error
+            ? error.stack ?? error.message
+            : String(error),
+        );
+      },
+    );
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
@@ -2260,6 +2282,7 @@ async function startMusicAndDiscord(): Promise<void> {
   }
 }
 
+console.log("🚨 ENTRY MARKER: about to call startMusicAndDiscord()");
 startMusicAndDiscord();
 
 /* =====================================================
