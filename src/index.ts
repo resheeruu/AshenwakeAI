@@ -1912,6 +1912,13 @@ logger.info("🚀 AshenAI startup beginning...");
     // Discord connects FIRST.
     // Nothing else is allowed to block Discord Gateway startup.
     logger.info("🔐 Attempting Discord login...");
+
+    logger.info("🧪 Discord client diagnostics:");
+    logger.info(`   Client ready before login: ${client.isReady()}`);
+    logger.info(`   Client ws status before login: ${client.ws.status}`);
+    logger.info(`   Client shard count: ${client.ws.shards.size}`);
+
+
     logger.info(`🔐 Discord token present: ${Boolean(token)}`);
     logger.info(`🔐 Discord token length: ${token?.length ?? 0}`);
 
