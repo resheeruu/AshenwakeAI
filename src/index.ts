@@ -1848,7 +1848,11 @@ async function startMusicAndDiscord(): Promise<void> {
       discordReady: client.isReady(),
     }));
 
+    logger.info("🔐 Attempting Discord login...");
+
     await client.login(token);
+
+    logger.info("🔐 Discord login() completed.");
 
     if (!client.isReady()) {
       await new Promise<void>((resolve, reject) => {
