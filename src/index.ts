@@ -1878,6 +1878,22 @@ client.on("error", (error) => {
   );
 });
 
+client.on("shardDisconnect", (event, shardId) => {
+  logger.error(
+    `🔴 DISCORD SHARD DISCONNECT: shard=${shardId} code=${event.code} reason=${event.reason || "none"}`,
+  );
+});
+
+client.on("shardReconnecting", (shardId) => {
+  logger.warn(`🟡 DISCORD SHARD RECONNECTING: shard=${shardId}`);
+});
+
+client.on("shardError", (error, shardId) => {
+  logger.error(
+    `❌ DISCORD SHARD ERROR: shard=${shardId} ${error.message}`,
+  );
+});
+
 client.on("shardReady", (shardId) => {
   logger.info(`🟢 DISCORD SHARD READY: ${shardId}`);
 });
