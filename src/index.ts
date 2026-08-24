@@ -1904,6 +1904,68 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+
+async function testRawDiscordGateway(): Promise<void> {
+  logger.info("🔬 RAW DISCORD WEBSOCKET TEST: Starting...");
+
+  const { default: WebSocket } = await import("ws");
+  const url = "wss://gateway.discord.gg/?v=10&encoding=json";
+
+  await new Promise<void>((resolve) => {
+    let finished = false;
+
+    const finish = (message: string) => {
+      if (finished) return;
+      finished = true;
+      logger.info(message);
+      try {
+        ws.close();
+      } catch {}
+      resolve();
+    };
+
+    const ws = new WebSocket(url, {
+      handshakeTimeout: 15000,
+    });
+
+    const timeout = setTimeout(() => {
+      finish("❌ RAW DISCORD WEBSOCKET TEST: TIMEOUT after 15s");
+    }, 20000);
+
+    ws.once("open", () => {
+      logger.info("🟢 RAW DISCORD WEBSOCKET: OPEN");
+    });
+
+    ws.on("message", (data: Buffer) => {
+      try {
+        const payload = JSON.parse(data.toString());
+
+        if (payload.op === 10) {
+          clearTimeout(timeout);
+          logger.info(
+            `🟢 RAW DISCORD WEBSOCKET: HELLO received, heartbeat_interval=${payload.d?.heartbeat_interval}`,
+          );
+          finish("✅ RAW DISCORD WEBSOCKET TEST: PASSED");
+        }
+      } catch (error) {
+        logger.error("❌ RAW DISCORD WEBSOCKET: Invalid payload", error);
+      }
+    });
+
+    ws.once("error", (error: Error) => {
+      clearTimeout(timeout);
+      logger.error("❌ RAW DISCORD WEBSOCKET ERROR:", error.message);
+      finish("❌ RAW DISCORD WEBSOCKET TEST: FAILED");
+    });
+
+    ws.once("close", (code: number, reason: Buffer) => {
+      logger.info(
+        `🔌 RAW DISCORD WEBSOCKET CLOSED: code=${code} reason=${reason.toString()}`,
+      );
+    });
+  });
+}
+
 async function loginDiscordWithTimeout(): Promise<void> {
   if (client.isReady()) {
     logger.info("🟢 Discord is already READY.");
@@ -2132,6 +2194,7 @@ async function startMusicAndDiscord(): Promise<void> {
     logger.info("🌐 Web server started. Waiting for Discord...");
     logger.info("🚀 AshenAI startup beginning...");
     logger.info("🔐 Attempting Discord login...");
+    await testRawDiscordGateway();
 
     logger.info("🧪 Discord client diagnostics:");
     logger.info(
