@@ -1874,6 +1874,24 @@ client.on("warn", (message) => {
   logger.warn(`⚠️ DISCORD WARN: ${message}`);
 });
 
+client.on("debug", (message) => {
+  logger.info(`🔎 DISCORD DEBUG EVENT: ${message}`);
+});
+
+client.on("shardDisconnect", (event, shardId) => {
+  logger.error(
+    `🔴 DISCORD SHARD ${shardId} DISCONNECTED: code=${event.code} reason=${event.reason || "(none)"}`,
+  );
+});
+
+client.on("shardReconnecting", (shardId) => {
+  logger.warn(`🟡 DISCORD SHARD ${shardId} RECONNECTING...`);
+});
+
+client.on("shardReady", (shardId) => {
+  logger.info(`🟢 DISCORD SHARD ${shardId} READY EVENT CONFIRMED`);
+});
+
 client.on("error", (error) => {
   logger.error(
     "❌ DISCORD CLIENT ERROR:",
@@ -1907,7 +1925,19 @@ async function startMusicAndDiscord(): Promise<void> {
     // The previous raw WebSocket diagnostic connection has been removed.
     logger.info("🔌 Using discord.js Gateway connection only.");
 
-    await client.login(token);
+    logger.info("🔌 Starting Discord Gateway login...");
+
+    const loginTimeout = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("Discord client.login() timed out after 60 seconds."));
+      }, 60_000);
+    });
+
+    await Promise.race([
+      client.login(token),
+      loginTimeout,
+    ]);
+
     logger.info("🔐 Discord login() completed.");
 
     // discord.js login() can resolve before the READY event.
