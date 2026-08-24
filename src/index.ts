@@ -80,6 +80,7 @@ import { UsageStats } from "./analytics/usage-stats";
 import { handleMusicCommand } from "./music/musicCommands";
 import { Player } from "discord-player";
 import { ShoukakuMusicManager } from "./music/ShoukakuMusicManager";
+import { MusicSessionManager } from "./music/MusicSessionManager";
 import {
   SoundCloudExtractor,
   SpotifyExtractor,
@@ -119,6 +120,33 @@ const shoukakuMusic = new ShoukakuMusicManager(client, {
   secure: process.env.LAVALINK_SECURE === "true",
   name: process.env.LAVALINK_NAME || "main",
 });
+
+/* =====================================================
+   MUSIC SESSION SYSTEM
+   ===================================================== */
+
+const musicSessions = new MusicSessionManager(
+  60_000,
+  async (session) => {
+    console.log(
+      `🚪 MUSIC EMPTY TIMEOUT: guild=${session.guildId} channel=${session.voiceChannelId}`,
+    );
+
+    try {
+      await shoukakuMusic.disconnect(session.guildId);
+
+      console.log(
+        `🔌 MUSIC AUTO-DISCONNECTED: guild=${session.guildId}`,
+      );
+    } catch (error) {
+      console.error(
+        `❌ MUSIC AUTO-DISCONNECT FAILED: guild=${session.guildId}`,
+        error,
+      );
+    }
+  },
+);
+
 
 
 musicPlayer.events.on("connection", (queue) => {
@@ -1253,6 +1281,95 @@ client.on(
 );
 
 /* =====================================================
+   MUSIC VOICE STATE HANDLER
+   ===================================================== */
+
+client.on(
+  Events.VoiceStateUpdate,
+  async (oldState, newState) => {
+    try {
+      const guild = newState.guild;
+
+      // Ignore unrelated voice-state changes unless they
+      // involve the active music channel.
+      const session = musicSessions.get(guild.id);
+
+      if (!session) {
+        return;
+      }
+
+      const musicChannelId = session.voiceChannelId;
+
+      const involved =
+        oldState.channelId === musicChannelId ||
+        newState.channelId === musicChannelId;
+
+      if (!involved) {
+        return;
+      }
+
+      /*
+       * If AshenAI itself leaves the music channel,
+       * the session is no longer valid.
+       */
+      if (
+        oldState.member?.id === client.user?.id &&
+        newState.channelId !== musicChannelId
+      ) {
+        console.log(
+          `🔌 MUSIC BOT LEFT CHANNEL: guild=${guild.id}`,
+        );
+
+        musicSessions.delete(guild.id);
+        return;
+      }
+
+      /*
+       * Count real users in the active music channel.
+       * Bots do not keep the music session alive.
+       */
+      const channel = guild.channels.cache.get(
+        musicChannelId,
+      );
+
+      if (!channel || !("members" in channel)) {
+        return;
+      }
+
+      const members = channel.members;
+
+      if (!("filter" in members)) {
+        return;
+      }
+
+      const humanMembers = members.filter(
+        (member: { user: { bot: boolean } }) => !member.user.bot,
+      );
+
+      console.log(
+        `🎙️ MUSIC VOICE STATE: guild=${guild.id} channel=${musicChannelId} humans=${humanMembers.size}`,
+      );
+
+      if (humanMembers.size === 0) {
+        musicSessions.markChannelEmpty(
+          guild,
+          guild.id,
+        );
+      } else {
+        musicSessions.markChannelOccupied(
+          guild.id,
+        );
+      }
+    } catch (error) {
+      console.error(
+        "❌ MUSIC VOICE STATE HANDLER ERROR:",
+        error,
+      );
+    }
+  },
+);
+
+/* =====================================================
    INTERACTIVE MESSAGE HANDLER
    ===================================================== */
 
@@ -1269,11 +1386,16 @@ client.on(
         return;
       }
 
-      // Handle music prefix commands before the AI mention/reply filter.
-      if (message.content.trim().toLowerCase().startsWith("!p")) {
+      // Handle all music prefix commands before the AI mention/reply filter.
+      const musicPrefixMatch = message.content
+        .trim()
+        .match(/^!(p|play|pause|resume|stop|claim|dj|music)(?:\s|$)/i);
+
+      if (musicPrefixMatch) {
         await handleMusicCommand(
           message,
           shoukakuMusic,
+          musicSessions,
           musicReady,
         );
         return;

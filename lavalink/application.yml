@@ -2,33 +2,6 @@ server:
   port: 2333
   address: 0.0.0.0
 
-lavalink:
-  server:
-    password: "ashenai-local"
-
-  sources:
-    youtube: false
-    bandcamp: true
-    soundcloud: true
-    twitch: true
-    vimeo: true
-    http: true
-    local: false
-
-  plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
-      snapshot: false
-
-  bufferDurationMs: 400
-  frameBufferDurationMs: 5000
-  opusEncodingQuality: 10
-  resamplingQuality: LOW
-  trackStuckThresholdMs: 10000
-  playerUpdateInterval: 5
-  youtubePlaylistLoadLimit: 6
-  youtubeSearchEnabled: true
-  soundcloudSearchEnabled: true
-
 plugins:
   youtube:
     enabled: true
@@ -36,6 +9,9 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
 
+    remoteCipher:
+      url: "https://cipher.kikkia.dev/"
+      userAgent: "AshenAI-Lavalink"
 
     clients:
       - ANDROID_VR
@@ -43,14 +19,38 @@ plugins:
       - IOS
       - MWEB
       - WEB
-      - MUSIC
       - WEBEMBEDDED
+      - MUSIC
 
     clientOptions:
-      MUSIC:
-        playback: false
+      ANDROID_VR:
+        playback: true
+        playlistLoading: true
+        videoLoading: true
+        searching: true
+
+      ANDROID_MUSIC:
+        playback: true
         playlistLoading: false
-        videoLoading: false
+        videoLoading: true
+        searching: true
+
+      IOS:
+        playback: true
+        playlistLoading: true
+        videoLoading: true
+        searching: true
+
+      MWEB:
+        playback: true
+        playlistLoading: true
+        videoLoading: true
+        searching: true
+
+      WEB:
+        playback: true
+        playlistLoading: true
+        videoLoading: true
         searching: true
 
       WEBEMBEDDED:
@@ -59,17 +59,38 @@ plugins:
         videoLoading: true
         searching: false
 
-filters:
-  volume: true
-  equalizer: true
-  karaoke: true
-  timescale: true
-  tremolo: true
-  vibrato: true
-  distortion: true
-  rotation: true
-  channelMix: true
-  lowPass: true
+      MUSIC:
+        playback: false
+        playlistLoading: false
+        videoLoading: false
+        searching: true
+
+lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+      snapshot: false
+
+  server:
+    password: "ashenai-local"
+
+    sources:
+      youtube: false
+      bandcamp: true
+      soundcloud: true
+      twitch: true
+      vimeo: true
+      http: true
+      local: false
+
+    bufferDurationMs: 0
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 10
+    resamplingQuality: LOW
+    trackStuckThresholdMs: 10000
+    playerUpdateInterval: 5
+    youtubePlaylistLoadLimit: 6
+    youtubeSearchEnabled: true
+    soundcloudSearchEnabled: true
 
 logging:
   level:
