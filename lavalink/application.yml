@@ -36,6 +36,10 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
 
+    remoteCipher:
+      url: "https://cipher.kikkia.dev/"
+      userAgent: "AshenAI-Lavalink"
+
     clients:
       - ANDROID_VR
       - ANDROID_MUSIC
