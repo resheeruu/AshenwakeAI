@@ -1884,6 +1884,13 @@ client.on("shardReady", (shardId) => {
 
 async function startMusicAndDiscord(): Promise<void> {
   try {
+    // Render web service must bind to PORT immediately.
+    // Discord/Lavalink must never block Render port detection.
+    startWebServer(router, () => ({
+      discordReady: client.isReady(),
+    }));
+
+    logger.info("🌐 Web server started. Waiting for Discord...");
     logger.info("🧪 Testing Discord network before login...");
 
 try {
