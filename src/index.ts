@@ -1874,9 +1874,7 @@ client.on("warn", (message) => {
   logger.warn(`⚠️ DISCORD WARN: ${message}`);
 });
 
-client.on("debug", (message) => {
-  logger.info(`🔎 DISCORD DEBUG EVENT: ${message}`);
-});
+
 
 client.on("shardDisconnect", (event, shardId) => {
   logger.error(
@@ -2017,10 +2015,10 @@ async function startMusicAndDiscord(): Promise<void> {
         const timeout = setTimeout(() => {
           finish(
             new Error(
-              "Discord READY event was not received within 45 seconds.",
+              "Discord READY event was not received within 120 seconds.",
             ),
           );
-        }, 45_000);
+        }, 120_000);
 
         const cleanup = () => {
           clearTimeout(timeout);
