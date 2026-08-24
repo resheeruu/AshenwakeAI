@@ -1915,6 +1915,91 @@ logger.info("🚀 AshenAI startup beginning...");
     logger.info(`🔐 Discord token present: ${Boolean(token)}`);
     logger.info(`🔐 Discord token length: ${token?.length ?? 0}`);
 
+    logger.info("🧪 Creating direct Discord Gateway WebSocket test...");
+
+    try {
+      const WebSocket = (await import("ws")).default;
+
+      await new Promise<void>((resolve) => {
+        const ws = new WebSocket(
+          "wss://gateway.discord.gg/?v=10&encoding=json",
+          {
+            handshakeTimeout: 15_000,
+          },
+        );
+
+        let finished = false;
+
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          resolve();
+        };
+
+        const timer = setTimeout(() => {
+          logger.error(
+            "❌ DIRECT GATEWAY TEST: timeout waiting for connection/HELLO",
+          );
+          try {
+            ws.close();
+          } catch {}
+          finish();
+        }, 20_000);
+
+        ws.on("open", () => {
+          logger.info(
+            "✅ DIRECT GATEWAY TEST: WebSocket connected",
+          );
+        });
+
+        ws.on("message", (data) => {
+          try {
+            const packet = JSON.parse(data.toString());
+
+            logger.info(
+              `📨 DIRECT GATEWAY TEST: received opcode ${packet.op}`,
+            );
+
+            if (packet.op === 10) {
+              logger.info(
+                "✅ DIRECT GATEWAY TEST: Discord HELLO received",
+              );
+              try {
+                ws.close();
+              } catch {}
+              finish();
+            }
+          } catch (error) {
+            logger.error(
+              "❌ DIRECT GATEWAY TEST: invalid packet:",
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+        });
+
+        ws.on("error", (error) => {
+          logger.error(
+            "❌ DIRECT GATEWAY TEST: WebSocket error:",
+            error instanceof Error ? error.message : String(error),
+          );
+          finish();
+        });
+
+        ws.on("close", (code, reason) => {
+          logger.error(
+            `🔴 DIRECT GATEWAY TEST: closed code=${code} reason=${reason.toString() || "none"}`,
+          );
+          finish();
+        });
+      });
+    } catch (error) {
+      logger.error(
+        "❌ DIRECT GATEWAY TEST failed:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
     const discordLoginTimeout = setTimeout(() => {
       logger.error("❌ Discord login timeout after 45 seconds.");
       logger.error(`❌ Discord ready: ${client.isReady()}`);
