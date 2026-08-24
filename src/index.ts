@@ -1983,18 +1983,74 @@ async function startMusicAndDiscord(): Promise<void> {
       );
     }
 
-    const loginTimeout = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("Discord client.login() timed out after 60 seconds."));
-      }, 60_000);
-    });
+    // Discord Gateway retry system
+    const MAX_LOGIN_ATTEMPTS = 12;
+    const LOGIN_TIMEOUT_MS = 60_000;
+    const INITIAL_BACKOFF_MS = 15_000;
+    const MAX_BACKOFF_MS = 5 * 60_000;
 
-    await Promise.race([
-      client.login(token),
-      loginTimeout,
-    ]);
+    let discordLoggedIn = false;
 
-    logger.info("🔐 Discord login() completed.");
+    for (let attempt = 1; attempt <= MAX_LOGIN_ATTEMPTS; attempt++) {
+      try {
+        logger.info(
+          `🔐 Discord Gateway attempt ${attempt}/${MAX_LOGIN_ATTEMPTS}...`,
+        );
+
+        const loginTimeout = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject(
+              new Error(
+                `Discord client.login() timed out after ${LOGIN_TIMEOUT_MS / 1000} seconds.`,
+              ),
+            );
+          }, LOGIN_TIMEOUT_MS);
+        });
+
+        await Promise.race([
+          client.login(token),
+          loginTimeout,
+        ]);
+
+        logger.info("🔐 Discord login() completed.");
+        discordLoggedIn = true;
+        break;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : String(error);
+
+        logger.error(
+          `❌ Discord Gateway attempt ${attempt} failed: ${message}`,
+        );
+
+        if (attempt >= MAX_LOGIN_ATTEMPTS) {
+          logger.error(
+            "🚨 Discord Gateway retry limit reached. Keeping Render web server alive.",
+          );
+          break;
+        }
+
+        const backoff = Math.min(
+          INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1),
+          MAX_BACKOFF_MS,
+        );
+
+        logger.warn(
+          `⏳ Discord Gateway retrying in ${Math.round(backoff / 1000)} seconds...`,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+      }
+    }
+
+    if (!discordLoggedIn) {
+      logger.warn(
+        "🟡 AshenAI web server remains online, but Discord is currently offline.",
+      );
+      return;
+    }
 
     // discord.js login() can resolve before the READY event.
     if (!client.isReady()) {
