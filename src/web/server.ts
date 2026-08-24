@@ -15,7 +15,6 @@ import { guardAIOutput } from "../security/output-guard";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
 import { wrapUntrustedContent } from "../security/context";
 
-const __dirname = path.dirname(__filename);
 const app = express();
 
 app.set("trust proxy", 1);

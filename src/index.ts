@@ -1864,47 +1864,6 @@ const internalSupervisor = new InternalSupervisor({
   },
 });
 
-client.on("shardDisconnect", (event, shardId) => {
-  logger.error(
-    `🔴 DISCORD SHARD DISCONNECT: shard=${shardId} code=${event.code} reason=${event.reason || "none"}`,
-  );
-});
-
-client.on("shardReconnecting", (shardId) => {
-  logger.warn(`🟡 DISCORD SHARD RECONNECTING: shard=${shardId}`);
-});
-
-client.on("shardError", (error, shardId) => {
-  logger.error(
-    `❌ DISCORD SHARD ERROR: shard=${shardId} ${error.message}`,
-  );
-});
-
-client.on("shardReady", (shardId) => {
-  logger.info(`🟢 DISCORD SHARD READY: ${shardId}`);
-});
-
-client.on("shardDisconnect", (event, shardId) => {
-  logger.error(
-    `🔴 DISCORD SHARD DISCONNECT: shard=${shardId} code=${event.code} reason=${event.reason || "none"}`,
-  );
-});
-
-client.on("shardReconnecting", (shardId) => {
-  logger.warn(`🟡 DISCORD SHARD RECONNECTING: shard=${shardId}`);
-});
-
-client.on("shardResume", (shardId, replayedEvents) => {
-  logger.info(
-    `🔵 DISCORD SHARD RESUMED: shard=${shardId} replayed=${replayedEvents}`,
-  );
-});
-
-client.on("shardError", (error, shardId) => {
-  logger.error(
-    `❌ DISCORD SHARD ERROR: shard=${shardId} ${error.stack ?? error.message}`,
-  );
-});
 
 // TEMPORARY: log EVERY discord.js Gateway debug message.
 client.on("debug", (message) => {
