@@ -921,7 +921,13 @@ export class AIRouter {
     let lastError: unknown;
 
     const attemptedProviders = new Set<string>();
-    const maxAttempts = Math.min(providers.length, 3);
+
+    /*
+     * Allow enough fallback attempts to reach healthy providers.
+     * The router already filters unavailable/quarantined providers,
+     * so increasing this does not waste requests on disabled providers.
+     */
+    const maxAttempts = Math.min(providers.length, 6);
     let attempts = 0;
 
     logger.debug(

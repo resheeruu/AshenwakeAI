@@ -6,7 +6,7 @@ export const providerConfig = {
     apiKey: config.providers.gemini,
     model:
       process.env.GEMINI_MODEL ||
-      "gemini-flash-latest",
+      "gemini-3.6-flash",
   },
 
   groq: {
@@ -14,7 +14,7 @@ export const providerConfig = {
     apiKey: config.providers.groq,
     model:
       process.env.GROQ_MODEL ||
-      "llama-3.3-70b-versatile",
+      "openai/gpt-oss-120b",
   },
 
   openrouter: {
