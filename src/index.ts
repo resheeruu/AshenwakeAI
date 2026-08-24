@@ -562,27 +562,6 @@ client.on(Events.Error, (error) => {
   );
 });
 
-client.on(Events.ShardResume, (id) => {
-  logger.info(`🔄 Discord shard ${id} resumed.`);
-});
-
-client.on(Events.ShardReconnecting, (id) => {
-  logger.warn(`🔄 Discord shard ${id} reconnecting...`);
-});
-
-client.on(Events.ShardDisconnect, (event, id) => {
-  logger.warn(
-    `⚠️ Discord shard ${id} disconnected: code=${event.code}`
-  );
-});
-
-client.on(Events.Error, (error) => {
-  logger.error(
-    "❌ Discord client error:",
-    error instanceof Error ? error.message : String(error)
-  );
-});
-
 client.on(Events.Warn, (warning) => {
   logger.warn(`⚠️ Discord warning: ${warning}`);
 });
@@ -1865,9 +1844,19 @@ const internalSupervisor = new InternalSupervisor({
 });
 
 
-// TEMPORARY: log EVERY discord.js Gateway debug message.
+/*
+ * Discord.js debug events are intentionally summarized.
+ * Full Gateway debug output can contain sensitive protocol details
+ * and creates excessive Render logs.
+ */
 client.on("debug", (message) => {
-  logger.info(`🔧 DISCORD DEBUG: ${message}`);
+  const text = String(message);
+
+  if (/heartbeat|heartbeat ack/i.test(text)) {
+    return;
+  }
+
+  logger.debug(`🔧 DISCORD DEBUG: ${text}`);
 });
 
 client.on("warn", (message) => {
@@ -1900,9 +1889,205 @@ client.on("error", (error) => {
 });
 
 
-async function startMusicAndDiscord(): Promise<void> {
+const DISCORD_CONNECT_TIMEOUT_MS = 60_000;
+const DISCORD_INITIAL_RETRY_MS = 5_000;
+const DISCORD_MAX_RETRY_MS = 60_000;
+
+let discordConnectionAttempt = 0;
+let discordConnectionManagerStarted = false;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function loginDiscordWithTimeout(): Promise<void> {
+  if (client.isReady()) {
+    logger.info("🟢 Discord is already READY.");
+    return;
+  }
+
+  discordConnectionAttempt += 1;
+
+  const attempt = discordConnectionAttempt;
+
+  logger.info(
+    `🔌 Discord Gateway connection attempt #${attempt}...`,
+  );
+
+  let timeoutHandle: NodeJS.Timeout | undefined;
+
   try {
-    // Render HTTP server must start immediately.
+    const loginPromise = client.login(token);
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(
+          new Error(
+            `Discord Gateway login timed out after ${DISCORD_CONNECT_TIMEOUT_MS / 1000}s`,
+          ),
+        );
+      }, DISCORD_CONNECT_TIMEOUT_MS);
+    });
+
+    await Promise.race([loginPromise, timeoutPromise]);
+
+    if (client.isReady()) {
+      logger.info(
+        `🟢 Discord Gateway connected successfully on attempt #${attempt}.`,
+      );
+      return;
+    }
+
+    logger.info(
+      "⏳ Discord login completed but READY has not fired yet. Waiting...",
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+
+      const cleanup = () => {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+
+        clearTimeout(readyTimeout);
+
+        client.off(Events.ClientReady, onReady);
+        client.off(Events.Error, onError);
+      };
+
+      const finish = (error?: Error) => {
+        if (settled) return;
+
+        settled = true;
+        cleanup();
+
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      };
+
+      const onReady = () => {
+        logger.info("🟢 Discord READY event received.");
+        finish();
+      };
+
+      const onError = (error: Error) => {
+        finish(error);
+      };
+
+      const readyTimeout = setTimeout(() => {
+        finish(
+          new Error(
+            "Discord READY event was not received within 60 seconds.",
+          ),
+        );
+      }, DISCORD_CONNECT_TIMEOUT_MS);
+
+      client.once(Events.ClientReady, onReady);
+      client.once(Events.Error, onError);
+
+      if (client.isReady()) {
+        finish();
+      }
+    });
+
+    if (!client.isReady()) {
+      throw new Error(
+        "Discord connection completed but client is still not READY.",
+      );
+    }
+
+    logger.info(
+      `🟢 Discord READY: ${client.user?.tag ?? client.user?.id ?? "unknown"}`,
+    );
+
+    logger.info(
+      `🏠 Guild count: ${client.guilds.cache.size}`,
+    );
+  } catch (error) {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+
+    throw error;
+  }
+}
+
+async function connectDiscordWithRecovery(): Promise<boolean> {
+  let retryDelay = DISCORD_INITIAL_RETRY_MS;
+
+  while (true) {
+    try {
+      await loginDiscordWithTimeout();
+
+      logger.info("✅ Discord Gateway is operational.");
+
+      return true;
+    } catch (error) {
+      logger.error(
+        `❌ Discord Gateway attempt #${discordConnectionAttempt} failed:`,
+        error instanceof Error
+          ? error.message
+          : String(error),
+      );
+
+      if (client.isReady()) {
+        logger.info(
+          "🟢 Discord became READY despite the reported connection error.",
+        );
+
+        return true;
+      }
+
+      logger.warn(
+        `🟡 Discord Gateway unavailable. Retrying in ${Math.round(
+          retryDelay / 1000,
+        )}s...`,
+      );
+
+      /*
+       * Clean up the failed Gateway session before retrying.
+       * This prevents overlapping login attempts.
+       */
+      try {
+        client.destroy();
+      } catch (destroyError) {
+        logger.warn(
+          "⚠️ Discord client cleanup warning:",
+          destroyError instanceof Error
+            ? destroyError.message
+            : String(destroyError),
+        );
+      }
+
+      await sleep(retryDelay);
+
+      retryDelay = Math.min(
+        retryDelay * 2,
+        DISCORD_MAX_RETRY_MS,
+      );
+    }
+  }
+}
+
+async function startMusicAndDiscord(): Promise<void> {
+  if (discordConnectionManagerStarted) {
+    logger.warn(
+      "⚠️ Discord connection manager already started; ignoring duplicate startup.",
+    );
+    return;
+  }
+
+  discordConnectionManagerStarted = true;
+
+  try {
+    /*
+     * Render HTTP server starts immediately and remains available
+     * even while Discord Gateway is reconnecting.
+     */
     startWebServer(router, () => ({
       discordReady: client.isReady(),
     }));
@@ -1912,35 +2097,59 @@ async function startMusicAndDiscord(): Promise<void> {
     logger.info("🔐 Attempting Discord login...");
 
     logger.info("🧪 Discord client diagnostics:");
-    logger.info(`   Client ready before login: ${client.isReady()}`);
-    logger.info(`   Client ws status before login: ${client.ws.status}`);
-    logger.info(`   Client shard count: ${client.ws.shards.size}`);
+    logger.info(
+      `   Client ready before login: ${client.isReady()}`,
+    );
+    logger.info(
+      `   Client ws status before login: ${client.ws.status}`,
+    );
+    logger.info(
+      `   Client shard count: ${client.ws.shards.size}`,
+    );
 
-    logger.info(`🔐 Discord token present: ${Boolean(token)}`);
-    logger.info(`🔐 Discord token length: ${token?.length ?? 0}`);
+    /*
+     * Never log the actual Discord token or its length.
+     * Presence is enough for diagnostics.
+     */
+    logger.info(
+      `🔐 Discord token configured: ${Boolean(token)}`,
+    );
 
-    // Discord.js is the ONLY Discord Gateway connection.
-    // The previous raw WebSocket diagnostic connection has been removed.
-    logger.info("🔌 Using discord.js Gateway connection only.");
+    if (!token) {
+      throw new Error(
+        "DISCORD_TOKEN is missing.",
+      );
+    }
 
-    logger.info("🔌 Starting Discord Gateway login...");
+    logger.info(
+      "🔌 Using discord.js Gateway connection only.",
+    );
 
-    // Render -> Discord network diagnostic
+    /*
+     * Render → Discord network diagnostics.
+     */
     try {
       const dns = await import("node:dns/promises");
       const https = await import("node:https");
 
-      logger.info("🌐 DISCORD NETWORK TEST: Resolving gateway.discord.gg...");
-
-      const addresses = await dns.lookup("gateway.discord.gg", {
-        all: true,
-      });
-
       logger.info(
-        `🌐 DISCORD DNS OK: ${addresses.map((a) => `${a.address}/${a.family}`).join(", ")}`
+        "🌐 DISCORD NETWORK TEST: Resolving gateway.discord.gg...",
       );
 
-      logger.info("🌐 DISCORD HTTPS TEST: Requesting /gateway...");
+      const addresses = await dns.lookup(
+        "gateway.discord.gg",
+        { all: true },
+      );
+
+      logger.info(
+        `🌐 DISCORD DNS OK: ${addresses
+          .map((a) => `${a.address}/${a.family}`)
+          .join(", ")}`,
+      );
+
+      logger.info(
+        "🌐 DISCORD HTTPS TEST: Requesting /gateway...",
+      );
 
       await new Promise<void>((resolve, reject) => {
         const req = https.request(
@@ -1955,118 +2164,62 @@ async function startMusicAndDiscord(): Promise<void> {
           },
           (res) => {
             logger.info(
-              `🌐 DISCORD HTTPS OK: status=${res.statusCode}`
+              `🌐 DISCORD HTTPS OK: status=${res.statusCode}`,
             );
 
             res.resume();
+
             res.on("end", resolve);
           },
         );
 
         req.on("timeout", () => {
-          req.destroy(new Error("Discord HTTPS test timed out."));
+          req.destroy(
+            new Error(
+              "Discord HTTPS test timed out.",
+            ),
+          );
         });
 
         req.on("error", reject);
+
         req.end();
       });
 
-      logger.info("🌐 DISCORD NETWORK TEST PASSED.");
-    } catch (error) {
-      logger.error(
-        "❌ DISCORD NETWORK TEST FAILED:",
-        error instanceof Error
-          ? error.stack ?? error.message
-          : String(error),
+      logger.info(
+        "🌐 DISCORD NETWORK TEST PASSED.",
       );
-    }
-
-    // Discord Gateway login.
-    // IMPORTANT: discord.js owns the Gateway lifecycle.
-    // Do not start multiple simultaneous client.login() calls.
-    logger.info("🔌 Connecting to Discord Gateway...");
-
-    try {
-      await client.login(token);
-      logger.info("🔐 Discord login() completed.");
     } catch (error) {
-      logger.error(
-        "❌ Discord Gateway login failed:",
-        error instanceof Error
-          ? error.stack ?? error.message
-          : String(error),
-      );
-
+      /*
+       * Network diagnostics are informational.
+       * Do not prevent discord.js from attempting the Gateway.
+       */
       logger.warn(
-        "🟡 AshenAI web server remains online while Discord Gateway is unavailable.",
+        "⚠️ Discord network diagnostic failed:",
+        error instanceof Error
+          ? error.message
+          : String(error),
       );
-
-      return;
     }
 
-    // login() normally resolves after the Gateway session is established,
-    // but explicitly verify READY before continuing startup.
-    if (!client.isReady()) {
-      logger.info("⏳ Waiting for Discord READY event...");
+    /*
+     * Production Gateway recovery loop.
+     *
+     * This is the important fix:
+     * a temporary Render → Discord WebSocket failure no longer
+     * leaves AshenAI permanently offline.
+     */
+    const connected = await connectDiscordWithRecovery();
 
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-
-        const timeout = setTimeout(() => {
-          finish(
-            new Error(
-              "Discord READY event was not received within 120 seconds.",
-            ),
-          );
-        }, 120_000);
-
-        const cleanup = () => {
-          clearTimeout(timeout);
-          client.off("ready", onReady);
-          client.off("error", onError);
-        };
-
-        const finish = (error?: Error) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
-        };
-
-        const onReady = () => {
-          logger.info("🟢 Discord READY event received.");
-          finish();
-        };
-
-        const onError = (error: Error) => {
-          finish(error);
-        };
-
-        client.once("ready", onReady);
-        client.once("error", onError);
-      });
-    }
-
-    if (!client.isReady()) {
+    if (!connected || !client.isReady()) {
       throw new Error(
-        "Discord READY wait completed but client is still not ready.",
+        "Discord Gateway recovery manager stopped without a READY client.",
       );
     }
 
-    logger.info(
-      `🟢 Discord READY: ${client.user?.tag ?? client.user?.id ?? "unknown"}`,
-    );
-
-    logger.info(
-      `🏠 Guild count: ${client.guilds.cache.size}`
-    );
-
-    // Only initialize systems that depend on Discord after READY.
+    /*
+     * Only initialize Discord-dependent systems after READY.
+     */
     await startAgent();
 
     logger.info("🧠 AshenAI agent started.");
@@ -2074,18 +2227,24 @@ async function startMusicAndDiscord(): Promise<void> {
     await initializeTaskEngine();
 
     logger.info("⚙️ Task engine initialized.");
-
   } catch (error) {
     logger.error(
-      "❌ Discord startup failed:",
+      "❌ Discord startup manager failed:",
       error instanceof Error
         ? error.stack ?? error.message
-        : String(error)
+        : String(error),
     );
 
+    /*
+     * Keep the Render web service alive instead of silently
+     * leaving the bot in a dead startup state.
+     *
+     * The Gateway recovery loop handles normal transient failures.
+     */
     throw error;
   }
 }
+
 startMusicAndDiscord();
 
 /* =====================================================
