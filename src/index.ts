@@ -184,8 +184,7 @@ usageStatsTimer.unref();
 const commandHandler = new CommandHandler([], usageStats);
 const agentManager = new AgentManager(router);
 
-// Initialize autonomous task actions once at startup.
-initializeTaskEngine();
+// Task engine initializes after Discord READY.
 
 
 /* =====================================================
@@ -440,6 +439,7 @@ let discordReadyAt = 0;
 
 client.once(Events.ClientReady, () => {
   discordReadyAt = Date.now();
+  discordLastReadyAt = discordReadyAt;
 
   if (discordWatchdogStarted) return;
   discordWatchdogStarted = true;
@@ -1816,7 +1816,7 @@ const internalSupervisor = new InternalSupervisor({
   checks: () => {
     const reasons: string[] = [];
 
-    if (!client.isReady()) {
+    if (!client.isReady() && !discordRecoveryActive) {
       reasons.push("Discord client is not ready");
     }
 
@@ -1895,6 +1895,10 @@ const DISCORD_MAX_RETRY_MS = 60_000;
 
 let discordConnectionAttempt = 0;
 let discordConnectionManagerStarted = false;
+let discordRecoveryActive = false;
+let discordLastFailureAt = 0;
+let discordLastFailureReason = "";
+let discordLastReadyAt = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2018,20 +2022,26 @@ async function loginDiscordWithTimeout(): Promise<void> {
 
 async function connectDiscordWithRecovery(): Promise<boolean> {
   let retryDelay = DISCORD_INITIAL_RETRY_MS;
+  discordRecoveryActive = true;
+
+  logger.info("🛡️ Discord Gateway recovery manager ACTIVE.");
 
   while (true) {
     try {
       await loginDiscordWithTimeout();
 
+      discordRecoveryActive = false;
       logger.info("✅ Discord Gateway is operational.");
 
       return true;
     } catch (error) {
+      discordLastFailureAt = Date.now();
+      discordLastFailureReason =
+        error instanceof Error ? error.message : String(error);
+
       logger.error(
         `❌ Discord Gateway attempt #${discordConnectionAttempt} failed:`,
-        error instanceof Error
-          ? error.message
-          : String(error),
+        discordLastFailureReason,
       );
 
       if (client.isReady()) {
@@ -2090,6 +2100,11 @@ async function startMusicAndDiscord(): Promise<void> {
      */
     startWebServer(router, () => ({
       discordReady: client.isReady(),
+      discordRecoveryActive,
+      discordConnectionAttempt,
+      discordLastReadyAt,
+      discordLastFailureAt,
+      discordLastFailureReason,
     }));
 
     logger.info("🌐 Web server started. Waiting for Discord...");
