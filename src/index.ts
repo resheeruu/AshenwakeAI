@@ -1863,6 +1863,25 @@ const internalSupervisor = new InternalSupervisor({
   },
 });
 
+client.on("debug", (message) => {
+  logger.info(`🔧 DISCORD DEBUG: ${message}`);
+});
+
+client.on("warn", (message) => {
+  logger.warn(`⚠️ DISCORD WARN: ${message}`);
+});
+
+client.on("error", (error) => {
+  logger.error(
+    "❌ DISCORD ERROR:",
+    error instanceof Error ? error.message : String(error),
+  );
+});
+
+client.on("shardReady", (shardId) => {
+  logger.info(`🟢 DISCORD SHARD READY: ${shardId}`);
+});
+
 async function startMusicAndDiscord(): Promise<void> {
   try {
     logger.info("🚀 AshenAI startup beginning...");
