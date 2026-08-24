@@ -1915,21 +1915,30 @@ client.on("shardResume", (shardId, replayedEvents) => {
   );
 });
 
+client.on("shardError", (error, shardId) => {
+  logger.error(
+    `❌ DISCORD SHARD ERROR: shard=${shardId} ${error.stack ?? error.message}`,
+  );
+});
+
+// TEMPORARY: log EVERY discord.js Gateway debug message.
 client.on("debug", (message) => {
-  if (
-    message.includes("[WS => Shard") ||
-    message.includes("[WS => Manager]")
-  ) {
-    logger.info(`🔧 DISCORD GATEWAY: ${message}`);
-  }
+  logger.info(`🔧 DISCORD DEBUG: ${message}`);
+});
+
+client.on("warn", (message) => {
+  logger.warn(`⚠️ DISCORD WARN: ${message}`);
 });
 
 client.on("error", (error) => {
   logger.error(
     "❌ DISCORD CLIENT ERROR:",
-    error instanceof Error ? error.stack ?? error.message : String(error),
+    error instanceof Error
+      ? error.stack ?? error.message
+      : String(error),
   );
 });
+
 
 async function startMusicAndDiscord(): Promise<void> {
   try {
