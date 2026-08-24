@@ -2,6 +2,33 @@ server:
   port: 2333
   address: 0.0.0.0
 
+lavalink:
+  server:
+    password: "ashenai-local"
+
+  sources:
+    youtube: false
+    bandcamp: true
+    soundcloud: true
+    twitch: true
+    vimeo: true
+    http: true
+    local: false
+
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+      snapshot: false
+
+  bufferDurationMs: 225
+  frameBufferDurationMs: 5000
+  opusEncodingQuality: 5
+  resamplingQuality: LOW
+  trackStuckThresholdMs: 10000
+  playerUpdateInterval: 5
+  youtubePlaylistLoadLimit: 3
+  youtubeSearchEnabled: true
+  soundcloudSearchEnabled: true
+
 plugins:
   youtube:
     enabled: true
@@ -9,35 +36,27 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
 
-    oauth:
-      enabled: true
-      refreshToken: ""
-
     clients:
-      - TV
-      - WEB
-      - WEBEMBEDDED
-      - ANDROID_MUSIC
-      - MUSIC
       - ANDROID_VR
+      - ANDROID_MUSIC
       - IOS
-      - TVHTML5_SIMPLY
-lavalink:
-  server:
-    password: "ashenai-local"
-    bufferDurationMs: 0
-  plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
-      snapshot: false
+      - MWEB
+      - WEB
+      - MUSIC
+      - WEBEMBEDDED
 
-sources:
-  youtube: false
-  bandcamp: true
-  soundcloud: true
-  twitch: true
-  vimeo: true
-  http: true
-  local: false
+    clientOptions:
+      MUSIC:
+        playback: false
+        playlistLoading: false
+        videoLoading: false
+        searching: true
+
+      WEBEMBEDDED:
+        playback: true
+        playlistLoading: false
+        videoLoading: true
+        searching: false
 
 filters:
   volume: true
@@ -55,3 +74,4 @@ logging:
   level:
     root: INFO
     lavalink: INFO
+    dev.lavalink.youtube: DEBUG
