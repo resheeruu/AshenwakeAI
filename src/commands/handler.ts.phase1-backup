@@ -1,0 +1,117 @@
+import {
+  ChatInputCommandInteraction,
+} from "discord.js";
+
+import { AshenCommand } from "./definitions";
+
+export class CommandHandler {
+  private readonly commands = new Map<string, AshenCommand>();
+
+  constructor(commands: AshenCommand[] = []) {
+    this.registerMany(commands);
+  }
+
+  register(command: AshenCommand): void {
+    this.commands.set(command.data.name, command);
+  }
+
+  registerMany(commands: AshenCommand[]): void {
+    for (const command of commands) {
+      this.register(command);
+    }
+  }
+
+  async handle(
+    interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
+    const command = this.commands.get(
+      interaction.commandName,
+    );
+
+    if (!command) {
+      await this.safeReply(
+        interaction,
+        "❌ Command not found.",
+      );
+      return;
+    }
+
+    const startedAt = Date.now();
+
+    console.log(
+      `⚡ Received /${interaction.commandName} interaction ` +
+      `(id=${interaction.id})`,
+    );
+
+    if (
+      !interaction.replied &&
+      !interaction.deferred
+    ) {
+      try {
+        console.log(
+          `⏱️ About to acknowledge /${interaction.commandName} ` +
+          `(elapsed=${Date.now() - startedAt}ms)`,
+        );
+
+        await interaction.deferReply();
+
+        console.log(
+          `✅ /${interaction.commandName} acknowledged in ${
+            Date.now() - startedAt
+          }ms.`,
+        );
+      } catch (error) {
+        console.error(
+          `❌ Failed to acknowledge /${interaction.commandName} ` +
+          `(elapsed=${Date.now() - startedAt}ms):`,
+          error,
+        );
+        return;
+      }
+    }
+
+    try {
+      await command.execute(interaction);
+
+      console.log(
+        `✅ /${interaction.commandName} completed in ${
+          Date.now() - startedAt
+        }ms.`,
+      );
+    } catch (error) {
+      console.error(
+        `❌ Error executing /${interaction.commandName}:`,
+        error,
+      );
+
+      await this.safeReply(
+        interaction,
+        "❌ Something went wrong while executing that command.",
+      );
+    }
+  }
+
+  private async safeReply(
+    interaction: ChatInputCommandInteraction,
+    content: string,
+  ): Promise<void> {
+    try {
+      if (interaction.replied) {
+        await interaction.followUp({ content });
+      } else if (interaction.deferred) {
+        await interaction.editReply({ content });
+      } else {
+        await interaction.reply({ content });
+      }
+    } catch (error) {
+      console.error(
+        "❌ Could not send command response:",
+        error,
+      );
+    }
+  }
+
+  getCommands(): Map<string, AshenCommand> {
+    return this.commands;
+  }
+}

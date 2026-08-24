@@ -1273,7 +1273,7 @@ client.on(
       if (message.content.trim().toLowerCase().startsWith("!p")) {
         await handleMusicCommand(
           message,
-          musicPlayer,
+          shoukakuMusic,
           musicReady,
         );
         return;

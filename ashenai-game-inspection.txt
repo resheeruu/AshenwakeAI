@@ -1,0 +1,2600 @@
+===== ASHENAI GAME EXPANSION INSPECTION =====
+Generated: Sat Aug 15 05:01:32 PST 2026
+
+===== PACKAGE.JSON =====
+{
+  "name": "ashenai",
+  "version": "1.0.0",
+  "description": "AshenAI Discord AI assistant",
+  "main": "index.js",
+  "scripts": {
+    "start": "bash scripts/render-start.sh",
+    "agent": "tsx src/agent/index.ts",
+    "test": "tsx scripts/test-router.ts && tsx scripts/test-core.ts && tsx scripts/test-commands.ts && tsx scripts/test-rate-limit.ts && tsx scripts/test-security.ts",
+    "check": "tsx scripts/check.ts && npm test",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "bot": "tsx src/index.ts"
+  },
+  "keywords": [
+    "discord",
+    "ai",
+    "bot"
+  ],
+  "type": "commonjs",
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}
+
+===== TSCONFIG =====
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+
+===== GAME TYPES =====
+export interface GamePlayer {
+  userId: string;
+  username: string;
+
+  coins: number;
+  xp: number;
+  level: number;
+
+  wins: number;
+  losses: number;
+  draws: number;
+
+  streak: number;
+  bestStreak: number;
+
+  gamesPlayed: number;
+
+  dailyClaimedAt?: string;
+  dailyStreak?: number;
+  bestDailyStreak?: number;
+  achievements: string[];
+
+  // Ashen Duel stats
+  hp: number;
+  maxHp: number;
+  attack: number;
+  defense: number;
+  duelWins: number;
+  duelLosses: number;
+
+  // Hunt stats
+  huntLastAt?: number;
+  huntStreak?: number;
+  bestHuntStreak?: number;
+  huntsCompleted?: number;
+  legendaryHunts?: number;
+
+  // Inventory
+  inventory?: Record<string, number>;
+  xpBoostActive?: boolean;
+  luckyTokenActive?: boolean;
+}
+
+export interface GameSession {
+  id: string;
+  game: string;
+  playerIds: string[];
+  createdAt: number;
+  expiresAt: number;
+  state: Record<string, unknown>;
+}
+
+export interface GameResult {
+  playerId: string;
+  result: "win" | "loss" | "draw";
+  coins: number;
+  xp: number;
+}
+
+===== GAME ENGINE =====
+import crypto from "crypto";
+import { GameSession } from "./types";
+
+const sessions = new Map<string, GameSession>();
+
+const SESSION_TIME = 10 * 60 * 1000;
+
+export function createSession(
+  game: string,
+  playerIds: string[],
+  state: Record<string, unknown> = {},
+): GameSession {
+  const now = Date.now();
+
+  const session: GameSession = {
+    id: crypto.randomUUID(),
+    game,
+    playerIds,
+    createdAt: now,
+    expiresAt: now + SESSION_TIME,
+    state,
+  };
+
+  sessions.set(session.id, session);
+
+  return session;
+}
+
+export function getSession(
+  sessionId: string,
+): GameSession | undefined {
+  const session = sessions.get(sessionId);
+
+  if (!session) {
+    return undefined;
+  }
+
+  if (Date.now() > session.expiresAt) {
+    sessions.delete(sessionId);
+    return undefined;
+  }
+
+  return session;
+}
+
+export function updateSession(
+  session: GameSession,
+): void {
+  sessions.set(session.id, session);
+}
+
+export function deleteSession(
+  sessionId: string,
+): void {
+  sessions.delete(sessionId);
+}
+
+export function cleanupSessions(): void {
+  const now = Date.now();
+
+  for (const [id, session] of sessions) {
+    if (now > session.expiresAt) {
+      sessions.delete(id);
+    }
+  }
+}
+
+setInterval(cleanupSessions, 60_000).unref();
+
+===== GAME STORE =====
+import fs from "fs";
+import path from "path";
+import { GamePlayer } from "./types";
+
+const DATA_DIR = path.join(process.cwd(), "data");
+const FILE = path.join(DATA_DIR, "game-players.json");
+
+async function ensureStore(): Promise<void> {
+  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+
+  if (!fs.existsSync(FILE)) {
+    await fs.promises.writeFile(FILE, "{}", "utf8");
+  }
+}
+
+export async function loadPlayers(): Promise<Record<string, GamePlayer>> {
+  await ensureStore();
+
+  try {
+    const raw = await fs.promises.readFile(FILE, "utf8");
+    const parsed = JSON.parse(raw);
+
+    return parsed && typeof parsed === "object"
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function savePlayers(
+  players: Record<string, GamePlayer>,
+): Promise<void> {
+  await ensureStore();
+
+  const temporary = `${FILE}.tmp`;
+
+  await fs.promises.writeFile(
+    temporary,
+    JSON.stringify(players, null, 2),
+    "utf8",
+  );
+
+  await fs.promises.rename(temporary, FILE);
+}
+
+export async function getPlayer(
+  userId: string,
+  username = "Unknown",
+): Promise<GamePlayer> {
+  const players = await loadPlayers();
+
+  if (!players[userId]) {
+    players[userId] = {
+      userId,
+      username,
+      coins: 100,
+      xp: 0,
+      level: 1,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      streak: 0,
+      bestStreak: 0,
+      gamesPlayed: 0,
+      achievements: [],
+
+      // Ashen Duel starting stats
+      hp: 100,
+      maxHp: 100,
+      attack: 15,
+      defense: 5,
+      duelWins: 0,
+      duelLosses: 0,
+
+      // Inventory
+      inventory: {},
+    };
+
+    await savePlayers(players);
+  } else {
+    players[userId].username = username;
+  }
+
+  return players[userId];
+}
+
+export async function updatePlayer(
+  player: GamePlayer,
+): Promise<void> {
+  const players = await loadPlayers();
+  players[player.userId] = player;
+  await savePlayers(players);
+}
+
+export type LeaderboardCategory =
+  | "level"
+  | "wins"
+  | "coins"
+  | "xp"
+  | "hunts"
+  | "hunt_streak";
+
+export async function getLeaderboard(
+  limit = 10,
+  category: LeaderboardCategory = "level",
+): Promise<GamePlayer[]> {
+  const players = await loadPlayers();
+
+  return Object.values(players)
+    .sort((a, b) => {
+      switch (category) {
+        case "wins":
+          return b.wins - a.wins;
+
+        case "coins":
+          return b.coins - a.coins;
+
+        case "xp":
+          return b.xp - a.xp;
+
+        case "hunts":
+          return (
+            (b.huntsCompleted ?? 0) -
+            (a.huntsCompleted ?? 0)
+          );
+
+        case "hunt_streak":
+          return (
+            (b.bestHuntStreak ?? 0) -
+            (a.bestHuntStreak ?? 0)
+          );
+
+        case "level":
+        default:
+          if (b.level !== a.level) {
+            return b.level - a.level;
+          }
+
+          if (b.xp !== a.xp) {
+            return b.xp - a.xp;
+          }
+
+          return b.coins - a.coins;
+      }
+    })
+    .slice(0, limit);
+}
+
+===== REWARDS =====
+import { GamePlayer } from "./types";
+import { updatePlayer } from "./store";
+
+const XP_PER_LEVEL = 100;
+
+export const ACHIEVEMENTS: Record<string, string> = {
+  first_game: "🎮 First Game",
+  first_win: "🏆 First Victory",
+  five_streak: "🔥 Unstoppable — 5 Win Streak",
+  five_hundred_coins: "🪙 Big Saver — 500 Coins",
+  level_five: "⭐ Rising Star — Level 5",
+  twenty_five_games: "🎮 Veteran — 25 Games",
+  first_hunt: "🎯 First Hunt",
+  ten_hunts: "🏹 Hunter — 10 Hunts",
+  five_hunt_streak: "🔥 Hunt Master — 5 Hunt Streak",
+  legendary_hunt: "👑 Legendary Hunter",
+};
+
+export function updateAchievements(player: GamePlayer): void {
+  const achievements = [
+    {
+      id: "first_game",
+      unlocked: player.gamesPlayed >= 1,
+    },
+    {
+      id: "first_win",
+      unlocked: player.wins >= 1,
+    },
+    {
+      id: "five_streak",
+      unlocked: player.bestStreak >= 5,
+    },
+    {
+      id: "five_hundred_coins",
+      unlocked: player.coins >= 500,
+    },
+    {
+      id: "level_five",
+      unlocked: player.level >= 5,
+    },
+    {
+      id: "twenty_five_games",
+      unlocked: player.gamesPlayed >= 25,
+    },
+    {
+      id: "first_hunt",
+      unlocked: (player.huntsCompleted ?? 0) >= 1,
+    },
+    {
+      id: "ten_hunts",
+      unlocked: (player.huntsCompleted ?? 0) >= 10,
+    },
+    {
+      id: "five_hunt_streak",
+      unlocked: (player.bestHuntStreak ?? 0) >= 5,
+    },
+    {
+      id: "legendary_hunt",
+      unlocked: (player.legendaryHunts ?? 0) >= 1,
+    },
+  ];
+
+  for (const achievement of achievements) {
+    if (
+      achievement.unlocked &&
+      !player.achievements.includes(achievement.id)
+    ) {
+      player.achievements.push(achievement.id);
+    }
+  }
+}
+
+export function applyLevelUp(player: GamePlayer): boolean {
+  const oldLevel = player.level;
+
+  while (player.xp >= player.level * XP_PER_LEVEL) {
+    player.xp -= player.level * XP_PER_LEVEL;
+    player.level++;
+  }
+
+  return player.level > oldLevel;
+}
+
+export async function awardResult(
+  player: GamePlayer,
+  result: "win" | "loss" | "draw",
+): Promise<{
+  coins: number;
+  xp: number;
+  levelUp: boolean;
+  newAchievements: string[];
+}> {
+  let coins = 0;
+  let xp = 0;
+
+  player.gamesPlayed++;
+
+  if (result === "win") {
+    coins = 25;
+    xp = 40;
+    player.wins++;
+    player.streak++;
+
+    if (player.streak > player.bestStreak) {
+      player.bestStreak = player.streak;
+    }
+  } else if (result === "loss") {
+    coins = 5;
+    xp = 10;
+    player.losses++;
+    player.streak = 0;
+  } else {
+    coins = 10;
+    xp = 20;
+    player.draws++;
+  }
+
+  player.coins += coins;
+  player.xp += xp;
+
+  const levelUp = applyLevelUp(player);
+
+  const before = new Set(player.achievements);
+
+  updateAchievements(player);
+
+  const newAchievements = player.achievements.filter(
+    (id) => !before.has(id),
+  );
+
+  await updatePlayer(player);
+
+  return {
+    coins,
+    xp,
+    levelUp,
+    newAchievements,
+  };
+}
+
+export async function awardDailyReward(
+  player: GamePlayer,
+): Promise<{
+  coins: number;
+  xp: number;
+  levelUp: boolean;
+  newAchievements: string[];
+}> {
+  const coins = 100;
+  const xp = 25;
+
+  player.coins += coins;
+  player.xp += xp;
+  player.dailyClaimedAt = new Date().toISOString();
+
+  const levelUp = applyLevelUp(player);
+
+  const before = new Set(player.achievements);
+
+  updateAchievements(player);
+
+  const newAchievements = player.achievements.filter(
+    (id) => !before.has(id),
+  );
+
+  await updatePlayer(player);
+
+  return {
+    coins,
+    xp,
+    levelUp,
+    newAchievements,
+  };
+}
+
+===== DAILY =====
+import { getPlayer, updatePlayer } from "./store";
+import { ACHIEVEMENTS } from "./rewards";
+
+const DAILY_COINS = 100;
+const DAILY_XP = 25;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const STREAK_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+export async function claimDaily(
+  userId: string,
+  username: string,
+): Promise<{
+  claimed: boolean;
+  coins: number;
+  xp: number;
+  level: number;
+  levelUp: boolean;
+  newAchievements: string[];
+  nextClaimAt?: number;
+}> {
+  const player = await getPlayer(userId, username);
+  const now = Date.now();
+
+  if (player.dailyClaimedAt) {
+    const lastClaim = new Date(player.dailyClaimedAt).getTime();
+    const nextClaimAt = lastClaim + DAY_MS;
+
+    if (now < nextClaimAt) {
+      return {
+        claimed: false,
+        coins: 0,
+        xp: 0,
+        level: player.level,
+        levelUp: false,
+        newAchievements: [],
+        nextClaimAt,
+      };
+    }
+  }
+
+  const oldLevel = player.level;
+  const oldAchievements = new Set(player.achievements);
+
+  const previousClaimAt = player.dailyClaimedAt
+    ? new Date(player.dailyClaimedAt).getTime()
+    : 0;
+
+  if (
+    previousClaimAt > 0 &&
+    now - previousClaimAt <= STREAK_WINDOW_MS
+  ) {
+    player.dailyStreak = (player.dailyStreak ?? 0) + 1;
+  } else {
+    player.dailyStreak = 1;
+  }
+
+  if (
+    player.dailyStreak >
+    (player.bestDailyStreak ?? 0)
+  ) {
+    player.bestDailyStreak = player.dailyStreak;
+  }
+
+  player.dailyClaimedAt = new Date(now).toISOString();
+
+  const streakBonusCoins =
+    Math.min(player.dailyStreak, 7) * 10;
+
+  const streakBonusXp =
+    Math.min(player.dailyStreak, 7) * 5;
+
+  let bonusCoins = streakBonusCoins;
+  let bonusXp = streakBonusXp;
+
+  if (player.dailyStreak % 7 === 0) {
+    bonusCoins += 100;
+    bonusXp += 25;
+  }
+
+  if (player.dailyStreak % 30 === 0) {
+    bonusCoins += 500;
+    bonusXp += 100;
+  }
+
+  const totalCoins = DAILY_COINS + bonusCoins;
+  const totalXp = DAILY_XP + bonusXp;
+
+  player.coins += totalCoins;
+  player.xp += totalXp;
+
+  while (player.xp >= player.level * 100) {
+    player.xp -= player.level * 100;
+    player.level++;
+  }
+
+  if (
+    player.gamesPlayed >= 1 &&
+    !player.achievements.includes("first_game")
+  ) {
+    player.achievements.push("first_game");
+  }
+
+  if (
+    player.wins >= 1 &&
+    !player.achievements.includes("first_win")
+  ) {
+    player.achievements.push("first_win");
+  }
+
+  if (
+    player.bestStreak >= 5 &&
+    !player.achievements.includes("five_streak")
+  ) {
+    player.achievements.push("five_streak");
+  }
+
+  if (
+    player.coins >= 500 &&
+    !player.achievements.includes("five_hundred_coins")
+  ) {
+    player.achievements.push("five_hundred_coins");
+  }
+
+  if (
+    player.level >= 5 &&
+    !player.achievements.includes("level_five")
+  ) {
+    player.achievements.push("level_five");
+  }
+
+  if (
+    player.gamesPlayed >= 25 &&
+    !player.achievements.includes("twenty_five_games")
+  ) {
+    player.achievements.push("twenty_five_games");
+  }
+
+  const newAchievements = player.achievements.filter(
+    (id) => !oldAchievements.has(id),
+  );
+
+  await updatePlayer(player);
+
+  return {
+    claimed: true,
+    coins: totalCoins,
+    xp: totalXp,
+    level: player.level,
+    levelUp: player.level > oldLevel,
+    newAchievements,
+  };
+}
+
+===== LOOT =====
+import { GamePlayer } from "./types";
+import { updatePlayer } from "./store";
+
+export const LOOT_ITEMS = {
+  wolf_fang: {
+    name: "🐺 Wolf Fang",
+    description: "A fang collected from a dangerous wolf.",
+    rarity: "common",
+  },
+  fox_charm: {
+    name: "🦊 Fox Charm",
+    description: "A mysterious charm discovered in a fox den.",
+    rarity: "uncommon",
+  },
+  crystal_shard: {
+    name: "💎 Crystal Shard",
+    description: "A rare crystal fragment from a hidden cave.",
+    rarity: "rare",
+  },
+  ancient_relic: {
+    name: "👑 Ancient Relic",
+    description: "A legendary relic recovered from ancient ruins.",
+    rarity: "legendary",
+  },
+} as const;
+
+export type LootItemId = keyof typeof LOOT_ITEMS;
+
+export function addItem(
+  player: GamePlayer,
+  itemId: string,
+  amount = 1,
+): void {
+  if (!player.inventory) {
+    player.inventory = {};
+  }
+
+  player.inventory[itemId] =
+    (player.inventory[itemId] ?? 0) + amount;
+}
+
+export async function addItemAndSave(
+  player: GamePlayer,
+  itemId: string,
+  amount = 1,
+): Promise<void> {
+  addItem(player, itemId, amount);
+  await updatePlayer(player);
+}
+
+export function getInventory(
+  player: GamePlayer,
+): Record<string, number> {
+  return player.inventory ?? {};
+}
+
+export function getLootForRarity(
+  rarity: string,
+): LootItemId | null {
+  switch (rarity) {
+    case "common":
+      return "wolf_fang";
+    case "uncommon":
+      return "fox_charm";
+    case "rare":
+      return "crystal_shard";
+    case "legendary":
+      return "ancient_relic";
+    default:
+      return null;
+  }
+}
+
+===== SHOP =====
+import { GamePlayer } from "./types";
+import { updatePlayer } from "./store";
+
+export const SHOP_ITEMS = {
+  xp_boost: {
+    name: "🧪 XP Boost",
+    description: "Doubles XP from your next hunt.",
+    price: 250,
+  },
+  lucky_token: {
+    name: "🍀 Lucky Token",
+    description: "Improves your next hunt's chance of finding rare loot.",
+    price: 500,
+  },
+  vip_badge: {
+    name: "👑 VIP Badge",
+    description: "A permanent prestigious AshenAI game badge.",
+    price: 1000,
+  },
+} as const;
+
+export type ShopItemId = keyof typeof SHOP_ITEMS;
+
+export async function buyItem(
+  player: GamePlayer,
+  itemId: ShopItemId,
+): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const item = SHOP_ITEMS[itemId];
+
+  if (!item) {
+    return {
+      success: false,
+      message: "❌ That shop item does not exist.",
+    };
+  }
+
+  if (!player.inventory) {
+    player.inventory = {};
+  }
+
+  // VIP Badge is permanent and cannot be purchased twice.
+  if (
+    itemId === "vip_badge" &&
+    (player.inventory.vip_badge ?? 0) > 0
+  ) {
+    return {
+      success: false,
+      message: "👑 You already own the VIP Badge.",
+    };
+  }
+
+  if (player.coins < item.price) {
+    return {
+      success: false,
+      message:
+        `❌ You need **${item.price} coins**, ` +
+        `but you only have **${player.coins}**.`,
+    };
+  }
+
+  player.coins -= item.price;
+
+  player.inventory[itemId] =
+    (player.inventory[itemId] ?? 0) + 1;
+
+  await updatePlayer(player);
+
+  return {
+    success: true,
+    message:
+      `✅ You purchased **${item.name}** for ` +
+      `**${item.price} coins**!`,
+  };
+}
+
+
+===== GAME FILE: src/games/games/chaos.ts =====
+export type ChaosResult = {
+  title: string;
+  description: string;
+  coins: number;
+  xp: number;
+};
+
+const EVENTS: ChaosResult[] = [
+  {
+    title: "🔥 Ashen Surge",
+    description: "The Ashen realm recognizes your presence.",
+    coins: 50,
+    xp: 30,
+  },
+  {
+    title: "💰 Lost Pouch",
+    description: "You found a mysterious pouch of coins.",
+    coins: 75,
+    xp: 20,
+  },
+  {
+    title: "👻 Ghost Encounter",
+    description: "A ghost challenged you to survive the encounter.",
+    coins: 25,
+    xp: 45,
+  },
+  {
+    title: "🍀 Lucky Moment",
+    description: "Pure luck. Nothing more. Nothing less.",
+    coins: 100,
+    xp: 50,
+  },
+  {
+    title: "💀 Ashen Curse",
+    description: "Something went terribly wrong...",
+    coins: -25,
+    xp: 10,
+  },
+];
+
+export function randomChaos(): ChaosResult {
+  return EVENTS[Math.floor(Math.random() * EVENTS.length)];
+}
+
+===== GAME FILE: src/games/games/coinflip.ts =====
+export type CoinSide = "heads" | "tails";
+
+export function flipCoin(): CoinSide {
+  return Math.random() < 0.5
+    ? "heads"
+    : "tails";
+}
+
+===== GAME FILE: src/games/games/dice.ts =====
+export function rollDice(sides = 6): number {
+  if (!Number.isInteger(sides) || sides < 2 || sides > 100) {
+    throw new Error("Dice must have between 2 and 100 sides.");
+  }
+
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+===== GAME FILE: src/games/games/duel.ts =====
+import { GamePlayer } from "../types";
+
+export type DuelTurnResult = {
+  attackerDamage: number;
+  critical: boolean;
+  defenderHp: number;
+};
+
+export type DuelResult = {
+  winner: GamePlayer;
+  loser: GamePlayer;
+  turns: number;
+};
+
+function calculateDamage(
+  attacker: GamePlayer,
+  defender: GamePlayer,
+): { damage: number; critical: boolean } {
+  const critical = Math.random() < 0.15;
+
+  const baseDamage = Math.max(
+    1,
+    attacker.attack - Math.floor(defender.defense * 0.5),
+  );
+
+  const variance =
+    Math.floor(Math.random() * 7) - 3;
+
+  const damage = Math.max(
+    1,
+    baseDamage + variance,
+  );
+
+  return {
+    damage: critical
+      ? Math.max(2, damage * 2)
+      : damage,
+    critical,
+  };
+}
+
+export function simulateDuel(
+  first: GamePlayer,
+  second: GamePlayer,
+): DuelResult {
+  const firstHp = first.hp;
+  const secondHp = second.hp;
+
+  let hp1 = firstHp;
+  let hp2 = secondHp;
+  let turns = 0;
+
+  while (hp1 > 0 && hp2 > 0 && turns < 100) {
+    turns++;
+
+    const attack1 = calculateDamage(
+      first,
+      second,
+    );
+
+    hp2 -= attack1.damage;
+
+    if (hp2 <= 0) {
+      return {
+        winner: first,
+        loser: second,
+        turns,
+      };
+    }
+
+    turns++;
+
+    const attack2 = calculateDamage(
+      second,
+      first,
+    );
+
+    hp1 -= attack2.damage;
+
+    if (hp1 <= 0) {
+      return {
+        winner: second,
+        loser: first,
+        turns,
+      };
+    }
+  }
+
+  return hp1 >= hp2
+    ? {
+        winner: first,
+        loser: second,
+        turns,
+      }
+    : {
+        winner: second,
+        loser: first,
+        turns,
+      };
+}
+
+===== GAME FILE: src/games/games/hunt.ts =====
+import { GamePlayer } from "../types";
+import { updatePlayer } from "../store";
+import { addItem, getLootForRarity } from "../loot";
+import { applyLevelUp, updateAchievements } from "../rewards";
+
+export interface HuntResult {
+  title: string;
+  description: string;
+  coins: number;
+  xp: number;
+  rarity:
+    | "common"
+    | "uncommon"
+    | "rare"
+    | "legendary"
+    | "danger";
+  streak: number;
+  huntsCompleted: number;
+  levelUp?: boolean;
+  xpBoostUsed?: boolean;
+  luckyTokenUsed?: boolean;
+  vipBadgeActive?: boolean;
+  newAchievements?: string[];
+}
+
+export interface HuntCooldown {
+  available: boolean;
+  remainingMs: number;
+}
+
+export const HUNT_COOLDOWN_MS = 30_000;
+
+const HUNT_EVENTS: Omit<
+  HuntResult,
+  "streak" | "huntsCompleted" | "levelUp" | "xpBoostUsed" | "luckyTokenUsed"
+>[] = [
+  {
+    title: "🐺 Wolf Encounter",
+    description:
+      "You tracked a wild wolf and found a valuable reward.",
+    coins: 20,
+    xp: 15,
+    rarity: "common",
+  },
+  {
+    title: "🦊 Fox Den",
+    description:
+      "You discovered a hidden fox den containing old coins.",
+    coins: 35,
+    xp: 25,
+    rarity: "uncommon",
+  },
+  {
+    title: "💎 Crystal Cave",
+    description:
+      "You discovered a rare crystal deep inside a cave.",
+    coins: 75,
+    xp: 50,
+    rarity: "rare",
+  },
+  {
+    title: "👑 Ancient Treasure",
+    description:
+      "You uncovered an ancient treasure hidden beneath the ruins!",
+    coins: 200,
+    xp: 100,
+    rarity: "legendary",
+  },
+  {
+    title: "💀 Dangerous Trap",
+    description:
+      "You triggered a trap during the hunt and escaped with almost nothing.",
+    coins: 5,
+    xp: 5,
+    rarity: "danger",
+  },
+];
+
+function randomEvent(lucky = false) {
+  const roll = Math.random();
+
+  if (!lucky) {
+    if (roll < 0.55) return HUNT_EVENTS[0];
+    if (roll < 0.80) return HUNT_EVENTS[1];
+    if (roll < 0.95) return HUNT_EVENTS[2];
+    if (roll < 0.99) return HUNT_EVENTS[3];
+    return HUNT_EVENTS[4];
+  }
+
+  // Lucky Token improves the odds of rare/legendary rewards.
+  if (roll < 0.35) return HUNT_EVENTS[0];
+  if (roll < 0.65) return HUNT_EVENTS[1];
+  if (roll < 0.90) return HUNT_EVENTS[2];
+  if (roll < 0.99) return HUNT_EVENTS[3];
+  return HUNT_EVENTS[4];
+}
+
+export function getHuntCooldown(
+  player: GamePlayer,
+  now = Date.now(),
+): HuntCooldown {
+  const lastAt = player.huntLastAt ?? 0;
+
+  const remainingMs = Math.max(
+    0,
+    lastAt + HUNT_COOLDOWN_MS - now,
+  );
+
+  return {
+    available: remainingMs <= 0,
+    remainingMs,
+  };
+}
+
+export async function hunt(
+  player: GamePlayer,
+): Promise<HuntResult> {
+  const cooldown = getHuntCooldown(player);
+
+  if (!cooldown.available) {
+    throw new Error(
+      `HUNT_COOLDOWN:${cooldown.remainingMs}`,
+    );
+  }
+
+  if (!player.inventory) {
+    player.inventory = {};
+  }
+
+  // Temporary effects are activated with /game use
+  // and consumed by the next successful hunt.
+  const xpBoostUsed = player.xpBoostActive === true;
+  const luckyTokenUsed = player.luckyTokenActive === true;
+
+  const event = randomEvent(luckyTokenUsed);
+
+  const earnedXp = xpBoostUsed
+    ? event.xp * 2
+    : event.xp;
+
+  // Consume temporary effects after the successful hunt.
+  player.xpBoostActive = false;
+  player.luckyTokenActive = false;
+
+  player.huntLastAt = Date.now();
+
+  player.huntsCompleted =
+    (player.huntsCompleted ?? 0) + 1;
+
+  player.huntStreak =
+    (player.huntStreak ?? 0) + 1;
+
+  if (
+    player.huntStreak >
+    (player.bestHuntStreak ?? 0)
+  ) {
+    player.bestHuntStreak = player.huntStreak;
+  }
+
+  player.gamesPlayed++;
+
+  const vipBadgeActive =
+    (player.inventory.vip_badge ?? 0) > 0;
+
+  const earnedCoins = vipBadgeActive
+    ? Math.floor(event.coins * 1.25)
+    : event.coins;
+
+  player.coins += earnedCoins;
+  player.xp += earnedXp;
+
+  const levelUp = applyLevelUp(player);
+
+  if (event.rarity === "legendary") {
+    player.legendaryHunts =
+      (player.legendaryHunts ?? 0) + 1;
+  }
+
+
+  const beforeAchievements = new Set(player.achievements);
+  updateAchievements(player);
+  const newAchievements = player.achievements.filter(
+    (id) => !beforeAchievements.has(id),
+  );
+
+  const lootItem = getLootForRarity(event.rarity);
+
+  if (lootItem) {
+    addItem(player, lootItem);
+  }
+
+  await updatePlayer(player);
+
+  return {
+    ...event,
+    coins: earnedCoins,
+    xp: earnedXp,
+    streak: player.huntStreak,
+    huntsCompleted: player.huntsCompleted,
+    levelUp,
+    xpBoostUsed,
+    luckyTokenUsed,
+    vipBadgeActive,
+    newAchievements,
+  };
+}
+
+===== GAME FILE: src/games/games/rps.ts =====
+export type RPSChoice = "rock" | "paper" | "scissors";
+
+export function playRPS(
+  player: RPSChoice,
+  bot: RPSChoice,
+): "win" | "loss" | "draw" {
+  if (player === bot) return "draw";
+
+  if (
+    (player === "rock" && bot === "scissors") ||
+    (player === "paper" && bot === "rock") ||
+    (player === "scissors" && bot === "paper")
+  ) {
+    return "win";
+  }
+
+  return "loss";
+}
+
+export function randomRPS(): RPSChoice {
+  const choices: RPSChoice[] = ["rock", "paper", "scissors"];
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+
+===== GAME COMMAND =====
+import {
+  ChatInputCommandInteraction,
+  EmbedBuilder,
+  SlashCommandBuilder,
+} from "discord.js";
+
+import { AshenCommand } from "./definitions";
+
+import {
+  getPlayer,
+  getLeaderboard,
+  updatePlayer,
+  LeaderboardCategory,
+} from "../games/store";
+
+import {
+  awardResult,
+  awardDailyReward,
+  ACHIEVEMENTS,
+} from "../games/rewards";
+
+import { rollDice } from "../games/games/dice";
+import { flipCoin } from "../games/games/coinflip";
+import {
+  SHOP_ITEMS,
+  buyItem,
+  ShopItemId,
+} from "../games/shop";
+import { claimDaily } from "../games/daily";
+import {
+  playRPS,
+  randomRPS,
+} from "../games/games/rps";
+import { simulateDuel } from "../games/games/duel";
+import { randomChaos } from "../games/games/chaos";
+import { hunt } from "../games/games/hunt";
+import { getInventory, LOOT_ITEMS } from "../games/loot";
+
+export function createGameCommand(): AshenCommand {
+  const data = new SlashCommandBuilder()
+    .setName("game")
+    .setDescription("🎮 Play AshenAI games")
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("dice")
+        .setDescription("🎲 Roll a dice")
+        .addIntegerOption((option) =>
+          option
+            .setName("sides")
+            .setDescription("Number of sides")
+            .setMinValue(2)
+            .setMaxValue(100)
+            .setRequired(false)
+        )
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("coin")
+        .setDescription("🪙 Flip a coin")
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("rps")
+        .setDescription("🪨 Rock Paper Scissors")
+        .addStringOption((option) =>
+          option
+            .setName("choice")
+            .setDescription("Choose your move")
+            .setRequired(true)
+            .addChoices(
+              {
+                name: "🪨 Rock",
+                value: "rock",
+              },
+              {
+                name: "📄 Paper",
+                value: "paper",
+              },
+              {
+                name: "✂️ Scissors",
+                value: "scissors",
+              },
+            )
+        )
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("profile")
+        .setDescription("👤 View your game profile")
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("stats")
+        .setDescription("📊 View your detailed game statistics")
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("achievements")
+        .setDescription(
+          "🏅 View all AshenAI game achievements",
+        )
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("daily")
+        .setDescription(
+          "🎁 Claim your daily reward",
+        )
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("duel")
+        .setDescription("⚔️ Challenge another player")
+        .addUserOption((option) =>
+          option
+            .setName("opponent")
+            .setDescription("Choose your opponent")
+            .setRequired(true),
+        )
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("leaderboard")
+        .setDescription(
+          "🏆 View the game leaderboard",
+        )
+        .addStringOption((option) =>
+          option
+            .setName("category")
+            .setDescription("Choose a leaderboard category")
+            .setRequired(false)
+            .addChoices(
+              { name: "⭐ Level", value: "level" },
+              { name: "🏆 Wins", value: "wins" },
+              { name: "🪙 Coins", value: "coins" },
+              { name: "✨ XP", value: "xp" },
+              { name: "🎯 Hunts", value: "hunts" },
+              { name: "🔥 Hunt Streak", value: "hunt_streak" },
+            ),
+        )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("chaos")
+        .setDescription("🌪️ Trigger a random AshenAI chaos event")
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("hunt")
+        .setDescription("🎯 Go hunting for coins and XP")
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("inventory")
+        .setDescription("🎒 View your AshenAI inventory")
+    );
+
+  // Shop and purchase subcommands
+  data
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("shop")
+        .setDescription("🛒 View the AshenAI coin shop"),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("buy")
+        .setDescription("🛍️ Buy an item from the shop")
+        .addStringOption((option) =>
+          option
+            .setName("item")
+            .setDescription("Choose an item")
+            .setRequired(true)
+            .addChoices(
+              ...Object.entries(SHOP_ITEMS).map(
+                ([value, item]) => ({
+                  name: `${item.name} — ${item.price} coins`,
+                  value,
+                }),
+              ),
+            ),
+        ),
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("use")
+        .setDescription("🧪 Use a consumable item")
+        .addStringOption((option) =>
+          option
+            .setName("item")
+            .setDescription("Choose an item to use")
+            .setRequired(true)
+            .addChoices(
+              {
+                name: "🧪 XP Boost",
+                value: "xp_boost",
+              },
+              {
+                name: "🍀 Lucky Token",
+                value: "lucky_token",
+              },
+            ),
+        ),
+    );
+
+  return {
+    data,
+
+
+    async execute(
+      interaction: ChatInputCommandInteraction,
+    ): Promise<void> {
+      const subcommand =
+        interaction.options.getSubcommand();
+
+      if (subcommand === "dice") {
+        const sides =
+          interaction.options.getInteger(
+            "sides",
+          ) ?? 6;
+
+        const result = rollDice(sides);
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const reward = await awardResult(
+          player,
+          "draw",
+        );
+
+        const embed = new EmbedBuilder()
+          .setTitle("🎲 AshenAI Dice")
+          .setDescription(
+            `**${interaction.user.username}** rolled **${result}** on a d${sides}!`,
+          )
+          .addFields(
+            {
+              name: "🪙 Coins",
+              value: `+${reward.coins}`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${reward.xp}`,
+              inline: true,
+            },
+            {
+              name: "⭐ Level",
+              value: `${player.level}`,
+              inline: true,
+            },
+          );
+
+        if (reward.levelUp) {
+          embed.addFields({
+            name: "🎉 Level Up!",
+            value:
+              `You reached **Level ${player.level}**!`,
+          });
+        }
+
+        if (
+          reward.newAchievements.length > 0
+        ) {
+          embed.addFields({
+            name: "🏅 Achievement Unlocked!",
+            value: reward.newAchievements
+              .map(
+                (id) =>
+                  `🏆 **${ACHIEVEMENTS[id] ?? id}**`,
+              )
+              .join("\n"),
+          });
+        }
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "coin") {
+        const result = flipCoin();
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const reward = await awardResult(
+          player,
+          "draw",
+        );
+
+        const embed = new EmbedBuilder()
+          .setTitle("🪙 AshenAI Coin Flip")
+          .setDescription(
+            `The coin landed on **${result}**!`,
+          )
+          .addFields(
+            {
+              name: "🪙 Coins",
+              value: `+${reward.coins}`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${reward.xp}`,
+              inline: true,
+            },
+          );
+
+        if (
+          reward.newAchievements.length > 0
+        ) {
+          embed.addFields({
+            name: "🏅 Achievement Unlocked!",
+            value: reward.newAchievements
+              .map(
+                (id) =>
+                  `🏆 **${ACHIEVEMENTS[id] ?? id}**`,
+              )
+              .join("\n"),
+          });
+        }
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "rps") {
+        const choice =
+          interaction.options.getString(
+            "choice",
+            true,
+          ) as
+            | "rock"
+            | "paper"
+            | "scissors";
+
+        const botChoice = randomRPS();
+
+        const result = playRPS(
+          choice,
+          botChoice,
+        );
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const reward = await awardResult(
+          player,
+          result,
+        );
+
+        const names = {
+          rock: "🪨 Rock",
+          paper: "📄 Paper",
+          scissors: "✂️ Scissors",
+        };
+
+        const resultText = {
+          win: "🎉 You win!",
+          loss: "💀 You lose!",
+          draw: "🤝 Draw!",
+        };
+
+        const embed = new EmbedBuilder()
+          .setTitle(
+            "🪨📄✂️ Rock Paper Scissors",
+          )
+          .setDescription(
+            `**You:** ${names[choice]}\n` +
+            `**AshenAI:** ${names[botChoice]}\n\n` +
+            `## ${resultText[result]}`,
+          )
+          .addFields(
+            {
+              name: "🪙 Coins",
+              value: `+${reward.coins}`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${reward.xp}`,
+              inline: true,
+            },
+            {
+              name: "⭐ Level",
+              value: `${player.level}`,
+              inline: true,
+            },
+          );
+
+        if (reward.levelUp) {
+          embed.addFields({
+            name: "🎉 Level Up!",
+            value:
+              `You reached **Level ${player.level}**!`,
+          });
+        }
+
+        if (
+          reward.newAchievements.length > 0
+        ) {
+          embed.addFields({
+            name: "🏅 Achievement Unlocked!",
+            value: reward.newAchievements
+              .map(
+                (id) =>
+                  `🏆 **${ACHIEVEMENTS[id] ?? id}**`,
+              )
+              .join("\n"),
+          });
+        }
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "stats") {
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const inventoryCount = Object.values(
+          player.inventory ?? {},
+        ).reduce(
+          (total, amount) => total + amount,
+          0,
+        );
+
+        const winRate =
+          player.gamesPlayed > 0
+            ? (
+                (player.wins / player.gamesPlayed) *
+                100
+              ).toFixed(1)
+            : "0.0";
+
+        const duelTotal =
+          player.duelWins + player.duelLosses;
+
+        const duelWinRate =
+          duelTotal > 0
+            ? (
+                (player.duelWins / duelTotal) *
+                100
+              ).toFixed(1)
+            : "0.0";
+
+        const lootSummary =
+          Object.entries(LOOT_ITEMS)
+            .map(([id, item]) => {
+              const amount = player.inventory?.[id] ?? 0;
+              return `${item.name}: **${amount}**`;
+            })
+            .join("\n");
+
+        const embed = new EmbedBuilder()
+          .setTitle(
+            `📊 ${player.username}'s AshenAI Statistics`,
+          )
+          .addFields(
+            {
+              name: "🎮 Overall Games",
+              value:
+                `Games: **${player.gamesPlayed}**\n` +
+                `🏆 Wins: **${player.wins}**\n` +
+                `💀 Losses: **${player.losses}**\n` +
+                `🤝 Draws: **${player.draws}**\n` +
+                `📈 Win Rate: **${winRate}%**`,
+              inline: true,
+            },
+            {
+              name: "⚔️ Duel Statistics",
+              value:
+                `🏆 Duel Wins: **${player.duelWins}**\n` +
+                `💀 Duel Losses: **${player.duelLosses}**\n` +
+                `📈 Duel Win Rate: **${duelWinRate}%**`,
+              inline: true,
+            },
+            {
+              name: "🎯 Hunt Statistics",
+              value:
+                `🎯 Hunts: **${player.huntsCompleted ?? 0}**\n` +
+                `🔥 Hunt Streak: **${player.huntStreak ?? 0}**\n` +
+                `👑 Best Hunt Streak: **${player.bestHuntStreak ?? 0}**`,
+              inline: true,
+            },
+            {
+              name: "🎁 Daily Statistics",
+              value:
+                `🔥 Daily Streak: **${player.dailyStreak ?? 0}**\n` +
+                `👑 Best Daily Streak: **${player.bestDailyStreak ?? 0}**`,
+              inline: true,
+            },
+            {
+              name: "💰 Economy",
+              value:
+                `🪙 Coins: **${player.coins}**\n` +
+                `✨ XP: **${player.xp}**\n` +
+                `⭐ Level: **${player.level}**`,
+              inline: true,
+            },
+            {
+              name: "🎒 Inventory",
+              value: `📦 Items: **${inventoryCount}**`,
+              inline: true,
+            },
+            {
+              name: "💎 Loot Collection",
+              value: lootSummary,
+              inline: false,
+            },
+          )
+          .setFooter({
+            text:
+              "AshenAI • Keep playing to improve your statistics!",
+          });
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "profile") {
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const inventoryCount = Object.values(
+          player.inventory ?? {},
+        ).reduce(
+          (total, amount) => total + amount,
+          0,
+        );
+
+        const achievements =
+          player.achievements.length > 0
+            ? player.achievements
+                .map(
+                  (id) =>
+                    `• ${ACHIEVEMENTS[id] ?? id}`,
+                )
+                .join("\n")
+            : "None yet";
+
+        const embed = new EmbedBuilder()
+          .setTitle(
+            `🎮 ${player.username}'s AshenAI Profile`,
+          )
+          .addFields(
+            {
+              name: "⭐ Level",
+              value: `${player.level}`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `${player.xp}`,
+              inline: true,
+            },
+            {
+              name: "🪙 Coins",
+              value: `${player.coins}`,
+              inline: true,
+            },
+            {
+              name: "🏆 Wins",
+              value: `${player.wins}`,
+              inline: true,
+            },
+            {
+              name: "💀 Losses",
+              value: `${player.losses}`,
+              inline: true,
+            },
+            {
+              name: "🤝 Draws",
+              value: `${player.draws}`,
+              inline: true,
+            },
+            {
+              name: "🎮 Games",
+              value: `${player.gamesPlayed}`,
+              inline: true,
+            },
+            {
+              name: "🔥 Streak",
+              value: `${player.streak}`,
+              inline: true,
+            },
+            {
+              name: "👑 Best Streak",
+              value: `${player.bestStreak}`,
+              inline: true,
+            },
+            {
+              name: "🔥 Daily Streak",
+              value: `${player.dailyStreak ?? 0} day(s)`,
+              inline: true,
+            },
+            {
+              name: "🏆 Best Daily Streak",
+              value: `${player.bestDailyStreak ?? 0} day(s)`,
+              inline: true,
+            },
+            {
+              name: "🏅 Achievements",
+              value: achievements,
+            },
+          );
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "achievements") {
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const lines = Object.entries(
+          ACHIEVEMENTS,
+        ).map(([id, name]) => {
+          const unlocked =
+            player.achievements.includes(id);
+
+          return unlocked
+            ? `✅ ${name}`
+            : `🔒 ${name}`;
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle(
+            "🏅 AshenAI Achievements",
+          )
+          .setDescription(
+            lines.join("\n"),
+          )
+          .setFooter({
+            text:
+              `${player.achievements.length}/${Object.keys(ACHIEVEMENTS).length} unlocked`,
+          });
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "daily") {
+        const reward = await claimDaily(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        if (!reward.claimed) {
+          const remaining = Math.max(
+            0,
+            (reward.nextClaimAt ?? Date.now()) - Date.now(),
+          );
+
+          const hours = Math.ceil(
+            remaining / (60 * 60 * 1000),
+          );
+
+          await interaction.editReply(
+            `⏳ You already claimed your daily reward. Try again in about **${hours}h**.`,
+          );
+
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle("🎁 AshenAI Daily Reward")
+          .setDescription(
+            "Your daily reward has been claimed!",
+          )
+          .addFields(
+            {
+              name: "🪙 Coins",
+              value: `+${reward.coins}`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${reward.xp}`,
+              inline: true,
+            },
+            {
+              name: "⭐ Level",
+              value: `${reward.level}`,
+              inline: true,
+            },
+            {
+              name: "🔥 Daily Streak",
+              value: `${player.dailyStreak ?? 1} day(s)`,
+              inline: true,
+            },
+          );
+
+        if (reward.levelUp) {
+          embed.addFields({
+            name: "🎉 Level Up!",
+            value:
+              `You reached **Level ${reward.level}**!`,
+          });
+        }
+
+        if (reward.newAchievements.length > 0) {
+          embed.addFields({
+            name: "🏅 Achievement Unlocked!",
+            value: reward.newAchievements
+              .map(
+                (id) =>
+                  `🏆 **${ACHIEVEMENTS[id] ?? id}**`,
+              )
+              .join("\n"),
+          });
+        }
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "duel") {
+        const opponent = interaction.options.getUser(
+          "opponent",
+          true,
+        );
+
+        if (opponent.id === interaction.user.id) {
+          await interaction.editReply(
+            "❌ You cannot duel yourself.",
+          );
+          return;
+        }
+
+        if (opponent.bot) {
+          await interaction.editReply(
+            "❌ You cannot duel a bot.",
+          );
+          return;
+        }
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const enemy = await getPlayer(
+          opponent.id,
+          opponent.username,
+        );
+
+        const result = simulateDuel(
+          player,
+          enemy,
+        );
+
+        if (result.winner.userId === player.userId) {
+          player.duelWins++;
+          enemy.duelLosses++;
+
+          player.coins += 50;
+          player.xp += 75;
+        } else {
+          player.duelLosses++;
+          enemy.duelWins++;
+
+          enemy.coins += 50;
+          enemy.xp += 75;
+        }
+
+        player.hp = player.maxHp;
+        enemy.hp = enemy.maxHp;
+
+        const { updatePlayer } =
+          await import("../games/store");
+
+        await updatePlayer(player);
+        await updatePlayer(enemy);
+
+        const winner = result.winner;
+        const loser = result.loser;
+
+        await interaction.editReply(
+          `⚔️ **ASHEN DUEL**\n\n` +
+          `**${player.username}** vs **${enemy.username}**\n\n` +
+          `🏆 **${winner.username} wins!**\n` +
+          `💀 ${loser.username} has been defeated.\n\n` +
+          `⚔️ Turns: **${result.turns}**\n` +
+          `🪙 Winner: **+50 coins**\n` +
+          `✨ Winner: **+75 XP**`,
+        );
+
+        return;
+      }
+
+      if (subcommand === "buy") {
+        const itemId = interaction.options.getString(
+          "item",
+          true,
+        ) as ShopItemId;
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const result = await buyItem(
+          player,
+          itemId,
+        );
+
+        await interaction.editReply(
+          result.success
+            ? `${result.message}\n\n🪙 Remaining coins: **${player.coins}**`
+            : result.message,
+        );
+
+        return;
+      }
+
+      if (subcommand === "use") {
+        const itemId = interaction.options.getString(
+          "item",
+          true,
+        );
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        if (!player.inventory) {
+          player.inventory = {};
+        }
+
+        const amount = player.inventory[itemId] ?? 0;
+
+        if (amount <= 0) {
+          await interaction.editReply(
+            `❌ You don't have **${itemId}** in your inventory.`,
+          );
+          return;
+        }
+
+        if (itemId === "xp_boost") {
+          if (player.xpBoostActive) {
+            await interaction.editReply(
+              "🧪 Your XP Boost is already active. Use it on your next hunt.",
+            );
+            return;
+          }
+
+          player.inventory.xp_boost = amount - 1;
+          if (player.inventory.xp_boost <= 0) {
+            delete player.inventory.xp_boost;
+          }
+
+          player.xpBoostActive = true;
+
+          await updatePlayer(player);
+
+          await interaction.editReply(
+            "🧪 **XP Boost activated!** Your next hunt will give **2× XP**.",
+          );
+          return;
+        }
+
+        if (itemId === "lucky_token") {
+          if (player.luckyTokenActive) {
+            await interaction.editReply(
+              "🍀 Your Lucky Token is already active. Use it on your next hunt.",
+            );
+            return;
+          }
+
+          player.inventory.lucky_token = amount - 1;
+          if (player.inventory.lucky_token <= 0) {
+            delete player.inventory.lucky_token;
+          }
+
+          player.luckyTokenActive = true;
+
+          await updatePlayer(player);
+
+          await interaction.editReply(
+            "🍀 **Lucky Token activated!** Your next hunt has an improved chance of finding rare loot.",
+          );
+          return;
+        }
+
+        if (itemId === "vip_badge") {
+          await interaction.editReply(
+            "👑 The VIP Badge is permanent and cannot be consumed.",
+          );
+          return;
+        }
+
+        await interaction.editReply(
+          "❌ That item cannot be used.",
+        );
+        return;
+      }
+
+      if (subcommand === "shop") {
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const lines = Object.entries(SHOP_ITEMS).map(
+          ([itemId, item]) => {
+            const owned = player.inventory?.[itemId] ?? 0;
+            const canAfford = player.coins >= item.price;
+
+            let status: string;
+
+            if (itemId === "vip_badge" && owned > 0) {
+              status = "👑 **OWNED — Permanent**";
+            } else if (canAfford) {
+              status = "✅ **You can afford this**";
+            } else {
+              status = `🔒 Need **${item.price - player.coins} more coins**`;
+            }
+
+            return [
+              `### ${item.name}`,
+              `🪙 **${item.price} coins**`,
+              item.description,
+              `📦 Owned: **${owned}**`,
+              status,
+            ].join("\n");
+          },
+        );
+
+        const embed = new EmbedBuilder()
+          .setTitle("🛒 AshenAI Coin Shop")
+          .setDescription(lines.join("\n\n"))
+          .addFields({
+            name: "🪙 Your Balance",
+            value: `**${player.coins} coins**`,
+            inline: false,
+          })
+          .setFooter({
+            text: "Use /game buy to purchase an item.",
+          });
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "hunt") {
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        let result;
+
+        try {
+          result = await hunt(player);
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : String(error);
+
+          if (message.startsWith("HUNT_COOLDOWN:")) {
+            const remainingMs = Number(
+              message.split(":")[1],
+            );
+
+            const seconds = Math.ceil(
+              remainingMs / 1000,
+            );
+
+            await interaction.editReply(
+              `⏳ You are still on a hunt cooldown. Try again in **${seconds}s**.`,
+            );
+
+            return;
+          }
+
+          throw error;
+        }
+
+        const rarityLabels: Record<string, string> = {
+          common: "⚪ Common",
+          uncommon: "🟢 Uncommon",
+          rare: "🔵 Rare",
+          legendary: "🟡 Legendary",
+          danger: "🔴 Danger",
+        };
+
+        const embed = new EmbedBuilder()
+          .setTitle(`🎯 AshenAI Hunt — ${result.title}`)
+          .setDescription(
+            `**${interaction.user.username}** ${result.description}`,
+          )
+          .addFields(
+            {
+              name: "✨ Rarity",
+              value:
+                rarityLabels[result.rarity] ??
+                result.rarity,
+              inline: true,
+            },
+            {
+              name: "🪙 Coins",
+              value: `+${result.coins}`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${result.xp}`,
+              inline: true,
+            },
+            {
+              name: "🔥 Hunt Streak",
+              value: `${result.streak}`,
+              inline: true,
+            },
+            {
+              name: "🎯 Hunts",
+              value: `${result.huntsCompleted}`,
+              inline: true,
+            },
+            {
+              name: "⭐ Level",
+              value: `${player.level}`,
+              inline: true,
+            },
+          );
+
+        if (result.newAchievements && result.newAchievements.length > 0) {
+          embed.addFields({
+            name: "🏅 Achievement Unlocked!",
+            value: result.newAchievements
+              .map(
+                (id) => `🏆 **${ACHIEVEMENTS[id] ?? id}**`,
+              )
+              .join("\n"),
+          });
+        }
+
+        embed.setFooter({
+          text:
+            "Keep hunting to build your AshenAI fortune.",
+        });
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "inventory") {
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        const inventory = getInventory(player);
+
+        const entries = Object.entries(inventory)
+          .filter(([, amount]) => amount > 0);
+
+        const lines = entries.map(
+          ([itemId, amount]) => {
+            const lootItem =
+              LOOT_ITEMS[
+                itemId as keyof typeof LOOT_ITEMS
+              ];
+
+            const shopItem =
+              SHOP_ITEMS[
+                itemId as keyof typeof SHOP_ITEMS
+              ];
+
+            const item = lootItem ?? shopItem;
+
+            if (item) {
+              let typeLabel = "🎁 Hunt Loot";
+
+              if (itemId === "vip_badge") {
+                typeLabel = "👑 Permanent";
+              } else if (
+                itemId === "xp_boost" ||
+                itemId === "lucky_token"
+              ) {
+                typeLabel = "🧪 Consumable";
+              }
+
+              return [
+                `**${item.name}** ×${amount}`,
+                `${typeLabel}`,
+                item.description,
+              ].join("\n");
+            }
+
+            return `**${itemId}** ×${amount}\n📦 Unknown Item`;
+          },
+        );
+
+        const inventoryDescription =
+          lines.length > 0
+            ? lines.join("\n\n")
+            : "Your inventory is empty. Go hunting or visit `/game shop`!";
+
+        const totalItems = entries.reduce(
+          (total, [, amount]) => total + amount,
+          0,
+        );
+
+        const embed = new EmbedBuilder()
+          .setTitle("🎒 AshenAI Inventory")
+          .setDescription(inventoryDescription)
+          .addFields({
+            name: "📦 Total Items",
+            value: `${totalItems}`,
+            inline: true,
+          })
+          .addFields({
+            name: "🪙 Coins",
+            value: `${player.coins}`,
+            inline: true,
+          })
+          .setFooter({
+            text: "Collect loot by hunting and purchase items from the shop!",
+          });
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "chaos") {
+        const result = randomChaos();
+
+        const player = await getPlayer(
+          interaction.user.id,
+          interaction.user.username,
+        );
+
+        player.coins += result.coins;
+        player.xp += result.xp;
+
+        await updatePlayer(player);
+
+        const embed = new EmbedBuilder()
+          .setTitle(result.title)
+          .setDescription(
+            `**${interaction.user.username}** — ${result.description}`,
+          )
+          .addFields(
+            {
+              name: "🪙 Coins",
+              value: `${result.coins >= 0 ? "+" : ""}${result.coins}`,
+              inline: true,
+            },
+            {
+              name: "✨ XP",
+              value: `+${result.xp}`,
+              inline: true,
+            },
+            {
+              name: "⭐ Level",
+              value: `${player.level}`,
+              inline: true,
+            },
+          );
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      if (subcommand === "leaderboard") {
+        const category =
+          (interaction.options.getString("category") ??
+            "level") as LeaderboardCategory;
+
+        const leaderboard =
+          await getLeaderboard(10, category);
+
+        if (leaderboard.length === 0) {
+          await interaction.editReply(
+            "🏆 No players yet. Start playing!",
+          );
+
+          return;
+        }
+
+        const lines = leaderboard.map(
+          (player, index) =>
+            `**${index + 1}.** ${player.username} — ⭐ Lv.${player.level} · ✨ ${player.xp} XP · 🪙 ${player.coins}`,
+        );
+
+        const embed = new EmbedBuilder()
+          .setTitle(
+            "🏆 AshenAI Game Leaderboard",
+          )
+          .setDescription(
+            lines.join("\n"),
+          );
+
+        await interaction.editReply({
+          embeds: [embed],
+        });
+
+        return;
+      }
+
+      await interaction.editReply(
+        "❌ Unknown game command.",
+      );
+    },
+  };
+}
+
+===== COMMAND DEFINITIONS =====
+import {
+  ChatInputCommandInteraction,
+  SlashCommandBuilder,
+  SlashCommandSubcommandsOnlyBuilder,
+  SlashCommandOptionsOnlyBuilder,
+} from "discord.js";
+
+export type AshenCommandData =
+  | SlashCommandBuilder
+  | SlashCommandSubcommandsOnlyBuilder
+  | SlashCommandOptionsOnlyBuilder;
+
+export interface AshenCommand {
+  data: AshenCommandData;
+
+  execute(
+    interaction: ChatInputCommandInteraction,
+  ): Promise<void>;
+}
+
+export type CommandBuilder = AshenCommandData;
+
+===== INDEX GAME REFERENCES =====
+24-
+25-import { providers } from "./ai/providers";
+26-import { AIRouter } from "./ai/router";
+27-import { ConversationMemory } from "./ai/memory";
+28-import { UserProfileMemory } from "./ai/user-profile";
+29-
+30-import { AshenCommand } from "./commands/definitions";
+31-import { CommandHandler } from "./commands/handler";
+32-import { createAskCommand } from "./commands/ask";
+33-import { createResetCommand } from "./commands/reset";
+34-import { createHelpCommand } from "./commands/help";
+35-import { createStatusCommand } from "./commands/status";
+36-import { createConfigCommand } from "./commands/config";
+37-import { createDiagnoseCommand } from "./commands/diagnose";
+38-import { createTaskCommand } from "./commands/task";
+39:import { createGameCommand } from "./commands/game";
+40-import { syncCommands } from "./commands/register";
+41-import { detectActionIntent } from "./discord/action-router";
+42-import { executeInteractiveModeration } from "./discord/interactive-moderation";
+43-import {
+44-  createActionKey,
+45-  createExpiration,
+46-  getPendingAction,
+47-  setPendingAction,
+48-  clearPendingAction,
+49-} from "./discord/action-confirmations";
+50-import {
+51-  createWarnCommand,
+52-  createWarningsCommand,
+53-  createTimeoutCommand,
+54-  createUntimeoutCommand,
+--
+88-const userProfiles = new UserProfileMemory();
+89-const commandHandler = new CommandHandler();
+90-const agentManager = new AgentManager();
+91-
+92-// Initialize autonomous task actions once at startup.
+93-initializeTaskEngine();
+94-
+95-
+96-/* =====================================================
+97-   COMMANDS
+98-   ===================================================== */
+99-
+100-const commands: AshenCommand[] = [
+101-  createAskCommand(router, memory),
+102-  createTaskCommand(router),
+103:  createGameCommand(),
+104-  createResetCommand(memory),
+105-  createHelpCommand(),
+106-  createStatusCommand(router, memory, agentManager),
+107-  createConfigCommand(),
+108-  createDiagnoseCommand(
+109-    client,
+110-    router,
+111-    memory,
+112-    () => commandHandler.getCommands().size
+113-  ),
+114-      createServerCommand(),
+115-      createUserInfoCommand(),
+116-      createRolesCommand(),
+117-      createWarnCommand(),
+118-      createWarningsCommand(),
+
+===== REGISTER GAME REFERENCES =====
+
+===== CURRENT GIT STATUS =====
+ M scripts/check.ts
+ M scripts/watch-render-logs.sh
+ M src/commands/definitions.ts
+ M src/commands/game.ts
+ M src/games/store.ts
+ M src/index.ts
+?? ashenai-game-inspection.txt
+
+===== RECENT COMMITS =====
+e9be510 Fix legendary hunt achievement timing
+c33ef3a Expand AshenAI game stats, loot, hunts, and achievements
+0f71b23 Prevent duplicate dependency installation
+cdf3db6 Harden agent context and output security
+12d3c10 Add live AshenAI monitoring
+d2399e5 Improve conversation history display
+abfa446 Connect AshenAI quick actions
+d019baf Improve AshenAI chat experience
+c14717d Polish AshenAI web interface
+bc104c7 Add AshenAI branding and logo assets

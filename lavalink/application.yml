@@ -9,35 +9,47 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
 
+    oauth:
+      enabled: true
+      refreshToken: ""
+
+    clients:
+      - TV
+      - WEB
+      - WEBEMBEDDED
+      - ANDROID_MUSIC
+      - MUSIC
+      - ANDROID_VR
+      - IOS
+      - TVHTML5_SIMPLY
 lavalink:
+  server:
+    password: "ashenai-local"
+    bufferDurationMs: 0
   plugins:
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
       snapshot: false
 
-  server:
-    bufferDurationMs: 400
-    password: "ashenai-local"
+sources:
+  youtube: false
+  bandcamp: true
+  soundcloud: true
+  twitch: true
+  vimeo: true
+  http: true
+  local: false
 
-    sources:
-      youtube: false
-      bandcamp: true
-      soundcloud: true
-      twitch: true
-      vimeo: true
-      http: true
-      local: false
-
-    filters:
-      volume: true
-      equalizer: true
-      karaoke: true
-      timescale: true
-      tremolo: true
-      vibrato: true
-      distortion: true
-      rotation: true
-      channelMix: true
-      lowPass: true
+filters:
+  volume: true
+  equalizer: true
+  karaoke: true
+  timescale: true
+  tremolo: true
+  vibrato: true
+  distortion: true
+  rotation: true
+  channelMix: true
+  lowPass: true
 
 logging:
   level:
