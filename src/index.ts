@@ -103,6 +103,7 @@ const client = new Client({
     Partials.Channel,
     Partials.Message,
   ],
+
 });
 
 /* =====================================================
@@ -1896,6 +1897,38 @@ client.on("shardError", (error, shardId) => {
 
 client.on("shardReady", (shardId) => {
   logger.info(`🟢 DISCORD SHARD READY: ${shardId}`);
+});
+
+client.on("shardDisconnect", (event, shardId) => {
+  logger.error(
+    `🔴 DISCORD SHARD DISCONNECT: shard=${shardId} code=${event.code} reason=${event.reason || "none"}`,
+  );
+});
+
+client.on("shardReconnecting", (shardId) => {
+  logger.warn(`🟡 DISCORD SHARD RECONNECTING: shard=${shardId}`);
+});
+
+client.on("shardResume", (shardId, replayedEvents) => {
+  logger.info(
+    `🔵 DISCORD SHARD RESUMED: shard=${shardId} replayed=${replayedEvents}`,
+  );
+});
+
+client.on("debug", (message) => {
+  if (
+    message.includes("[WS => Shard") ||
+    message.includes("[WS => Manager]")
+  ) {
+    logger.info(`🔧 DISCORD GATEWAY: ${message}`);
+  }
+});
+
+client.on("error", (error) => {
+  logger.error(
+    "❌ DISCORD CLIENT ERROR:",
+    error instanceof Error ? error.stack ?? error.message : String(error),
+  );
 });
 
 async function startMusicAndDiscord(): Promise<void> {
