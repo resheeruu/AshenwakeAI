@@ -12,6 +12,6 @@ RUN curl -L \
 
 COPY application.yml /lavalink/application.yml
 
-EXPOSE 2333
+EXPOSE 10000
 
 CMD ["java", "-jar", "Lavalink.jar"]
