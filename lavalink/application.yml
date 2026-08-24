@@ -19,13 +19,13 @@ lavalink:
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
       snapshot: false
 
-  bufferDurationMs: 225
+  bufferDurationMs: 400
   frameBufferDurationMs: 5000
-  opusEncodingQuality: 5
+  opusEncodingQuality: 10
   resamplingQuality: LOW
   trackStuckThresholdMs: 10000
   playerUpdateInterval: 5
-  youtubePlaylistLoadLimit: 3
+  youtubePlaylistLoadLimit: 6
   youtubeSearchEnabled: true
   soundcloudSearchEnabled: true
 
