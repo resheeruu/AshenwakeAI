@@ -1927,6 +1927,62 @@ async function startMusicAndDiscord(): Promise<void> {
 
     logger.info("🔌 Starting Discord Gateway login...");
 
+    // Render -> Discord network diagnostic
+    try {
+      const dns = await import("node:dns/promises");
+      const https = await import("node:https");
+
+      logger.info("🌐 DISCORD NETWORK TEST: Resolving gateway.discord.gg...");
+
+      const addresses = await dns.lookup("gateway.discord.gg", {
+        all: true,
+      });
+
+      logger.info(
+        `🌐 DISCORD DNS OK: ${addresses.map((a) => `${a.address}/${a.family}`).join(", ")}`
+      );
+
+      logger.info("🌐 DISCORD HTTPS TEST: Requesting /gateway...");
+
+      await new Promise<void>((resolve, reject) => {
+        const req = https.request(
+          {
+            hostname: "discord.com",
+            path: "/api/v10/gateway",
+            method: "GET",
+            timeout: 15_000,
+            headers: {
+              "User-Agent": "AshenAI/1.0",
+            },
+          },
+          (res) => {
+            logger.info(
+              `🌐 DISCORD HTTPS OK: status=${res.statusCode}`
+            );
+
+            res.resume();
+            res.on("end", resolve);
+          },
+        );
+
+        req.on("timeout", () => {
+          req.destroy(new Error("Discord HTTPS test timed out."));
+        });
+
+        req.on("error", reject);
+        req.end();
+      });
+
+      logger.info("🌐 DISCORD NETWORK TEST PASSED.");
+    } catch (error) {
+      logger.error(
+        "❌ DISCORD NETWORK TEST FAILED:",
+        error instanceof Error
+          ? error.stack ?? error.message
+          : String(error),
+      );
+    }
+
     const loginTimeout = new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(new Error("Discord client.login() timed out after 60 seconds."));
