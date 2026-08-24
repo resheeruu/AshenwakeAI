@@ -1984,7 +1984,8 @@ async function startMusicAndDiscord(): Promise<void> {
     }
 
     // Discord Gateway login.
-    // Let discord.js manage the Gateway connection lifecycle.
+    // IMPORTANT: discord.js owns the Gateway lifecycle.
+    // Do not start multiple simultaneous client.login() calls.
     logger.info("🔌 Connecting to Discord Gateway...");
 
     try {
@@ -2005,11 +2006,10 @@ async function startMusicAndDiscord(): Promise<void> {
       return;
     }
 
-    // discord.js login() can resolve before the READY event.
+    // login() normally resolves after the Gateway session is established,
+    // but explicitly verify READY before continuing startup.
     if (!client.isReady()) {
-      logger.warn(
-        "🟡 Discord login() resolved but client is not READY yet. Waiting for READY..."
-      );
+      logger.info("⏳ Waiting for Discord READY event...");
 
       await new Promise<void>((resolve, reject) => {
         let settled = false;
@@ -2017,8 +2017,8 @@ async function startMusicAndDiscord(): Promise<void> {
         const timeout = setTimeout(() => {
           finish(
             new Error(
-              "Discord READY event was not received within 45 seconds."
-            )
+              "Discord READY event was not received within 45 seconds.",
+            ),
           );
         }, 45_000);
 
@@ -2030,7 +2030,6 @@ async function startMusicAndDiscord(): Promise<void> {
 
         const finish = (error?: Error) => {
           if (settled) return;
-
           settled = true;
           cleanup();
 
@@ -2057,12 +2056,12 @@ async function startMusicAndDiscord(): Promise<void> {
 
     if (!client.isReady()) {
       throw new Error(
-        "Discord READY wait completed but client is still not ready."
+        "Discord READY wait completed but client is still not ready.",
       );
     }
 
     logger.info(
-      `🟢 Discord READY: ${client.user?.tag ?? client.user?.id ?? "unknown"}`
+      `🟢 Discord READY: ${client.user?.tag ?? client.user?.id ?? "unknown"}`,
     );
 
     logger.info(
