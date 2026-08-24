@@ -109,10 +109,31 @@ const client = new Client({
    AI SYSTEM
    ===================================================== */
 
+const lavalinkUrl = process.env.LAVALINK_URL?.trim().replace(/^wss?:\/\//, "").replace(/\/$/, "");
+
+if (!lavalinkUrl) {
+  console.error("❌ LAVALINK_URL is missing.");
+}
+
+const lavalinkPassword = process.env.LAVALINK_PASSWORD?.trim();
+
+if (!lavalinkPassword) {
+  console.error("❌ LAVALINK_PASSWORD is missing.");
+}
+
+const lavalinkSecure =
+  process.env.LAVALINK_SECURE?.trim().toLowerCase() === "true";
+
+console.log("🎵 Lavalink configuration:");
+console.log(`   URL: ${lavalinkUrl || "(missing)"}`);
+console.log(`   Secure: ${lavalinkSecure}`);
+console.log(`   Name: ${process.env.LAVALINK_NAME || "main"}`);
+console.log(`   Password: ${lavalinkPassword ? "(set)" : "(missing)"}`);
+
 const shoukakuMusic = new ShoukakuMusicManager(client, {
-  url: process.env.LAVALINK_URL!,
-  auth: process.env.LAVALINK_PASSWORD!,
-  secure: process.env.LAVALINK_SECURE === "true",
+  url: lavalinkUrl || "localhost:2333",
+  auth: lavalinkPassword || "",
+  secure: lavalinkSecure,
   name: process.env.LAVALINK_NAME || "main",
 });
 
