@@ -1884,7 +1884,20 @@ client.on("shardReady", (shardId) => {
 
 async function startMusicAndDiscord(): Promise<void> {
   try {
-    logger.info("🚀 AshenAI startup beginning...");
+    logger.info("🧪 Testing Discord network before login...");
+
+try {
+  const gatewayResponse = await fetch("https://discord.com/api/v10/gateway");
+  logger.info(`🧪 Discord REST gateway status: ${gatewayResponse.status}`);
+  logger.info(`🧪 Discord REST gateway body: ${await gatewayResponse.text()}`);
+} catch (error) {
+  logger.error(
+    "❌ Discord REST network test failed:",
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+logger.info("🚀 AshenAI startup beginning...");
 
     // Discord connects FIRST.
     // Nothing else is allowed to block Discord Gateway startup.
