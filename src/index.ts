@@ -78,16 +78,13 @@ import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
 import { UsageStats } from "./analytics/usage-stats";
 import { handleMusicCommand } from "./music/musicCommands";
-import { Player } from "discord-player";
 import { ShoukakuMusicManager } from "./music/ShoukakuMusicManager";
 import { MusicSessionManager } from "./music/MusicSessionManager";
 import {
-  SoundCloudExtractor,
-  SpotifyExtractor,
-  YouTubeExtractor,
-  VimeoExtractor,
-  AttachmentExtractor,
-} from "@discord-player/extractor";
+  buildMusicPanel,
+  buildStoppedMusicPanel,
+  buildMusicControls,
+} from "./music/musicPanel";
 
 /* =====================================================
    DISCORD CLIENT
@@ -112,14 +109,15 @@ const client = new Client({
    AI SYSTEM
    ===================================================== */
 
-const musicPlayer = new Player(client);
-
 const shoukakuMusic = new ShoukakuMusicManager(client, {
   url: process.env.LAVALINK_URL!,
   auth: process.env.LAVALINK_PASSWORD!,
   secure: process.env.LAVALINK_SECURE === "true",
   name: process.env.LAVALINK_NAME || "main",
 });
+
+// Lavalink/Shoukaku is the active music engine.
+let musicReady = true;
 
 /* =====================================================
    MUSIC SESSION SYSTEM
@@ -149,109 +147,6 @@ const musicSessions = new MusicSessionManager(
 
 
 
-musicPlayer.events.on("connection", (queue) => {
-  console.log(`🎵 MUSIC CONNECTION: guild=${queue.guild.id}`);
-});
-
-musicPlayer.events.on("playerStart", (queue, track) => {
-  console.log(`🎵 MUSIC START: ${track.title}`);
-});
-
-musicPlayer.events.on("playerError", (queue, error, track) => {
-  console.error(`❌ MUSIC PLAYER ERROR: ${track.title}: ${error.message}`);
-});
-
-musicPlayer.events.on("error", (queue, error) => {
-  console.error(`❌ MUSIC QUEUE ERROR: ${error.message}`);
-});
-
-musicPlayer.events.on("disconnect", (queue) => {
-  console.log(`⚠️ MUSIC DISCONNECT: guild=${queue.guild.id}`);
-});
-
-musicPlayer.events.on("playerFinish", (queue, track) => {
-  console.log(`🏁 MUSIC FINISH: ${track.title}`);
-});
-let musicReady = false;
-let musicInitError: string | null = null;
-
-async function initializeMusic(): Promise<void> {
-  try {
-    await musicPlayer.extractors.register(SoundCloudExtractor, {});
-    await musicPlayer.extractors.register(SpotifyExtractor, {});
-    await musicPlayer.extractors.register(YouTubeExtractor, {});
-    await musicPlayer.extractors.register(VimeoExtractor, {});
-    await musicPlayer.extractors.register(AttachmentExtractor, {});
-
-    musicReady = true;
-    musicInitError = null;
-
-    console.log(
-      "🎵 MUSIC EXTRACTORS:",
-      musicPlayer.extractors.store.map((x: any) => x.identifier),
-    );
-
-    console.log("🟢 MUSIC SYSTEM READY");
-  } catch (error) {
-    musicReady = false;
-    musicInitError =
-      error instanceof Error
-        ? error.message
-        : String(error);
-
-    console.error(
-      "⚠️ MUSIC SYSTEM DISABLED: extractor initialization failed:",
-      musicInitError,
-    );
-
-    console.error(
-      "⚠️ AshenAI will continue without music functionality.",
-    );
-  }
-}
-
-console.log(
-  "🎵 MUSIC EXTRACTORS:",
-  musicPlayer.extractors.store.map((x: any) => x.identifier),
-);
-
-musicPlayer.events.on("playerStart", (queue, track) => {
-  console.log(`🎵 PLAYER START: ${track.title}`);
-});
-
-musicPlayer.events.on("playerError", (queue, error, track) => {
-  console.error(
-    `❌ PLAYER ERROR: ${track.title} | ${error.message}`,
-    error,
-  );
-});
-
-musicPlayer.events.on("error", (queue, error) => {
-  console.error(
-    `❌ MUSIC QUEUE ERROR: ${error.message}`,
-    error,
-  );
-});
-
-musicPlayer.events.on("connection", (queue) => {
-  console.log(`🔊 MUSIC CONNECTION: ${queue.guild.name}`);
-});
-
-musicPlayer.events.on("connectionDestroyed", (queue) => {
-  console.log(`🔌 MUSIC CONNECTION DESTROYED: ${queue.guild.name}`);
-});
-
-musicPlayer.events.on("disconnect", (queue) => {
-  console.log(`📴 MUSIC DISCONNECTED: ${queue.guild.name}`);
-});
-
-musicPlayer.events.on("emptyQueue", (queue) => {
-  console.log(`📭 MUSIC QUEUE EMPTY: ${queue.guild.name}`);
-});
-
-musicPlayer.events.on("emptyChannel", (queue) => {
-  console.log(`📭 MUSIC CHANNEL EMPTY: ${queue.guild.name}`);
-});
 const router = new AIRouter(providers);
 const memory = new ConversationMemory();
 const userProfiles = new UserProfileMemory();
@@ -1389,7 +1284,7 @@ client.on(
       // Handle all music prefix commands before the AI mention/reply filter.
       const musicPrefixMatch = message.content
         .trim()
-        .match(/^!(p|play|pause|resume|stop|claim|dj|music)(?:\s|$)/i);
+        .match(/^!(p|play|pause|resume|stop|skip|queue|claim|dj|music)(?:\s|$)/i);
 
       if (musicPrefixMatch) {
         await handleMusicCommand(
@@ -1949,7 +1844,6 @@ const internalSupervisor = new InternalSupervisor({
 
 async function startMusicAndDiscord(): Promise<void> {
   try {
-    await initializeMusic();
     startWebServer(router, () => ({
       discordReady: client.isReady(),
     }));
@@ -1984,3 +1878,369 @@ async function startMusicAndDiscord(): Promise<void> {
 }
 
 startMusicAndDiscord();
+
+/* =====================================================
+   ASHENAI INTERACTIVE MUSIC PANEL
+   ===================================================== */
+
+client.on(
+  Events.InteractionCreate,
+  async (interaction) => {
+    if (!interaction.isButton()) {
+      return;
+    }
+
+    if (!interaction.customId.startsWith("ashen_music:")) {
+      return;
+    }
+
+    try {
+      if (!interaction.guild) {
+        await interaction.reply({
+          content: "❌ Music controls can only be used in a server.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const session = musicSessions.get(
+        interaction.guild.id,
+      );
+
+      if (!session) {
+        await interaction.reply({
+          content: "❌ This music session no longer exists.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const member = await interaction.guild.members.fetch(
+        interaction.user.id,
+      );
+
+      if (
+        member.voice.channelId !==
+        session.voiceChannelId
+      ) {
+        await interaction.reply({
+          content:
+            `❌ Join <#${session.voiceChannelId}> to control this music session.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (
+        !musicSessions.userCanControl(
+          session.guildId,
+          interaction.user.id,
+        )
+      ) {
+        await interaction.reply({
+          content:
+            "🚫 Only the music owner or a DJ can use these controls.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const action =
+        interaction.customId.split(":")[1];
+
+      const player =
+        shoukakuMusic.getPlayer(
+          interaction.guild.id,
+        );
+
+      if (!player) {
+        await interaction.reply({
+          content:
+            "❌ There is no active Lavalink player for this session.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (action === "pause") {
+        await shoukakuMusic.pause(
+          interaction.guild.id,
+        );
+
+        await interaction.update({
+          components: buildMusicControls("paused"),
+        });
+
+        return;
+      }
+
+      if (action === "resume") {
+        await shoukakuMusic.resume(
+          interaction.guild.id,
+        );
+
+        await interaction.update({
+          components: buildMusicControls("playing"),
+        });
+
+        return;
+      }
+
+      if (action === "stop") {
+        await shoukakuMusic.stop(
+          interaction.guild.id,
+        );
+
+        await interaction.update({
+          components: buildMusicControls("stopped"),
+        });
+
+        return;
+      }
+
+      if (action === "skip") {
+        const next = await shoukakuMusic.skip(
+          interaction.guild.id,
+        );
+
+        if (!next) {
+          await interaction.update({
+            components: buildMusicControls("stopped"),
+          });
+
+          return;
+        }
+
+        await interaction.update(
+          buildMusicPanel(
+            session,
+            {
+              title: next.title,
+              author: next.author,
+              uri: next.uri,
+              length: next.length,
+            },
+            "playing",
+          ),
+        );
+
+        return;
+      }
+
+      if (action === "previous") {
+        const previous =
+          await shoukakuMusic.previous(
+            interaction.guild.id,
+          );
+
+        if (!previous) {
+          await interaction.reply({
+            content:
+              "⏮️ There is no previous track available.",
+            flags: MessageFlags.Ephemeral,
+          });
+
+          return;
+        }
+
+        await interaction.update(
+          buildMusicPanel(
+            session,
+            {
+              title: previous.title,
+              author: previous.author,
+              uri: previous.uri,
+              length: previous.length,
+            },
+            "playing",
+          ),
+        );
+
+        return;
+      }
+
+      if (action === "shuffle") {
+        const size =
+          shoukakuMusic.shuffle(
+            interaction.guild.id,
+          );
+
+        await interaction.reply({
+          content:
+            size > 0
+              ? `🔀 Queue shuffled. **${size}** upcoming track(s).`
+              : "🔀 There are not enough upcoming tracks to shuffle.",
+          flags: MessageFlags.Ephemeral,
+        });
+
+        return;
+      }
+
+      if (action === "loop") {
+        const mode =
+          shoukakuMusic.cycleLoop(
+            interaction.guild.id,
+          );
+
+        const label =
+          mode === "off"
+            ? "🔁 Loop disabled."
+            : mode === "track"
+              ? "🔂 Track loop enabled."
+              : "🔁 Queue loop enabled.";
+
+        await interaction.reply({
+          content: label,
+          flags: MessageFlags.Ephemeral,
+        });
+
+        return;
+      }
+
+      if (action === "volume") {
+        const current =
+          shoukakuMusic.getVolume(
+            interaction.guild.id,
+          );
+
+        await interaction.reply({
+          content:
+            `🔊 Current music volume: **${current}%**\n` +
+            "Use `!volume <0-100>` to change it.",
+          flags: MessageFlags.Ephemeral,
+        });
+
+        return;
+      }
+
+      if (action === "queue") {
+        const current =
+          shoukakuMusic.getCurrent(
+            interaction.guild.id,
+          );
+
+        const queue =
+          shoukakuMusic.getQueue(
+            interaction.guild.id,
+          );
+
+        const lines = [
+          "📋 **AshenAI Music Queue**",
+          "",
+        ];
+
+        if (current) {
+          lines.push(
+            `▶️ **Now Playing:** ${current.track.info.title}`,
+          );
+          lines.push("");
+        }
+
+        if (queue.length > 0) {
+          queue.slice(0, 10).forEach(
+            (item, index) => {
+              lines.push(
+                `**${index + 1}.** ${item.track.info.title} — <@${item.requestedBy}>`,
+              );
+            },
+          );
+
+          if (queue.length > 10) {
+            lines.push("");
+            lines.push(
+              `…and ${queue.length - 10} more track(s).`,
+            );
+          }
+        } else {
+          lines.push(
+            "📭 No upcoming tracks.",
+          );
+        }
+
+        await interaction.reply({
+          content: lines.join("\n"),
+          flags: MessageFlags.Ephemeral,
+        });
+
+        return;
+      }
+
+      if (action === "disconnect") {
+        await shoukakuMusic.disconnect(
+          interaction.guild.id,
+        );
+
+        musicSessions.delete(
+          interaction.guild.id,
+        );
+
+        await interaction.update({
+          content:
+            "🔌 **Music disconnected.** The queue and music session have been cleared.",
+          embeds: [],
+          components: [],
+        });
+
+        return;
+      }
+
+      if (action === "refresh") {
+        const current =
+          shoukakuMusic.getCurrent(
+            interaction.guild.id,
+          );
+
+        if (!current) {
+          await interaction.update({
+            content:
+              "📭 **No track is currently playing.**",
+            embeds: [],
+            components: [],
+          });
+
+          return;
+        }
+
+        await interaction.update(
+          buildMusicPanel(
+            session,
+            {
+              title: current.track.info.title,
+              author: current.track.info.author,
+              uri: current.track.info.uri,
+              length: current.track.info.length,
+              position:
+                current.track.info.position,
+            },
+            "playing",
+          ),
+        );
+
+        return;
+      }
+
+      await interaction.reply({
+        content: "❌ Unknown music control.",
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (error) {
+      logger.error(
+        "❌ Music button handler failed:",
+        error instanceof Error
+          ? error.message
+          : String(error),
+      );
+
+      if (
+        !interaction.replied &&
+        !interaction.deferred
+      ) {
+        await interaction.reply({
+          content:
+            "❌ Something went wrong while controlling the music.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
+  },
+);

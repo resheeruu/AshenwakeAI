@@ -5,6 +5,7 @@ import {
 
 import { ShoukakuMusicManager } from "./ShoukakuMusicManager";
 import { MusicSessionManager } from "./MusicSessionManager";
+import { buildMusicPanel } from "./musicPanel";
 
 const PREFIX = "!";
 
@@ -122,6 +123,15 @@ export async function handleMusicCommand(
     "pause",
     "resume",
     "stop",
+    "skip",
+    "queue",
+    "autoplay",
+    "loop",
+    "shuffle",
+    "clearqueue",
+    "remove",
+    "move",
+    "nowplaying",
     "claim",
     "dj",
     "music",
@@ -215,6 +225,7 @@ export async function handleMusicCommand(
         message.guild.id,
         session.voiceChannelId,
         args,
+        message.author.id,
       );
 
       console.log(
@@ -236,11 +247,16 @@ export async function handleMusicCommand(
       }
 
       await message.reply(
-        `🎵 Now playing **${track.title}**${
-          track.author
-            ? ` — ${track.author}`
-            : ""
-        }\n👑 Owner: <@${session.ownerId}>`,
+        buildMusicPanel(
+          session,
+          {
+            title: track.title,
+            author: track.author,
+            uri: track.uri,
+            length: track.length,
+          },
+          "playing",
+        ),
       );
 
       return true;
@@ -297,6 +313,352 @@ export async function handleMusicCommand(
     await music.resume(message.guild.id);
 
     await message.reply("▶️ Music resumed.");
+
+    return true;
+  }
+
+  // =====================================================
+  // SKIP
+  // =====================================================
+
+  if (command === "skip") {
+    const session = await requireDJ(
+      message,
+      sessions,
+    );
+
+    if (!session) return true;
+
+    try {
+      const next = await music.skip(
+        message.guild.id,
+      );
+
+      if (!next) {
+        await message.reply(
+          "⏭️ Skipped. The queue is now empty.",
+        );
+        return true;
+      }
+
+      await message.reply(
+        buildMusicPanel(
+          session,
+          {
+            title: next.title,
+            author: next.author,
+            uri: next.uri,
+            length: next.length,
+          },
+          "playing",
+        ),
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "❌ MUSIC SKIP ERROR:",
+        error,
+      );
+
+      await message.reply(
+        "❌ I couldn't skip the current track.",
+      );
+
+      return true;
+    }
+  }
+
+  // =====================================================
+  // QUEUE
+  // =====================================================
+
+  if (command === "queue") {
+    const session = await requireMusicChannel(
+      message,
+      sessions,
+    );
+
+    if (!session) return true;
+
+    const current = music.getCurrent(
+      message.guild.id,
+    );
+
+    const queue = music.getQueue(
+      message.guild.id,
+    );
+
+    if (!current && queue.length === 0) {
+      await message.reply(
+        "📭 The music queue is empty.",
+      );
+      return true;
+    }
+
+    const lines = [
+      "📋 **AshenAI Music Queue**",
+      "",
+    ];
+
+    if (current) {
+      lines.push(
+        `▶️ **Now Playing:** ${current.track.info.title}`,
+      );
+      lines.push("");
+    }
+
+    if (queue.length > 0) {
+      queue.slice(0, 10).forEach((item, index) => {
+        lines.push(
+          `**${index + 1}.** ${item.track.info.title} — <@${item.requestedBy}>`,
+        );
+      });
+
+      if (queue.length > 10) {
+        lines.push("");
+        lines.push(
+          `…and ${queue.length - 10} more track(s).`,
+        );
+      }
+    } else {
+      lines.push("📭 No upcoming tracks.");
+    }
+
+    await message.reply(
+      lines.join("\n"),
+    );
+
+    return true;
+  }
+
+  // =====================================================
+  // AUTOPLAY
+  // =====================================================
+
+  if (command === "autoplay") {
+    const session = await requireDJ(message, sessions);
+
+    if (!session) return true;
+
+    const current = music.isAutoplayEnabled(message.guild.id);
+    const enabled = !current;
+
+    music.setAutoplay(message.guild.id, enabled);
+
+    await message.reply(
+      enabled
+        ? "🤖 **Autoplay enabled.** AshenAI Radio will continue with related tracks when the queue ends."
+        : "⏹️ **Autoplay disabled.** Music will stop when the queue becomes empty.",
+    );
+
+    return true;
+  }
+
+  // =====================================================
+  // LOOP
+  // =====================================================
+
+  if (command === "loop") {
+    const session = await requireDJ(message, sessions);
+
+    if (!session) return true;
+
+    const mode = music.cycleLoop(message.guild.id);
+
+    const labels = {
+      off: "🔁 Loop **OFF**",
+      track: "🔂 Looping **current track**",
+      queue: "🔁 Looping **queue**",
+    };
+
+    await message.reply(labels[mode]);
+
+    return true;
+  }
+
+  // =====================================================
+  // SHUFFLE
+  // =====================================================
+
+  if (command === "shuffle") {
+    const session = await requireDJ(message, sessions);
+
+    if (!session) return true;
+
+    const size = music.getQueueSize(message.guild.id);
+
+    if (size < 2) {
+      await message.reply(
+        "🔀 You need at least **2 upcoming tracks** to shuffle.",
+      );
+      return true;
+    }
+
+    music.shuffleQueue(message.guild.id);
+
+    await message.reply(
+      `🔀 **Queue shuffled!** ${size} upcoming track(s) randomized.`,
+    );
+
+    return true;
+  }
+
+  // =====================================================
+  // CLEAR QUEUE
+  // =====================================================
+
+  if (command === "clearqueue") {
+    const session = await requireDJ(message, sessions);
+
+    if (!session) return true;
+
+    const size = music.getQueueSize(message.guild.id);
+
+    if (size === 0) {
+      await message.reply("📭 The upcoming queue is already empty.");
+      return true;
+    }
+
+    music.clearUpcomingQueue(message.guild.id);
+
+    await message.reply(
+      `🧹 Cleared **${size}** upcoming track(s). The current track will continue playing.`,
+    );
+
+    return true;
+  }
+
+  // =====================================================
+  // REMOVE
+  // =====================================================
+
+  if (command === "remove") {
+    const session = await requireDJ(message, sessions);
+
+    if (!session) return true;
+
+    const index = Number(parts[1]);
+
+    if (!Number.isInteger(index) || index < 1) {
+      await message.reply(
+        "❌ Usage: `!remove <queue number>`\nExample: `!remove 3`",
+      );
+      return true;
+    }
+
+    const removed = music.removeFromQueue(
+      message.guild.id,
+      index - 1,
+    );
+
+    if (!removed) {
+      await message.reply(
+        `❌ There is no track at queue position **${index}**.`,
+      );
+      return true;
+    }
+
+    await message.reply(
+      `🗑️ Removed **${removed.track.info.title}** from the queue.`,
+    );
+
+    return true;
+  }
+
+  // =====================================================
+  // MOVE
+  // =====================================================
+
+  if (command === "move") {
+    const session = await requireDJ(message, sessions);
+
+    if (!session) return true;
+
+    const from = Number(parts[1]);
+    const to = Number(parts[2]);
+
+    if (
+      !Number.isInteger(from) ||
+      !Number.isInteger(to) ||
+      from < 1 ||
+      to < 1
+    ) {
+      await message.reply(
+        "❌ Usage: `!move <from> <to>`\nExample: `!move 5 1`",
+      );
+      return true;
+    }
+
+    const queueSize = music.getQueueSize(message.guild.id);
+
+    if (from > queueSize || to > queueSize) {
+      await message.reply(
+        `❌ Queue positions must be between **1** and **${queueSize}**.`,
+      );
+      return true;
+    }
+
+    if (from === to) {
+      await message.reply(
+        "ℹ️ That track is already in that position.",
+      );
+      return true;
+    }
+
+    const moved = music.moveInQueue(
+      message.guild.id,
+      from - 1,
+      to - 1,
+    );
+
+    if (!moved) {
+      await message.reply(
+        "❌ I couldn't move that track.",
+      );
+      return true;
+    }
+
+    await message.reply(
+      `↕️ Moved queue position **${from} → ${to}**.`,
+    );
+
+    return true;
+  }
+
+  // =====================================================
+  // NOW PLAYING
+  // =====================================================
+
+  if (command === "nowplaying") {
+    const session = await requireMusicChannel(
+      message,
+      sessions,
+    );
+
+    if (!session) return true;
+
+    const current = music.getCurrent(message.guild.id);
+
+    if (!current) {
+      await message.reply("📭 Nothing is currently playing.");
+      return true;
+    }
+
+    const info = current.track.info;
+
+    await message.reply(
+      [
+        "🎵 **Now Playing**",
+        "",
+        `🎶 **${info.title}**`,
+        `👤 ${info.author || "Unknown artist"}`,
+        `👤 Requested by <@${current.requestedBy}>`,
+        `📋 Queue: **${music.getQueueSize(message.guild.id)}** upcoming`,
+        `🤖 Autoplay: **${music.isAutoplayEnabled(message.guild.id) ? "ON" : "OFF"}**`,
+        `🔁 Loop: **${music.getLoop(message.guild.id).toUpperCase()}**`,
+      ].join("\n"),
+    );
 
     return true;
   }
@@ -483,7 +845,16 @@ export async function handleMusicCommand(
         "🎵 Request: `!p <song>`",
         "⏸️ Pause: `!pause`",
         "▶️ Resume: `!resume`",
+        "⏭️ Skip: `!skip`",
         "⏹️ Stop: `!stop`",
+        "🎵 Now Playing: `!nowplaying`",
+        "📋 Queue: `!queue`",
+        "🤖 Autoplay: `!autoplay`",
+        "🔁 Loop: `!loop`",
+        "🔀 Shuffle: `!shuffle`",
+        "🧹 Clear queue: `!clearqueue`",
+        "🗑️ Remove: `!remove <number>`",
+        "↕️ Move: `!move <from> <to>`",
         "👑 Claim: `!claim`",
         "🎧 DJ management: `!dj add/remove @user`",
         "",
