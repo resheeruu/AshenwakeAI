@@ -1870,10 +1870,24 @@ async function startMusicAndDiscord(): Promise<void> {
     }));
 
     logger.info("🔐 Attempting Discord login...");
+    logger.info(`🔐 Discord token present: ${Boolean(token)}`);
+    logger.info(`🔐 Discord token length: ${token?.length ?? 0}`);
 
-    await client.login(token);
+    const discordLoginTimeout = setTimeout(() => {
+      logger.error("❌ Discord login timeout: client.login() did not complete within 45 seconds.");
+      logger.error("❌ Check DISCORD_TOKEN in Render Environment Variables.");
+      logger.error("❌ Do NOT change Lavalink configuration for this error.");
+    }, 45_000);
 
-    logger.info("🔐 Discord login() completed.");
+    try {
+      await client.login(token);
+      logger.info("🔐 Discord login() completed.");
+    } catch (error) {
+      logger.error("❌ Discord login FAILED:", error);
+      throw error;
+    } finally {
+      clearTimeout(discordLoginTimeout);
+    }
 
     if (!client.isReady()) {
       await new Promise<void>((resolve, reject) => {
