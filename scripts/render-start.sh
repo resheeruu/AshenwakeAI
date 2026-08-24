@@ -11,4 +11,4 @@ else
   echo "❌ FFmpeg check: NOT AVAILABLE"
 fi
 
-exec npx tsx src/index.ts
+exec node --import tsx src/index.ts
