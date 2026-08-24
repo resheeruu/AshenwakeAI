@@ -97,7 +97,10 @@ const PERSISTENT_FAILURE_THRESHOLD =
   3;
 
 const FAILURE_QUARANTINE_MS =
-  6 * 60 * 60_000;
+  5 * 60_000;
+
+const PERSISTENT_RECOVERY_PROBE_MS =
+  5 * 60_000;
 
 const RECOVERY_PROBE_ENABLED =
   true;
@@ -379,7 +382,7 @@ export class AIRouter {
         }
 
         state.recoveryProbeAt =
-          now + CREDIT_RECOVERY_MS;
+          now + PERSISTENT_RECOVERY_PROBE_MS;
 
         state.lastRecoveryProbeAt = now;
 
