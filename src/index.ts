@@ -1865,47 +1865,51 @@ const internalSupervisor = new InternalSupervisor({
 
 async function startMusicAndDiscord(): Promise<void> {
   try {
-    startWebServer(router, () => ({
-      discordReady: client.isReady(),
-    }));
+    logger.info("🚀 AshenAI startup beginning...");
 
+    // Discord connects FIRST.
+    // Nothing else is allowed to block Discord Gateway startup.
     logger.info("🔐 Attempting Discord login...");
     logger.info(`🔐 Discord token present: ${Boolean(token)}`);
     logger.info(`🔐 Discord token length: ${token?.length ?? 0}`);
 
     const discordLoginTimeout = setTimeout(() => {
-      logger.error("❌ Discord login timeout: client.login() did not complete within 45 seconds.");
-      logger.error("❌ Check DISCORD_TOKEN in Render Environment Variables.");
-      logger.error("❌ Do NOT change Lavalink configuration for this error.");
+      logger.error("❌ Discord login timeout after 45 seconds.");
+      logger.error(`❌ Discord ready: ${client.isReady()}`);
+      logger.error(`❌ Discord websocket status: ${client.ws.status}`);
     }, 45_000);
 
     try {
       await client.login(token);
       logger.info("🔐 Discord login() completed.");
-    } catch (error) {
-      logger.error("❌ Discord login FAILED:", error);
-      throw error;
     } finally {
       clearTimeout(discordLoginTimeout);
     }
 
     if (!client.isReady()) {
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Discord client did not become ready within 30 seconds"));
-        }, 30_000);
-
-        client.once("clientReady", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-      });
+      throw new Error(
+        "Discord login resolved but Discord client is not ready.",
+      );
     }
 
-    console.log(`🟢 Discord ready: ${client.user?.tag ?? client.user?.id}`);
-    console.log("🎵 Shoukaku Lavalink connection initialized.");
+    logger.info(
+      `🟢 Discord READY: ${client.user?.tag ?? client.user?.id}`,
+    );
+
+    // Only start the web server AFTER Discord is ready.
+    startWebServer(router, () => ({
+      discordReady: client.isReady(),
+    }));
+
+    logger.info("🌐 Web server started after Discord became ready.");
+
+    // Lavalink is optional for Discord availability.
+    // A Lavalink failure must NEVER prevent Discord from staying online.
+    logger.info("🎵 Shoukaku Lavalink initialized.");
 
     internalSupervisor.start();
+
+    logger.info("🟢 AshenAI startup completed successfully.");
   } catch (error) {
     logger.error(
       "❌ Discord startup failed:",
@@ -1915,7 +1919,6 @@ async function startMusicAndDiscord(): Promise<void> {
     process.exit(1);
   }
 }
-
 startMusicAndDiscord();
 
 /* =====================================================
