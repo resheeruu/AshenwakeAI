@@ -1864,21 +1864,6 @@ const internalSupervisor = new InternalSupervisor({
   },
 });
 
-client.on("debug", (message) => {
-  logger.info(`🔧 DISCORD DEBUG: ${message}`);
-});
-
-client.on("warn", (message) => {
-  logger.warn(`⚠️ DISCORD WARN: ${message}`);
-});
-
-client.on("error", (error) => {
-  logger.error(
-    "❌ DISCORD ERROR:",
-    error instanceof Error ? error.message : String(error),
-  );
-});
-
 client.on("shardDisconnect", (event, shardId) => {
   logger.error(
     `🔴 DISCORD SHARD DISCONNECT: shard=${shardId} code=${event.code} reason=${event.reason || "none"}`,
