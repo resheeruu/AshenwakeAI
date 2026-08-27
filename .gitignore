@@ -20,8 +20,6 @@ src.v4-backup/
 
 src/index.working.ts
 
-src/index.working.ts
-
 # AshenAI runtime files
 .ashennai-mode
 .failover-monitor.pid
@@ -29,3 +27,13 @@ src/index.working.ts
 termux-backup.log
 failover-boot.log
 boot-test.log
+
+# Lavalink runtime files
+lavalink/Lavalink.jar
+lavalink/plugins/
+lavalink/native-libs/
+lavalink/work/
+lavalink/*.log
+lavalink/*.backup*
+lavalink/*.bak
+lavalink/*.before-*

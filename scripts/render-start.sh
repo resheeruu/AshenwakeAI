@@ -1,14 +1,107 @@
 #!/usr/bin/env bash
 
-set -u
+set -euo pipefail
 
-echo "🔥 Starting AshenAI..."
-export PORT="${PORT:-10000}"
-echo "🌐 Render PORT: $PORT"
+# ============================================================
+# AshenAI Combined Render Startup
+# Starts Lavalink + AshenAI in a single Render container.
+# ============================================================
+
+LAVALINK_HOST="${LAVALINK_HOST:-127.0.0.1}"
+LAVALINK_PORT="${LAVALINK_PORT:-2333}"
+LAVALINK_JAR="${LAVALINK_JAR:-lavalink/Lavalink.jar}"
+LAVALINK_WAIT_TIMEOUT="${LAVALINK_WAIT_TIMEOUT:-60}"
+PORT="${PORT:-10000}"
+LAVALINK_PID=""
+
+cleanup() {
+  echo "[render-start] Shutting down..."
+  if [ -n "$LAVALINK_PID" ] && kill -0 "$LAVALINK_PID" 2>/dev/null; then
+    kill -TERM "$LAVALINK_PID" 2>/dev/null || true
+    wait "$LAVALINK_PID" 2>/dev/null || true
+  fi
+  jobs -p 2>/dev/null | xargs -r kill -TERM 2>/dev/null || true
+  wait 2>/dev/null || true
+  echo "[render-start] Shutdown complete."
+  exit 0
+}
+
+trap cleanup SIGTERM SIGINT SIGHUP
+
+# ---------- FFmpeg check ----------
 if command -v ffmpeg >/dev/null 2>&1; then
-  echo "🎵 FFmpeg check: AVAILABLE ($(ffmpeg -version | head -1))"
+  echo "[render-start] FFmpeg: $(ffmpeg -version 2>&1 | head -1)"
 else
-  echo "❌ FFmpeg check: NOT AVAILABLE"
+  echo "[render-start] WARNING: FFmpeg not found"
 fi
 
-exec node --import tsx src/index.ts
+# ---------- Java check ----------
+if ! command -v java >/dev/null 2>&1; then
+  echo "[render-start] ERROR: Java not found. Lavalink requires Java 21+."
+  exit 1
+fi
+echo "[render-start] Java: $(java -version 2>&1 | head -1)"
+
+start_lavalink() {
+  java -jar "$LAVALINK_JAR" &
+  LAVALINK_PID=$!
+  echo "[render-start] Lavalink started (PID $LAVALINK_PID) on ${LAVALINK_HOST}:${LAVALINK_PORT}"
+}
+
+wait_for_lavalink() {
+  local elapsed=0
+  while [ "$elapsed" -lt "$LAVALINK_WAIT_TIMEOUT" ]; do
+    if ! kill -0 "$LAVALINK_PID" 2>/dev/null; then
+      return 1
+    fi
+    if curl -sf "http://${LAVALINK_HOST}:${LAVALINK_PORT}/version" >/dev/null 2>&1; then
+      echo "[render-start] Lavalink is ready"
+      return 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  return 1
+}
+
+# ---------- Start Lavalink ----------
+start_lavalink
+
+echo "[render-start] Waiting for Lavalink (${LAVALINK_WAIT_TIMEOUT}s timeout)..."
+if ! wait_for_lavalink; then
+  echo "[render-start] ERROR: Lavalink failed to start within ${LAVALINK_WAIT_TIMEOUT}s."
+  kill -TERM "$LAVALINK_PID" 2>/dev/null || true
+  exit 1
+fi
+
+# ---------- Start AshenAI ----------
+echo "[render-start] Starting AshenAI on port $PORT..."
+node --import tsx src/index.ts &
+ASHENAI_PID=$!
+echo "[render-start] AshenAI started (PID $ASHENAI_PID)"
+
+# ---------- Keep alive + monitor Lavalink ----------
+while kill -0 "$ASHENAI_PID" 2>/dev/null; do
+  if ! kill -0 "$LAVALINK_PID" 2>/dev/null; then
+    echo "[render-start] Lavalink died. Restarting..."
+    start_lavalink
+    if ! wait_for_lavalink; then
+      echo "[render-start] ERROR: Lavalink restart failed. AshenAI will lose music."
+    fi
+  fi
+  sleep 5
+done
+
+wait "$ASHENAI_PID" 2>/dev/null
+EXIT_CODE=$?
+
+echo "[render-start] AshenAI exited with code $EXIT_CODE."
+
+# ---------- Stop Lavalink ----------
+if kill -0 "$LAVALINK_PID" 2>/dev/null; then
+  echo "[render-start] Stopping Lavalink (PID $LAVALINK_PID)..."
+  kill -TERM "$LAVALINK_PID" 2>/dev/null || true
+  wait "$LAVALINK_PID" 2>/dev/null || true
+fi
+
+exit "$EXIT_CODE"

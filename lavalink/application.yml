@@ -1,6 +1,6 @@
 server:
-  port: ${PORT:2333}
-  address: 0.0.0.0
+  port: 2333
+  address: 127.0.0.1
 
 plugins:
   youtube:
@@ -71,7 +71,7 @@ lavalink:
       snapshot: false
 
   server:
-    password: "ashenai-local"
+    password: ${LAVALINK_PASSWORD:ashenai-local}
 
     sources:
       youtube: false
