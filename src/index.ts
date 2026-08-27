@@ -150,7 +150,7 @@ console.log(`   Name: ${process.env.LAVALINK_NAME || "main"}`);
 console.log(`   Password: ${lavalinkPassword ? "(set)" : "(missing)"}`);
 
 const shoukakuMusic = new ShoukakuMusicManager(client, {
-  url: lavalinkUrl || "localhost:2333",
+  url: lavalinkUrl || "",
   auth: lavalinkPassword || "",
   secure: lavalinkSecure,
   name: process.env.LAVALINK_NAME || "main",
@@ -1922,6 +1922,16 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 
+/* =====================================================
+   INTERNAL SUPERVISOR STATE
+   ===================================================== */
+let discordConnectionAttempt = 0;
+let discordConnectionManagerStarted = false;
+let discordRecoveryActive = false;
+let discordLastFailureAt = 0;
+let discordLastFailureReason = "";
+let discordLastReadyAt = 0;
+
 const internalSupervisor = new InternalSupervisor({
   intervalMs: 30_000,
   failureThreshold: 3,
@@ -1932,10 +1942,6 @@ const internalSupervisor = new InternalSupervisor({
     if (!client.isReady() && !discordRecoveryActive) {
       reasons.push("Discord client is not ready");
     }
-
-    // AI providers are intentionally NOT treated as a fatal
-    // process-health failure. The AIRouter handles provider
-    // cooldowns, retries, and fallback independently.
 
     return {
       healthy: reasons.length === 0,
@@ -1958,14 +1964,8 @@ const internalSupervisor = new InternalSupervisor({
 
 internalSupervisor.start();
 
-/*
- * Discord.js debug events are intentionally summarized.
- * Full Gateway debug output can contain sensitive protocol details
- * and creates excessive Render logs.
- */
 client.on("debug", (message) => {
   const text = String(message);
-
   if (/heartbeat|heartbeat ack/i.test(text)) {
     return;
   }
@@ -1976,8 +1976,6 @@ client.on("debug", (message) => {
 client.on("warn", (message) => {
   logger.warn(`⚠️ DISCORD WARN: ${message}`);
 });
-
-
 
 client.on("shardDisconnect", (event, shardId) => {
   logger.error(
@@ -2001,23 +1999,6 @@ client.on("error", (error) => {
       : String(error),
   );
 });
-
-
-const DISCORD_CONNECT_TIMEOUT_MS = 60_000;
-const DISCORD_INITIAL_RETRY_MS = 5_000;
-const DISCORD_MAX_RETRY_MS = 60_000;
-
-let discordConnectionAttempt = 0;
-let discordConnectionManagerStarted = false;
-let discordRecoveryActive = false;
-let discordLastFailureAt = 0;
-let discordLastFailureReason = "";
-let discordLastReadyAt = 0;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 
 async function testRawDiscordGateway(): Promise<void> {
   logger.info("🔬 RAW DISCORD WEBSOCKET TEST: Starting...");
@@ -2078,6 +2059,14 @@ async function testRawDiscordGateway(): Promise<void> {
       );
     });
   });
+}
+
+const DISCORD_CONNECT_TIMEOUT_MS = 60_000;
+const DISCORD_INITIAL_RETRY_MS = 5_000;
+const DISCORD_MAX_RETRY_MS = 60_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function loginDiscordWithTimeout(): Promise<void> {
