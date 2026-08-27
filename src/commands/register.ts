@@ -7,7 +7,7 @@ import { config } from "../config/env";
 import { CommandBuilder } from "./definitions";
 
 /*
- * Synchronize AshenAI slash commands to the configured guild.
+ * Synchronize AshenAI slash commands globally.
  *
  * Guild commands are used during development because Discord
  * updates them much faster than global commands.
@@ -19,12 +19,6 @@ import { CommandBuilder } from "./definitions";
 export async function syncCommands(
   commands: CommandBuilder[],
 ): Promise<void> {
-  if (!config.discord.guildId) {
-    throw new Error(
-      "DISCORD_GUILD_ID is required.",
-    );
-  }
-
   const rest = new REST({
     version: "10",
   }).setToken(
@@ -36,13 +30,12 @@ export async function syncCommands(
   );
 
   console.log(
-    `⚡ Synchronizing ${commandData.length} guild slash commands...`,
+    `⚡ Synchronizing ${commandData.length} global slash commands...`,
   );
 
   await rest.put(
-    Routes.applicationGuildCommands(
+    Routes.applicationCommands(
       config.discord.clientId,
-      config.discord.guildId,
     ),
     {
       body: commandData,
@@ -50,6 +43,6 @@ export async function syncCommands(
   );
 
   console.log(
-    `✅ Guild commands synchronized: ${commandData.length}`,
+    `✅ Global commands synchronized: ${commandData.length}`,
   );
 }
