@@ -66,6 +66,7 @@ start_lavalink() {
 wait_for_lavalink() {
   local elapsed=0
   local url="http://${LAVALINK_HOST}:${LAVALINK_PORT}/version"
+  local auth_header="Authorization: ${LAVALINK_PASSWORD}"
   echo "[render-start] Polling $url ..."
 
   while [ "$elapsed" -lt "$LAVALINK_WAIT_TIMEOUT" ]; do
@@ -74,13 +75,17 @@ wait_for_lavalink() {
       return 1
     fi
 
-    if curl -sf "$url" >/dev/null 2>&1; then
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+      -H "$auth_header" "$url" 2>/dev/null) || http_code="000"
+
+    if [ "$http_code" = "200" ]; then
       echo "[render-start] Lavalink is ready after ${elapsed}s"
       return 0
     fi
 
     if [ $((elapsed % 10)) -eq 0 ] && [ "$elapsed" -gt 0 ]; then
-      echo "[render-start] Still waiting for Lavalink... (${elapsed}/${LAVALINK_WAIT_TIMEOUT}s)"
+      echo "[render-start] Still waiting for Lavalink... (${elapsed}/${LAVALINK_WAIT_TIMEOUT}s, last HTTP $http_code)"
     fi
 
     sleep 1
@@ -91,7 +96,10 @@ wait_for_lavalink() {
   echo "[render-start] Diagnostics:"
   echo "  - Lavalink PID: $LAVALINK_PID"
   echo "  - Process alive: $(kill -0 "$LAVALINK_PID" 2>/dev/null && echo yes || echo no)"
-  echo "  - curl exit: $(curl -sf "$url" 2>&1; echo $?)"
+  local final_code
+  final_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "$auth_header" "$url" 2>/dev/null) || final_code="000"
+  echo "  - Last HTTP status: $final_code"
   return 1
 }
 
