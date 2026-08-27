@@ -37,3 +37,5 @@ lavalink/*.log
 lavalink/*.backup*
 lavalink/*.bak
 lavalink/*.before-*
+lavalink/*.pre-*
+lavalink/*.bad-*

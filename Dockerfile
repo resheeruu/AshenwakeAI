@@ -25,7 +25,7 @@ RUN mkdir -p lavalink/plugins && \
     curl -fSL -o lavalink/Lavalink.jar \
       "https://github.com/lavalink-devs/Lavalink/releases/download/4.2.2/Lavalink.jar" && \
     curl -fSL -o lavalink/plugins/youtube-plugin-1.18.2.jar \
-      "https://github.com/lavalink-devs/youtube-plugin/releases/download/1.18.2/youtube-plugin-1.18.2.jar"
+      "https://maven.lavalink.dev/releases/dev/lavalink/youtube/youtube-plugin/1.18.2/youtube-plugin-1.18.2.jar"
 
 RUN npm run build
 

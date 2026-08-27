@@ -7,9 +7,11 @@ set -euo pipefail
 # Starts Lavalink + AshenAI in a single Render container.
 # ============================================================
 
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+LAVALINK_DIR="${APP_DIR}/lavalink"
+LAVALINK_JAR="${LAVALINK_DIR}/Lavalink.jar"
 LAVALINK_HOST="${LAVALINK_HOST:-127.0.0.1}"
 LAVALINK_PORT="${LAVALINK_PORT:-2333}"
-LAVALINK_JAR="${LAVALINK_JAR:-lavalink/Lavalink.jar}"
 LAVALINK_WAIT_TIMEOUT="${LAVALINK_WAIT_TIMEOUT:-60}"
 PORT="${PORT:-10000}"
 LAVALINK_PID=""
@@ -42,9 +44,22 @@ if ! command -v java >/dev/null 2>&1; then
 fi
 echo "[render-start] Java: $(java -version 2>&1 | head -1)"
 
+# ---------- Validate Lavalink files ----------
+if [ ! -f "$LAVALINK_JAR" ]; then
+  echo "[render-start] ERROR: Lavalink JAR not found at $LAVALINK_JAR"
+  exit 1
+fi
+
+if [ ! -f "${LAVALINK_DIR}/application.yml" ]; then
+  echo "[render-start] ERROR: application.yml not found at ${LAVALINK_DIR}/application.yml"
+  exit 1
+fi
+
 start_lavalink() {
+  cd "$LAVALINK_DIR"
   java -jar "$LAVALINK_JAR" &
   LAVALINK_PID=$!
+  cd "$APP_DIR"
   echo "[render-start] Lavalink started (PID $LAVALINK_PID) on ${LAVALINK_HOST}:${LAVALINK_PORT}"
 }
 
@@ -76,6 +91,7 @@ fi
 
 # ---------- Start AshenAI ----------
 echo "[render-start] Starting AshenAI on port $PORT..."
+cd "$APP_DIR"
 node --import tsx src/index.ts &
 ASHENAI_PID=$!
 echo "[render-start] AshenAI started (PID $ASHENAI_PID)"
