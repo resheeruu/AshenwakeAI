@@ -12,7 +12,7 @@ LAVALINK_DIR="${APP_DIR}/lavalink"
 LAVALINK_JAR="${LAVALINK_DIR}/Lavalink.jar"
 LAVALINK_HOST="${LAVALINK_HOST:-127.0.0.1}"
 LAVALINK_PORT="${LAVALINK_PORT:-2333}"
-LAVALINK_WAIT_TIMEOUT="${LAVALINK_WAIT_TIMEOUT:-60}"
+LAVALINK_WAIT_TIMEOUT="${LAVALINK_WAIT_TIMEOUT:-120}"
 PORT="${PORT:-10000}"
 LAVALINK_PID=""
 
@@ -65,17 +65,33 @@ start_lavalink() {
 
 wait_for_lavalink() {
   local elapsed=0
+  local url="http://${LAVALINK_HOST}:${LAVALINK_PORT}/version"
+  echo "[render-start] Polling $url ..."
+
   while [ "$elapsed" -lt "$LAVALINK_WAIT_TIMEOUT" ]; do
     if ! kill -0 "$LAVALINK_PID" 2>/dev/null; then
+      echo "[render-start] ERROR: Lavalink process (PID $LAVALINK_PID) exited prematurely."
       return 1
     fi
-    if curl -sf "http://${LAVALINK_HOST}:${LAVALINK_PORT}/version" >/dev/null 2>&1; then
-      echo "[render-start] Lavalink is ready"
+
+    if curl -sf "$url" >/dev/null 2>&1; then
+      echo "[render-start] Lavalink is ready after ${elapsed}s"
       return 0
     fi
+
+    if [ $((elapsed % 10)) -eq 0 ] && [ "$elapsed" -gt 0 ]; then
+      echo "[render-start] Still waiting for Lavalink... (${elapsed}/${LAVALINK_WAIT_TIMEOUT}s)"
+    fi
+
     sleep 1
     elapsed=$((elapsed + 1))
   done
+
+  echo "[render-start] ERROR: Lavalink failed to respond after ${LAVALINK_WAIT_TIMEOUT}s."
+  echo "[render-start] Diagnostics:"
+  echo "  - Lavalink PID: $LAVALINK_PID"
+  echo "  - Process alive: $(kill -0 "$LAVALINK_PID" 2>/dev/null && echo yes || echo no)"
+  echo "  - curl exit: $(curl -sf "$url" 2>&1; echo $?)"
   return 1
 }
 
@@ -84,8 +100,9 @@ start_lavalink
 
 echo "[render-start] Waiting for Lavalink (${LAVALINK_WAIT_TIMEOUT}s timeout)..."
 if ! wait_for_lavalink; then
-  echo "[render-start] ERROR: Lavalink failed to start within ${LAVALINK_WAIT_TIMEOUT}s."
+  echo "[render-start] Killing Lavalink (PID $LAVALINK_PID)..."
   kill -TERM "$LAVALINK_PID" 2>/dev/null || true
+  wait "$LAVALINK_PID" 2>/dev/null || true
   exit 1
 fi
 
