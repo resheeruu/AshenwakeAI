@@ -1,4 +1,5 @@
 import type { Guild, GuildMember } from "discord.js";
+import { logger } from "../logger";
 
 export interface MusicSession {
   guildId: string;
@@ -177,8 +178,8 @@ export class MusicSessionManager {
       this.emptyTimeoutMs,
     );
 
-    console.log(
-      `⏱️ MUSIC EMPTY: guild=${guild.id} auto-disconnect in ${this.emptyTimeoutMs / 1000}s`,
+    logger.info(
+      `Music empty: guild=${guild.id} auto-disconnect in ${this.emptyTimeoutMs / 1000}s`,
     );
   }
 

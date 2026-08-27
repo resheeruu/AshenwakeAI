@@ -1,5 +1,6 @@
 import {
   ChatInputCommandInteraction,
+  MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
 
@@ -7,6 +8,7 @@ import { AIRouter } from "../ai/router";
 import { ConversationMemory } from "../ai/memory";
 import { AshenCommand } from "./definitions";
 import { AgentManager } from "../agent/manager";
+import { logger } from "../logger";
 
 export function createStatusCommand(
   router: AIRouter,
@@ -23,6 +25,7 @@ export function createStatusCommand(
     async execute(
       interaction: ChatInputCommandInteraction
     ): Promise<void> {
+      try {
       const providers = router.getAvailableProviders();
       const health = router.getHealth();
       const stats = memory.stats();
@@ -242,6 +245,18 @@ export function createStatusCommand(
       await interaction.editReply({
         content,
       });
+      } catch (error) {
+        logger.error("/status failed:", error);
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: "❌ Status check failed. Check the logs." });
+          } else {
+            await interaction.reply({ content: "❌ Status check failed.", flags: MessageFlags.Ephemeral });
+          }
+        } catch (replyError) {
+          logger.error("Could not send status result:", replyError);
+        }
+      }
     },
   };
 }

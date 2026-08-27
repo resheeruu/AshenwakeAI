@@ -11,6 +11,7 @@ import { AshenCommand } from "./definitions";
 import { scanAshenAI } from "../diagnostics/health-scanner";
 import { generateOptimizations } from "../diagnostics/optimizer";
 import { config } from "../config/env";
+import { logger } from "../logger";
 import { recordAudit } from "../security/audit";
 
 export function createDiagnoseCommand(
@@ -32,10 +33,12 @@ export function createDiagnoseCommand(
         const isCreator = config.creator.discord === userId;
         const isAdmin = config.admin.discordIds.includes(userId);
         if (!isCreator && !isAdmin) {
-          await interaction.reply({
-            content: "❌ Only the bot owner or an admin can run /diagnose.",
-            flags: MessageFlags.Ephemeral,
-          });
+          const denyMsg = "❌ Only the bot owner or an admin can run /diagnose.";
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: denyMsg });
+          } else {
+            await interaction.reply({ content: denyMsg, flags: MessageFlags.Ephemeral });
+          }
           return;
         }
 
@@ -196,10 +199,7 @@ export function createDiagnoseCommand(
           }
         }
       } catch (error) {
-        console.error(
-          "❌ /diagnose failed:",
-          error,
-        );
+        logger.error("/diagnose failed:", error);
 
         try {
           if (
@@ -218,10 +218,7 @@ export function createDiagnoseCommand(
             });
           }
         } catch (replyError) {
-          console.error(
-            "❌ Could not send diagnostics result:",
-            replyError,
-          );
+          logger.error("Could not send diagnostics result:", replyError);
         }
       }
     },

@@ -101,9 +101,11 @@ export function createProfileCommand(): AshenCommand {
           text: "Ashen Realms",
         });
 
-      await interaction.reply({
-        embeds: [embed],
-      });
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ embeds: [embed] });
+      } else {
+        await interaction.reply({ embeds: [embed] });
+      }
     },
   };
 }

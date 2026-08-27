@@ -14,7 +14,8 @@ export function readJSON<T>(filename: string, fallback: T): T {
     if (!fs.existsSync(filePath)) return fallback;
     const raw = fs.readFileSync(filePath, "utf8");
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (error) {
+    logger.warn(`⚠️ Could not parse ${filename}, using fallback: ${error instanceof Error ? error.message : String(error)}`);
     return fallback;
   }
 }

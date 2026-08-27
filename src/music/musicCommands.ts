@@ -6,6 +6,7 @@ import {
 import { ShoukakuMusicManager } from "./ShoukakuMusicManager";
 import { MusicSessionManager } from "./MusicSessionManager";
 import { buildMusicPanel } from "./musicPanel";
+import { logger } from "../logger";
 
 const PREFIX = "!";
 
@@ -186,8 +187,8 @@ export async function handleMusicCommand(
         message.author.id,
       );
 
-      console.log(
-        `👑 MUSIC SESSION CREATED: guild=${message.guild.id} owner=${message.author.id} channel=${voiceChannel.id}`,
+      logger.info(
+        `Music session created: guild=${message.guild.id} owner=${message.author.id}`,
       );
     }
 
@@ -213,8 +214,8 @@ export async function handleMusicCommand(
     sessions.markChannelOccupied(message.guild.id);
 
     try {
-      console.log(
-        `🎵 MUSIC REQUEST: user=${message.author.id} query=${args}`,
+      logger.debug(
+        `Music request: user=${message.author.id} query=${args}`,
       );
 
       await message.reply(
@@ -228,15 +229,8 @@ export async function handleMusicCommand(
         message.author.id,
       );
 
-      console.log(
-        "🎵 MUSIC COMMAND RETURN:",
-        track
-          ? JSON.stringify({
-              title: track.title,
-              author: track.author,
-              uri: track.uri,
-            })
-          : "NULL",
+      logger.debug(
+        "Music command result:",
       );
 
       if (!track) {
@@ -261,9 +255,8 @@ export async function handleMusicCommand(
 
       return true;
     } catch (error) {
-      console.error(
-        "❌ SHOUKAKU MUSIC COMMAND ERROR:",
-        error,
+      logger.error(
+        "Music command error:",
       );
 
       const errorMessage =
@@ -356,9 +349,8 @@ export async function handleMusicCommand(
 
       return true;
     } catch (error) {
-      console.error(
-        "❌ MUSIC SKIP ERROR:",
-        error,
+      logger.error(
+        "Music skip error:",
       );
 
       await message.reply(

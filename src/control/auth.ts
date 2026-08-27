@@ -91,7 +91,9 @@ export function authenticateOwner(
   }
 
   const { hash } = hashPassword(password, credentials.salt);
-  if (hash !== credentials.passwordHash) {
+  const hashBuf = Buffer.from(hash, "hex");
+  const expectedBuf = Buffer.from(credentials.passwordHash, "hex");
+  if (hashBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(hashBuf, expectedBuf)) {
     recentAttempts.push(now);
     store.loginAttempts.set(ip, recentAttempts);
     recordAudit({

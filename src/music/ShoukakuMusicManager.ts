@@ -8,6 +8,7 @@ import {
 
 import type { Client } from "discord.js";
 
+import { logger } from "../logger";
 import {
   MusicQueueManager,
   type LoopMode,
@@ -67,8 +68,8 @@ export class ShoukakuMusicManager {
     this.shoukaku.on(
       "ready",
       (name, resumed) => {
-        console.log(
-          `🟢 LAVALINK READY: ${name} resumed=${resumed}`,
+        logger.info(
+          `Lavalink ready: ${name} resumed=${resumed}`,
         );
       },
     );
@@ -76,11 +77,8 @@ export class ShoukakuMusicManager {
     this.shoukaku.on(
       "error",
       (name, error) => {
-        console.error(
-          `❌ LAVALINK ERROR [${name}]:`,
-          error instanceof Error
-            ? error.message
-            : String(error),
+        logger.error(
+          `Lavalink error [${name}]: ${error instanceof Error ? error.message : String(error)}`,
         );
       },
     );
@@ -88,8 +86,8 @@ export class ShoukakuMusicManager {
     this.shoukaku.on(
       "close",
       (name, code, reason) => {
-        console.warn(
-          `⚠️ LAVALINK CLOSED [${name}]: code=${code} reason=${reason}`,
+        logger.warn(
+          `Lavalink closed [${name}]: code=${code} reason=${reason}`,
         );
       },
     );
@@ -97,8 +95,8 @@ export class ShoukakuMusicManager {
     this.shoukaku.on(
       "debug",
       (name, message) => {
-        console.log(
-          `🔧 LAVALINK DEBUG [${name}]: ${message}`,
+        logger.debug(
+          `Lavalink debug [${name}]: ${message}`,
         );
       },
     );
@@ -128,8 +126,8 @@ export class ShoukakuMusicManager {
       this.shoukaku.players.get(guildId);
 
     if (!player) {
-      console.log(
-        `🎙️ VOICE CONNECT: guild=${guildId} channel=${channelId} shard=${shardId}`,
+      logger.info(
+        `Voice connect: guild=${guildId} channel=${channelId} shard=${shardId}`,
       );
 
       player =
@@ -141,12 +139,12 @@ export class ShoukakuMusicManager {
           mute: false,
         });
 
-      console.log(
-        `🟢 VOICE CONNECTED: guild=${guildId} channel=${channelId}`,
+      logger.info(
+        `Voice connected: guild=${guildId} channel=${channelId}`,
       );
     } else {
-      console.log(
-        `♻️ REUSING EXISTING VOICE CONNECTION: guild=${guildId}`,
+      logger.info(
+        `Reusing voice connection: guild=${guildId}`,
       );
     }
 
@@ -166,8 +164,8 @@ export class ShoukakuMusicManager {
           requestedBy,
         );
 
-      console.log(
-        `📋 MUSIC QUEUED: guild=${guildId} position=${this.queue.size(guildId)} title=${queued.track.info.title}`,
+      logger.info(
+        `Music queued: guild=${guildId} position=${this.queue.size(guildId)} title=${queued.track.info.title}`,
       );
 
       return track.info;
@@ -217,8 +215,8 @@ export class ShoukakuMusicManager {
     const identifier =
       this.normalizeQuery(query);
 
-    console.log(
-      `🎵 LAVALINK RESOLVE: ${identifier}`,
+    logger.debug(
+      `Lavalink resolve: ${identifier}`,
     );
 
     const result =
@@ -227,15 +225,13 @@ export class ShoukakuMusicManager {
       );
 
     if (!result) {
-      console.error(
-        "❌ Lavalink returned no result.",
-      );
+      logger.warn("Lavalink returned no result.");
 
       return null;
     }
 
-    console.log(
-      `🎵 LAVALINK LOAD TYPE: ${result.loadType}`,
+    logger.debug(
+      `Lavalink load type: ${result.loadType}`,
     );
 
     if (
@@ -273,17 +269,8 @@ export class ShoukakuMusicManager {
       return null;
     }
 
-    console.log(
-      "🎵 LAVALINK TRACK:",
-      JSON.stringify({
-        title: track.info.title,
-        author: track.info.author,
-        uri: track.info.uri,
-        source: track.info.sourceName,
-        length: track.info.length,
-        encodedLength:
-          track.encoded?.length ?? 0,
-      }),
+    logger.debug(
+      "Lavalink track resolved",
     );
 
     return track;
@@ -310,8 +297,8 @@ export class ShoukakuMusicManager {
       );
     }
 
-    console.log(
-      `▶️ PLAYTRACK REQUEST: ${item.track.info.title}`,
+    logger.debug(
+      `PlayTrack request: ${item.track.info.title}`,
     );
 
     await player.setGlobalVolume(
@@ -324,8 +311,8 @@ export class ShoukakuMusicManager {
       },
     });
 
-    console.log(
-      `🎵 LAVALINK PLAYING: ${item.track.info.title}`,
+    logger.info(
+      `Lavalink playing: ${item.track.info.title}`,
     );
   }
 
@@ -370,8 +357,8 @@ export class ShoukakuMusicManager {
     const node = this.shoukaku.getIdealNode();
 
     if (!node) {
-      console.warn(
-        `⚠️ RADIO: no Lavalink node available guild=${guildId}`,
+      logger.warn(
+        `Radio: no Lavalink node available guild=${guildId}`,
       );
       return 0;
     }
@@ -502,25 +489,19 @@ export class ShoukakuMusicManager {
 
           addedCount++;
 
-          console.log(
-            `📻 RADIO ADD: guild=${guildId} ` +
-            `position=${this.queue.size(guildId)} ` +
-            `title=${candidate.info.title} ` +
-            `artist=${candidate.info.author}`,
+          logger.debug(
+            `Radio add: guild=${guildId} position=${this.queue.size(guildId)} title=${candidate.info.title}`,
           );
         }
       } catch (error) {
-        console.error(
-          `❌ RADIO SEARCH FAILED: guild=${guildId} query="${search}"`,
-          error,
+        logger.error(
+          `Radio search failed: guild=${guildId} query="${search}"`,
         );
       }
     }
 
-    console.log(
-      `📻 RADIO FILLED: guild=${guildId} ` +
-      `added=${addedCount} ` +
-      `queue=${this.queue.size(guildId)}`,
+    logger.info(
+      `Radio filled: guild=${guildId} added=${addedCount} queue=${this.queue.size(guildId)}`,
     );
 
     return addedCount;
@@ -545,8 +526,8 @@ export class ShoukakuMusicManager {
     player.on(
       "start",
       (data: any) => {
-        console.log(
-          `▶️ TRACK START: guild=${data.guildId} title=${data.track.info.title}`,
+        logger.debug(
+          `Track start: guild=${data.guildId} title=${data.track.info.title}`,
         );
       },
     );
@@ -554,8 +535,8 @@ export class ShoukakuMusicManager {
     player.on(
       "update",
       (data: any) => {
-        console.log(
-          `🎧 PLAYER UPDATE: guild=${data.guildId} position=${data.state.position} connected=${data.state.connected} ping=${data.state.ping}`,
+        logger.debug(
+          `Player update: guild=${data.guildId} position=${data.state.position}`,
         );
       },
     );
@@ -563,11 +544,8 @@ export class ShoukakuMusicManager {
     player.on(
       "exception",
       (data: any) => {
-        console.error(
-          `🚨 TRACK EXCEPTION: guild=${data.guildId}`,
-          JSON.stringify(
-            data.exception,
-          ),
+        logger.error(
+          `Track exception: guild=${data.guildId}`,
         );
       },
     );
@@ -575,8 +553,8 @@ export class ShoukakuMusicManager {
     player.on(
       "stuck",
       (data: any) => {
-        console.error(
-          `🚨 TRACK STUCK: guild=${data.guildId} threshold=${data.thresholdMs}ms`,
+        logger.warn(
+          `Track stuck: guild=${data.guildId} threshold=${data.thresholdMs}ms`,
         );
       },
     );
@@ -594,8 +572,8 @@ export class ShoukakuMusicManager {
     player.on(
       "closed",
       (data: any) => {
-        console.error(
-          `🔌 PLAYER WEBSOCKET CLOSED: guild=${data.guildId} code=${data.code} reason=${data.reason}`,
+        logger.warn(
+          `Player websocket closed: guild=${data.guildId} code=${data.code}`,
         );
       },
     );
@@ -611,13 +589,13 @@ export class ShoukakuMusicManager {
     guildId: string,
     data: any,
   ): Promise<void> {
-    console.log(
-      `🏁 TRACK END: guild=${guildId} reason=${data.reason}`,
+    logger.debug(
+      `Track end: guild=${guildId} reason=${data.reason}`,
     );
 
     if (this.manuallyStopped.has(guildId)) {
-      console.log(
-        `⏹️ TRACK END IGNORED: manual stop guild=${guildId}`,
+      logger.debug(
+        `Track end ignored: manual stop guild=${guildId}`,
       );
       return;
     }
@@ -625,8 +603,8 @@ export class ShoukakuMusicManager {
     const current = this.queue.getCurrent(guildId);
 
     if (!current) {
-      console.log(
-        `📭 NO CURRENT TRACK: guild=${guildId}`,
+      logger.debug(
+        `No current track: guild=${guildId}`,
       );
       return;
     }
@@ -643,9 +621,8 @@ export class ShoukakuMusicManager {
 
         return;
       } catch (error) {
-        console.error(
-          `❌ FAILED TO REPEAT TRACK: guild=${guildId}`,
-          error,
+        logger.error(
+          `Failed to repeat track: guild=${guildId}`,
         );
       }
     }
@@ -668,9 +645,8 @@ export class ShoukakuMusicManager {
      * from the track that just finished.
      */
     if (!next && this.isAutoplayEnabled(guildId)) {
-      console.log(
-        `🤖 AUTOPLAY TRIGGERED: guild=${guildId} ` +
-        `seed="${current.track.info.title}"`,
+      logger.debug(
+        `Autoplay triggered: guild=${guildId} seed="${current.track.info.title}"`,
       );
 
       const added = await this.fillAutoplayQueue(
@@ -690,8 +666,8 @@ export class ShoukakuMusicManager {
         null,
       );
 
-      console.log(
-        `📭 MUSIC QUEUE EMPTY: guild=${guildId}`,
+      logger.info(
+        `Music queue empty: guild=${guildId}`,
       );
 
       return;
@@ -713,9 +689,8 @@ export class ShoukakuMusicManager {
         next,
       );
     } catch (error) {
-      console.error(
-        `❌ FAILED TO START NEXT TRACK: guild=${guildId}`,
-        error,
+      logger.error(
+        `Failed to start next track: guild=${guildId}`,
       );
 
       this.queue.setCurrent(
@@ -781,9 +756,8 @@ export class ShoukakuMusicManager {
     const next = this.queue.dequeue(guildId);
 
     if (!next && this.isAutoplayEnabled(guildId)) {
-      console.log(
-        `🤖 AUTOPLAY SKIP TRIGGERED: guild=${guildId} ` +
-        `seed="${current.track.info.title}"`,
+      logger.debug(
+        `Autoplay skip triggered: guild=${guildId} seed="${current.track.info.title}"`,
       );
 
       const added = await this.fillAutoplayQueue(
@@ -868,10 +842,12 @@ export class ShoukakuMusicManager {
     this.queue.clear(guildId);
 
     if (!player) {
+      this.cleanupGuildMaps(guildId);
       return;
     }
 
     await player.stopTrack();
+    this.cleanupGuildMaps(guildId);
   }
 
   /*
@@ -889,13 +865,24 @@ export class ShoukakuMusicManager {
 
     this.queue.clear(guildId);
 
-    this.listenersAttached.delete(
-      guildId,
-    );
+    this.cleanupGuildMaps(guildId);
 
     await this.shoukaku.leaveVoiceChannel(
       guildId,
     );
+  }
+
+  /*
+   * =====================================================
+   * GUILD MAP CLEANUP
+   * =====================================================
+   */
+
+  private cleanupGuildMaps(guildId: string): void {
+    this.listenersAttached.delete(guildId);
+    this.volumes.delete(guildId);
+    this.autoplayEnabled.delete(guildId);
+    this.manuallyStopped.delete(guildId);
   }
 
   /*

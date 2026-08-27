@@ -26,6 +26,11 @@ import { guardAIOutput } from "./security/output-guard";
 import { wrapUntrustedContent } from "./security/context";
 import { buildAdaptivePersonality } from "./ai/adaptive-personality";
 import { parseServerIntent } from "./discord/server-assistant";
+import {
+  isToolConfirmationId,
+  handleToolConfirmation,
+  setDiscordClient,
+} from "./discord/interactions/confirmation-handler";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
@@ -449,6 +454,9 @@ client.once(
       logger.info(
         "🟢 AshenAI Discord bot + AI agent are ONLINE."
       );
+
+      // Wire U5 tool confirmation handler
+      setDiscordClient(client);
     } catch (error) {
       logger.error(
         "❌ Startup initialization failed:",
@@ -1202,6 +1210,29 @@ client.on(
             "❌ I couldn't execute that moderation action. The member may no longer exist or Discord may have rejected the action.",
           components: [],
         });
+      }
+    }
+  }
+);
+
+/* =====================================================
+   U5 TOOL CONFIRMATION HANDLER
+   ===================================================== */
+
+client.on(
+  Events.InteractionCreate,
+  async (interaction) => {
+    if (!interaction.isButton()) return;
+    if (!isToolConfirmationId(interaction.customId)) return;
+    try {
+      await handleToolConfirmation(interaction);
+    } catch (error) {
+      logger.error(`Tool confirmation handler error: ${error instanceof Error ? error.message : String(error)}`);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "❌ An error occurred processing this confirmation.",
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
       }
     }
   }

@@ -3,6 +3,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { AIRouter } from "../ai/router";
 import { UsageManager } from "../ai/usage-manager";
+import { logger } from "../logger";
 import {
   getRecentLogs,
   subscribeLogs,
@@ -53,6 +54,45 @@ import {
 const app = express();
 app.set("trust proxy", 1);
 
+/* ==================== CORS ==================== */
+app.use((_req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (_req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
+
+/* ==================== GLOBAL RATE LIMITER ==================== */
+const apiRequestCounts = new Map<string, number[]>();
+const API_RATE_WINDOW_MS = 60_000;
+const API_RATE_MAX = 120;
+
+function globalRateLimit(req: Request, res: Response, next: () => void) {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const hits = (apiRequestCounts.get(ip) || []).filter((t) => now - t < API_RATE_WINDOW_MS);
+  if (hits.length >= API_RATE_MAX) {
+    res.status(429).json({ ok: false, error: "Rate limit exceeded." });
+    return;
+  }
+  hits.push(now);
+  apiRequestCounts.set(ip, hits);
+  next();
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, hits] of apiRequestCounts) {
+    const recent = hits.filter((t) => now - t < API_RATE_WINDOW_MS);
+    if (recent.length === 0) apiRequestCounts.delete(ip);
+    else apiRequestCounts.set(ip, recent);
+  }
+}, API_RATE_WINDOW_MS).unref();
+
 const PORT = Number(process.env.PORT || process.env.WEB_PORT || 3000);
 
 let router: AIRouter;
@@ -91,6 +131,7 @@ function requireOwner(req: Request, res: Response, next: () => void) {
 }
 
 app.use(express.json({ limit: "64kb" }));
+app.use(globalRateLimit);
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ==================== PUBLIC ==================== */
@@ -364,8 +405,6 @@ export function startWebServer(
   initControlLayer(webRouter, usageManager!, webMemory || {} as any, getVersionFn, webSystemUsage);
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log("🌐 ===============================");
-    console.log(`🌐 AshenAI Web listening on port ${PORT}`);
-    console.log("🌐 ===============================");
+    logger.info(`AshenAI Web listening on port ${PORT}`);
   });
 }

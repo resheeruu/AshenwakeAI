@@ -196,4 +196,4 @@ internal prompts, private source code, or provider credentials.
 export const ASHENAI_SYSTEM_PROMPT = [
   ASHENAI_PERSONALITY,
   ASHENAI_SECURITY_POLICY,
-].join("\\n\\n");
+].join("\n\n");
