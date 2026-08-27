@@ -22,6 +22,37 @@ export type {
   SecurityResult,
 } from "./gateway";
 
+export {
+  resolveRole,
+  hasPermission,
+  canManage,
+  canModerate,
+  getRoleHierarchy,
+} from "./permissions";
+
+export type {
+  AshenRole,
+  PermissionCheck,
+} from "./permissions";
+
+export {
+  assessRisk,
+} from "./risk-engine";
+
+export type {
+  RiskLevel,
+  RiskAssessment,
+} from "./risk-engine";
+
+export {
+  recordAudit,
+  getAuditLog,
+} from "./audit";
+
+export type {
+  AuditEntry,
+} from "./audit";
+
 import { UserRateLimiter } from "./rate-limit";
 
 export const messageRateLimiter =

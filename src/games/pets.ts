@@ -1,4 +1,4 @@
-import { GamePlayer } from "./types";
+import { GamePlayer, OwnedPet } from "./types";
 
 export type PetRarity =
   | "common"
@@ -22,13 +22,6 @@ export type PetDefinition = {
   ability: PetAbility;
   bonus: number;
   description: string;
-};
-
-export type OwnedPet = {
-  petId: string;
-  level: number;
-  xp: number;
-  evolved: boolean;
 };
 
 export const PETS: PetDefinition[] = [
@@ -94,20 +87,14 @@ export function getOwnedPet(
 }
 
 export function getPlayerPets(player: GamePlayer): OwnedPet[] {
-  const raw = (player as GamePlayer & { pets?: OwnedPet[] }).pets;
-
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-
-  return raw;
+  return player.pets ?? [];
 }
 
 function savePlayerPets(
   player: GamePlayer,
   pets: OwnedPet[],
 ): void {
-  (player as GamePlayer & { pets?: OwnedPet[] }).pets = pets;
+  player.pets = pets;
 }
 
 export function addPet(
@@ -133,6 +120,7 @@ export function addPet(
     level: 1,
     xp: 0,
     evolved: false,
+    active: pets.length === 0,
   };
 
   pets.push(pet);
@@ -220,8 +208,28 @@ export function getActivePet(
   player: GamePlayer,
 ): OwnedPet | undefined {
   const pets = getPlayerPets(player);
+  return pets.find((pet) => pet.active) ?? pets[0];
+}
 
-  return pets[0];
+export function setActivePet(
+  player: GamePlayer,
+  petId: string,
+): OwnedPet {
+  const pets = getPlayerPets(player);
+  const pet = pets.find((p) => p.petId === petId);
+
+  if (!pet) {
+    throw new Error("PET_NOT_OWNED");
+  }
+
+  for (const p of pets) {
+    p.active = false;
+  }
+
+  pet.active = true;
+  savePlayerPets(player, pets);
+
+  return pet;
 }
 
 export function calculatePetBonusAmount(

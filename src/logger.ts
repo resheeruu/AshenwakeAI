@@ -1,5 +1,6 @@
 import { config } from "./config/env";
 import { recordLog } from "./log-stream";
+import { redactLogMessage } from "./security/redact";
 
 const levels = {
   silent: 0,
@@ -22,34 +23,38 @@ function enabled(level: LogLevel): boolean {
 
 export const logger = {
   error(...args: unknown[]) {
-    recordLog("error", ...args);
+    const safe = redactLogMessage(...args);
+    recordLog("error", ...safe);
 
     if (enabled("error")) {
-      console.error(...args);
+      console.error(...safe);
     }
   },
 
   warn(...args: unknown[]) {
-    recordLog("warn", ...args);
+    const safe = redactLogMessage(...args);
+    recordLog("warn", ...safe);
 
     if (enabled("warn")) {
-      console.warn(...args);
+      console.warn(...safe);
     }
   },
 
   info(...args: unknown[]) {
-    recordLog("info", ...args);
+    const safe = redactLogMessage(...args);
+    recordLog("info", ...safe);
 
     if (enabled("info")) {
-      console.log(...args);
+      console.log(...safe);
     }
   },
 
   debug(...args: unknown[]) {
-    recordLog("debug", ...args);
+    const safe = redactLogMessage(...args);
+    recordLog("debug", ...safe);
 
     if (enabled("debug")) {
-      console.log(...args);
+      console.log(...safe);
     }
   },
 };

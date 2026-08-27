@@ -111,6 +111,7 @@ function normalizePlayer(
 
     classId: player.classId,
     regionId: player.regionId,
+    unlockedRegions: player.unlockedRegions ?? (player.regionId ? [player.regionId] : ["ashen_village"]),
 
     hp: player.hp ?? 100,
     maxHp: player.maxHp ?? 100,
@@ -125,6 +126,7 @@ function normalizePlayer(
 
     reputation: player.reputation ?? 0,
     titles: player.titles ?? [],
+    activeTitle: player.activeTitle,
 
     huntLastAt: player.huntLastAt,
     huntStreak: player.huntStreak ?? 0,
@@ -135,6 +137,35 @@ function normalizePlayer(
 
     inventory: player.inventory ?? {},
     equipment: player.equipment ?? [],
+
+    pets: player.pets ?? [],
+    activePetId: player.activePetId,
+
+    quests: player.quests ?? [],
+
+    statistics: player.statistics ?? {
+      totalDamageDealt: 0,
+      totalDamageTaken: 0,
+      totalHealing: 0,
+      bossesKilled: 0,
+      worldBossesKilled: 0,
+      dungeonsCompleted: 0,
+      dungeonsFailed: 0,
+      questsCompleted: 0,
+      itemsSold: 0,
+      itemsBought: 0,
+      coinsEarned: 0,
+      coinsSpent: 0,
+      tradesCompleted: 0,
+      gamblesPlayed: 0,
+      gamblesWon: 0,
+      highestDamage: 0,
+      longestStreak: 0,
+      totalPlayTimeMs: 0,
+      lastActiveAt: Date.now(),
+    },
+
+    guildId: player.guildId,
 
     xpBoostActive: player.xpBoostActive ?? false,
     luckyTokenActive: player.luckyTokenActive ?? false,

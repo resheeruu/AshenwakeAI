@@ -13,6 +13,7 @@ import {
 } from "../security";
 
 import { AshenCommand } from "./definitions";
+import { recordAudit } from "../security/audit";
 
 export function createConfigCommand(): AshenCommand {
   return {
@@ -100,6 +101,14 @@ export function createConfigCommand(): AshenCommand {
             `📝 Log level: ${runtime.logLevel}\n\n` +
             "🔐 Secrets remain hidden."
           );
+
+          recordAudit({
+            who: interaction.user.id,
+            whoName: interaction.user.tag,
+            what: "Reloaded AshenAI configuration",
+            where: "discord",
+            result: "success",
+          });
 
           return;
         }
@@ -191,6 +200,14 @@ export function createConfigCommand(): AshenCommand {
           console.log(
             `🛡️ Rate limit reset by ${interaction.user.tag} for ${userId}.`
           );
+
+          recordAudit({
+            who: interaction.user.id,
+            whoName: interaction.user.tag,
+            what: `Reset rate limit for user ${userId}`,
+            where: "discord",
+            result: "success",
+          });
 
           return;
         }

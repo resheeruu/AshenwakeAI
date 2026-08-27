@@ -5,6 +5,7 @@ import {
 
 import { canModerate, canTarget } from "./moderation";
 import { addWarning } from "./warnings";
+import { recordAudit } from "../security/audit";
 
 export interface InteractiveModerationResult {
   success: boolean;
@@ -23,6 +24,14 @@ export async function executeInteractiveModeration(
     PermissionFlagsBits.ModerateMembers;
 
   if (!canModerate(requester, requiredPermission)) {
+    recordAudit({
+      who: requester.id,
+      whoName: requester.user.tag,
+      what: `Interactive ${action} denied: insufficient permissions`,
+      where: "discord",
+      guildId: target.guild.id,
+      result: "denied",
+    });
     return {
       success: false,
       message:
@@ -50,6 +59,15 @@ export async function executeInteractiveModeration(
       requester.id,
       reason
     );
+
+    recordAudit({
+      who: requester.id,
+      whoName: requester.user.tag,
+      what: `Warned ${target.user.tag}: ${reason}`,
+      where: "discord",
+      guildId: target.guild.id,
+      result: "success",
+    });
 
     return {
       success: true,
@@ -93,6 +111,15 @@ export async function executeInteractiveModeration(
         reason
       );
 
+      recordAudit({
+        who: requester.id,
+        whoName: requester.user.tag,
+        what: `Timed out ${target.user.tag} for ${durationMinutes}m: ${reason}`,
+        where: "discord",
+        guildId: target.guild.id,
+        result: "success",
+      });
+
       return {
         success: true,
         message:
@@ -102,6 +129,14 @@ export async function executeInteractiveModeration(
           `Reason: ${reason}`,
       };
     } catch {
+      recordAudit({
+        who: requester.id,
+        whoName: requester.user.tag,
+        what: `Timed out ${target.user.tag} failed: Discord rejected`,
+        where: "discord",
+        guildId: target.guild.id,
+        result: "failure",
+      });
       return {
         success: false,
         message:

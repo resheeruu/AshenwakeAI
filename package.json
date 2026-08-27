@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "description": "AshenAI Discord AI assistant",
   "main": "index.js",
+  "bin": {
+    "ashen": "dist/cli.js"
+  },
   "scripts": {
     "start": "bash scripts/render-start.sh",
     "agent": "tsx src/agent/index.ts",
+    "cli": "tsx src/cli.ts",
     "test": "tsx scripts/test-router.ts && tsx scripts/test-core.ts && tsx scripts/test-commands.ts && tsx scripts/test-rate-limit.ts && tsx scripts/test-security.ts && tsx scripts/test-tasks.ts && tsx scripts/test-settlement.ts",
     "check": "tsx scripts/check.ts && npm test",
     "typecheck": "tsc --noEmit",

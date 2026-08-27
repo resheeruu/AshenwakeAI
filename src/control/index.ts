@@ -1,0 +1,46 @@
+export {
+  initControlLayer,
+  getStatus,
+  getHealth,
+  getSystemInfo,
+  getProviderStatus,
+  getProviderPerformance,
+  getCurrentModel,
+  getMemoryStats,
+  getUsageStats,
+  getSystemUsageStats,
+  getLogs,
+  getRecentErrors,
+  runDiagnostics,
+  getFeatureStatus,
+  getGuildConfigs,
+  getGuildConfig,
+  updateGuildConfig,
+  confirmAction,
+  executeAction,
+  getAuditEntries,
+} from "./control-service";
+
+export {
+  authenticateOwner,
+  validateSession,
+  destroySession,
+  createLoginRateLimiter,
+  type OwnerSession,
+  type LoginResult,
+} from "./auth";
+
+export type {
+  SystemStatus,
+  ProviderInfo,
+  SystemInfo,
+  MemoryStats,
+  UsageSnapshot,
+  DiagnosticResult,
+  LogSnapshot,
+  FeatureStatus,
+  ActionResult,
+  ActionRequest,
+  ActionConfirmation,
+  AdminAction,
+} from "./types";

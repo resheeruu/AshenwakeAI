@@ -3,6 +3,7 @@ import {
   addEquipment,
   createEquipment,
 } from "./equipment";
+import { GAME_CONFIG } from "./config";
 
 export type DungeonAction =
   | "attack"
@@ -260,7 +261,7 @@ export function performDungeonAction(
   member.defending = false;
 
   if (action === "flee") {
-    const fleeSuccess = Math.random() < 0.35;
+    const fleeSuccess = Math.random() < GAME_CONFIG.dungeon.fleeChance;
 
     if (fleeSuccess) {
       member.fled = true;
@@ -297,33 +298,30 @@ export function performDungeonAction(
   }
 
   let damageDealt = 0;
+  let isCritical = false;
 
   if (action === "attack") {
-    damageDealt = Math.max(
-      1,
-      player.attack - dungeon.bossDefense,
-    );
+    const critChance = GAME_CONFIG.combat.baseCritChance + (player.luck * 0.001);
+    isCritical = Math.random() < critChance;
+    const baseDamage = Math.max(1, player.attack - dungeon.bossDefense);
+    damageDealt = isCritical ? Math.floor(baseDamage * GAME_CONFIG.combat.critMultiplier) : baseDamage;
   }
 
   if (action === "ability") {
-    damageDealt = Math.max(
-      5,
-      Math.floor(
-        player.attack * 1.75 -
-          dungeon.bossDefense * 0.5,
-      ),
-    );
+    const critChance = GAME_CONFIG.combat.baseCritChance + (player.luck * 0.001);
+    isCritical = Math.random() < critChance;
+    const baseDamage = Math.max(5, Math.floor(
+      player.attack * GAME_CONFIG.combat.abilityDamageMultiplier -
+        dungeon.bossDefense * GAME_CONFIG.combat.abilityDefenseReduction,
+    ));
+    damageDealt = isCritical ? Math.floor(baseDamage * GAME_CONFIG.combat.critMultiplier) : baseDamage;
   }
 
   if (action === "defend") {
     member.defending = true;
   }
 
-  state.bossHp = Math.max(
-    0,
-    state.bossHp - damageDealt,
-  );
-
+  state.bossHp = Math.max(0, state.bossHp - damageDealt);
   member.damageDealt += damageDealt;
 
   if (state.bossHp <= 0) {
@@ -343,18 +341,14 @@ export function performDungeonAction(
   const rawDamage = Math.max(
     1,
     dungeon.bossAttack -
-      Math.floor(player.defense * 0.5),
+      Math.floor(player.defense * GAME_CONFIG.dungeon.bossDefenseReduction),
   );
 
   const damageTaken = member.defending
-    ? Math.floor(rawDamage * 0.5)
+    ? Math.floor(rawDamage * GAME_CONFIG.dungeon.defendDamageReduction)
     : rawDamage;
 
-  player.hp = Math.max(
-    0,
-    player.hp - damageTaken,
-  );
-
+  player.hp = Math.max(0, player.hp - damageTaken);
   member.damageTaken += damageTaken;
 
   if (player.hp <= 0) {

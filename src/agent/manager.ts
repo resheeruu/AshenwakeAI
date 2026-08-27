@@ -1,5 +1,6 @@
 import { logger } from "../logger";
 import { AIRouter } from "../ai/router";
+import { SystemUsageManager } from "../ai/system-usage";
 import { AgentLifecycle } from "./lifecycle";
 import { createSelfHealerCallback } from "./selfHealCallback";
 import {
@@ -21,10 +22,11 @@ export class AgentManager {
   constructor(
     router: AIRouter,
     selfHealerCallback?: SelfHealerCallback,
+    systemUsage?: SystemUsageManager,
   ) {
     this.selfHealerCallback =
       selfHealerCallback ??
-      createSelfHealerCallback(router, []);
+      createSelfHealerCallback(router, [], systemUsage);
   }
 
   setSelfHealerCallback(

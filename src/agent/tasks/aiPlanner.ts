@@ -1,5 +1,7 @@
 import { AIRequest } from "../../ai/types";
 import { AIRouter } from "../../ai/router";
+import { SystemUsageManager, getPriorityForSystem, estimateSystemCredits } from "../../ai/system-usage";
+import { canRunInternalOperation } from "../../core/load-manager";
 import {
   AgentTask,
   TaskStep,
@@ -53,6 +55,7 @@ const ALLOWED_ACTIONS = new Set([
 export async function planTask(
   router: AIRouter,
   goal: string,
+  systemUsage?: SystemUsageManager,
 ): Promise<AgentTask> {
   if (!goal.trim()) {
     throw new Error(
@@ -60,11 +63,26 @@ export async function planTask(
     );
   }
 
-  const request: AIRequest = {
-    messages: [
-      {
-        role: "system",
-        content: `
+  const priority = getPriorityForSystem("task-planner");
+  if (!canRunInternalOperation(priority)) {
+    throw new Error("System load too high. Try again later.");
+  }
+
+  const estimatedCredits = estimateSystemCredits("plan-task");
+  if (systemUsage) {
+    const check = systemUsage.canExecute("task-planner", priority, estimatedCredits);
+    if (!check.allowed) {
+      throw new Error(`Task planner deferred: ${check.reason}`);
+    }
+    systemUsage.acquire("task-planner");
+  }
+
+  try {
+    const request: AIRequest = {
+      messages: [
+        {
+          role: "system",
+          content: `
 You are AshenAI's task planner.
 
 Convert the user's goal into a SAFE,
@@ -109,64 +127,90 @@ Return:
 
 Return JSON only.
 `,
-      },
-      {
-        role: "user",
-        content: goal,
-      },
-    ],
-    temperature: 0.1,
-    maxTokens: 2000,
-  };
+        },
+        {
+          role: "user",
+          content: goal,
+        },
+      ],
+      temperature: 0.1,
+      maxTokens: 2000,
+    };
 
-  const response =
-    await router.generate(request);
+    const response =
+      await router.generate(request);
 
-  const parsed =
-    extractJSON(response.text) as PlannedTask;
+    if (systemUsage) {
+      systemUsage.record({
+        system: "task-planner",
+        operation: "plan",
+        provider: response.provider,
+        credits: estimatedCredits,
+        latencyMs: response.latencyMs,
+        success: true,
+      });
+    }
 
-  if (
-    !parsed ||
-    typeof parsed !== "object"
-  ) {
-    throw new Error(
-      "Invalid task plan.",
-    );
-  }
+    const parsed =
+      extractJSON(response.text) as PlannedTask;
 
-  if (
-    !Array.isArray(parsed.steps) ||
-    parsed.steps.length === 0
-  ) {
-    throw new Error(
-      "AI generated an empty task.",
-    );
-  }
-
-  if (parsed.steps.length > 8) {
-    throw new Error(
-      "AI generated too many task steps.",
-    );
-  }
-
-  validateTaskPlan(parsed.steps);
-
-  for (const step of parsed.steps) {
     if (
-      !step.title ||
-      !step.description ||
-      !ALLOWED_ACTIONS.has(
-        step.action,
-      )
+      !parsed ||
+      typeof parsed !== "object"
     ) {
       throw new Error(
-        `Unsafe or invalid task step: ${JSON.stringify(step)}`,
+        "Invalid task plan.",
       );
     }
-  }
 
-  return createTask(
-    parsed.goal || goal,
-    parsed.steps,
-  );
+    if (
+      !Array.isArray(parsed.steps) ||
+      parsed.steps.length === 0
+    ) {
+      throw new Error(
+        "AI generated an empty task.",
+      );
+    }
+
+    if (parsed.steps.length > 8) {
+      throw new Error(
+        "AI generated too many task steps.",
+      );
+    }
+
+    validateTaskPlan(parsed.steps);
+
+    for (const step of parsed.steps) {
+      if (
+        !step.title ||
+        !step.description ||
+        !ALLOWED_ACTIONS.has(
+          step.action,
+        )
+      ) {
+        throw new Error(
+          `Unsafe or invalid task step: ${JSON.stringify(step)}`,
+        );
+      }
+    }
+
+    return createTask(
+      parsed.goal || goal,
+      parsed.steps,
+    );
+  } catch (error) {
+    if (systemUsage) {
+      systemUsage.record({
+        system: "task-planner",
+        operation: "plan",
+        credits: estimatedCredits,
+        success: false,
+      });
+    }
+    throw error;
+  } finally {
+    if (systemUsage) {
+      systemUsage.release("task-planner");
+    }
+  }
 }

@@ -4,6 +4,7 @@ import {
   addEquipment,
   createEquipment,
 } from "./equipment";
+import { GAME_CONFIG } from "./config";
 
 export type WorldBossDefinition = {
   id: string;
@@ -83,8 +84,8 @@ export const WORLD_BOSSES: WorldBossDefinition[] = [
   },
 ];
 
-const BOSS_DURATION_MS = 60 * 60 * 1000;
-const ATTACK_COOLDOWN_MS = 30 * 1000;
+const BOSS_DURATION_MS = GAME_CONFIG.worldBoss.durationMs;
+const ATTACK_COOLDOWN_MS = GAME_CONFIG.worldBoss.attackCooldownMs;
 
 function randomInt(min: number, max: number): number {
   return Math.floor(
@@ -292,13 +293,7 @@ export async function claimWorldBossReward(
     ) + 1;
 
   const rankMultiplier =
-    rank === 1
-      ? 3
-      : rank === 2
-        ? 2
-        : rank === 3
-          ? 1.5
-          : 1;
+    GAME_CONFIG.worldBoss.rankMultipliers[rank] ?? 1;
 
   const coins = Math.floor(
     randomInt(

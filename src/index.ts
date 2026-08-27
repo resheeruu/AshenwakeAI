@@ -20,14 +20,30 @@ import { createSelfHealerCallback } from "./agent/selfHealCallback";
 import { taskEngine, initializeTaskEngine } from "./agent/tasks";
 import { messageRateLimiter } from "./security";
 import { config } from "./config/env";
+import { loadGuildConfig } from "./core/guild-config";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
 import { guardAIOutput } from "./security/output-guard";
 import { wrapUntrustedContent } from "./security/context";
+import { buildAdaptivePersonality } from "./ai/adaptive-personality";
+import { parseServerIntent } from "./discord/server-assistant";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
 import { ConversationMemory } from "./ai/memory";
 import { UserProfileMemory } from "./ai/user-profile";
+import { UsageManager } from "./ai/usage-manager";
+import { SystemUsageManager } from "./ai/system-usage";
+import { GuildKnowledge } from "./ai/knowledge";
+import { VisionHandler } from "./ai/vision";
+import { TicketManager } from "./tickets/ticket-manager";
+import { CaseManager } from "./moderation/cases";
+import { XPSystem } from "./community/xp-system";
+import { SuggestionManager } from "./community/suggestions";
+import { EventManager } from "./community/events";
+import { ReactionRoleManager } from "./community/reaction-roles";
+import { runHealthCheck } from "./core/health-checker";
+import { autoBackup } from "./core/backup-manager";
+import { checkLoad, recordRequest } from "./core/load-manager";
 
 import { AshenCommand } from "./commands/definitions";
 import { CommandHandler } from "./commands/handler";
@@ -85,6 +101,8 @@ import {
   buildStoppedMusicPanel,
   buildMusicControls,
 } from "./music/musicPanel";
+import { recordWorldEvent, checkLevelMilestone, announceWorldEvent } from "./games/world-events";
+import { updateQuestProgress } from "./games/quests";
 
 /* =====================================================
    DISCORD CLIENT
@@ -173,6 +191,16 @@ const router = new AIRouter(providers);
 const memory = new ConversationMemory();
 const userProfiles = new UserProfileMemory();
 const usageStats = new UsageStats();
+const usageManager = new UsageManager();
+const systemUsage = new SystemUsageManager();
+const knowledge = new GuildKnowledge();
+const vision = new VisionHandler(usageManager);
+const ticketManager = new TicketManager();
+const caseManager = new CaseManager();
+const xpSystem = new XPSystem();
+const suggestionManager = new SuggestionManager();
+const eventManager = new EventManager();
+const reactionRoleManager = new ReactionRoleManager();
 
 const usageStatsTimer = setInterval(
   () => usageStats.logSummary(),
@@ -181,8 +209,11 @@ const usageStatsTimer = setInterval(
 
 usageStatsTimer.unref();
 
+const backupTimer = setInterval(() => autoBackup(), 6 * 60 * 60 * 1000);
+backupTimer.unref();
+
 const commandHandler = new CommandHandler([], usageStats);
-const agentManager = new AgentManager(router);
+const agentManager = new AgentManager(router, undefined, systemUsage);
 
 // Task engine initializes after Discord READY.
 
@@ -192,7 +223,7 @@ const agentManager = new AgentManager(router);
    ===================================================== */
 
 const commands: AshenCommand[] = [
-  createAskCommand(router, memory),
+  createAskCommand(router, memory, usageManager),
   createGameCommand(),
   createResetCommand(memory),
   createHelpCommand(),
@@ -1272,8 +1303,13 @@ client.on(
 client.on(
   Events.MessageCreate,
   async (message) => {
+    const userId = message.author.id;
+    const channelId = message.channel.id;
+    const guildId = message.guild?.id || "";
+    let usageCheck: { allowed: boolean; reason?: string; credits: number; retryAfterMs?: number } = { allowed: true, credits: 0 };
+
     try {
-      console.log(`📨 MESSAGE EVENT: ${message.author.tag} -> ${message.content}`);
+      console.log(`📨 MESSAGE EVENT: userId=${userId} guildId=${guildId} channelId=${channelId} length=${message.content.length}`);
 
       /*
        * Never respond to bots.
@@ -1297,9 +1333,7 @@ client.on(
         return;
       }
 
-      console.log(
-        `📨 MessageCreate received: author=${message.author.tag} content=${JSON.stringify(message.content).slice(0, 200)}`
-      );
+      logger.debug(`Message received: userId=${userId} channelId=${channelId} length=${message.content.length}`);
 
       const botId = client.user?.id;
 
@@ -1312,6 +1346,18 @@ client.on(
 
       const isMention =
         message.mentions.users.has(botId);
+
+      /*
+       * Assistant channel restriction.
+       * When a guild has configured an assistantChannelId,
+       * only respond in that specific channel.
+       */
+      if (!isDM && message.guild) {
+        const guildConfig = loadGuildConfig(message.guild.id);
+        if (guildConfig.assistantChannelId && channelId !== guildConfig.assistantChannelId) {
+          return;
+        }
+      }
 
       /*
        * Check whether this message is replying
@@ -1346,11 +1392,9 @@ client.on(
         return;
       }
 
-      const userId = message.author.id;
-      const channelId = message.channel.id;
-
       // Record only messages that AshenAI actually handles.
       usageStats.recordMessage(userId);
+      recordRequest();
 
       /*
        * Remove AshenAI's mention.
@@ -1442,6 +1486,33 @@ client.on(
           "DISCORD CONVERSATION",
           rawInteractiveContent
         );
+
+      /*
+       * Server Assistant intent detection.
+       * Detects server management requests before AI processing.
+       * Shows confirmation for dangerous actions, provides guidance for safe ones.
+       */
+      if (!isDM && message.guild) {
+        const serverAction = parseServerIntent(content);
+        if (serverAction && serverAction.requiresConfirmation) {
+          const riskEmoji = serverAction.riskLevel === "critical" ? "🚨" : serverAction.riskLevel === "high" ? "⚠️" : "ℹ️";
+          await message.reply(
+            `${riskEmoji} **Server Action Detected:** ${serverAction.intent}\n` +
+            `Target: \`${serverAction.target || "N/A"}\`\n` +
+            `Risk: **${serverAction.riskLevel}**\n\n` +
+            `To confirm this action, use the appropriate slash command or ask me to proceed with full details.`
+          );
+          logger.info(`🔧 Server assistant intent detected: ${serverAction.intent} by ${message.author.tag}`);
+          return;
+        }
+        if (serverAction && !serverAction.requiresConfirmation) {
+          await message.reply(
+            `ℹ️ I can help with that: **${serverAction.intent}**.\n` +
+            `For safe actions like this, you can ask me to proceed and I'll handle it.`
+          );
+          return;
+        }
+      }
 
       /*
        * Natural-language server action detection.
@@ -1547,6 +1618,21 @@ client.on(
       }
 
       /*
+       * UsageManager: check limits before AI call.
+       */
+      usageCheck = usageManager.check(userId, guildId, "chat", content.length);
+
+      if (!usageCheck.allowed) {
+        const retrySeconds = usageCheck.retryAfterMs
+          ? Math.max(1, Math.ceil(usageCheck.retryAfterMs / 1000))
+          : 60;
+        await message.reply(
+          `⏳ ${usageCheck.reason === "daily_limit" ? "You've reached your daily AI limit." : usageCheck.reason === "monthly_limit" ? "You've reached your monthly AI limit." : "Request limit reached."} Try again in ${retrySeconds}s.`
+        );
+        return;
+      }
+
+      /*
        * Conversation memory.
        */
       const history =
@@ -1556,13 +1642,19 @@ client.on(
         );
 
       /*
+       * Adaptive personality based on user profile.
+       */
+      const userProfile = userProfiles.get(userId);
+      const personalityBlock = buildAdaptivePersonality(userProfile);
+
+      /*
        * AI context.
        */
       const messages = [
         {
           role: "system" as const,
 
-          content: ASHENAI_SYSTEM_PROMPT,
+          content: ASHENAI_SYSTEM_PROMPT + "\n\n" + personalityBlock,
         },
 
         ...history.map((entry) => ({
@@ -1629,6 +1721,19 @@ client.on(
       );
 
       /*
+       * Record usage after successful AI response.
+       */
+      usageManager.record({
+        userId,
+        guildId,
+        feature: "chat",
+        credits: usageCheck.credits,
+        provider: response.provider,
+        latencyMs: response.latencyMs,
+        success: true,
+      });
+
+      /*
        * Final application-level security check.
        * Never send raw AI output directly to Discord.
        */
@@ -1661,6 +1766,14 @@ client.on(
         message.author.id,
         "chat",
       );
+
+      usageManager.record({
+        userId,
+        guildId: message.guild?.id || "",
+        feature: "chat",
+        credits: usageCheck?.credits || 0,
+        success: false,
+      });
 
       logger.error(
         "❌ Interactive message response failed:",
@@ -1843,6 +1956,7 @@ const internalSupervisor = new InternalSupervisor({
   },
 });
 
+internalSupervisor.start();
 
 /*
  * Discord.js debug events are intentionally summarized.
@@ -2184,12 +2298,7 @@ async function startMusicAndDiscord(): Promise<void> {
      */
     startWebServer(router, () => ({
       discordReady: client.isReady(),
-      discordRecoveryActive,
-      discordConnectionAttempt,
-      discordLastReadyAt,
-      discordLastFailureAt,
-      discordLastFailureReason,
-    }));
+    }), usageManager, usageStats, undefined, memory, systemUsage);
 
     logger.info("🌐 Web server started. Waiting for Discord...");
     logger.info("🚀 AshenAI startup beginning...");

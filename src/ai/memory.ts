@@ -156,8 +156,9 @@ export class ConversationMemory {
         };
       }
 
+      const tmpPath = MEMORY_FILE + ".tmp";
       fs.writeFileSync(
-        MEMORY_FILE,
+        tmpPath,
         JSON.stringify(
           stored,
           null,
@@ -165,6 +166,7 @@ export class ConversationMemory {
         ),
         "utf8"
       );
+      fs.renameSync(tmpPath, MEMORY_FILE);
     } catch (error) {
       logger.warn(
         "⚠️ Could not save conversation memory:",

@@ -2,6 +2,8 @@ import path from "path";
 import { AIRouter } from "../ai/router";
 import { providers } from "../ai/providers";
 import { AIRequest, ChatMessage } from "../ai/types";
+import { SystemUsageManager, getPriorityForSystem, estimateSystemCredits } from "../ai/system-usage";
+import { canRunInternalOperation, getInternalCooldownMs } from "../core/load-manager";
 import {
   canUseTool,
   canWritePath,
@@ -53,6 +55,7 @@ function extractRepairJSON(text: string): RepairAction {
 export function createSelfHealerCallback(
   router: AIRouter,
   conversation: ChatMessage[],
+  systemUsage?: SystemUsageManager,
 ): (
   filePath: string,
   errorOutput: string,
@@ -60,14 +63,31 @@ export function createSelfHealerCallback(
   return async (filePath, errorOutput): Promise<boolean> => {
     console.log(`🧠 AshenAI is diagnosing: ${filePath}`);
 
-    const currentContent = await readFile(filePath);
+    const priority = getPriorityForSystem("self-healer");
+    if (!canRunInternalOperation(priority)) {
+      console.log("⏸️ Self-healer deferred: system load too high.");
+      return false;
+    }
 
-    const repairRequest: AIRequest = {
-      messages: [
-        ...conversation,
-        {
-          role: "user",
-          content: `SELF-HEAL REQUEST
+    const estimatedCredits = estimateSystemCredits("self-heal");
+    if (systemUsage) {
+      const check = systemUsage.canExecute("self-healer", priority, estimatedCredits);
+      if (!check.allowed) {
+        console.log(`⏸️ Self-healer deferred: ${check.reason}`);
+        return false;
+      }
+      systemUsage.acquire("self-healer");
+    }
+
+    try {
+      const currentContent = await readFile(filePath);
+
+      const repairRequest: AIRequest = {
+        messages: [
+          ...conversation,
+          {
+            role: "user",
+            content: `SELF-HEAL REQUEST
 
 A source file was changed and verification failed.
 
@@ -104,14 +124,24 @@ Return ONLY:
   "path": "${filePath}",
   "content": "COMPLETE CORRECTED FILE CONTENT"
 }`,
-        },
-      ],
-      temperature: 0.1,
-      maxTokens: 4096,
-    };
+          },
+        ],
+        temperature: 0.1,
+        maxTokens: 4096,
+      };
 
-    try {
       const response = await router.generate(repairRequest);
+
+      if (systemUsage) {
+        systemUsage.record({
+          system: "self-healer",
+          operation: "repair",
+          provider: response.provider,
+          credits: estimatedCredits,
+          latencyMs: response.latencyMs,
+          success: true,
+        });
+      }
 
       console.log(
         `🧾 Self-Healer response received (${response.text.length} chars)`,
@@ -136,11 +166,6 @@ Return ONLY:
         return false;
       }
 
-      /*
-       * Automatic repairs still pass through the normal security
-       * authorization layer. We explicitly use the FIX permission
-       * profile here rather than changing the global agent mode.
-       */
       if (!canUseTool("writeFile", "fix")) {
         console.log(
           "🛡️ Self-Healer write permission denied.",
@@ -182,11 +207,23 @@ Return ONLY:
 
       return true;
     } catch (error) {
+      if (systemUsage) {
+        systemUsage.record({
+          system: "self-healer",
+          operation: "repair",
+          credits: estimatedCredits,
+          success: false,
+        });
+      }
       console.log(
         "❌ Self-Healer repair error:",
         error instanceof Error ? error.message : String(error),
       );
       return false;
+    } finally {
+      if (systemUsage) {
+        systemUsage.release("self-healer");
+      }
     }
   };
 }

@@ -314,8 +314,9 @@ export class AIRouter {
         };
       }
 
+      const tmpPath = HEALTH_FILE + ".tmp";
       fs.writeFileSync(
-        HEALTH_FILE,
+        tmpPath,
         JSON.stringify(
           saved,
           null,
@@ -323,6 +324,7 @@ export class AIRouter {
         ),
         "utf8"
       );
+      fs.renameSync(tmpPath, HEALTH_FILE);
     } catch (error) {
       console.warn(
         "⚠️ Could not save provider history:",

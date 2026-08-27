@@ -107,9 +107,42 @@ export function unlockAvailableRegion(
 
   player.regionId = next.id;
 
+  if (!player.unlockedRegions) {
+    player.unlockedRegions = [];
+  }
+
+  if (!player.unlockedRegions.includes(next.id)) {
+    player.unlockedRegions.push(next.id);
+  }
+
   if (!player.titles.includes("region_pioneer")) {
     player.titles.push("region_pioneer");
   }
 
   return next;
+}
+
+export function isRegionUnlocked(
+  player: GamePlayer,
+  regionId: string,
+): boolean {
+  if (!player.unlockedRegions) {
+    return player.regionId === regionId || regionId === "ashen_village";
+  }
+
+  return player.unlockedRegions.includes(regionId);
+}
+
+export function setPlayerRegion(
+  player: GamePlayer,
+  regionId: string,
+): Region {
+  if (!isRegionUnlocked(player, regionId)) {
+    throw new Error("REGION_NOT_UNLOCKED");
+  }
+
+  const region = getRegion(regionId);
+  player.regionId = regionId;
+
+  return region;
 }

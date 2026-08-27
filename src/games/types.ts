@@ -4,7 +4,8 @@ export type Rarity =
   | "rare"
   | "epic"
   | "legendary"
-  | "mythic";
+  | "mythic"
+  | "divine";
 
 export type EquipmentSlot =
   | "weapon"
@@ -24,6 +25,54 @@ export interface Equipment {
   hp: number;
   luck: number;
   equipped: boolean;
+}
+
+export interface OwnedPet {
+  petId: string;
+  level: number;
+  xp: number;
+  evolved: boolean;
+  active: boolean;
+}
+
+export interface Quest {
+  id: string;
+  type: "daily" | "weekly" | "story" | "region" | "combat" | "dungeon" | "collection" | "achievement";
+  name: string;
+  description: string;
+  target: number;
+  progress: number;
+  rewardXp: number;
+  rewardCoins: number;
+  rewardEquipment?: string;
+  rewardTitle?: string;
+  rewardReputation?: number;
+  completed: boolean;
+  claimed: boolean;
+  regionId?: string;
+  expiresAt?: number;
+}
+
+export interface PlayerStatistics {
+  totalDamageDealt: number;
+  totalDamageTaken: number;
+  totalHealing: number;
+  bossesKilled: number;
+  worldBossesKilled: number;
+  dungeonsCompleted: number;
+  dungeonsFailed: number;
+  questsCompleted: number;
+  itemsSold: number;
+  itemsBought: number;
+  coinsEarned: number;
+  coinsSpent: number;
+  tradesCompleted: number;
+  gamblesPlayed: number;
+  gamblesWon: number;
+  highestDamage: number;
+  longestStreak: number;
+  totalPlayTimeMs: number;
+  lastActiveAt?: number;
 }
 
 export interface GamePlayer {
@@ -53,6 +102,7 @@ export interface GamePlayer {
   // Character
   classId?: string;
   regionId?: string;
+  unlockedRegions?: string[];
 
   // Ashen Duel
   hp: number;
@@ -67,6 +117,7 @@ export interface GamePlayer {
   deaths: number;
   reputation: number;
   titles: string[];
+  activeTitle?: string;
 
   // Hunt
   huntLastAt?: number;
@@ -79,6 +130,19 @@ export interface GamePlayer {
   // Inventory / equipment
   inventory: Record<string, number>;
   equipment: Equipment[];
+
+  // Pets
+  pets?: OwnedPet[];
+  activePetId?: string;
+
+  // Quests
+  quests?: Quest[];
+
+  // Detailed statistics
+  statistics?: PlayerStatistics;
+
+  // Guild
+  guildId?: string;
 
   // Boosts
   xpBoostActive?: boolean;

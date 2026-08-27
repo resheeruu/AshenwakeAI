@@ -10,6 +10,8 @@ import { ConversationMemory } from "../ai/memory";
 import { AshenCommand } from "./definitions";
 import { scanAshenAI } from "../diagnostics/health-scanner";
 import { generateOptimizations } from "../diagnostics/optimizer";
+import { config } from "../config/env";
+import { recordAudit } from "../security/audit";
 
 export function createDiagnoseCommand(
   client: Client,
@@ -26,6 +28,25 @@ export function createDiagnoseCommand(
       interaction: ChatInputCommandInteraction,
     ): Promise<void> {
       try {
+        const userId = interaction.user.id;
+        const isCreator = config.creator.discord === userId;
+        const isAdmin = config.admin.discordIds.includes(userId);
+        if (!isCreator && !isAdmin) {
+          await interaction.reply({
+            content: "❌ Only the bot owner or an admin can run /diagnose.",
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        recordAudit({
+          who: interaction.user.id,
+          whoName: interaction.user.tag,
+          what: "Ran diagnostics",
+          where: "discord",
+          result: "success",
+        });
+
         const discordReady = client.isReady();
         const ping = client.ws.ping;
 

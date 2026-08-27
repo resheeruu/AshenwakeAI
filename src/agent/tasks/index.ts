@@ -12,6 +12,7 @@ import {
   getProgress,
 } from "./planner";
 import { TaskExecutor } from "./executor";
+import { SystemUsageManager } from "../../ai/system-usage";
 
 export * from "./types";
 export * from "./planner";
@@ -53,12 +54,13 @@ export class AutonomousTaskEngine {
   async planAndRun(
     router: import("../../ai/router").AIRouter,
     goal: string,
+    systemUsage?: SystemUsageManager,
   ): Promise<AgentTask> {
     const { planTask } =
       await import("./aiPlanner");
 
     const planned =
-      await planTask(router, goal);
+      await planTask(router, goal, systemUsage);
 
     await upsertTask(planned);
 

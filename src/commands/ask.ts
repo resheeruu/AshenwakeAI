@@ -1,8 +1,8 @@
 import { logger } from "../logger";
 import {
-  UserRateLimiter,
   inspectUserInput,
 } from "../security";
+import { checkBoundary } from "../security/boundary";
 
 import {
   ChatInputCommandInteraction,
@@ -11,6 +11,7 @@ import {
 
 import { AIRouter } from "../ai/router";
 import { ConversationMemory } from "../ai/memory";
+import { UsageManager } from "../ai/usage-manager";
 import { AshenCommand } from "./definitions";
 import { config } from "../config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
@@ -34,22 +35,10 @@ function cleanResponse(text: string): string {
     "\n\n…(response shortened)";
 }
 
-function isInteractionUsable(
-  interaction: ChatInputCommandInteraction
-): boolean {
-  return !interaction.isRepliable() || !interaction.isCommand()
-    ? false
-    : true;
-}
-
-const askRateLimiter = new UserRateLimiter(
-  10,
-  60_000
-);
-
 export function createAskCommand(
   router: AIRouter,
-  memory: ConversationMemory
+  memory: ConversationMemory,
+  usageManager: UsageManager
 ): AshenCommand {
   return {
     data: new SlashCommandBuilder()
@@ -67,24 +56,29 @@ export function createAskCommand(
       interaction: ChatInputCommandInteraction
     ): Promise<void> {
 
-      const rateLimit = askRateLimiter.check(
-        interaction.user.id
-      );
+      const userId = interaction.user.id;
+      const guildId = interaction.guildId || "";
+      const prompt = interaction.options.getString("prompt", true).trim();
 
-      if (!rateLimit.allowed) {
-        const retrySeconds = Math.max(
-          1,
-          Math.ceil(rateLimit.retryAfterMs / 1000)
-        );
+      const usageCheck = usageManager.check(userId, guildId, "ask", prompt.length);
+
+      if (!usageCheck.allowed) {
+        const retrySeconds = usageCheck.retryAfterMs
+          ? Math.max(1, Math.ceil(usageCheck.retryAfterMs / 1000))
+          : 60;
+
+        const reasonText: Record<string, string> = {
+          cooldown: "You're on a brief cooldown.",
+          daily_limit: "You've reached your daily AI limit.",
+          monthly_limit: "You've reached your monthly AI limit.",
+          rate_limit: "You're sending requests too quickly.",
+          burst_limit: "Too many requests in a short time.",
+          concurrent_limit: "Too many concurrent requests. Please wait.",
+        };
 
         await interaction.editReply(
-          `⏳ You're sending /ask requests too quickly. Please try again in ${retrySeconds}s.`
+          `⏳ ${reasonText[usageCheck.reason || ""] || "Request limit reached."} Try again in ${retrySeconds}s.`
         );
-
-        logger.warn(
-          `🛑 /ask rate limit blocked ${interaction.user.tag} (${interaction.user.id}).`
-        );
-
         return;
       }
 
@@ -117,8 +111,38 @@ export function createAskCommand(
           true
         ).trim();
 
+        // Boundary behavior (single source, no duplication)
+        const boundary = checkBoundary(prompt);
+        if (boundary.matched && boundary.response) {
+          await interaction.editReply(boundary.response);
+          return;
+        }
+
         // Security boundary: inspect untrusted Discord input before AI processing.
         const security = inspectUserInput(prompt);
+
+        // Boundary behavior: calmly handle excessive patterns
+        const lower = prompt.toLowerCase().trim();
+
+        // "I know" detection
+        if (/^\s*i\s+know\s*$/.test(lower)) {
+          await interaction.editReply("I know what? Tell me.");
+          return;
+        }
+
+        // Abuse boundary: calm refusal + redirect
+        if (/\b(useless|stupid|dumb|idiot|garbage|trash)\b/.test(lower)) {
+          await interaction.editReply(
+            "I'm here to help. If something wasn't clear, tell me what confused you and I'll re-explain."
+          );
+          return;
+        }
+
+        // "Fair enough" reciprocation (playful)
+        if (/\bfair enough\b/.test(lower)) {
+          await interaction.editReply("Glad we're on the same page. What's on your mind?");
+          return;
+        }
 
         if (security.decision === "BLOCK") {
           await interaction.editReply(
@@ -136,7 +160,7 @@ export function createAskCommand(
         }
 
         logger.debug(
-          `📩 /ask from ${interaction.user.tag}: ${prompt}`
+          `📩 /ask: userId=${userId} guildId=${guildId} promptLength=${prompt.length}`
         );
 
         /*
@@ -165,9 +189,8 @@ export function createAskCommand(
         /*
          * Conversation memory
          */
-        const userId = interaction.user.id;
 
-        const history = memory.get(userId);
+        const history = memory.get(userId, interaction.channelId);
 
         logger.debug(
           `🧠 /ask memory messages: ${history.length}`
@@ -232,6 +255,16 @@ export function createAskCommand(
           );
         }
 
+        usageManager.record({
+          userId,
+          guildId,
+          feature: "ask",
+          credits: usageCheck.credits,
+          provider: response.provider,
+          latencyMs: response.latencyMs,
+          success: true,
+        });
+
         /*
          * Final application-level security check.
          * Never send raw AI output directly to Discord.
@@ -255,7 +288,8 @@ export function createAskCommand(
           {
             role: "user",
             content: prompt,
-          }
+          },
+          interaction.channelId
         );
 
         memory.add(
@@ -263,7 +297,8 @@ export function createAskCommand(
           {
             role: "assistant",
             content: guarded.text,
-          }
+          },
+          interaction.channelId
         );
 
         /*
@@ -280,6 +315,14 @@ export function createAskCommand(
           "❌ /ask failed:",
           error
         );
+
+        usageManager.record({
+          userId,
+          guildId,
+          feature: "ask",
+          credits: usageCheck.credits,
+          success: false,
+        });
 
         /*
          * The interaction may have expired while the AI router

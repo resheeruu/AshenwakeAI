@@ -115,15 +115,21 @@ export class UsageStats {
   }
 
   private save(): void {
-    fs.mkdirSync(DATA_DIR, {
-      recursive: true,
-    });
+    try {
+      fs.mkdirSync(DATA_DIR, {
+        recursive: true,
+      });
 
-    fs.writeFileSync(
-      STATS_FILE,
-      JSON.stringify(this.stats, null, 2),
-      "utf8",
-    );
+      const tmpPath = STATS_FILE + ".tmp";
+      fs.writeFileSync(
+        tmpPath,
+        JSON.stringify(this.stats, null, 2),
+        "utf8",
+      );
+      fs.renameSync(tmpPath, STATS_FILE);
+    } catch {
+      // Silently ignore write failures to avoid crashing the caller.
+    }
   }
 
   recordUser(userId: string): void {

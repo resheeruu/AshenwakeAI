@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { GamePlayer } from "./types";
 import { withGlobalLock, withPlayerLock } from "./lock";
+import { GAME_CONFIG } from "./config";
 
 export type CasinoGame =
   | "slots"
@@ -9,7 +10,8 @@ export type CasinoGame =
   | "dice"
   | "blackjack"
   | "crystal"
-  | "chest";
+  | "chest"
+  | "jackpot";
 
 export type CasinoResult = {
   game: CasinoGame;
@@ -25,12 +27,11 @@ export type CasinoResult = {
 const DATA_DIR = path.join(process.cwd(), "data");
 const JACKPOT_FILE = path.join(DATA_DIR, "casino-jackpot.json");
 
-const MIN_WAGER = 10;
-const MAX_WAGER = 100_000;
-const DEFAULT_JACKPOT = 10_000;
+const MIN_WAGER = GAME_CONFIG.casino.minWager;
+const MAX_WAGER = GAME_CONFIG.casino.maxWager;
+const DEFAULT_JACKPOT: number = GAME_CONFIG.casino.defaultJackpot;
 
-// 5% of every casino wager feeds the jackpot.
-const JACKPOT_RATE = 0.05;
+const JACKPOT_RATE = GAME_CONFIG.casino.jackpotRate;
 
 const randomInt = (min: number, max: number): number =>
   Math.floor(Math.random() * (max - min + 1)) + min;
@@ -424,6 +425,40 @@ export async function playCasino(
       message =
         "📦 **Empty Chest!**\n" +
         "Nothing but dust.";
+    }
+  }
+
+  if (game === "jackpot") {
+    const roll = Math.random();
+
+    if (roll < 0.005) {
+      const jackpot = await getJackpot();
+      payout = jackpot;
+      won = true;
+
+      await setJackpot(DEFAULT_JACKPOT);
+
+      message =
+        `🔥 **MEGA JACKPOT!**\n` +
+        `💰 You won **${jackpot.toLocaleString()} coins**!`;
+    } else if (roll < 0.05) {
+      payout = wager * 10;
+      won = true;
+
+      message =
+        "🎰 **BIG WIN!**\n" +
+        "The jackpot wheel stops on a multiplier!";
+    } else if (roll < 0.20) {
+      payout = wager * 3;
+      won = true;
+
+      message =
+        "🎰 **Nice spin!**\n" +
+        "You win a small prize.";
+    } else {
+      message =
+        "🎰 **No luck this time.**\n" +
+        "The jackpot wheel stops on nothing.";
     }
   }
 

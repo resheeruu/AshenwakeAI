@@ -19,7 +19,7 @@ export function createResetCommand(
     ): Promise<void> {
       const userId = interaction.user.id;
 
-      memory.reset(userId);
+      memory.reset(userId, interaction.channelId);
 
       await interaction.editReply({
         content:

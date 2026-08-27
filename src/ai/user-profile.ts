@@ -81,11 +81,13 @@ export class UserProfileMemory {
         stored[userId] = profile;
       }
 
+      const tmpPath = PROFILE_FILE + ".tmp";
       fs.writeFileSync(
-        PROFILE_FILE,
+        tmpPath,
         JSON.stringify(stored, null, 2),
         "utf8",
       );
+      fs.renameSync(tmpPath, PROFILE_FILE);
     } catch (error) {
       logger.warn(
         "⚠️ Could not save user profiles:",

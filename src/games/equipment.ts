@@ -1,4 +1,5 @@
 import { Equipment, EquipmentSlot, GamePlayer, Rarity } from "./types";
+import { GAME_CONFIG } from "./config";
 
 const RARITIES: Rarity[] = [
   "common",
@@ -7,16 +8,8 @@ const RARITIES: Rarity[] = [
   "epic",
   "legendary",
   "mythic",
+  "divine",
 ];
-
-const RARITY_MULTIPLIER: Record<Rarity, number> = {
-  common: 1,
-  uncommon: 1.25,
-  rare: 1.6,
-  epic: 2.1,
-  legendary: 2.8,
-  mythic: 3.8,
-};
 
 const SLOT_NAMES: Record<EquipmentSlot, string> = {
   weapon: "Weapon",
@@ -42,12 +35,13 @@ function randomInt(min: number, max: number): number {
 
 function rollRarity(): Rarity {
   const roll = Math.random();
+  const chances = GAME_CONFIG.rarityDropChances;
 
-  if (roll < 0.01) return "mythic";
-  if (roll < 0.04) return "legendary";
-  if (roll < 0.10) return "epic";
-  if (roll < 0.25) return "rare";
-  if (roll < 0.50) return "uncommon";
+  let cumulative = 0;
+  for (const rarity of RARITIES) {
+    cumulative += chances[rarity];
+    if (roll < cumulative) return rarity;
+  }
 
   return "common";
 }
@@ -123,7 +117,7 @@ export function createEquipment(
       ? levelOrRarity
       : forcedRarity ?? rollRarity();
 
-  const multiplier = RARITY_MULTIPLIER[rarity];
+  const multiplier = GAME_CONFIG.rarityMultipliers[rarity];
 
   const base = basePowerForLevel(playerLevel);
 
@@ -173,11 +167,13 @@ export function createEquipment(
       break;
   }
 
+  const slotName = SLOT_NAMES[slot] ?? slot;
+
   return {
     id: `${slot}_${rarity}_${Date.now()}_${Math.random()
       .toString(36)
       .slice(2, 8)}`,
-    name: `${rarity} ${slot}`,
+    name: `${rarity} ${slotName}`,
     slot,
     rarity,
     attack,
@@ -264,7 +260,7 @@ export function getEquipmentSummary(player: GamePlayer): string {
     .join("\n");
 }
 
-export { RARITIES, RARITY_MULTIPLIER, SLOT_NAMES, SLOT_EMOJIS };
+export { RARITIES, SLOT_NAMES, SLOT_EMOJIS };
 
     
 export function getEquipmentStats(player: GamePlayer): {
