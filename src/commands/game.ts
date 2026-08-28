@@ -1487,7 +1487,7 @@ export function createGameCommand(): AshenCommand {
             await updatePlayer(player);
             await interaction.editReply(`${def?.emoji ?? "🐾"} **${def?.name ?? pet.petId}** is now your active pet!`);
           } catch (error) {
-            await interaction.editReply(`❌ ${error instanceof Error ? error.message : "Failed to set pet."}`);
+            await interaction.editReply(`❌ Failed to set pet. The issue has been logged.`);
           }
           return;
         }
@@ -1558,7 +1558,7 @@ export function createGameCommand(): AshenCommand {
             await createDungeonState(state);
             await interaction.editReply(`🏰 Party created for **${DUNGEONS.find((d) => d.id === dungeonId)?.name ?? dungeonId}**! Party ID: \`${state.id}\``);
           } catch (error) {
-            await interaction.editReply(`❌ ${error instanceof Error ? error.message : "Failed to create party."}`);
+            await interaction.editReply(`❌ Failed to create party. The issue has been logged.`);
           }
           return;
         }
@@ -1574,7 +1574,7 @@ export function createGameCommand(): AshenCommand {
             await updateDungeonState(active);
             await interaction.editReply("🏰 Dungeon started! Use /game dungeon attack to fight!");
           } catch (error) {
-            await interaction.editReply(`❌ ${error instanceof Error ? error.message : "Failed to start dungeon."}`);
+            await interaction.editReply(`❌ Failed to start dungeon. The issue has been logged.`);
           }
           return;
         }
@@ -1607,7 +1607,7 @@ export function createGameCommand(): AshenCommand {
 
             await interaction.editReply({ embeds: [embed] });
           } catch (error) {
-            await interaction.editReply(`❌ ${error instanceof Error ? error.message : "Failed."}`);
+            await interaction.editReply(`❌ Failed. The issue has been logged.`);
           }
           return;
         }
@@ -1631,7 +1631,7 @@ export function createGameCommand(): AshenCommand {
 
             await interaction.editReply({ embeds: [embed] });
           } catch (error) {
-            await interaction.editReply(`❌ ${error instanceof Error ? error.message : "Failed to claim reward."}`);
+            await interaction.editReply(`❌ Failed to claim reward. The issue has been logged.`);
           }
           return;
         }
@@ -1676,7 +1676,7 @@ export function createGameCommand(): AshenCommand {
 
           await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-          await interaction.editReply(`❌ ${error instanceof Error ? error.message : "Cannot attack world boss."}`);
+          await interaction.editReply(`❌ Cannot attack world boss. The issue has been logged.`);
         }
         return;
       }
@@ -1711,7 +1711,7 @@ export function createGameCommand(): AshenCommand {
 
           await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-          await interaction.editReply(`❌ ${error instanceof Error ? error.message : "Casino error."}`);
+          await interaction.editReply(`❌ Casino error. The issue has been logged.`);
         }
         return;
       }

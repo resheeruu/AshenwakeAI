@@ -277,8 +277,13 @@ export function validateSecurityConfig(): void {
     );
   }
 
-  // Optional: session secret
+  // Optional: session secret (required in production for audit integrity)
   if (!process.env.SESSION_SECRET?.trim()) {
-    logger.warn("SESSION_SECRET not set — using default session handling");
+    if (process.env.NODE_ENV === "production") {
+      logger.fatal("SESSION_SECRET is required in production.");
+      process.exit(1);
+    } else {
+      logger.warn("SESSION_SECRET not set — using ephemeral fallback for audit signatures");
+    }
   }
 }

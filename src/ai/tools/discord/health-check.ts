@@ -57,7 +57,7 @@ export function createHealthCheckTool(): ToolDefinition {
       } catch (error) {
         return {
           status: "error",
-          message: `Failed to run health check: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Failed to run health check. The issue has been logged.`,
         };
       }
     },

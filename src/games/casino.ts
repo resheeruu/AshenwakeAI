@@ -462,6 +462,32 @@ export async function playCasino(
     }
   }
 
+  if (game === "blackjack") {
+    const playerCard = randomInt(1, 11);
+    const dealerCard = randomInt(1, 11);
+
+    if (playerCard > dealerCard) {
+      won = true;
+      payout = wager * 2;
+      message =
+        `🃏 Your hand: **${playerCard}**\n` +
+        `🃏 Dealer: **${dealerCard}**\n\n` +
+        "🎉 **Blackjack win!**";
+    } else if (playerCard === dealerCard) {
+      won = false;
+      payout = wager;
+      message =
+        `🃏 Your hand: **${playerCard}**\n` +
+        `🃏 Dealer: **${dealerCard}**\n\n` +
+        "🤝 **Push — your wager is returned.**";
+    } else {
+      message =
+        `🃏 Your hand: **${playerCard}**\n` +
+        `🃏 Dealer: **${dealerCard}**\n\n` +
+        "💀 **Dealer wins.**";
+    }
+  }
+
   applyCasinoResult(
     player,
     wager,

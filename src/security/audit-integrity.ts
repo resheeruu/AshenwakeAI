@@ -6,6 +6,7 @@
  * entry's signature forming a chain. Tampering with any entry breaks the chain.
  *
  * U13: Audit log integrity with backward compatibility for pre-U13 entries.
+ * U15: Production requires strong SESSION_SECRET; startup fails if missing.
  */
 
 import crypto from "node:crypto";
@@ -17,9 +18,34 @@ import crypto from "node:crypto";
 const INTEGRITY_CONTEXT = "ashenai-audit-integrity-v1";
 
 let integrityKey: Buffer | null = null;
+let keyValidated = false;
+
+function validateKeyForProduction(): void {
+  if (keyValidated) return;
+  keyValidated = true;
+
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 16) {
+    const isProduction = process.env.NODE_ENV === "production";
+    if (isProduction) {
+      console.error(
+        "[FATAL] SESSION_SECRET is required in production (minimum 16 characters). " +
+        "Audit log integrity cannot be guaranteed without a strong secret."
+      );
+      process.exit(1);
+    } else {
+      console.warn(
+        "[WARN] SESSION_SECRET not set or too short — audit signatures use a weaker fallback key. " +
+        "Set SESSION_SECRET for production deployments."
+      );
+    }
+  }
+}
 
 function getIntegrityKey(): Buffer {
   if (integrityKey) return integrityKey;
+
+  validateKeyForProduction();
 
   const secret = process.env.SESSION_SECRET;
   if (secret && secret.length >= 16) {
@@ -28,13 +54,13 @@ function getIntegrityKey(): Buffer {
       .update(INTEGRITY_CONTEXT)
       .digest();
   } else {
-    // Fallback: use a deterministic key derived from hostname + context
-    // This is less secure than SESSION_SECRET but still provides tamper detection
-    const fallback = crypto
-      .createHash("sha256")
-      .update(INTEGRITY_CONTEXT + (process.env.HOSTNAME || "ashenai-fallback"))
-      .digest("hex");
-    integrityKey = Buffer.from(fallback, "hex");
+    // Fallback: use a random key generated at startup.
+    // This provides per-process tamper detection but does NOT
+    // survive restarts (entries signed before restart cannot be verified).
+    console.warn(
+      "[WARN] Audit integrity using ephemeral fallback key — signatures are valid only for this process lifetime."
+    );
+    integrityKey = crypto.randomBytes(32);
   }
 
   return integrityKey;

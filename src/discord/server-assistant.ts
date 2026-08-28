@@ -197,7 +197,7 @@ export async function executeServerAction(
     });
     return {
       success: false,
-      message: `❌ Failed to execute ${action.action}: ${error instanceof Error ? error.message : "unknown error"}`,
+      message: `❌ Failed to execute ${action.action}.`,
     };
   }
 }

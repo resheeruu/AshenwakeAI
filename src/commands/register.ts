@@ -33,16 +33,21 @@ export async function syncCommands(
     `⚡ Synchronizing ${commandData.length} global slash commands...`,
   );
 
-  await rest.put(
-    Routes.applicationCommands(
-      config.discord.clientId,
-    ),
-    {
-      body: commandData,
-    },
-  );
+  try {
+    await rest.put(
+      Routes.applicationCommands(
+        config.discord.clientId,
+      ),
+      {
+        body: commandData,
+      },
+    );
 
-  console.log(
-    `✅ Global commands synchronized: ${commandData.length}`,
-  );
+    console.log(
+      `✅ Global commands synchronized: ${commandData.length}`,
+    );
+  } catch (error) {
+    console.error("❌ Failed to synchronize global commands:", error);
+    console.error("⚠️ Bot will continue with existing commands.");
+  }
 }

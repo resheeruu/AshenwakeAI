@@ -281,11 +281,10 @@ export async function executeRenameChannel(
 
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`rename_channel execution failed: ${msg}`);
+    logger.error(`rename_channel execution failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "error",
-      message: `❌ Rename failed: ${msg}`,
+      message: `❌ Rename failed. The issue has been logged.`,
     };
   }
 }

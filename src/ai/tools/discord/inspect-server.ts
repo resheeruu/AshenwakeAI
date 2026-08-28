@@ -108,7 +108,7 @@ export function createInspectServerTool(getClient: () => Client | null): ToolDef
       } catch (error) {
         return {
           status: "error",
-          message: `Failed to inspect server: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Failed to inspect server. The issue has been logged.`,
         };
       }
     },

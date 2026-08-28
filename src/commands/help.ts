@@ -129,6 +129,7 @@ export function createHelpCommand(): AshenCommand {
     async execute(
       interaction: ChatInputCommandInteraction,
     ): Promise<void> {
+      try {
       const member = interaction.member;
       const isOwner = member && typeof member.permissions === "string"
         ? false
@@ -178,6 +179,16 @@ export function createHelpCommand(): AshenCommand {
       lines.push("*Just mention me with your question and I'll help!*");
 
       await interaction.editReply({ content: lines.join("\n") });
+      } catch (error) {
+        console.error("❌ /help failed:", error);
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply("❌ Help command failed. Check the Termux logs.");
+          }
+        } catch (replyError) {
+          console.error("❌ Could not edit /help response:", replyError);
+        }
+      }
     },
   };
 }

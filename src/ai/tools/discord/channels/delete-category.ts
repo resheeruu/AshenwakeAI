@@ -178,8 +178,7 @@ export async function executeDeleteCategory(
     );
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`delete_category execution failed: ${msg}`);
-    return { status: "error", message: `❌ Delete failed: ${msg}` };
+    logger.error(`delete_category execution failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { status: "error", message: `❌ Delete failed. The issue has been logged.` };
   }
 }

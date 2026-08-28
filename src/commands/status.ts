@@ -1,6 +1,8 @@
 import {
   ChatInputCommandInteraction,
+  GuildMember,
   MessageFlags,
+  PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
 
@@ -30,6 +32,14 @@ export function createStatusCommand(
       const health = router.getHealth();
       const stats = memory.stats();
       const agentStatus = agentManager?.getStatus() ?? { status: "offline" };
+
+      const member = interaction.member;
+      const isAuthorized = !member || typeof member.permissions === "string"
+        ? false
+        : member && "permissions" in member
+          ? ((member.permissions as any).has?.(PermissionFlagsBits.Administrator) ||
+            (member.permissions as any).has?.(PermissionFlagsBits.ModerateMembers)) ?? false
+          : false;
 
       const tested = health
         .filter(
@@ -196,6 +206,24 @@ export function createStatusCommand(
               )
               .join("\n")
           : "None";
+
+      if (!isAuthorized) {
+        const safeContent = [
+          "🟢 **AshenAI Status**",
+          "",
+          "🤖 **Bot:** Online",
+          `🧠 **AI Agent:** ${agentStatus.status === "online" ? "Online" : agentStatus.status}`,
+          "⚡ **System:** Operational",
+          `🧠 **AI Providers:** ${providers.length} available`,
+          `💬 **Conversations:** ${stats.conversations}`,
+          `📝 **Messages:** ${stats.messages}`,
+        ].join("\n");
+
+        await interaction.editReply({
+          content: safeContent,
+        });
+        return;
+      }
 
       const content = [
         "🟢 **AshenAI Status**",

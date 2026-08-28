@@ -259,13 +259,8 @@ export async function handleMusicCommand(
         "Music command error:",
       );
 
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : String(error);
-
       await message.reply(
-        `❌ I couldn't play that track.\n\`${errorMessage.slice(0, 500)}\``,
+        `❌ I couldn't play that track. The issue has been logged.`,
       );
 
       return true;

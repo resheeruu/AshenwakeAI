@@ -139,7 +139,7 @@ export async function buildFromTemplate(
     });
     return {
       success: false,
-      message: `❌ Failed to build server: ${error instanceof Error ? error.message : "unknown error"}`,
+      message: "❌ Failed to build server.",
       details,
     };
   }

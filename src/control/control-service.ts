@@ -248,7 +248,8 @@ export function updateGuildConfig(guildId: string, updates: Partial<GuildConfig>
     });
     return { success: true, message: `Guild config updated for ${guildId}` };
   } catch (error) {
-    return { success: false, message: `Failed to update guild config: ${error instanceof Error ? error.message : String(error)}` };
+    console.error("[control] saveGuildConfig failed:", error);
+    return { success: false, message: "Failed to update guild config." };
   }
 }
 

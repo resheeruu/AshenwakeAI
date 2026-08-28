@@ -368,14 +368,13 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
       `Tool confirmation executed: ${plan.toolName} [${result.status}] guild=${plan.guildId} by=${interaction.user.id} (${durationMs}ms)`,
     );
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`Tool confirmation execution failed: ${plan.toolName} — ${msg}`);
+    logger.error(`Tool confirmation execution failed: ${plan.toolName} — ${error instanceof Error ? error.message : String(error)}`);
     removePendingPlan(planId);
     toolRateLimiter.release(plan.guildId, plan.requesterId, planId);
 
     try {
       await interaction.editReply({
-        content: `❌ Execution failed: ${msg}`,
+        content: `❌ Execution failed. The issue has been logged.`,
       });
     } catch {
       // Interaction may have been deleted

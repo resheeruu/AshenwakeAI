@@ -276,13 +276,8 @@ export function createTaskCommand(
           "❌ Unknown task operation.",
         );
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : String(error);
-
         await interaction.editReply(
-          `❌ Task error: ${message}`.slice(
+          `❌ Task error. The issue has been logged.`.slice(
             0,
             MAX,
           ),

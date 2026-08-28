@@ -67,7 +67,7 @@ export function createInspectAIConfigTool(): ToolDefinition {
       } catch (error) {
         return {
           status: "error",
-          message: `Failed to inspect AI config: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Failed to inspect AI config. The issue has been logged.`,
         };
       }
     },

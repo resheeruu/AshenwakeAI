@@ -318,8 +318,7 @@ export async function executeEditChannel(
     );
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`edit_channel execution failed: ${msg}`);
-    return { status: "error", message: `❌ Edit failed: ${msg}` };
+    logger.error(`edit_channel execution failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { status: "error", message: `❌ Edit failed. The issue has been logged.` };
   }
 }

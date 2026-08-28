@@ -11,6 +11,22 @@ import {
   canModerate,
   canTarget,
 } from "../discord/moderation";
+import { recordAudit } from "../security/audit";
+import { UserRateLimiter } from "../security/rate-limit";
+
+const moderationRateLimiter = new UserRateLimiter(5, 60_000);
+
+function checkModerationRateLimit(interaction: ChatInputCommandInteraction): boolean {
+  const result = moderationRateLimiter.check(interaction.user.id);
+  if (!result.allowed) {
+    const seconds = Math.ceil(result.retryAfterMs / 1000);
+    interaction.editReply(
+      `⚠️ Rate limit exceeded. Please wait ${seconds} second(s) before using moderation commands again.`
+    ).catch(() => {});
+    return false;
+  }
+  return true;
+}
 
 export function createWarnCommand(): AshenCommand {
   const data = new SlashCommandBuilder()
@@ -40,6 +56,8 @@ export function createWarnCommand(): AshenCommand {
         );
         return;
       }
+
+      if (!checkModerationRateLimit(interaction)) return;
 
       const requester = interaction.member as GuildMember;
 
@@ -98,6 +116,15 @@ export function createWarnCommand(): AshenCommand {
         `Warning ID: ${warning.id}\n` +
         `Moderator: ${requester.user.tag}`
       );
+
+      recordAudit({
+        who: requester.id,
+        whoName: requester.user.tag,
+        what: `Warned user ${target.user.tag} (${target.id}): ${reason}`,
+        where: "discord",
+        guildId: interaction.guild.id,
+        result: "success",
+      });
     },
   };
 }
@@ -207,6 +234,8 @@ export function createTimeoutCommand(): AshenCommand {
         return;
       }
 
+      if (!checkModerationRateLimit(interaction)) return;
+
       const requester = interaction.member as GuildMember;
 
       if (
@@ -271,10 +300,28 @@ export function createTimeoutCommand(): AshenCommand {
           `Reason: ${reason}\n` +
           `Moderator: ${requester.user.tag}`
         );
+
+        recordAudit({
+          who: requester.id,
+          whoName: requester.user.tag,
+          what: `Timed out user ${target.user.tag} (${target.id}) for ${minutes} minutes: ${reason}`,
+          where: "discord",
+          guildId: interaction.guild.id,
+          result: "success",
+        });
       } catch (error) {
         await interaction.editReply(
           "❌ Discord rejected the timeout. Check my role position and permissions."
         );
+
+        recordAudit({
+          who: requester.id,
+          whoName: requester.user.tag,
+          what: `Failed timeout for user ${target.user.tag} (${target.id})`,
+          where: "discord",
+          guildId: interaction.guild.id,
+          result: "failure",
+        });
       }
     },
   };
@@ -308,6 +355,8 @@ export function createUntimeoutCommand(): AshenCommand {
         );
         return;
       }
+
+      if (!checkModerationRateLimit(interaction)) return;
 
       const requester = interaction.member as GuildMember;
 
@@ -371,10 +420,28 @@ export function createUntimeoutCommand(): AshenCommand {
           `Reason: ${reason}\n` +
           `Moderator: ${requester.user.tag}`
         );
+
+        recordAudit({
+          who: requester.id,
+          whoName: requester.user.tag,
+          what: `Removed timeout for user ${target.user.tag} (${target.id}): ${reason}`,
+          where: "discord",
+          guildId: interaction.guild.id,
+          result: "success",
+        });
       } catch {
         await interaction.editReply(
           "❌ Discord rejected the action. Check my role position and permissions."
         );
+
+        recordAudit({
+          who: requester.id,
+          whoName: requester.user.tag,
+          what: `Failed to remove timeout for user ${target.user.tag} (${target.id})`,
+          where: "discord",
+          guildId: interaction.guild.id,
+          result: "failure",
+        });
       }
     },
   };

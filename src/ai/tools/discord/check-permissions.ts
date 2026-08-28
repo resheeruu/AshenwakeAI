@@ -126,7 +126,7 @@ export function createCheckPermissionsTool(getClient: () => Client | null): Tool
       } catch (error) {
         return {
           status: "error",
-          message: `Failed to check permissions: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Failed to check permissions. The issue has been logged.`,
         };
       }
     },

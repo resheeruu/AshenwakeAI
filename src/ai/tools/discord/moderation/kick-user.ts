@@ -211,11 +211,10 @@ export async function executeKickUserPlan(
 
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`kick_user execution failed: ${msg}`);
+    logger.error(`kick_user execution failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "error",
-      message: `❌ Discord rejected the kick. Check my role position and permissions. (${msg})`,
+      message: `❌ Discord rejected the kick. Check my role position and permissions. The issue has been logged.`,
     };
   }
 }

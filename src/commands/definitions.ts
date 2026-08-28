@@ -70,16 +70,13 @@ export const commandBuilders: CommandBuilder[] = [
       subcommand
         .setName("ratelimit")
         .setDescription("Show rate limit status for a user")
-        .addUserOption((option) =>
-          option.setName("user").setDescription("Target user").setRequired(true)
-        )
     )
     .addSubcommand((subcommand) =>
       subcommand
         .setName("resetuser")
         .setDescription("Reset rate limits for a user")
-        .addUserOption((option) =>
-          option.setName("user").setDescription("Target user").setRequired(true)
+        .addStringOption((option) =>
+          option.setName("user_id").setDescription("Target user ID").setRequired(true)
         )
     ),
 ];

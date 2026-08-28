@@ -335,11 +335,10 @@ export async function executeCreateChannel(
 
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`create_channel execution failed: ${msg}`);
+    logger.error(`create_channel execution failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "error",
-      message: `❌ Channel creation failed: ${msg}`,
+      message: `❌ Channel creation failed. The issue has been logged.`,
     };
   }
 }

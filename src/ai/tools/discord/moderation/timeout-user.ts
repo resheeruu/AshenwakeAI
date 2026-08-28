@@ -239,11 +239,10 @@ export async function executeTimeoutUserPlan(
 
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`timeout_user execution failed: ${msg}`);
+    logger.error(`timeout_user execution failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "error",
-      message: `❌ Discord rejected the timeout. Check my role position and permissions. (${msg})`,
+      message: `❌ Discord rejected the timeout. Check my role position and permissions. The issue has been logged.`,
     };
   }
 }

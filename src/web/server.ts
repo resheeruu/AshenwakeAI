@@ -233,7 +233,7 @@ app.post("/auth/login", (req: Request, res: Response) => {
   res.json({ ok: true, user: { username }, csrfToken });
 });
 
-app.post("/auth/logout", (req: Request, res: Response) => {
+app.post("/auth/logout", requireCsrf, (req: Request, res: Response) => {
   const sessionId = getSessionFromCookie(req.headers.cookie);
   if (sessionId) destroySession(sessionId);
   clearSessionCookie(res);

@@ -6,6 +6,8 @@
  * may use tools that can inspect or modify the project.
  */
 
+import path from "node:path";
+
 export type ToolAccess =
   | "public"
   | "agent"
@@ -55,10 +57,52 @@ const FIX_TOOLS = new Set([
   "installPackage",
 ]);
 
+/**
+ * Normalizes a file path to prevent traversal attacks.
+ * Resolves "..", removes redundant separators, and strips leading slashes.
+ * Returns null for absolute paths (outside project root).
+ */
+function normalizePath(filePath: string): string | null {
+  const raw = String(filePath ?? "").replace(/\\/g, "/");
+
+  // Block absolute paths
+  if (raw.startsWith("/") || /^[a-zA-Z]:/.test(raw)) {
+    return null;
+  }
+
+  // Decode percent-encoded traversal sequences
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    // If decoding fails, use the raw value
+  }
+
+  // Block null bytes
+  if (decoded.includes("\0")) {
+    return null;
+  }
+
+  // Normalize: collapse double slashes, resolve ".."
+  const normalized = path.posix.normalize(decoded);
+
+  // After normalization, reject absolute paths again
+  if (normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized)) {
+    return null;
+  }
+
+  // Block remaining ".." after normalization
+  if (normalized.includes("..")) {
+    return null;
+  }
+
+  // Strip leading "./"
+  return normalized.replace(/^\.\//, "");
+}
+
 export function isSecretPath(filePath: string): boolean {
-  const normalized = String(filePath ?? "")
-    .replace(/\\/g, "/")
-    .replace(/^\/+/, "");
+  const normalized = normalizePath(filePath);
+  if (normalized === null) return true; // Treat un-normalizable paths as secret
 
   return SECRET_PATH_PATTERNS.some((pattern) =>
     pattern.test(normalized),

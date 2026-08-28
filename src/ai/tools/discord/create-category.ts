@@ -230,11 +230,10 @@ export async function executeCreateCategory(
 
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`create_category execution failed: ${msg}`);
+    logger.error(`create_category execution failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "error",
-      message: `❌ Category creation failed: ${msg}`,
+      message: `❌ Category creation failed. The issue has been logged.`,
     };
   }
 }

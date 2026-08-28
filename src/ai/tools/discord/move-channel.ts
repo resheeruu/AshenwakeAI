@@ -309,11 +309,10 @@ export async function executeMoveChannel(
 
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`move_channel execution failed: ${msg}`);
+    logger.error(`move_channel execution failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "error",
-      message: `❌ Move failed: ${msg}`,
+      message: `❌ Move failed. The issue has been logged.`,
     };
   }
 }

@@ -137,7 +137,7 @@ const client = new Client({
    AI SYSTEM
    ===================================================== */
 
-const lavalinkUrl = process.env.LAVALINK_URL?.trim().replace(/^wss?:\/\//, "").replace(/\/$/, "");
+const lavalinkUrl = (process.env.LAVALINK_URL || "").trim().replace(/^wss?:\/\//, "").replace(/\/$/, "");
 
 if (!lavalinkUrl) {
   console.error("❌ LAVALINK_URL is missing.");
@@ -153,7 +153,7 @@ const lavalinkSecure =
   process.env.LAVALINK_SECURE?.trim().toLowerCase() === "true";
 
 console.log("🎵 Lavalink configuration:");
-console.log(`   URL: ${lavalinkUrl || "(missing)"}`);
+console.log(`   URL: ${lavalinkUrl ? "(configured)" : "(missing)"}`);
 console.log(`   Secure: ${lavalinkSecure}`);
 console.log(`   Name: ${process.env.LAVALINK_NAME || "main"}`);
 console.log(`   Password: ${lavalinkPassword ? "(set)" : "(missing)"}`);
@@ -2479,7 +2479,10 @@ async function startMusicAndDiscord(): Promise<void> {
 }
 
 console.log("🚨 ENTRY MARKER: about to call startMusicAndDiscord()");
-startMusicAndDiscord();
+startMusicAndDiscord().catch((error) => {
+  console.error("❌ FATAL: startMusicAndDiscord failed:", error);
+  process.exit(1);
+});
 
 /* =====================================================
    ASHENAI INTERACTIVE MUSIC PANEL

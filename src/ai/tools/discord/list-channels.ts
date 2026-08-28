@@ -128,7 +128,7 @@ export function createListChannelsTool(getClient: () => Client | null): ToolDefi
       } catch (error) {
         return {
           status: "error",
-          message: `Failed to list channels: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Failed to list channels. The issue has been logged.`,
         };
       }
     },

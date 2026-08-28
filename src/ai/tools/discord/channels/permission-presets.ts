@@ -378,8 +378,7 @@ export async function executeApplyChannelPreset(
     );
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`apply_channel_preset execution failed: ${msg}`);
-    return { status: "error", message: `❌ Preset application failed: ${msg}` };
+    logger.error(`apply_channel_preset execution failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { status: "error", message: `❌ Preset application failed. The issue has been logged.` };
   }
 }

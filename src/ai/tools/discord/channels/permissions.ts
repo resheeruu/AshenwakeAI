@@ -294,8 +294,7 @@ export async function executeManageChannelPermissions(
     );
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`manage_channel_permissions execution failed: ${msg}`);
-    return { status: "error", message: `❌ Permission update failed: ${msg}` };
+    logger.error(`manage_channel_permissions execution failed: ${error instanceof Error ? error.message : String(error)}`);
+    return { status: "error", message: `❌ Permission update failed. The issue has been logged.` };
   }
 }

@@ -254,11 +254,10 @@ export async function executePurgeMessagesPlan(
 
     return result;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`purge_messages execution failed: ${msg}`);
+    logger.error(`purge_messages execution failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "error",
-      message: `❌ Discord rejected the purge. Messages may be too old (14+ days) or I lack permissions. (${msg})`,
+      message: `❌ Discord rejected the purge. Messages may be too old (14+ days) or I lack permissions. The issue has been logged.`,
     };
   }
 }
