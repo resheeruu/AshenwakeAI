@@ -52,6 +52,23 @@ export type {
   AuditEntry,
 } from "./audit";
 
+export {
+  sanitizeToolError,
+  isErrorMessageSafe,
+} from "./sanitize";
+
+export {
+  signEntry,
+  verifyEntry,
+  verifyAuditChain,
+  getGenesisHash,
+} from "./audit-integrity";
+
+export type {
+  SignableAuditEntry,
+  SignedAuditEntry,
+} from "./audit-integrity";
+
 import { UserRateLimiter } from "./rate-limit";
 
 export const messageRateLimiter =

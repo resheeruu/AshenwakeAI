@@ -2,6 +2,12 @@ import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 import { redact } from "./redact";
+import {
+  signEntry,
+  verifyAuditChain,
+  type SignedAuditEntry,
+  type SignableAuditEntry,
+} from "./audit-integrity";
 
 export interface AuditEntry {
   id: string;
@@ -14,6 +20,10 @@ export interface AuditEntry {
   reason?: string;
   result: "success" | "failure" | "denied" | "error";
   details?: string;
+  /** U13: HMAC-SHA256 signature over entry content */
+  signature?: string;
+  /** U13: Hash of previous entry's signature (chain link) */
+  prevHash?: string;
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -48,13 +58,20 @@ function saveAudit(): void {
 
 loadAudit();
 
-export function recordAudit(entry: Omit<AuditEntry, "id" | "timestamp">): AuditEntry {
+export function recordAudit(entry: Omit<AuditEntry, "id" | "timestamp" | "signature" | "prevHash">): AuditEntry {
   const full: AuditEntry = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
     timestamp: Date.now(),
     ...entry,
     details: entry.details ? String(redact(entry.details)) : undefined,
   };
+
+  // U13: Sign the entry for integrity
+  const lastEntry = auditLog[auditLog.length - 1];
+  const lastSignature = lastEntry?.signature ?? null;
+  const { signature, prevHash } = signEntry(full as SignableAuditEntry, lastSignature);
+  full.signature = signature;
+  full.prevHash = prevHash;
 
   auditLog.push(full);
   saveAudit();
@@ -69,6 +86,8 @@ export function getAuditLog(options: {
   who?: string;
   limit?: number;
   since?: number;
+  /** U13: If true, verify chain integrity before returning */
+  verifyIntegrity?: boolean;
 } = {}): AuditEntry[] {
   let entries = auditLog;
 
@@ -86,5 +105,18 @@ export function getAuditLog(options: {
   }
 
   const limit = options.limit || 100;
-  return entries.slice(-limit);
+  const result = entries.slice(-limit);
+
+  // U13: Non-blocking chain verification
+  if (options.verifyIntegrity && result.length > 0) {
+    const chainResult = verifyAuditChain(result);
+    if (!chainResult.valid) {
+      logger.warn(
+        `⚠️ Audit log integrity check failed at entry index ${chainResult.brokenAt}. ` +
+        `Entries may have been modified.`,
+      );
+    }
+  }
+
+  return result;
 }

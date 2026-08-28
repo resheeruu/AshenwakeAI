@@ -1,5 +1,6 @@
 import { logger } from "../../logger";
 import { recordAudit } from "../../security/audit";
+import { sanitizeToolError } from "../../security/sanitize";
 import type { GuildAIConfig } from "./channel-scope";
 import { loadGuildAIConfig } from "./channel-scope";
 import { validateToolRequest } from "./validator";
@@ -247,7 +248,7 @@ export async function executeTool(
 
     return {
       status: "error",
-      message: `Tool "${toolName}" failed: ${errorMessage}`,
+      message: sanitizeToolError(toolName, error),
     };
   }
 }
