@@ -60,3 +60,13 @@ export const messageRateLimiter =
     10,
     60_000
   );
+
+export {
+  ToolRateLimiter,
+  toolRateLimiter,
+} from "../ai/tools/tool-rate-limit";
+
+export type {
+  ToolRateLimitConfig,
+  ToolRateLimitResult,
+} from "../ai/tools/tool-rate-limit";

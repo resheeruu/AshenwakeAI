@@ -24,6 +24,13 @@ export interface ToolParameter {
   allowedValues?: unknown[];
 }
 
+export interface ToolRateLimit {
+  /** Max requests allowed in the window for this tool */
+  maxRequests: number;
+  /** Window duration in milliseconds */
+  windowMs: number;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
@@ -34,6 +41,8 @@ export interface ToolDefinition {
   confirmationRequired: boolean;
   riskLevel: RiskLevel;
   parameters: ToolParameter[];
+  /** Optional per-tool rate limit (overrides global for this tool) */
+  rateLimit?: ToolRateLimit;
   execute: (context: ToolContext) => Promise<ToolResult>;
 }
 

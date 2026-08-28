@@ -7,6 +7,7 @@ import type {
   ToolResult,
   DenialReason,
 } from "./types";
+import { toolRateLimiter } from "./tool-rate-limit";
 
 /* ================================================================
  * VALIDATION RESULT
@@ -150,6 +151,45 @@ export function validateRisk(
 }
 
 /* ================================================================
+ * RATE LIMIT VALIDATION (check-only, no side effects)
+ *
+ * Verifies whether the requester is currently rate-limited.
+ * Does NOT consume a token — consumption happens in the executor.
+ * Owner role always passes.
+ * ================================================================ */
+
+export function validateRateLimit(
+  tool: ToolDefinition,
+  context: ToolContext,
+): ValidationResult {
+  // Owner bypass — trusted role from context, not spoofable
+  if (context.requesterRole === "owner") {
+    return { allowed: true };
+  }
+
+  // isLimited() checks without consuming a token
+  const result = toolRateLimiter.isLimited(
+    context.guildId,
+    context.requesterId,
+    context.requesterRole,
+    tool.name,
+  );
+
+  if (!result.allowed) {
+    const retrySeconds = Math.ceil(result.retryAfterMs / 1000);
+    return {
+      allowed: false,
+      denialReason: "RATE_LIMITED",
+      message:
+        `Rate limit exceeded for this action.\n` +
+        `Try again in ${retrySeconds} second${retrySeconds !== 1 ? "s" : ""}.`,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/* ================================================================
  * FULL VALIDATION PIPELINE
  * ================================================================ */
 
@@ -166,6 +206,7 @@ export function validateToolRequest(
   context: ToolContext,
   guildConfig: GuildAIConfig,
   isBotOwner: boolean,
+  skipRateLimit = false,
 ): FullValidationResult {
   const base = {
     tool,
@@ -200,6 +241,14 @@ export function validateToolRequest(
       message: riskCheck.message,
       riskRequiresConfirmation: tool.confirmationRequired,
     };
+  }
+
+  // 5. Rate limit validation (skipped for confirmed executions to prevent double-consumption)
+  if (!skipRateLimit) {
+    const rateLimitCheck = validateRateLimit(tool, context);
+    if (!rateLimitCheck.allowed) {
+      return { ...base, allowed: false, denialReason: rateLimitCheck.denialReason, message: rateLimitCheck.message };
+    }
   }
 
   return { ...base, allowed: true };

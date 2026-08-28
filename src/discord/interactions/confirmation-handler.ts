@@ -13,6 +13,7 @@ import { loadGuildAIConfig } from "../../ai/tools/channel-scope";
 import { validateToolRequest } from "../../ai/tools/validator";
 import { toolRegistry } from "../../ai/tools/registry";
 import { isChannelProtected, isProtectedResource } from "../../ai/tools/discord/protection";
+import { toolRateLimiter } from "../../ai/tools/tool-rate-limit";
 import { executeCreateChannel } from "../../ai/tools/discord/create-channel";
 import { executeCreateCategory } from "../../ai/tools/discord/create-category";
 import { executeRenameChannel } from "../../ai/tools/discord/rename-channel";
@@ -236,7 +237,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
-  // 7. Re-check channel scope
+  // 7. Re-check channel scope (skip rate limit — token already consumed at plan creation)
   const guildConfig = loadGuildAIConfig(plan.guildId);
   const validation = validateToolRequest(tool, {
     guildId: plan.guildId,
@@ -246,7 +247,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     requesterRole: "moderator",
     arguments: plan.arguments,
     dryRun: false,
-  }, guildConfig, false);
+  }, guildConfig, false, true);
 
   if (!validation.allowed) {
     removePendingPlan(planId);
@@ -306,6 +307,27 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
   // 9. Defer reply (execution may take time)
   await interaction.deferReply();
 
+  // 9.5. Verify rate limit reservation exists (token was consumed at plan creation)
+  const hasReservation = toolRateLimiter.confirmReservation(
+    plan.guildId,
+    plan.requesterId,
+    planId,
+  );
+  if (!hasReservation) {
+    removePendingPlan(planId);
+    await interaction.editReply({
+      content: "❌ Rate limit reservation expired or not found. Please create a new action plan.",
+    });
+    recordToolAudit(
+      { ...plan, channelId: plan.channelId, requesterName: interaction.user.username } as any,
+      "denied",
+      "RATE_LIMITED",
+      startTime,
+      false,
+    );
+    return;
+  }
+
   // 10. Mark executed BEFORE execution (prevents double-execution)
   markPlanExecuted(planId);
 
@@ -338,8 +360,9 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
       );
     }
 
-    // 11. Remove plan from store
+    // 11. Remove plan from store and release rate limit reservation
     removePendingPlan(planId);
+    toolRateLimiter.release(plan.guildId, plan.requesterId, planId);
 
     logger.info(
       `Tool confirmation executed: ${plan.toolName} [${result.status}] guild=${plan.guildId} by=${interaction.user.id} (${durationMs}ms)`,
@@ -348,6 +371,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     const msg = error instanceof Error ? error.message : String(error);
     logger.error(`Tool confirmation execution failed: ${plan.toolName} — ${msg}`);
     removePendingPlan(planId);
+    toolRateLimiter.release(plan.guildId, plan.requesterId, planId);
 
     try {
       await interaction.editReply({
@@ -405,6 +429,9 @@ async function handleCancel(interaction: ButtonInteraction): Promise<void> {
 
   // Remove plan
   removePendingPlan(planId);
+
+  // Release rate limit reservation
+  toolRateLimiter.release(plan.guildId, plan.requesterId, planId);
 
   // Audit cancellation
   recordToolAudit(

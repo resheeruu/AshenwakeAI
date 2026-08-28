@@ -5,6 +5,7 @@ import { loadGuildAIConfig } from "./channel-scope";
 import { validateToolRequest } from "./validator";
 import { recordToolAudit } from "./audit";
 import { toolRegistry } from "./registry";
+import { toolRateLimiter } from "./tool-rate-limit";
 import type {
   ToolContext,
   ToolResult,
@@ -20,6 +21,8 @@ export interface ExecutorOptions {
   dryRun?: boolean;
   /** Bot owner override (bypasses some risk checks) */
   isBotOwner?: boolean;
+  /** If true, skip rate limit check (used for confirmed executions) */
+  skipRateLimit?: boolean;
 }
 
 /* ================================================================
@@ -59,10 +62,11 @@ export function createActionPlan(
  *   3. Validate role
  *   4. Validate channel scope
  *   5. Validate risk level
- *   6. If dry-run → return plan only
- *   7. If confirmation required → return confirmation prompt
- *   8. Execute tool
- *   9. Audit the result
+ *   6. Check + consume rate limit (skipped for dry-run, confirmed executions, and confirmation-required tools)
+ *   7. If dry-run → return plan only
+ *   8. If confirmation required → reserve rate limit with plan ID, return confirmation prompt
+ *   9. Execute tool
+ *  10. Audit the result
  * ================================================================ */
 
 export async function executeTool(
@@ -73,6 +77,7 @@ export async function executeTool(
   const startTime = Date.now();
   const dryRun = options.dryRun ?? false;
   const isBotOwner = options.isBotOwner ?? false;
+  const skipRateLimit = options.skipRateLimit ?? false;
 
   // 1. Look up tool
   const tool = toolRegistry.get(toolName);
@@ -86,13 +91,13 @@ export async function executeTool(
     return result;
   }
 
-  // 2–5. Full validation
+  // 2–5. Full validation (rate limit check included unless skipped)
   const guildConfig = loadGuildAIConfig(context.guildId);
-  const validation = validateToolRequest(tool, context, guildConfig, isBotOwner);
+  const validation = validateToolRequest(tool, context, guildConfig, isBotOwner, skipRateLimit);
 
   if (!validation.allowed) {
     const result: ToolResult = {
-      status: "denied",
+      status: validation.denialReason === "RATE_LIMITED" ? "rate_limited" : "denied",
       message: validation.message || "Access denied.",
       denialReason: validation.denialReason,
     };
@@ -100,7 +105,62 @@ export async function executeTool(
     return result;
   }
 
-  // 6. Dry-run mode
+  // 6. Rate limit consumption (skip for dry-run, confirmed executions, and confirmation-required tools)
+  // Confirmation-required tools handle their own reservation at step 8 with the actual plan ID.
+  if (!dryRun && !skipRateLimit && !tool.confirmationRequired) {
+    try {
+      const consumed = toolRateLimiter.reserve(
+        context.guildId,
+        context.requesterId,
+        context.requesterRole,
+        "pending",
+        toolName,
+      );
+
+      if (!consumed) {
+        // Rate limit exceeded at consumption time
+        const isMutation = tool.riskLevel !== "safe" && tool.riskLevel !== "low";
+
+        if (isMutation) {
+          // Fail closed for mutation tools
+          const result: ToolResult = {
+            status: "rate_limited",
+            message: "Rate limit exceeded for this action. Try again later.",
+            denialReason: "RATE_LIMITED",
+          };
+          recordToolAudit(context, "rate_limited", "RATE_LIMITED", startTime, dryRun);
+          return result;
+        }
+
+        // Fail open for read-only/low-risk tools (log but allow)
+        logger.warn(
+          `Rate limit check failed for read-only tool ${toolName} in guild=${context.guildId} — failing open`,
+        );
+      }
+    } catch (error) {
+      // Rate limiter itself failed
+      const isMutation = tool.riskLevel !== "safe" && tool.riskLevel !== "low";
+
+      if (isMutation) {
+        // Fail closed for mutation tools
+        logger.error(`Rate limiter error for mutation tool ${toolName}: ${error instanceof Error ? error.message : String(error)}`);
+        const result: ToolResult = {
+          status: "error",
+          message: "Rate limit service unavailable. Action blocked for safety.",
+          denialReason: "RATE_LIMITED",
+        };
+        recordToolAudit(context, "error", "RATE_LIMITED", startTime, dryRun);
+        return result;
+      }
+
+      // Fail open for read-only/low-risk tools
+      logger.warn(
+        `Rate limiter error for read-only tool ${toolName} — failing open: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  // 7. Dry-run mode
   if (dryRun) {
     const plan = createActionPlan(
       context,
@@ -122,7 +182,7 @@ export async function executeTool(
     return result;
   }
 
-  // 7. Confirmation required
+  // 8. Confirmation required — reserve rate limit with actual plan ID
   if (tool.confirmationRequired) {
     const plan = createActionPlan(
       context,
@@ -134,6 +194,21 @@ export async function executeTool(
       }],
       true,
     );
+
+    // Reserve rate limit with actual plan ID (only token consumption for confirmation tools)
+    try {
+      toolRateLimiter.reserve(
+        context.guildId,
+        context.requesterId,
+        context.requesterRole,
+        plan.id,
+        toolName,
+      );
+    } catch {
+      // Reservation failed — log but don't block plan creation
+      // The initial "pending" reservation provides baseline protection
+      logger.warn(`Failed to create rate limit reservation for plan ${plan.id}`);
+    }
 
     const result: ToolResult = {
       status: "confirmation_required",
@@ -149,12 +224,12 @@ export async function executeTool(
     return result;
   }
 
-  // 8. Execute
+  // 9. Execute
   try {
     const result = await tool.execute(context);
     const durationMs = Date.now() - startTime;
 
-    // 9. Audit
+    // 10. Audit
     recordToolAudit(context, result.status, result.denialReason, startTime, dryRun);
 
     logger.info(
