@@ -4,6 +4,10 @@ import "dotenv/config";
 import { validateSecurityConfig } from "./config/env";
 validateSecurityConfig();
 
+// Migrate owner credentials from environment to accounts.json if needed
+import { setOwnerFromEnv } from "./control/account-store";
+setOwnerFromEnv();
+
 import {
   Client,
   Events,

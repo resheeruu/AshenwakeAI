@@ -28,6 +28,10 @@ termux-backup.log
 failover-boot.log
 boot-test.log
 
+# Auth runtime data (never commit)
+data/accounts.json
+data/sessions.json
+
 # Lavalink runtime files
 lavalink/Lavalink.jar
 lavalink/plugins/

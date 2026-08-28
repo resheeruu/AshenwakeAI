@@ -26,9 +26,59 @@ export {
   validateSession,
   destroySession,
   createLoginRateLimiter,
-  type OwnerSession,
-  type LoginResult,
+  getSessionFromCookie,
+  setSessionCookie,
+  clearSessionCookie,
+  validateCsrfToken,
+  getCsrfToken,
+  rotateSession,
+  destroyAllSessionsForAccount,
 } from "./auth";
+
+export type {
+  LoginResult,
+  Session,
+} from "./auth";
+
+export {
+  requireAuth,
+  requireRole,
+  requireCsrf,
+  hasRole,
+} from "./roles";
+
+export type {
+  WebRole,
+  AuthenticatedRequest,
+} from "./roles";
+
+export {
+  getAccountById,
+  getAccountByUsername,
+  getEnabledAccountByUsername,
+  listAccounts,
+  createAccount,
+  updateAccount,
+  updateAccountCredentials,
+  deleteAccount,
+  changePassword as changeAccountPassword,
+  hashPassword,
+  verifyPassword,
+  sanitizeAccount,
+  setOwnerFromEnv,
+  hasOwnerAccount,
+  generateId,
+} from "./account-store";
+
+export type {
+  Account,
+  SanitizedAccount,
+} from "./account-store";
+
+export {
+  createSession,
+  getActiveSessionCount,
+} from "./session-store";
 
 export type {
   SystemStatus,

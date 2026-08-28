@@ -248,31 +248,61 @@ export const configManager =
  * Called at startup to verify security-critical env vars exist.
  * - Required vars: process exits with FATAL if missing
  * - Optional vars: warning logged if missing
+ *
+ * Owner credentials: either accounts.json with an owner, OR
+ * ASHENAI_OWNER_* environment variables must be present.
  * ================================================================ */
 
 export function validateSecurityConfig(): void {
-  const logger = {
+  const log = {
     fatal: (msg: string) => { console.error(`[FATAL] ${msg}`); },
     warn: (msg: string) => { console.warn(`[WARN] ${msg}`); },
+    info: (msg: string) => { console.log(`[INFO] ${msg}`); },
   };
 
-  // Required: owner auth credentials
-  const requiredVars = [
-    "ASHENAI_OWNER_USERNAME",
-    "ASHENAI_OWNER_PASSWORD_HASH",
-    "ASHENAI_OWNER_PASSWORD_SALT",
-  ];
-
-  for (const name of requiredVars) {
-    if (!process.env[name]?.trim()) {
-      logger.fatal(`Missing required security env var: ${name}`);
-      process.exit(1);
+  // Check if accounts.json has an owner account
+  let hasOwnerInStore = false;
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const accountsFile = path.join(process.cwd(), "data", "accounts.json");
+    if (fs.existsSync(accountsFile)) {
+      const raw = fs.readFileSync(accountsFile, "utf8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        hasOwnerInStore = parsed.some(
+          (a: any) => a && a.role === "owner" && a.enabled !== false,
+        );
+      }
     }
+  } catch {
+    // File doesn't exist or is invalid — check env vars
+  }
+
+  // Check if legacy env vars exist
+  const hasLegacyOwner =
+    !!process.env.ASHENAI_OWNER_USERNAME?.trim() &&
+    !!process.env.ASHENAI_OWNER_PASSWORD_HASH?.trim() &&
+    !!process.env.ASHENAI_OWNER_PASSWORD_SALT?.trim();
+
+  if (!hasOwnerInStore && !hasLegacyOwner) {
+    log.fatal(
+      "No owner account found. Provide ASHENAI_OWNER_USERNAME, ASHENAI_OWNER_PASSWORD_HASH, and ASHENAI_OWNER_PASSWORD_SALT environment variables, or create an owner account in data/accounts.json.",
+    );
+    process.exit(1);
+  }
+
+  if (hasLegacyOwner && !hasOwnerInStore) {
+    log.info("Legacy owner credentials detected — will migrate to accounts.json on startup.");
+  }
+
+  if (hasOwnerInStore && hasLegacyOwner) {
+    log.info("Owner account found in accounts.json — legacy env vars will not override.");
   }
 
   // Optional: CORS origins (warn if not set — means CORS blocks all cross-origin)
   if (!process.env.ASHENAI_CORS_ORIGINS?.trim()) {
-    logger.warn(
+    log.warn(
       "ASHENAI_CORS_ORIGINS not set — all cross-origin requests are blocked (this is the secure default)",
     );
   }
@@ -280,10 +310,10 @@ export function validateSecurityConfig(): void {
   // Optional: session secret (required in production for audit integrity)
   if (!process.env.SESSION_SECRET?.trim()) {
     if (process.env.NODE_ENV === "production") {
-      logger.fatal("SESSION_SECRET is required in production.");
+      log.fatal("SESSION_SECRET is required in production.");
       process.exit(1);
     } else {
-      logger.warn("SESSION_SECRET not set — using ephemeral fallback for audit signatures");
+      log.warn("SESSION_SECRET not set — using ephemeral fallback for audit signatures");
     }
   }
 }

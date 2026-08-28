@@ -36,6 +36,10 @@ a{color:var(--accent);text-decoration:none}
 .hamburger{display:none;background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:4px 8px}
 .btn-logout{background:rgba(255,255,255,.06);border:1px solid var(--border-strong);color:var(--muted);padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;font-weight:600}
 .btn-logout:hover{background:rgba(255,111,125,.15);color:var(--danger);border-color:var(--danger)}
+.role-badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.role-owner{background:rgba(155,124,255,.2);color:var(--accent)}
+.role-admin{background:rgba(97,226,148,.15);color:var(--success)}
+.role-user{background:rgba(255,179,71,.15);color:var(--warning)}
 
 .layout{display:flex;min-height:calc(100vh - 52px)}
 .sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:12px 0;overflow-y:auto;position:sticky;top:52px;height:calc(100vh - 52px)}
@@ -153,7 +157,7 @@ a{color:var(--accent);text-decoration:none}
 <div id="loginScreen">
   <div class="login-box">
     <h1>AshenAI</h1>
-    <p>Owner Control Center</p>
+    <p>Control Center</p>
     <form id="loginForm">
       <input type="text" id="loginUser" placeholder="Username" autocomplete="username" required>
       <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" required>
@@ -171,10 +175,11 @@ a{color:var(--accent);text-decoration:none}
       <div class="topbar-logo">A</div>
       <div>
         <div class="topbar-title">AshenAI</div>
-        <div class="topbar-sub">Owner Control Center</div>
+        <div class="topbar-sub" id="topRoleLabel">Control Center</div>
       </div>
     </div>
     <div class="topbar-right">
+      <span class="role-badge" id="topRoleBadge"></span>
       <div class="topbar-status"><span class="dot"></span> <span id="topStatus">Online</span></div>
       <button class="btn-logout" onclick="logout()">Sign Out</button>
     </div>
@@ -183,7 +188,7 @@ a{color:var(--accent);text-decoration:none}
   <div class="layout">
     <nav class="sidebar" id="sidebar">
       <a href="#overview" class="active" data-section="overview"><span class="nav-icon">&#9673;</span><span class="nav-label">Overview</span></a>
-      <a href="#bot-control" data-section="bot-control"><span class="nav-icon">&#9881;</span><span class="nav-label">Bot Control</span></a>
+      <a href="#bot-control" data-section="bot-control" data-min-role="owner"><span class="nav-icon">&#9881;</span><span class="nav-label">Bot Control</span></a>
       <a href="#providers" data-section="providers"><span class="nav-icon">&#9889;</span><span class="nav-label">AI Providers</span></a>
       <a href="#usage" data-section="usage"><span class="nav-icon">&#9776;</span><span class="nav-label">Usage</span></a>
       <a href="#memory" data-section="memory"><span class="nav-icon">&#9997;</span><span class="nav-label">Memory</span></a>
@@ -191,13 +196,14 @@ a{color:var(--accent);text-decoration:none}
       <a href="#diagnostics" data-section="diagnostics"><span class="nav-icon">&#9883;</span><span class="nav-label">Diagnostics</span></a>
       <a href="#logs" data-section="logs"><span class="nav-icon">&#9776;</span><span class="nav-label">Logs</span></a>
       <a href="#seraph" data-section="seraph"><span class="nav-icon">&#9733;</span><span class="nav-label">Seraph</span></a>
-      <a href="#investigations" data-section="investigations"><span class="nav-icon">&#128269;</span><span class="nav-label">Investigations</span></a>
+      <a href="#investigations" data-section="investigations" data-min-role="owner"><span class="nav-icon">&#128269;</span><span class="nav-label">Investigations</span></a>
       <a href="#reports" data-section="reports"><span class="nav-icon">&#128196;</span><span class="nav-label">Reports</span></a>
       <a href="#config" data-section="config"><span class="nav-icon">&#9874;</span><span class="nav-label">Configuration</span></a>
-      <a href="#backups" data-section="backups"><span class="nav-icon">&#128190;</span><span class="nav-label">Backups</span></a>
-      <a href="#maintenance" data-section="maintenance"><span class="nav-icon">&#128295;</span><span class="nav-label">Maintenance</span></a>
-      <a href="#audit" data-section="audit"><span class="nav-icon">&#128220;</span><span class="nav-label">Audit Logs</span></a>
-      <a href="#account" data-section="account"><span class="nav-icon">&#128100;</span><span class="nav-label">Account</span></a>
+      <a href="#backups" data-section="backups" data-min-role="owner"><span class="nav-icon">&#128190;</span><span class="nav-label">Backups</span></a>
+      <a href="#maintenance" data-section="maintenance" data-min-role="owner"><span class="nav-icon">&#128295;</span><span class="nav-label">Maintenance</span></a>
+      <a href="#audit" data-section="audit" data-min-role="owner"><span class="nav-icon">&#128220;</span><span class="nav-label">Audit Logs</span></a>
+      <a href="#accounts" data-section="accounts" data-min-role="owner"><span class="nav-icon">&#128101;</span><span class="nav-label">Accounts</span></a>
+      <a href="#account" data-section="account"><span class="nav-icon">&#128100;</span><span class="nav-label">My Account</span></a>
     </nav>
 
     <main class="main" id="mainContent">
@@ -210,7 +216,7 @@ a{color:var(--accent);text-decoration:none}
         <div class="card"><h3>Recent Errors</h3><div id="overviewErrors"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- BOT CONTROL -->
+      <!-- BOT CONTROL (OWNER ONLY) -->
       <div class="section-page" id="sec-bot-control">
         <div class="section-title">&#9881; Bot Control</div>
         <div class="card">
@@ -286,7 +292,7 @@ a{color:var(--accent);text-decoration:none}
         <div class="card"><h3>System Information</h3><div id="seraphSys"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- INVESTIGATIONS -->
+      <!-- INVESTIGATIONS (OWNER ONLY) -->
       <div class="section-page" id="sec-investigations">
         <div class="section-title">&#128269; Investigations</div>
         <div class="card">
@@ -320,7 +326,7 @@ a{color:var(--accent);text-decoration:none}
         <div class="card" id="configDisplay"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
-      <!-- BACKUPS -->
+      <!-- BACKUPS (OWNER ONLY) -->
       <div class="section-page" id="sec-backups">
         <div class="section-title">&#128190; Backups</div>
         <div class="card">
@@ -330,7 +336,7 @@ a{color:var(--accent);text-decoration:none}
         </div>
       </div>
 
-      <!-- MAINTENANCE -->
+      <!-- MAINTENANCE (OWNER ONLY) -->
       <div class="section-page" id="sec-maintenance">
         <div class="section-title">&#128295; Maintenance</div>
         <div class="card">
@@ -343,7 +349,7 @@ a{color:var(--accent);text-decoration:none}
         </div>
       </div>
 
-      <!-- AUDIT -->
+      <!-- AUDIT (OWNER ONLY) -->
       <div class="section-page" id="sec-audit">
         <div class="section-title">&#128220; Audit Logs</div>
         <div class="card">
@@ -355,10 +361,43 @@ a{color:var(--accent);text-decoration:none}
         </div>
       </div>
 
-      <!-- ACCOUNT -->
+      <!-- ACCOUNTS (OWNER ONLY) -->
+      <div class="section-page" id="sec-accounts">
+        <div class="section-title">&#128101; Account Management</div>
+        <div class="card">
+          <h3>Accounts</h3>
+          <div id="accountList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+        </div>
+        <div class="card">
+          <h3>Create Account</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <input type="text" id="newUsername" placeholder="Username" style="flex:1;min-width:120px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+            <input type="password" id="newPassword" placeholder="Password (min 8 chars)" style="flex:1;min-width:120px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+            <select id="newRole" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="owner">Owner</option>
+            </select>
+            <button class="btn btn-primary" onclick="createAccount()">Create</button>
+          </div>
+          <div id="createAccountError" style="color:var(--danger);font-size:12px;margin-top:8px;min-height:16px"></div>
+        </div>
+      </div>
+
+      <!-- MY ACCOUNT -->
       <div class="section-page" id="sec-account">
-        <div class="section-title">&#128100; Account</div>
+        <div class="section-title">&#128100; My Account</div>
         <div class="card" id="accountInfo"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+        <div class="card">
+          <h3>Change Password</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <input type="password" id="currentPassword" placeholder="Current password" style="flex:1;min-width:150px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+            <input type="password" id="newPasswordInput" placeholder="New password (min 8 chars)" style="flex:1;min-width:150px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+            <button class="btn btn-primary" onclick="changePassword()">Change Password</button>
+          </div>
+          <div id="changePwError" style="color:var(--danger);font-size:12px;margin-top:8px;min-height:16px"></div>
+          <div id="changePwSuccess" style="color:var(--success);font-size:12px;margin-top:8px;min-height:16px"></div>
+        </div>
       </div>
 
     </main>
@@ -379,61 +418,148 @@ a{color:var(--accent);text-decoration:none}
 
 <script>
 (function(){
-  const API = '';
-  let pendingAction = null;
-  let refreshInterval = null;
+  var API = '';
+  var pendingAction = null;
+  var refreshInterval = null;
+  var csrfToken = null;
+  var currentUser = null;
+
+  var ROLE_HIERARCHY = ['owner', 'admin', 'user'];
+  function roleLevel(r){ return ROLE_HIERARCHY.indexOf(r); }
+  function hasRole(userRole, requiredRole){ return roleLevel(userRole) <= roleLevel(requiredRole); }
 
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
   function redact(s){return String(s).replace(/(?:api[_-]?key|token|password|secret|cookie|auth|authorization)\s*[:=]\s*['"]?[\w\-\.]+/gi,(m)=>{const p=m.split(/[:=]/);return p[0]+': [REDACTED]'})}
 
-  async function api(path,opts={}){
-    const r=await fetch(API+path,{credentials:'include',...opts});
-    if(r.status===401){showLogin();return null}
+  function apiHeaders(method){
+    var h = {'Content-Type':'application/json'};
+    if (method !== 'GET' && csrfToken) h['X-CSRF-Token'] = csrfToken;
+    return h;
+  }
+
+  async function api(path, opts){
+    opts = opts || {};
+    var method = opts.method || 'GET';
+    var headers = apiHeaders(method);
+    if (opts.headers) {
+      for (var k in opts.headers) headers[k] = opts.headers[k];
+    }
+    var r = await fetch(API + path, {credentials:'include', method:method, headers:headers, body:opts.body});
+    if (r.status === 401 || r.status === 403) {
+      var data = await r.json().catch(function(){return null});
+      if (data && data.error && data.error.indexOf('CSRF') >= 0) {
+        await refreshCsrf();
+        return null;
+      }
+      showLogin();
+      return null;
+    }
     return r.json();
   }
 
-  async function checkAuth(){
-    const d=await api('/api/me');
-    if(d&&d.authenticated){showDashboard();loadSection('overview');startRefresh();}
-    else showLogin();
+  async function refreshCsrf(){
+    var d = await api('/api/me');
+    if (d && d.authenticated && d.csrfToken) {
+      csrfToken = d.csrfToken;
+    }
   }
 
-  function showLogin(){document.getElementById('loginScreen').style.display='flex';document.getElementById('app').style.display='none';}
-  function showDashboard(){document.getElementById('loginScreen').style.display='none';document.getElementById('app').style.display='block';}
+  async function checkAuth(){
+    var d = await api('/api/me');
+    if (d && d.authenticated) {
+      currentUser = d.user;
+      csrfToken = d.csrfToken;
+      showDashboard();
+      loadSection('overview');
+      startRefresh();
+    } else {
+      showLogin();
+    }
+  }
 
-  document.getElementById('loginForm').addEventListener('submit',async(e)=>{
+  function showLogin(){
+    document.getElementById('loginScreen').style.display='flex';
+    document.getElementById('app').style.display='none';
+  }
+
+  function showDashboard(){
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('app').style.display='block';
+    applyRoleUI();
+  }
+
+  function applyRoleUI(){
+    if (!currentUser) return;
+    var role = currentUser.role;
+    document.getElementById('topRoleBadge').textContent = role;
+    document.getElementById('topRoleBadge').className = 'role-badge role-' + role;
+    document.getElementById('topRoleLabel').textContent = role.charAt(0).toUpperCase() + role.slice(1) + ' Control Center';
+
+    var navItems = document.querySelectorAll('.sidebar a[data-min-role]');
+    navItems.forEach(function(a){
+      var minRole = a.getAttribute('data-min-role');
+      if (minRole && !hasRole(role, minRole)) {
+        a.style.display = 'none';
+      } else {
+        a.style.display = '';
+      }
+    });
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', async function(e){
     e.preventDefault();
-    const u=document.getElementById('loginUser').value;
-    const p=document.getElementById('loginPass').value;
-    const err=document.getElementById('loginError');
-    const btn=document.getElementById('loginBtn');
-    btn.disabled=true;err.textContent='';
-    try{
-      const d=await fetch(API+'/auth/login',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
-      const j=await d.json();
-      if(j.ok){showDashboard();loadSection('overview');startRefresh();}
-      else err.textContent=j.error||'Login failed';
-    }catch{err.textContent='Connection failed';}
-    btn.disabled=false;
+    var u = document.getElementById('loginUser').value;
+    var p = document.getElementById('loginPass').value;
+    var err = document.getElementById('loginError');
+    var btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    err.textContent = '';
+    try {
+      var r = await fetch(API+'/auth/login',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+      var j = await r.json();
+      if (j.ok) {
+        currentUser = j.user;
+        csrfToken = j.csrfToken;
+        showDashboard();
+        loadSection('overview');
+        startRefresh();
+      } else {
+        err.textContent = j.error || 'Login failed';
+      }
+    } catch(ex) {
+      err.textContent = 'Connection failed';
+    }
+    btn.disabled = false;
   });
 
-  window.logout=async function(){await fetch(API+'/auth/logout',{method:'POST',credentials:'include'});showLogin();if(refreshInterval)clearInterval(refreshInterval);}
+  window.logout = async function(){
+    await fetch(API+'/auth/logout',{method:'POST',credentials:'include',headers:apiHeaders('POST')});
+    csrfToken = null;
+    currentUser = null;
+    showLogin();
+    if (refreshInterval) clearInterval(refreshInterval);
+  };
 
-  // Navigation
-  document.querySelectorAll('.sidebar a').forEach(a=>{
-    a.addEventListener('click',e=>{
+  document.querySelectorAll('.sidebar a').forEach(function(a){
+    a.addEventListener('click', function(e){
       e.preventDefault();
-      document.querySelectorAll('.sidebar a').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.sidebar a').forEach(function(x){x.classList.remove('active')});
       a.classList.add('active');
-      const sec=a.dataset.section;
-      document.querySelectorAll('.section-page').forEach(p=>p.classList.remove('active'));
+      var sec = a.dataset.section;
+      document.querySelectorAll('.section-page').forEach(function(p){p.classList.remove('active')});
       document.getElementById('sec-'+sec).classList.add('active');
       document.querySelector('.sidebar').classList.remove('open');
       loadSection(sec);
     });
   });
 
-  function startRefresh(){if(refreshInterval)clearInterval(refreshInterval);refreshInterval=setInterval(()=>{const active=document.querySelector('.sidebar a.active');if(active)loadSection(active.dataset.section);},30000);}
+  function startRefresh(){
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(function(){
+      var active = document.querySelector('.sidebar a.active');
+      if (active) loadSection(active.dataset.section);
+    }, 30000);
+  }
 
   function loadSection(sec){
     switch(sec){
@@ -450,97 +576,94 @@ a{color:var(--accent);text-decoration:none}
       case 'reports':loadReports();break;
       case 'config':loadConfig();break;
       case 'audit':loadAudit();break;
+      case 'accounts':loadAccounts();break;
       case 'account':loadAccount();break;
     }
   }
 
   function renderStats(container,items){
-    container.innerHTML=items.map(s=>`<div class="stat-card ${s.color||''}"><div class="stat-value">${esc(s.value)}</div><div class="stat-label">${esc(s.label)}</div></div>`).join('');
+    container.innerHTML=items.map(function(s){return '<div class="stat-card '+(s.color||'')+'"><div class="stat-value">'+esc(s.value)+'</div><div class="stat-label">'+esc(s.label)+'</div></div>'}).join('');
   }
 
-  // OVERVIEW
   async function loadOverview(){
-    const [status,health,providers,features,errors]=await Promise.all([
-      api('/api/system/status'),api('/api/system/health'),api('/api/providers/status'),api('/api/system/features'),api('/api/logs/errors?limit=5')
-    ]);
+    var data = await Promise.all([api('/api/system/status'),api('/api/system/health'),api('/api/providers/status'),api('/api/system/features'),api('/api/logs/errors?limit=5')]);
+    var status=data[0],health=data[1],providers=data[2],features=data[3],errors=data[4];
     if(!status)return;
-    const uptime=Math.floor((status.uptime||0)/3600)+'h '+Math.floor(((status.uptime||0)%3600)/60)+'m';
-    const avail=providers?providers.filter(p=>p.available).length:0;
-    const total=providers?providers.length:0;
-    const healthScore=health?health.score:'--';
-    const healthColor=health?(health.overall==='healthy'?'green':health.overall==='degraded'?'yellow':'red'):'';
+    var uptime=Math.floor((status.uptime||0)/3600)+'h '+Math.floor(((status.uptime||0)%3600)/60)+'m';
+    var avail=providers?providers.filter(function(p){return p.available}).length:0;
+    var total=providers?providers.length:0;
+    var healthScore=health?health.score:'--';
+    var healthColor=health?(health.overall==='healthy'?'green':health.overall==='degraded'?'yellow':'red'):'';
     renderStats(document.getElementById('overviewStats'),[
       {value:status.running?'Online':'Offline',label:'Status',color:status.running?'green':'red'},
       {value:uptime,label:'Uptime'},
       {value:healthScore,label:'Health Score',color:healthColor},
-      {value:`${avail}/${total}`,label:'Providers Online',color:avail>0?'green':'red'},
+      {value:avail+'/'+total,label:'Providers Online',color:avail>0?'green':'red'},
       {value:features?(features.discord?'Yes':'No'):'--',label:'Discord',color:features&&features.discord?'green':'red'},
       {value:features?(features.selfHealer?'Active':'Off'):'--',label:'Self-Healer'},
     ]);
     if(providers){
-      document.getElementById('overviewProviders').innerHTML=providers.map(p=>`<div class="provider-row"><span class="provider-name">${esc(p.name)}</span><span class="badge ${p.available?'badge-green':'badge-red'}">${p.available?'Online':'Offline'}</span><span class="provider-meta"><span>${p.successes} ok</span><span>${p.failures} fail</span><span>${p.averageLatencyMs||0}ms</span></span></div>`).join('');
+      document.getElementById('overviewProviders').innerHTML=providers.map(function(p){return '<div class="provider-row"><span class="provider-name">'+esc(p.name)+'</span><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Online':'Offline')+'</span><span class="provider-meta"><span>'+p.successes+' ok</span><span>'+p.failures+' fail</span><span>'+(p.averageLatencyMs||0)+'ms</span></span></div>'}).join('');
     }
     if(errors&&errors.entries){
-      document.getElementById('overviewErrors').innerHTML=errors.entries.length?errors.entries.map(e=>`<div class="log-entry error"><span class="log-ts">${esc(e.timestamp)}</span><span class="log-level">ERR</span>${esc(redact(e.message))}</div>`).join(''):'<div class="empty">No recent errors</div>';
+      document.getElementById('overviewErrors').innerHTML=errors.entries.length?errors.entries.map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(e.timestamp)+'</span><span class="log-level">ERR</span>'+esc(redact(e.message))+'</div>'}).join(''):'<div class="empty">No recent errors</div>';
     }
     document.getElementById('topStatus').textContent=status.running?'Online':'Offline';
   }
 
-  // BOT CONTROL
   async function loadBotControl(){
-    const d=await api('/api/system/status');
+    var d=await api('/api/system/status');
     if(!d)return;
-    document.getElementById('botStatus').innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px"><span>Status: <b>${d.running?'Running':'Stopped'}</b></span><span>PID: ${d.pid||'N/A'}</span><span>Version: ${esc(d.version||'unknown')}</span><span>Node: ${esc(d.nodeVersion||'')}</span><span>Platform: ${esc(d.platform||'')}</span></div>`;
+    document.getElementById('botStatus').innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px"><span>Status: <b>'+(d.running?'Running':'Stopped')+'</b></span><span>PID: '+(d.pid||'N/A')+'</span><span>Version: '+esc(d.version||'unknown')+'</span><span>Node: '+esc(d.nodeVersion||'')+'</span><span>Platform: '+esc(d.platform||'')+'</span></div>';
   }
 
-  // PROVIDERS
   async function loadProviders(){
-    const [status,perf]=await Promise.all([api('/api/providers/status'),api('/api/providers/performance')]);
+    var data=await Promise.all([api('/api/providers/status'),api('/api/providers/performance')]);
+    var status=data[0],perf=data[1];
     if(status){
-      document.getElementById('providerList').innerHTML=status.length?status.map(p=>`<div class="provider-row"><div><span class="provider-name">${esc(p.name)}</span><div class="provider-meta" style="margin-top:4px"><span>Latency: ${p.averageLatencyMs||0}ms</span><span>Success: ${p.successes}</span><span>Fail: ${p.failures}</span>${p.disabledUntil?`<span>Cooldown until ${new Date(p.disabledUntil).toLocaleTimeString()}</span>`:''}${p.lastError?`<span style="color:var(--danger)">Last: ${esc(p.lastError)}</span>`:''}</div></div><span class="badge ${p.available?'badge-green':'badge-red'}">${p.available?'Available':'Disabled'}</span></div>`).join(''):'<div class="empty">No providers configured</div>';
+      document.getElementById('providerList').innerHTML=status.length?status.map(function(p){return '<div class="provider-row"><div><span class="provider-name">'+esc(p.name)+'</span><div class="provider-meta" style="margin-top:4px"><span>Latency: '+(p.averageLatencyMs||0)+'ms</span><span>Success: '+p.successes+'</span><span>Fail: '+p.failures+'</span>'+(p.disabledUntil?'<span>Cooldown until '+new Date(p.disabledUntil).toLocaleTimeString()+'</span>':'')+(p.lastError?'<span style="color:var(--danger)">Last: '+esc(p.lastError)+'</span>':'')+'</div></div><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Available':'Disabled')+'</span></div>'}).join(''):'<div class="empty">No providers configured</div>';
     }
     if(perf){
-      const entries=Object.entries(perf);
-      document.getElementById('providerPerf').innerHTML=entries.length?`<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>${entries.map(([n,v])=>`<tr><td>${esc(n)}</td><td>${v.requests||0}</td><td>${v.credits||0}</td><td>${v.latency||0}ms</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No performance data</div>';
+      var entries=Object.entries(perf);
+      document.getElementById('providerPerf').innerHTML=entries.length?'<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency||0)+'ms</td></tr>'}).join('')+'</tbody></table>':'<div class="empty">No performance data</div>';
     }
   }
 
-  // USAGE
   async function loadUsage(){
-    const [d,sd]=await Promise.all([api('/api/usage/global'),api('/api/usage/system')]);
+    var data=await Promise.all([api('/api/usage/global'),api('/api/usage/system')]);
+    var d=data[0],sd=data[1];
     if(d&&d.usage){
-      const g=d.usage.global||{};
+      var g=d.usage.global||{};
       renderStats(document.getElementById('usageGlobal'),[
         {value:g.totalRequests||0,label:'Total Requests',color:'purple'},
         {value:g.totalCredits||0,label:'Total Credits'},
         {value:g.totalTokens||0,label:'Total Tokens'},
         {value:g.failures||0,label:'Failures',color:g.failures?'red':''},
       ]);
-      const provs=d.usage.providers||{};
-      const entries=Object.entries(provs);
-      document.getElementById('usageProviders').innerHTML=entries.length?`<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>${entries.map(([n,v])=>`<tr><td>${esc(n)}</td><td>${v.requests||0}</td><td>${v.credits||0}</td><td>${v.latency||0}ms</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No provider usage data</div>';
+      var provs=d.usage.providers||{};
+      var entries=Object.entries(provs);
+      document.getElementById('usageProviders').innerHTML=entries.length?'<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency||0)+'ms</td></tr>'}).join('')+'</tbody></table>':'<div class="empty">No provider usage data</div>';
     }
     if(sd&&sd.systemUsage){
-      const su=sd.systemUsage;
-      const budget=su.budget||{};
-      const systems=su.systems||{};
-      const sysEntries=Object.entries(systems);
+      var su=sd.systemUsage;
+      var budget=su.budget||{};
+      var systems=su.systems||{};
+      var sysEntries=Object.entries(systems);
       if(sysEntries.length){
-        const container=document.getElementById('usageProviders');
+        var container=document.getElementById('usageProviders');
         container.innerHTML+='<h3 style="margin-top:16px">Internal AI Usage</h3>'+
-          `<table class="data-table"><thead><tr><th>System</th><th>Requests</th><th>Credits</th><th>Failures</th></tr></thead><tbody>`+
-          sysEntries.map(([n,v]:[string,any])=>`<tr><td>${esc(n)}</td><td>${v.requests||0}</td><td>${v.credits||0}</td><td>${v.failures||0}</td></tr>`).join('')+
-          `</tbody></table>`+
-          `<div style="margin-top:8px;font-size:11px;color:var(--muted)">Budget: ${budget.dailyCredits||0} daily, ${budget.maxConcurrent||0} concurrent, ${budget.cooldownMs||0}ms cooldown</div>`;
+          '<table class="data-table"><thead><tr><th>System</th><th>Requests</th><th>Credits</th><th>Failures</th></tr></thead><tbody>'+
+          sysEntries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.failures||0)+'</td></tr>'}).join('')+
+          '</tbody></table>'+
+          '<div style="margin-top:8px;font-size:11px;color:var(--muted)">Budget: '+(budget.dailyCredits||0)+' daily, '+(budget.maxConcurrent||0)+' concurrent, '+(budget.cooldownMs||0)+'ms cooldown</div>';
       }
     }
   }
 
-  // MEMORY
   async function loadMemory(){
-    const d=await api('/api/memory/stats');
+    var d=await api('/api/memory/stats');
     if(!d||!d.memory)return;
-    const m=d.memory;
+    var m=d.memory;
     renderStats(document.getElementById('memoryStats'),[
       {value:m.conversations||0,label:'Conversations',color:'purple'},
       {value:m.messages||0,label:'Stored Messages'},
@@ -548,42 +671,39 @@ a{color:var(--accent);text-decoration:none}
     ]);
   }
 
-  // SERVERS
   async function loadServers(){
-    const d=await api('/api/guilds');
+    var d=await api('/api/guilds');
     if(!d||!d.guilds)return;
-    const guilds=d.guilds;
-    document.getElementById('serverList').innerHTML=guilds.length?guilds.map(g=>`<div class="guild-card"><h4>${esc(g.guildName||g.guildId)}</h4><div class="guild-meta"><span>ID: ${esc(g.guildId)}</span><span class="badge ${g.enabled?'badge-green':'badge-red'}">${g.enabled?'Enabled':'Disabled'}</span></div></div>`).join(''):'<div class="empty">No servers configured</div>';
+    var guilds=d.guilds;
+    document.getElementById('serverList').innerHTML=guilds.length?guilds.map(function(g){return '<div class="guild-card"><h4>'+esc(g.guildName||g.guildId)+'</h4><div class="guild-meta"><span>ID: '+esc(g.guildId)+'</span><span class="badge '+(g.enabled?'badge-green':'badge-red')+'">'+(g.enabled?'Enabled':'Disabled')+'</span></div></div>'}).join(''):'<div class="empty">No servers configured</div>';
   }
 
-  // DIAGNOSTICS
   async function loadDiagnostics(){
-    const d=await api('/api/system/diagnostics');
+    var d=await api('/api/system/diagnostics');
     if(!d)return;
-    document.getElementById('diagResults').innerHTML=`<div style="margin-bottom:12px"><span class="badge ${d.overall==='healthy'?'badge-green':d.overall==='degraded'?'badge-yellow':'badge-red'}">${d.overall} (${d.score}/100)</span></div>`+(d.checks?d.checks.map(c=>`<div class="provider-row"><div><span class="provider-name">${esc(c.name)}</span><div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(c.message)}</div></div><span class="badge ${c.status==='pass'?'badge-green':c.status==='warn'?'badge-yellow':'badge-red'}">${c.status}</span></div>`).join(''):'<div class="empty">No checks available</div>');
+    document.getElementById('diagResults').innerHTML='<div style="margin-bottom:12px"><span class="badge '+(d.overall==='healthy'?'badge-green':d.overall==='degraded'?'badge-yellow':'badge-red')+'">'+d.overall+' ('+d.score+'/100)</span></div>'+(d.checks?d.checks.map(function(c){return '<div class="provider-row"><div><span class="provider-name">'+esc(c.name)+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">'+esc(c.message)+'</div></div><span class="badge '+(c.status==='pass'?'badge-green':c.status==='warn'?'badge-yellow':'badge-red')+'">'+c.status+'</span></div>'}).join(''):'<div class="empty">No checks available</div>');
   }
 
-  // LOGS
   window.loadLogs=async function(){
-    const d=await api('/api/logs?limit=200');
+    var d=await api('/api/logs?limit=200');
     if(!d||!d.entries)return;
-    const search=(document.getElementById('logSearch').value||'').toLowerCase();
-    const level=document.getElementById('logLevel').value;
-    let entries=d.entries;
-    if(level)entries=entries.filter(e=>e.level===level);
-    if(search)entries=entries.filter(e=>(e.message||'').toLowerCase().includes(search));
-    document.getElementById('logList').innerHTML=entries.length?entries.slice(-100).reverse().map(e=>`<div class="log-entry ${e.level}"><span class="log-ts">${esc(e.timestamp)}</span><span class="log-level">${esc(e.level)}</span>${esc(redact(e.message))}</div>`).join(''):'<div class="empty">No logs found</div>';
-    const errD=await api('/api/logs/errors?limit=10');
+    var search=(document.getElementById('logSearch').value||'').toLowerCase();
+    var level=document.getElementById('logLevel').value;
+    var entries=d.entries;
+    if(level)entries=entries.filter(function(e){return e.level===level});
+    if(search)entries=entries.filter(function(e){return(e.message||'').toLowerCase().includes(search)});
+    document.getElementById('logList').innerHTML=entries.length?entries.slice(-100).reverse().map(function(e){return '<div class="log-entry '+e.level+'"><span class="log-ts">'+esc(e.timestamp)+'</span><span class="log-level">'+esc(e.level)+'</span>'+esc(redact(e.message))+'</div>'}).join(''):'<div class="empty">No logs found</div>';
+    var errD=await api('/api/logs/errors?limit=10');
     if(errD&&errD.entries){
-      document.getElementById('logErrors').innerHTML=errD.entries.length?errD.entries.reverse().map(e=>`<div class="log-entry error"><span class="log-ts">${esc(e.timestamp)}</span>${esc(redact(e.message))}</div>`).join(''):'<div class="empty">No recent errors</div>';
+      document.getElementById('logErrors').innerHTML=errD.entries.length?errD.entries.reverse().map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(e.timestamp)+'</span>'+esc(redact(e.message))+'</div>'}).join(''):'<div class="empty">No recent errors</div>';
     }
   };
-  document.getElementById('logSearch').addEventListener('input',()=>loadLogs());
-  document.getElementById('logLevel').addEventListener('change',()=>loadLogs());
+  document.getElementById('logSearch').addEventListener('input',function(){loadLogs()});
+  document.getElementById('logLevel').addEventListener('change',function(){loadLogs()});
 
-  // SERAPH
   async function loadSeraph(){
-    const [status,tools,sys]=await Promise.all([api('/api/seraph/status'),api('/api/seraph/tools'),api('/api/seraph/system')]);
+    var data=await Promise.all([api('/api/seraph/status'),api('/api/seraph/tools'),api('/api/seraph/system')]);
+    var status=data[0],tools=data[1],sys=data[2];
     if(status){
       renderStats(document.getElementById('seraphStats'),[
         {value:status.active?'Active':'Inactive',label:'Status',color:'green'},
@@ -591,71 +711,121 @@ a{color:var(--accent);text-decoration:none}
         {value:Math.floor((status.uptime||0)/3600)+'h '+Math.floor(((status.uptime||0)%3600)/60)+'m',label:'Uptime'},
       ]);
       if(status.components){
-        document.getElementById('seraphComponents').innerHTML=status.components.map(c=>`<div class="provider-row"><span class="provider-name">${esc(c.name)}</span><span class="badge ${c.status==='operational'?'badge-green':c.status==='degraded'?'badge-yellow':'badge-red'}">${c.status}</span><span class="provider-meta">${c.message?esc(c.message):''}</span></div>`).join('');
+        document.getElementById('seraphComponents').innerHTML=status.components.map(function(c){return '<div class="provider-row"><span class="provider-name">'+esc(c.name)+'</span><span class="badge '+(c.status==='operational'?'badge-green':c.status==='degraded'?'badge-yellow':'badge-red')+'">'+c.status+'</span><span class="provider-meta">'+(c.message?esc(c.message):'')+'</span></div>'}).join('');
       }
     }
     if(tools){
-      document.getElementById('seraphTools').innerHTML=tools.map(t=>`<div class="provider-row"><div><span class="provider-name">${esc(t.name)}</span><div style="font-size:11px;color:var(--muted)">${esc(t.description)}</div></div><span class="badge badge-purple">${esc(t.category)}</span></div>`).join('');
+      document.getElementById('seraphTools').innerHTML=tools.map(function(t){return '<div class="provider-row"><div><span class="provider-name">'+esc(t.name)+'</span><div style="font-size:11px;color:var(--muted)">'+esc(t.description)+'</div></div><span class="badge badge-purple">'+esc(t.category)+'</span></div>'}).join('');
     }
     if(sys){
-      document.getElementById('seraphSys').innerHTML=`<table class="data-table"><tbody>${Object.entries(sys).map(([k,v])=>`<tr><td style="font-weight:600">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>`;
+      document.getElementById('seraphSys').innerHTML='<table class="data-table"><tbody>'+Object.entries(sys).map(function(kv){return '<tr><td style="font-weight:600">'+esc(kv[0])+'</td><td>'+esc(kv[1])+'</td></tr>'}).join('')+'</tbody></table>';
     }
   }
 
-  // INVESTIGATIONS
   window.runInvestigation=async function(){
-    const problem=document.getElementById('invProblem').value.trim();
+    var problem=document.getElementById('invProblem').value.trim();
     if(!problem)return;
-    const container=document.getElementById('invResult');
+    var container=document.getElementById('invResult');
     container.innerHTML='<div class="loading"><span class="spinner"></span> Investigating...</div>';
-    const d=await fetch(API+'/api/seraph/investigate',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({problem})}).then(r=>r.json());
+    var d=await api('/api/seraph/investigate',{method:'POST',body:JSON.stringify({problem:problem})});
     if(!d||!d.investigation){container.innerHTML='<div style="color:var(--danger)">Investigation failed</div>';return;}
-    const inv=d.investigation;
-    container.innerHTML=`<div class="card"><h3>Result: ${esc(inv.status)}</h3>${inv.findings.length?inv.findings.map(f=>`<div class="inv-finding ${f.severity}"><strong>${esc(f.severity.toUpperCase())}</strong> - ${esc(f.area)}: ${esc(f.message)}${f.evidence?`<div style="font-size:11px;color:var(--muted);margin-top:4px">Evidence: ${esc(f.evidence)}</div>`:''}</div>`).join(''):'<div class="empty">No findings</div>'}${inv.recommendations.length?`<h3 style="margin-top:12px">Recommendations</h3><ul style="margin:8px 0 0 16px;font-size:13px;color:var(--muted)">${inv.recommendations.map(r=>`<li>${esc(r)}</li>`).join('')}</ul>`:''}</div>`;
+    var inv=d.investigation;
+    container.innerHTML='<div class="card"><h3>Result: '+esc(inv.status)+'</h3>'+(inv.findings.length?inv.findings.map(function(f){return '<div class="inv-finding '+f.severity+'"><strong>'+esc(f.severity.toUpperCase())+'</strong> - '+esc(f.area)+': '+esc(f.message)+(f.evidence?'<div style="font-size:11px;color:var(--muted);margin-top:4px">Evidence: '+esc(f.evidence)+'</div>':'')+'</div>'}).join(''):'<div class="empty">No findings</div>')+(inv.recommendations.length?'<h3 style="margin-top:12px">Recommendations</h3><ul style="margin:8px 0 0 16px;font-size:13px;color:var(--muted)">'+inv.recommendations.map(function(r){return '<li>'+esc(r)+'</li>'}).join('')+'</ul>':'')+'</div>';
   };
 
-  // REPORTS
   async function loadReports(){
-    const d=await api('/api/seraph/reports');
+    var d=await api('/api/seraph/reports');
     if(!d||!d.reports)return;
-    document.getElementById('reportList').innerHTML=d.reports.length?d.reports.map(r=>`<div class="provider-row"><div><span class="provider-name">[${esc(r.type)}] ${esc(r.summary)}</span><div style="font-size:11px;color:var(--muted)">${new Date(r.generatedAt).toLocaleString()}</div></div></div>`).join(''):'<div class="empty">No reports yet. Generate one above.</div>';
+    document.getElementById('reportList').innerHTML=d.reports.length?d.reports.map(function(r){return '<div class="provider-row"><div><span class="provider-name">['+esc(r.type)+'] '+esc(r.summary)+'</span><div style="font-size:11px;color:var(--muted)">'+new Date(r.generatedAt).toLocaleString()+'</div></div></div>'}).join(''):'<div class="empty">No reports yet. Generate one above.</div>';
   }
   window.generateReport=async function(type){
-    await fetch(API+'/api/seraph/reports/generate',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({type})});
+    await api('/api/seraph/reports/generate',{method:'POST',body:JSON.stringify({type:type})});
     loadReports();
   };
 
-  // CONFIG
   async function loadConfig(){
-    const d=await api('/api/system/features');
+    var d=await api('/api/system/features');
     if(!d)return;
-    document.getElementById('configDisplay').innerHTML=`<table class="data-table"><tbody>${Object.entries(d).map(([k,v])=>`<tr><td style="font-weight:600;text-transform:capitalize">${esc(k)}</td><td><span class="badge ${v?'badge-green':'badge-red'}">${v?'Enabled':'Disabled'}</span></td></tr>`).join('')}</tbody></table>`;
+    document.getElementById('configDisplay').innerHTML='<table class="data-table"><tbody>'+Object.entries(d).map(function(kv){return '<tr><td style="font-weight:600;text-transform:capitalize">'+esc(kv[0])+'</td><td><span class="badge '+(kv[1]?'badge-green':'badge-red')+'">'+(kv[1]?'Enabled':'Disabled')+'</span></td></tr>'}).join('')+'</tbody></table>';
   }
 
-  // AUDIT
   window.loadAudit=async function(){
-    const d=await api('/api/audit?limit=100');
+    var d=await api('/api/audit?limit=100');
     if(!d||!d.entries)return;
-    const search=(document.getElementById('auditSearch').value||'').toLowerCase();
-    let entries=d.entries;
-    if(search)entries=entries.filter(e=>(e.what||'').toLowerCase().includes(search)||(e.who||'').toLowerCase().includes(search));
-    document.getElementById('auditList').innerHTML=entries.length?entries.slice(-50).reverse().map(e=>`<div class="log-entry ${e.result==='failure'||e.result==='denied'?'error':''}"><span class="log-ts">${esc(e.timestamp||new Date(e.createdAt||Date.now()).toLocaleString())}</span><span class="log-level">${esc(e.result||'info')}</span><strong>${esc(e.who||'system')}</strong> ${esc(e.what||'')} ${e.guildId?`(guild: ${esc(e.guildId)})`:''} ${e.details?`<span style="color:var(--muted)">- ${esc(e.details)}</span>`:''}</div>`).join(''):'<div class="empty">No audit entries</div>';
+    var search=(document.getElementById('auditSearch').value||'').toLowerCase();
+    var entries=d.entries;
+    if(search)entries=entries.filter(function(e){return(e.what||'').toLowerCase().includes(search)||(e.who||'').toLowerCase().includes(search)});
+    document.getElementById('auditList').innerHTML=entries.length?entries.slice(-50).reverse().map(function(e){return '<div class="log-entry '+(e.result==='failure'||e.result==='denied'?'error':'')+'"><span class="log-ts">'+esc(e.timestamp||new Date(e.createdAt||Date.now()).toLocaleString())+'</span><span class="log-level">'+esc(e.result||'info')+'</span><strong>'+esc(e.who||'system')+'</strong> '+esc(e.what||'')+(e.guildId?' (guild: '+esc(e.guildId)+')':'')+(e.details?' <span style="color:var(--muted)">- '+esc(e.details)+'</span>':'')+'</div>'}).join(''):'<div class="empty">No audit entries</div>';
   };
-  document.getElementById('auditSearch').addEventListener('input',()=>loadAudit());
+  document.getElementById('auditSearch').addEventListener('input',function(){loadAudit()});
 
-  // ACCOUNT
   async function loadAccount(){
-    const d=await api('/api/me');
-    if(!d)return;
-    document.getElementById('accountInfo').innerHTML=`<div style="font-size:13px"><p><strong>Username:</strong> ${esc(d.user?.username||'Owner')}</p><p style="color:var(--muted);margin-top:8px">Session is bound to your IP address. Logs out after 24 hours of inactivity.</p><p style="color:var(--muted);margin-top:4px">All actions are logged in the audit trail.</p></div>`;
+    var d=await api('/api/me');
+    if(!d||!d.authenticated)return;
+    document.getElementById('accountInfo').innerHTML='<div style="font-size:13px"><p><strong>Username:</strong> '+esc(d.user.username)+'</p><p><strong>Role:</strong> '+esc(d.user.role)+'</p><p style="color:var(--muted);margin-top:8px">All actions are logged in the audit trail.</p></div>';
   }
 
-  // ACTIONS
+  async function loadAccounts(){
+    var d=await api('/api/accounts');
+    if(!d||!d.accounts)return;
+    document.getElementById('accountList').innerHTML=d.accounts.length?'<table class="data-table"><thead><tr><th>Username</th><th>Role</th><th>Enabled</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>'+d.accounts.map(function(a){
+      return '<tr><td>'+esc(a.username)+'</td><td><span class="role-badge role-'+a.role+'">'+a.role+'</span></td><td><span class="badge '+(a.enabled?'badge-green':'badge-red')+'">'+(a.enabled?'Yes':'No')+'</span></td><td>'+(a.lastLoginAt?new Date(a.lastLoginAt).toLocaleString():'Never')+'</td><td><button class="btn btn-outline" style="padding:4px 8px;font-size:10px" onclick="toggleAccount(\''+a.id+'\','+(!a.enabled)+')">'+(a.enabled?'Disable':'Enable')+'</button> <button class="btn btn-danger" style="padding:4px 8px;font-size:10px" onclick="deleteAccountConfirm(\''+a.id+'\',\''+esc(a.username)+'\')">Delete</button></td></tr>';
+    }).join('')+'</tbody></table>':'<div class="empty">No accounts</div>';
+  }
+
+  window.createAccount=async function(){
+    var username=document.getElementById('newUsername').value.trim();
+    var password=document.getElementById('newPassword').value;
+    var role=document.getElementById('newRole').value;
+    var errDiv=document.getElementById('createAccountError');
+    errDiv.textContent='';
+    if(!username||!password){errDiv.textContent='Username and password required.';return;}
+    if(password.length<8){errDiv.textContent='Password must be at least 8 characters.';return;}
+    var d=await api('/api/accounts',{method:'POST',body:JSON.stringify({username:username,password:password,role:role})});
+    if(d&&d.ok){
+      document.getElementById('newUsername').value='';
+      document.getElementById('newPassword').value='';
+      loadAccounts();
+    } else {
+      errDiv.textContent=(d&&d.error)?d.error:'Failed to create account';
+    }
+  };
+
+  window.toggleAccount=async function(id,enabled){
+    await api('/api/accounts/'+id,{method:'PUT',body:JSON.stringify({enabled:enabled})});
+    loadAccounts();
+  };
+
+  window.deleteAccountConfirm=function(id,username){
+    if(!confirm('Delete account "'+username+'"? This cannot be undone.'))return;
+    api('/api/accounts/'+id,{method:'DELETE'}).then(function(){loadAccounts()});
+  };
+
+  window.changePassword=async function(){
+    var current=document.getElementById('currentPassword').value;
+    var newPw=document.getElementById('newPasswordInput').value;
+    var errDiv=document.getElementById('changePwError');
+    var okDiv=document.getElementById('changePwSuccess');
+    errDiv.textContent='';
+    okDiv.textContent='';
+    if(!current||!newPw){errDiv.textContent='Both fields required.';return;}
+    if(newPw.length<8){errDiv.textContent='New password must be at least 8 characters.';return;}
+    var d=await api('/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword:current,newPassword:newPw})});
+    if(d&&d.ok){
+      okDiv.textContent=d.message||'Password changed.';
+      if(d.csrfToken) csrfToken=d.csrfToken;
+      document.getElementById('currentPassword').value='';
+      document.getElementById('newPasswordInput').value='';
+    } else {
+      errDiv.textContent=(d&&d.error)?d.error:'Failed to change password';
+    }
+  };
+
   window.confirmAction=function(action){
     pendingAction=action;
-    const dangerous=['stop','clear_memory','reset_usage','provider_disable'];
-    const titles={restart:'Restart Bot',stop:'Stop Bot',reload_config:'Reload Configuration',clear_memory:'Clear Memory',reset_usage:'Reset Usage',run_diagnostics:'Run Diagnostics',backup:'Trigger Backup',provider_disable:'Disable Provider',provider_enable:'Enable Provider'};
-    const msgs={restart:'This will restart the AshenAI process. The bot will be briefly unavailable.',stop:'This will stop AshenAI completely. It will not restart automatically.',clear_memory:'This will clear ALL conversation memory. This cannot be undone.',reset_usage:'This will reset ALL usage statistics. This cannot be undone.',run_diagnostics:'This will run a full system diagnostic scan.',backup:'This will trigger a data backup.',reload_config:'This will reload the configuration.',provider_disable:'This will disable the specified AI provider.',provider_enable:'This will enable the specified AI provider.'};
+    var dangerous=['stop','clear_memory','reset_usage','provider_disable'];
+    var titles={restart:'Restart Bot',stop:'Stop Bot',reload_config:'Reload Configuration',clear_memory:'Clear Memory',reset_usage:'Reset Usage',run_diagnostics:'Run Diagnostics',backup:'Trigger Backup',provider_disable:'Disable Provider',provider_enable:'Enable Provider'};
+    var msgs={restart:'This will restart the AshenAI process. The bot will be briefly unavailable.',stop:'This will stop AshenAI completely. It will not restart automatically.',clear_memory:'This will clear ALL conversation memory. This cannot be undone.',reset_usage:'This will reset ALL usage statistics. This cannot be undone.',run_diagnostics:'This will run a full system diagnostic scan.',backup:'This will trigger a data backup.',reload_config:'This will reload the configuration.',provider_disable:'This will disable the specified AI provider.',provider_enable:'This will enable the specified AI provider.'};
     document.getElementById('confirmTitle').textContent=titles[action]||'Confirm Action';
     document.getElementById('confirmMsg').textContent=msgs[action]||'Are you sure?';
     document.getElementById('confirmBtn').className=dangerous.includes(action)?'btn btn-danger':'btn btn-primary';
@@ -666,14 +836,14 @@ a{color:var(--accent);text-decoration:none}
 
   window.executeConfirmedAction=async function(){
     if(!pendingAction)return;
-    const action=pendingAction;
+    var action=pendingAction;
     closeModal();
-    const target=action==='provider_disable'||action==='provider_enable'?prompt('Provider name:'):'';
+    var target=(action==='provider_disable'||action==='provider_enable')?prompt('Provider name:'):undefined;
     if((action==='provider_disable'||action==='provider_enable')&&!target)return;
-    const d=await fetch(API+'/api/actions/execute',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,target,confirmed:true})}).then(r=>r.json());
-    if(d.ok){alert(d.message||'Action executed');}
-    else{alert('Failed: '+(d.error||'Unknown error'));}
-    if(action==='restart'||action==='stop'){setTimeout(()=>loadOverview(),3000);}
+    var d=await api('/api/actions/execute',{method:'POST',body:JSON.stringify({action:action,target:target,confirmed:true})});
+    if(d&&d.ok){alert(d.message||'Action executed');}
+    else{alert('Failed: '+(d&&d.error?'d.error':'Unknown error'));}
+    if(action==='restart'||action==='stop'){setTimeout(function(){loadOverview()},3000);}
   };
 
   checkAuth();
