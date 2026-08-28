@@ -1,5 +1,5 @@
 /**
- * Discord tools — U3 (read-only) + U4 (write) + U5 (management) + U6 (protection) + U7 (governance) barrel exports.
+ * Discord tools — U3 (read-only) + U4 (write) + U5 (management) + U6 (protection) + U7 (governance) + U8 (moderation) barrel exports.
  *
  * Use `createDiscordTools(getClient)` for all tools.
  * Use `createReadOnlyDiscordTools(getClient)` for U3 only.
@@ -7,6 +7,7 @@
  * Use `createManagementDiscordTools(getClient)` for U5 only.
  * Use `createProtectionDiscordTools(getClient)` for U6 only.
  * Use `createGovernanceTools(getClient)` for U7 only.
+ * Use `createModerationDiscordTools(getClient)` for U8 only.
  */
 
 import type { Client } from "discord.js";
@@ -42,6 +43,17 @@ import { createPermissionPresetTools } from "./channels";
 // U7 — Governance
 import { createGovernanceTools } from "../governance";
 
+// U8 — Moderation
+import {
+  createWarnUserTool,
+  createTimeoutUserTool,
+  createUntimeoutUserTool,
+  createKickUserTool,
+  createBanUserTool,
+  createViewWarningsTool,
+  createPurgeMessagesTool,
+} from "./moderation";
+
 export type { ServerInfo, ChannelInfo, PermissionReport, AIConfigInfo, HealthReport, PermissionSet, SubsystemHealth, HealthStatus, ChannelType } from "./types";
 
 // U4 execution functions
@@ -60,8 +72,11 @@ export { executeManageChannelPermissions } from "./channels";
 export { executeProtectChannel, executeUnprotectChannel, executeProtectCategory, executeUnprotectCategory } from "./protection-tools";
 export { executeApplyChannelPreset } from "./channels";
 
+// U8 execution functions
+export { executeWarnUserPlan, executeTimeoutUserPlan, executeUntimeoutUserPlan, executeKickUserPlan, executeBanUserPlan, executePurgeMessagesPlan } from "./moderation";
+
 /**
- * Create all Discord tools (U3 + U4 + U5 + U6 + U7).
+ * Create all Discord tools (U3 + U4 + U5 + U6 + U7 + U8).
  */
 export function createDiscordTools(getClient: () => Client | null): ToolDefinition[] {
   return [
@@ -70,6 +85,7 @@ export function createDiscordTools(getClient: () => Client | null): ToolDefiniti
     ...createManagementDiscordTools(getClient),
     ...createProtectionDiscordTools(getClient),
     ...createGovernanceTools(getClient),
+    ...createModerationDiscordTools(getClient),
   ];
 }
 
@@ -117,5 +133,20 @@ export function createProtectionDiscordTools(getClient: () => Client | null): To
     createListProtectedResourcesTool(getClient),
     ...createPermissionPresetTools(getClient),
     createViewToolAuditTool(getClient),
+  ];
+}
+
+/**
+ * Create U8 moderation Discord tools.
+ */
+export function createModerationDiscordTools(getClient: () => Client | null): ToolDefinition[] {
+  return [
+    createWarnUserTool(getClient),
+    createTimeoutUserTool(getClient),
+    createUntimeoutUserTool(getClient),
+    createKickUserTool(getClient),
+    createBanUserTool(getClient),
+    createViewWarningsTool(getClient),
+    createPurgeMessagesTool(getClient),
   ];
 }

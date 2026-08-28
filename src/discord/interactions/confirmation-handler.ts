@@ -24,6 +24,7 @@ import { executeManageChannelPermissions } from "../../ai/tools/discord/channels
 import { executeProtectChannel, executeUnprotectChannel, executeProtectCategory, executeUnprotectCategory } from "../../ai/tools/discord/protection-tools";
 import { executeApplyChannelPreset } from "../../ai/tools/discord/channels/permission-presets";
 import { executeCreateGuildPolicyPlan, executeUpdateGuildPolicyPlan, executeApplyPolicyTemplatePlan } from "../../ai/tools/governance";
+import { executeWarnUserPlan, executeTimeoutUserPlan, executeUntimeoutUserPlan, executeKickUserPlan, executeBanUserPlan, executePurgeMessagesPlan } from "../../ai/tools/discord/moderation";
 import type { ToolContext, ActionPlan } from "../../ai/tools/types";
 
 /* ================================================================
@@ -103,6 +104,18 @@ async function executePlan(plan: ActionPlan): Promise<{ status: string; message:
       return executeUpdateGuildPolicyPlan(plan);
     case "apply_policy_template":
       return executeApplyPolicyTemplatePlan(plan);
+    case "warn_user":
+      return executeWarnUserPlan(plan, () => client);
+    case "timeout_user":
+      return executeTimeoutUserPlan(plan, () => client);
+    case "untimeout_user":
+      return executeUntimeoutUserPlan(plan, () => client);
+    case "kick_user":
+      return executeKickUserPlan(plan, () => client);
+    case "ban_user":
+      return executeBanUserPlan(plan, () => client);
+    case "purge_messages":
+      return executePurgeMessagesPlan(plan, () => client);
     default:
       return { status: "error", message: `Unknown tool: ${toolName}` };
   }

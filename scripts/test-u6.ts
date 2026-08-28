@@ -188,7 +188,7 @@ async function main() {
 
   {
     const allTools = createDiscordTools(() => null);
-    assertEqual(allTools.length, 29, "Total Discord tools: 5 U3 + 4 U4 + 4 U5 + 7 U6 + 9 U7 = 29");
+    assertEqual(allTools.length, 36, "Total Discord tools: 5 U3 + 4 U4 + 4 U5 + 7 U6 + 9 U7 + 7 U8 = 36");
   }
 
   // ===== PROTECTION SYSTEM =====
