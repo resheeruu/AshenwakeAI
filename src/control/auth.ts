@@ -12,6 +12,8 @@ export interface OwnerSession {
   createdAt: number;
   expiresAt: number;
   ip: string;
+  /** U10: CSRF token for cross-site request forgery protection */
+  csrfToken: string;
 }
 
 export interface LoginResult {
@@ -32,6 +34,7 @@ const store: SessionStore = {
 };
 
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+const SESSION_ROTATION_MS = 60 * 60 * 1000; // U10: rotate session after 1 hour
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const SESSION_COOKIE = "ashenai_owner_sid";
@@ -108,12 +111,14 @@ export function authenticateOwner(
   store.loginAttempts.delete(ip);
 
   const sessionId = crypto.randomBytes(32).toString("hex");
+  const csrfToken = crypto.randomBytes(32).toString("hex");
   const session: OwnerSession = {
     sessionId,
     ownerUsername: username,
     createdAt: now,
     expiresAt: now + SESSION_DURATION_MS,
     ip,
+    csrfToken,
   };
 
   store.sessions.set(sessionId, session);
@@ -191,7 +196,7 @@ export function setSessionCookie(
     `${SESSION_COOKIE}=${sessionId}`,
     `Path=/`,
     `HttpOnly`,
-    `SameSite=Lax`,
+    `SameSite=Strict`,
     isProduction ? `Secure` : "",
     `Max-Age=${maxAge}`,
   ].filter(Boolean).join("; ");
@@ -213,7 +218,7 @@ export function clearSessionCookie(
     `${SESSION_COOKIE}=`,
     `Path=/`,
     `HttpOnly`,
-    `SameSite=Lax`,
+    `SameSite=Strict`,
     isProduction ? `Secure` : "",
     `Max-Age=0`,
   ].filter(Boolean).join("; ");
@@ -223,4 +228,89 @@ export function clearSessionCookie(
 
 export function hashPasswordPublic(password: string): { hash: string; salt: string } {
   return hashPassword(password);
+}
+
+/* ================================================================
+ * U10: CSRF TOKEN VALIDATION
+ * ================================================================ */
+
+export function validateCsrfToken(
+  sessionId: string,
+  ip: string,
+  token: string,
+): boolean {
+  const session = validateSession(sessionId, ip);
+  if (!session) return false;
+  if (!token || token.length !== 64) return false;
+  return crypto.timingSafeEqual(
+    Buffer.from(session.csrfToken, "hex"),
+    Buffer.from(token, "hex"),
+  );
+}
+
+/* ================================================================
+ * U10: CSRF TOKEN RETRIEVAL (for login response)
+ * ================================================================ */
+
+export function getCsrfToken(sessionId: string, ip: string): string | null {
+  const session = validateSession(sessionId, ip);
+  return session?.csrfToken ?? null;
+}
+
+/* ================================================================
+ * U10: SESSION ROTATION
+ *
+ * If a session is older than SESSION_ROTATION_MS, issue a new
+ * session ID and CSRF token while preserving the original session
+ * data. The old session is invalidated.
+ * ================================================================ */
+
+export function rotateSession(
+  sessionId: string,
+  ip: string,
+): { newSessionId: string; csrfToken: string; expiresAt: number } | null {
+  const session = validateSession(sessionId, ip);
+  if (!session) return null;
+
+  const age = Date.now() - session.createdAt;
+  if (age < SESSION_ROTATION_MS) {
+    // Not yet time to rotate — return current session info
+    return {
+      newSessionId: session.sessionId,
+      csrfToken: session.csrfToken,
+      expiresAt: session.expiresAt,
+    };
+  }
+
+  // Rotate: create new session with fresh IDs
+  const newSessionId = crypto.randomBytes(32).toString("hex");
+  const newCsrfToken = crypto.randomBytes(32).toString("hex");
+  const now = Date.now();
+
+  const newSession: OwnerSession = {
+    sessionId: newSessionId,
+    ownerUsername: session.ownerUsername,
+    createdAt: now,
+    expiresAt: now + SESSION_DURATION_MS,
+    ip,
+    csrfToken: newCsrfToken,
+  };
+
+  // Destroy old session, create new one
+  store.sessions.delete(sessionId);
+  store.sessions.set(newSessionId, newSession);
+
+  logger.info(`🔄 Session rotated for ${session.ownerUsername}`);
+  recordAudit({
+    who: session.ownerUsername,
+    what: "Session rotated",
+    where: "control-auth",
+    result: "success",
+  });
+
+  return {
+    newSessionId,
+    csrfToken: newCsrfToken,
+    expiresAt: newSession.expiresAt,
+  };
 }

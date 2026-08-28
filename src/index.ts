@@ -1,5 +1,9 @@
 import "dotenv/config";
 
+// U10: Validate security configuration before any other initialization
+import { validateSecurityConfig } from "./config/env";
+validateSecurityConfig();
+
 import {
   Client,
   Events,

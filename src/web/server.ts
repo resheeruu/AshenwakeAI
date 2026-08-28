@@ -17,6 +17,9 @@ import {
   setSessionCookie,
   getSessionFromCookie,
   clearSessionCookie,
+  validateCsrfToken,
+  getCsrfToken,
+  rotateSession,
 } from "../control/auth";
 import {
   initControlLayer,
@@ -54,12 +57,27 @@ import {
 const app = express();
 app.set("trust proxy", 1);
 
-/* ==================== CORS ==================== */
-app.use((_req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (_req.method === "OPTIONS") {
+/* ==================== CORS (U10: Configurable Origin Allowlist) ==================== */
+const ALLOWED_ORIGINS = (process.env.ASHENAI_CORS_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (ALLOWED_ORIGINS.length > 0 && origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  // When no origins configured or origin not in list: do NOT set Allow-Origin header
+  // This blocks all cross-origin requests (same-origin requests have no Origin header)
+
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token");
+  res.setHeader("Access-Control-Max-Age", "86400");
+
+  if (req.method === "OPTIONS") {
     res.status(204).end();
     return;
   }
@@ -130,6 +148,26 @@ function requireOwner(req: Request, res: Response, next: () => void) {
   next();
 }
 
+/* U10: CSRF validation middleware — enforced on POST and PUT */
+function requireCsrf(req: Request, res: Response, next: () => void) {
+  if (req.method === "GET" || req.method === "OPTIONS") {
+    next();
+    return;
+  }
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const sessionId = getSessionFromCookie(req.headers.cookie);
+  const csrfToken = req.headers["x-csrf-token"];
+  if (!sessionId || !csrfToken || typeof csrfToken !== "string") {
+    res.status(403).json({ ok: false, error: "CSRF token required." });
+    return;
+  }
+  if (!validateCsrfToken(sessionId, ip, csrfToken)) {
+    res.status(403).json({ ok: false, error: "Invalid CSRF token." });
+    return;
+  }
+  next();
+}
+
 app.use(express.json({ limit: "64kb" }));
 app.use(globalRateLimit);
 app.use(express.static(path.join(__dirname, "public")));
@@ -172,7 +210,9 @@ app.post("/auth/login", (req: Request, res: Response) => {
   }
 
   setSessionCookie(res, result.sessionId!, result.expiresAt!);
-  res.json({ ok: true, user: { username } });
+  // U10: Return CSRF token for client-side CSRF header generation
+  const csrfToken = getCsrfToken(result.sessionId!, ip);
+  res.json({ ok: true, user: { username }, csrfToken });
 });
 
 app.post("/auth/logout", (req: Request, res: Response) => {
@@ -189,12 +229,22 @@ app.get("/api/me", (req: Request, res: Response) => {
     res.json({ ok: true, authenticated: false });
     return;
   }
-  const session = validateSession(sessionId, ip);
+  // U10: Session rotation — if session is old, issue new one
+  const rotated = rotateSession(sessionId, ip);
+  if (rotated && rotated.newSessionId !== sessionId) {
+    setSessionCookie(res, rotated.newSessionId, rotated.expiresAt);
+  }
+  const session = validateSession(rotated?.newSessionId || sessionId, ip);
   if (!session) {
     res.json({ ok: true, authenticated: false });
     return;
   }
-  res.json({ ok: true, authenticated: true, user: { username: session.ownerUsername } });
+  res.json({
+    ok: true,
+    authenticated: true,
+    user: { username: session.ownerUsername },
+    csrfToken: session.csrfToken,
+  });
 });
 
 /* ==================== CONTROL LAYER APIs ==================== */
@@ -270,7 +320,7 @@ app.get("/api/guilds/:guildId", requireOwner, (req: Request, res: Response) => {
   res.json({ ok: true, config: getGuildConfig(guildId) });
 });
 
-app.put("/api/guilds/:guildId", requireOwner, (req: Request, res: Response) => {
+app.put("/api/guilds/:guildId", requireOwner, requireCsrf, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const session = (req as any).ownerSession;
   const result = updateGuildConfig(guildId, req.body);
@@ -283,7 +333,7 @@ app.put("/api/guilds/:guildId", requireOwner, (req: Request, res: Response) => {
 
 /* ==================== ADMIN ACTIONS ==================== */
 
-app.post("/api/actions/confirm", requireOwner, (req: Request, res: Response) => {
+app.post("/api/actions/confirm", requireOwner, requireCsrf, (req: Request, res: Response) => {
   const { action, target } = req.body || {};
   if (!action) {
     res.status(400).json({ ok: false, error: "Action required." });
@@ -293,7 +343,7 @@ app.post("/api/actions/confirm", requireOwner, (req: Request, res: Response) => 
   res.json({ ok: true, confirmation });
 });
 
-app.post("/api/actions/execute", requireOwner, (req: Request, res: Response) => {
+app.post("/api/actions/execute", requireOwner, requireCsrf, (req: Request, res: Response) => {
   const session = (req as any).ownerSession;
   const { action, target, reason, confirmed } = req.body || {};
   if (!action) {
@@ -322,7 +372,7 @@ app.get("/api/seraph/doctor", requireOwner, (_req: Request, res: Response) => {
   res.json({ ok: true, doctor: runSeraphDoctor() });
 });
 
-app.post("/api/seraph/investigate", requireOwner, (req: Request, res: Response) => {
+app.post("/api/seraph/investigate", requireOwner, requireCsrf, (req: Request, res: Response) => {
   const { problem } = req.body || {};
   if (!problem) {
     res.status(400).json({ ok: false, error: "Problem description required." });
@@ -335,7 +385,7 @@ app.get("/api/seraph/reports", requireOwner, (_req: Request, res: Response) => {
   res.json({ ok: true, reports: getSeraphReports() });
 });
 
-app.post("/api/seraph/reports/generate", requireOwner, (req: Request, res: Response) => {
+app.post("/api/seraph/reports/generate", requireOwner, requireCsrf, (req: Request, res: Response) => {
   const { type } = req.body || {};
   const validTypes = ["health", "performance", "security", "diagnostic"];
   if (!type || !validTypes.includes(type)) {

@@ -241,3 +241,44 @@ export class ConfigManager {
 
 export const configManager =
   new ConfigManager();
+
+/* ================================================================
+ * U10: SECURITY CONFIGURATION VALIDATION
+ *
+ * Called at startup to verify security-critical env vars exist.
+ * - Required vars: process exits with FATAL if missing
+ * - Optional vars: warning logged if missing
+ * ================================================================ */
+
+export function validateSecurityConfig(): void {
+  const logger = {
+    fatal: (msg: string) => { console.error(`[FATAL] ${msg}`); },
+    warn: (msg: string) => { console.warn(`[WARN] ${msg}`); },
+  };
+
+  // Required: owner auth credentials
+  const requiredVars = [
+    "ASHENAI_OWNER_USERNAME",
+    "ASHENAI_OWNER_PASSWORD_HASH",
+    "ASHENAI_OWNER_PASSWORD_SALT",
+  ];
+
+  for (const name of requiredVars) {
+    if (!process.env[name]?.trim()) {
+      logger.fatal(`Missing required security env var: ${name}`);
+      process.exit(1);
+    }
+  }
+
+  // Optional: CORS origins (warn if not set — means CORS blocks all cross-origin)
+  if (!process.env.ASHENAI_CORS_ORIGINS?.trim()) {
+    logger.warn(
+      "ASHENAI_CORS_ORIGINS not set — all cross-origin requests are blocked (this is the secure default)",
+    );
+  }
+
+  // Optional: session secret
+  if (!process.env.SESSION_SECRET?.trim()) {
+    logger.warn("SESSION_SECRET not set — using default session handling");
+  }
+}
