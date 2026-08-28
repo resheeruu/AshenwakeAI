@@ -57,6 +57,24 @@ import {
 const app = express();
 app.set("trust proxy", 1);
 
+/* ==================== SECURITY HEADERS (U11) ==================== */
+app.use((_req: Request, res: Response, next: () => void) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  );
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  res.setHeader("X-XSS-Protection", "0");
+  res.removeHeader("X-Powered-By");
+  next();
+});
+
 /* ==================== CORS (U10: Configurable Origin Allowlist) ==================== */
 const ALLOWED_ORIGINS = (process.env.ASHENAI_CORS_ORIGINS || "")
   .split(",")
