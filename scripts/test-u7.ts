@@ -42,9 +42,14 @@ import {
 import { detectDrift } from "../src/ai/tools/governance/drift-detection";
 import { generateRemediationPlan } from "../src/ai/tools/governance/remediation";
 import { createGovernanceTools } from "../src/ai/tools/governance/governance-tools";
+import {
+  executeCreateGuildPolicyPlan,
+  executeUpdateGuildPolicyPlan,
+  executeApplyPolicyTemplatePlan,
+} from "../src/ai/tools/governance/governance-tools";
 import { ToolRegistry } from "../src/ai/tools/registry";
 import { validateToolRequest } from "../src/ai/tools/validator";
-import type { PolicyConfig, PolicyRule, GuildAIConfig, ToolContext } from "../src/ai/tools/types";
+import type { PolicyConfig, PolicyRule, GuildAIConfig, ToolContext, ActionPlan } from "../src/ai/tools/types";
 import { saveGuildAIConfig } from "../src/ai/tools/channel-scope";
 
 let passed = 0;
@@ -701,6 +706,152 @@ async function main() {
         result.status === "error" || result.status === "denied",
         `Tool ${tool.name} handles null client (got ${result.status})`,
       );
+    }
+  }
+
+  // ===== CONFIRMATION DISPATCHER: GOVERNANCE PLANS =====
+  console.log("\n===== CONFIRMATION DISPATCHER: GOVERNANCE PLANS =====");
+
+  {
+    function makePlan(toolName: string, args: Record<string, unknown> = {}): ActionPlan {
+      return {
+        id: `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        guildId: "guild_u7_test",
+        channelId: "ch_mgmt_1",
+        requesterId: "user_admin_1",
+        toolName,
+        arguments: args,
+        riskLevel: "medium",
+        changes: [],
+        requiresConfirmation: true,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 300_000,
+      };
+    }
+
+    // --- create_guild_policy: success ---
+    {
+      const config = makePolicyConfig({ name: "Dispatcher Test Policy" });
+      const plan = makePlan("create_guild_policy", { name: "Dispatcher Test Policy", _policyConfig: config });
+
+      const result = await executeCreateGuildPolicyPlan(plan);
+      assertEqual(result.status, "success", "create_guild_policy plan executes successfully");
+      assert(result.message.includes("Policy created"), "create_guild_policy result mentions created");
+      assert(hasPolicy("guild_u7_test"), "Policy persisted after create_guild_policy plan");
+
+      const loaded = loadPolicyConfig("guild_u7_test");
+      assertEqual(loaded.name, "Dispatcher Test Policy", "Persisted policy has correct name");
+    }
+
+    // --- create_guild_policy: missing _policyConfig ---
+    {
+      const plan = makePlan("create_guild_policy", { name: "No Config" });
+      const result = await executeCreateGuildPolicyPlan(plan);
+      assertEqual(result.status, "error", "create_guild_policy missing config returns error");
+    }
+
+    // --- create_guild_policy: invalid policy config ---
+    {
+      const badConfig = makePolicyConfig({ name: "" });
+      const plan = makePlan("create_guild_policy", { name: "", _policyConfig: badConfig });
+      const result = await executeCreateGuildPolicyPlan(plan);
+      assertEqual(result.status, "validation_error", "create_guild_policy invalid config returns validation_error");
+    }
+
+    // --- update_guild_policy: success ---
+    {
+      const existing = makePolicyConfig({ name: "Original Name" });
+      savePolicyConfig(existing);
+
+      const updated = makePolicyConfig({ name: "Updated Name", version: 2 });
+      const plan = makePlan("update_guild_policy", { name: "Updated Name", _policyConfig: updated });
+
+      const result = await executeUpdateGuildPolicyPlan(plan);
+      assertEqual(result.status, "success", "update_guild_policy plan executes successfully");
+      assert(result.message.includes("Policy updated"), "update_guild_policy result mentions updated");
+
+      const loaded = loadPolicyConfig("guild_u7_test");
+      assertEqual(loaded.name, "Updated Name", "Policy name updated after plan execution");
+    }
+
+    // --- update_guild_policy: missing _policyConfig ---
+    {
+      const plan = makePlan("update_guild_policy", {});
+      const result = await executeUpdateGuildPolicyPlan(plan);
+      assertEqual(result.status, "error", "update_guild_policy missing config returns error");
+    }
+
+    // --- apply_policy_template: success ---
+    {
+      const config = applyTemplate("community", "guild_u7_test");
+      const plan = makePlan("apply_policy_template", {
+        template: "community",
+        _policyConfig: config,
+      });
+
+      const result = await executeApplyPolicyTemplatePlan(plan);
+      assertEqual(result.status, "success", "apply_policy_template plan executes successfully");
+      assert(result.message.includes("template applied"), "apply_policy_template result mentions template");
+      assert(result.message.includes("community"), "apply_policy_template result mentions template name");
+
+      const loaded = loadPolicyConfig("guild_u7_test");
+      assertEqual(loaded.template, "community", "Persisted policy has template source");
+    }
+
+    // --- apply_policy_template: invalid template ---
+    {
+      const plan = makePlan("apply_policy_template", { template: "invalid", _policyConfig: makePolicyConfig() });
+      const result = await executeApplyPolicyTemplatePlan(plan);
+      assertEqual(result.status, "validation_error", "apply_policy_template invalid template returns validation_error");
+    }
+
+    // --- apply_policy_template: missing _policyConfig ---
+    {
+      const plan = makePlan("apply_policy_template", { template: "community" });
+      const result = await executeApplyPolicyTemplatePlan(plan);
+      assertEqual(result.status, "error", "apply_policy_template missing config returns error");
+    }
+
+    // --- Guild isolation: mismatched config guildId is rejected ---
+    {
+      // create_guild_policy: config.guildId != plan.guildId → rejected
+      const mismatchedConfig = makePolicyConfig({ guildId: "guild_other", name: "Mismatched Policy" });
+      const createPlan = makePlan("create_guild_policy", {
+        name: "Mismatched Policy",
+        _policyConfig: mismatchedConfig,
+      });
+      const createResult = await executeCreateGuildPolicyPlan(createPlan);
+      assertEqual(createResult.status, "denied", "create_guild_policy rejects mismatched guild");
+      assert(!hasPolicy("guild_other"), "No policy persisted for mismatched create_guild_policy");
+
+      // update_guild_policy: config.guildId != plan.guildId → rejected
+      const updatePlan = makePlan("update_guild_policy", {
+        name: "Mismatched Update",
+        _policyConfig: mismatchedConfig,
+      });
+      const updateResult = await executeUpdateGuildPolicyPlan(updatePlan);
+      assertEqual(updateResult.status, "denied", "update_guild_policy rejects mismatched guild");
+      assert(!hasPolicy("guild_other"), "No policy persisted for mismatched update_guild_policy");
+
+      // apply_policy_template: config.guildId != plan.guildId → rejected
+      const applyPlan = makePlan("apply_policy_template", {
+        template: "community",
+        _policyConfig: mismatchedConfig,
+      });
+      const applyResult = await executeApplyPolicyTemplatePlan(applyPlan);
+      assertEqual(applyResult.status, "denied", "apply_policy_template rejects mismatched guild");
+      assert(!hasPolicy("guild_other"), "No policy persisted for mismatched apply_policy_template");
+    }
+
+    // --- Guild isolation: matching guild succeeds ---
+    {
+      const matchingConfig = makePolicyConfig({ guildId: "guild_u7_test", name: "Matching Policy" });
+      const plan = makePlan("create_guild_policy", {
+        name: "Matching Policy",
+        _policyConfig: matchingConfig,
+      });
+      const result = await executeCreateGuildPolicyPlan(plan);
+      assertEqual(result.status, "success", "create_guild_policy succeeds with matching guild");
     }
   }
 

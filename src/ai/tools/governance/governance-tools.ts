@@ -715,6 +715,130 @@ export function createPlanPolicyRemediationTool(
 }
 
 /* ================================================================
+ * EXECUTE CONFIRMED PLAN — create_guild_policy
+ *
+ * Called by the interaction handler after verification.
+ * Operates within the plan's trusted guild context.
+ * ================================================================ */
+
+export async function executeCreateGuildPolicyPlan(
+  plan: ActionPlan,
+): Promise<ToolResult> {
+  const config = plan.arguments._policyConfig as PolicyConfig | undefined;
+  if (!config) {
+    return { status: "error", message: "Missing policy configuration in plan." };
+  }
+
+  if (config.guildId !== plan.guildId) {
+    return { status: "denied", message: "Policy configuration guild does not match execution plan guild.", denialReason: "INVALID_ARGUMENTS" };
+  }
+
+  const validation = validatePolicyConfig(config);
+  if (!validation.valid) {
+    return { status: "validation_error", message: `Invalid policy: ${validation.errors.join(", ")}` };
+  }
+
+  savePolicyConfig(config);
+
+  return {
+    status: "success",
+    message:
+      `✅ **Policy created**\n` +
+      `**Name:** ${config.name}\n` +
+      `**Description:** ${config.description}\n` +
+      `**Rules:** ${config.rules.length}\n` +
+      `Action ID: \`${plan.id}\``,
+    data: config,
+  };
+}
+
+/* ================================================================
+ * EXECUTE CONFIRMED PLAN — update_guild_policy
+ * ================================================================ */
+
+export async function executeUpdateGuildPolicyPlan(
+  plan: ActionPlan,
+): Promise<ToolResult> {
+  const config = plan.arguments._policyConfig as PolicyConfig | undefined;
+  if (!config) {
+    return { status: "error", message: "Missing policy configuration in plan." };
+  }
+
+  if (config.guildId !== plan.guildId) {
+    return { status: "denied", message: "Policy configuration guild does not match execution plan guild.", denialReason: "INVALID_ARGUMENTS" };
+  }
+
+  const validation = validatePolicyConfig(config);
+  if (!validation.valid) {
+    return { status: "validation_error", message: `Invalid policy: ${validation.errors.join(", ")}` };
+  }
+
+  savePolicyConfig(config);
+
+  return {
+    status: "success",
+    message:
+      `✅ **Policy updated**\n` +
+      `**Name:** ${config.name}\n` +
+      `**Description:** ${config.description}\n` +
+      `**Rules:** ${config.rules.length}\n` +
+      `Action ID: \`${plan.id}\``,
+    data: config,
+  };
+}
+
+/* ================================================================
+ * EXECUTE CONFIRMED PLAN — apply_policy_template
+ *
+ * Defense in depth: re-checks prohibited permissions at execution time.
+ * ================================================================ */
+
+export async function executeApplyPolicyTemplatePlan(
+  plan: ActionPlan,
+): Promise<ToolResult> {
+  const templateName = String(plan.arguments.template || "").trim();
+  const config = plan.arguments._policyConfig as PolicyConfig | undefined;
+
+  if (!templateName || !isValidTemplate(templateName)) {
+    return { status: "validation_error", message: `Invalid template "${templateName}".` };
+  }
+
+  if (!config) {
+    return { status: "error", message: "Missing policy configuration in plan." };
+  }
+
+  if (config.guildId !== plan.guildId) {
+    return { status: "denied", message: "Policy configuration guild does not match execution plan guild.", denialReason: "INVALID_ARGUMENTS" };
+  }
+
+  if (templateHasProhibitedPermissions(templateName)) {
+    return {
+      status: "denied",
+      message: "❌ Template contains prohibited permissions.",
+      denialReason: "MISSING_DISCORD_PERMISSION",
+    };
+  }
+
+  const validation = validatePolicyConfig(config);
+  if (!validation.valid) {
+    return { status: "validation_error", message: `Invalid policy: ${validation.errors.join(", ")}` };
+  }
+
+  savePolicyConfig(config);
+
+  return {
+    status: "success",
+    message:
+      `✅ **Policy template applied**\n` +
+      `**Template:** ${templateName}\n` +
+      `**Name:** ${config.name}\n` +
+      `**Rules:** ${config.rules.length}\n` +
+      `Action ID: \`${plan.id}\``,
+    data: config,
+  };
+}
+
+/* ================================================================
  * TOOL FACTORY
  * ================================================================ */
 

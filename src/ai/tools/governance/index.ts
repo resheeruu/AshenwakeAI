@@ -2,7 +2,12 @@
  * U7 GOVERNANCE BARREL
  * ================================================================ */
 
-export { createGovernanceTools } from "./governance-tools";
+export {
+  createGovernanceTools,
+  executeCreateGuildPolicyPlan,
+  executeUpdateGuildPolicyPlan,
+  executeApplyPolicyTemplatePlan,
+} from "./governance-tools";
 
 export type {
   PolicyConfig,

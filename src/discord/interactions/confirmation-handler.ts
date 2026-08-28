@@ -23,6 +23,7 @@ import { executeDeleteCategory } from "../../ai/tools/discord/channels/delete-ca
 import { executeManageChannelPermissions } from "../../ai/tools/discord/channels/permissions";
 import { executeProtectChannel, executeUnprotectChannel, executeProtectCategory, executeUnprotectCategory } from "../../ai/tools/discord/protection-tools";
 import { executeApplyChannelPreset } from "../../ai/tools/discord/channels/permission-presets";
+import { executeCreateGuildPolicyPlan, executeUpdateGuildPolicyPlan, executeApplyPolicyTemplatePlan } from "../../ai/tools/governance";
 import type { ToolContext, ActionPlan } from "../../ai/tools/types";
 
 /* ================================================================
@@ -96,6 +97,12 @@ async function executePlan(plan: ActionPlan): Promise<{ status: string; message:
       return executeUnprotectCategory(plan, () => client);
     case "apply_channel_preset":
       return executeApplyChannelPreset(plan, () => client);
+    case "create_guild_policy":
+      return executeCreateGuildPolicyPlan(plan);
+    case "update_guild_policy":
+      return executeUpdateGuildPolicyPlan(plan);
+    case "apply_policy_template":
+      return executeApplyPolicyTemplatePlan(plan);
     default:
       return { status: "error", message: `Unknown tool: ${toolName}` };
   }
