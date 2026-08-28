@@ -11,42 +11,15 @@
  * Redacts: API keys, tokens, passwords, secrets, cookies,
  * authorization headers, bearer tokens, provider credentials,
  * and other sensitive patterns.
+ *
+ * U12: Redaction rules are centralized in ./patterns.ts
  */
 
-const SECRET_PATTERNS: Array<{ pattern: RegExp; replacement: string | ((match: string) => string) }> = [
-  // Key-value assignments: api_key=xxx, token: xxx, password=xxx, etc.
-  {
-    pattern: /(?:api[_-]?key|apikey|token|password|secret|cookie|auth|authorization|bearer|credential|private[_-]?key|access[_-]?key)\s*[:=]\s*['"]?[\w\-\.]+/gi,
-    replacement: (match: string) => {
-      const parts = match.split(/[:=]/);
-      return parts[0] + ": [REDACTED]";
-    },
-  },
-  // GitHub tokens
-  { pattern: /(?:ghp_|gho_|ghu_|ghs_|ghr_)[\w\-]+/g, replacement: "[REDACTED]" },
-  // OpenAI keys
-  { pattern: /sk-(?:live|test)?-[\w\-]{20,}/g, replacement: "[REDACTED]" },
-  // Anthropic keys
-  { pattern: /sk-ant-[\w\-]{20,}/g, replacement: "[REDACTED]" },
-  // Google API keys
-  { pattern: /AIza[\w\-]{20,}/g, replacement: "[REDACTED]" },
-  // AWS keys
-  { pattern: /AKIA[\w\-]{16}/g, replacement: "[REDACTED]" },
-  // Slack tokens
-  { pattern: /xox[bpsar]-[\w\-]+/g, replacement: "[REDACTED]" },
-  // Bearer tokens
-  { pattern: /Bearer\s+[\w\-\.]+/gi, replacement: "Bearer [REDACTED]" },
-  // Basic auth
-  { pattern: /Basic\s+[\w\-\/=]+/gi, replacement: "Basic [REDACTED]" },
-  // Discord tokens (bot tokens)
-  { pattern: /[MN][\w]{23,}\.[\w\-]{6}\.[\w\-]{20,}/g, replacement: "[REDACTED]" },
-  // Generic long hex/base64 secrets that look like tokens
-  { pattern: /(?:eyJ|eyJhbG)[\w\-]+\.([\w\-]+\.)*[\w\-]+/g, replacement: "[REDACTED]" },
-];
+import { REDACTION_RULES } from "./patterns";
 
 function redactString(text: string): string {
   let result = text;
-  for (const { pattern, replacement } of SECRET_PATTERNS) {
+  for (const { pattern, replacement } of REDACTION_RULES) {
     if (typeof replacement === "function") {
       result = result.replace(pattern, replacement);
     } else {

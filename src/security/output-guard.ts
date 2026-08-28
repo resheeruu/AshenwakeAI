@@ -6,38 +6,11 @@
  * This is intentionally conservative. It blocks obvious credential/secret
  * patterns and internal configuration disclosures without attempting to
  * determine whether normal conversation is "safe" semantically.
+ *
+ * U12: Detection patterns are centralized in ./patterns.ts
  */
 
-const SECRET_PATTERNS: RegExp[] = [
-  // Common API-key style assignments.
-  /\b(api[_-]?key|access[_-]?token|auth[_-]?token|secret[_-]?key)\s*[:=]\s*[^\s"'`]+/i,
-
-  // Discord bot tokens / token-like strings.
-  /\b(MT[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{10,})\b/,
-
-  // Generic password/credential assignments.
-  /\b(password|passwd|pwd|client[_-]?secret)\s*[:=]\s*[^\s"'`]+/i,
-
-  // Environment secret assignments.
-  /\b[A-Z0-9_]*(API_KEY|TOKEN|SECRET|PASSWORD|CLIENT_SECRET)\s*=\s*[^\s"'`]+/i,
-
-  // Private key headers.
-  /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/i,
-
-  // Common authorization header.
-  /\bauthorization\s*:\s*bearer\s+[A-Za-z0-9._~+/=-]+/i,
-];
-
-const INTERNAL_PATTERNS: RegExp[] = [
-  // Explicit requests/attempts to expose hidden instructions.
-  /\b(system prompt|developer prompt|hidden prompt|internal prompt)\b/i,
-
-  // Attempts to obtain private configuration.
-  /\b(show|give|print|dump|reveal|display|output)\b.{0,80}\b(\.env|environment variables|api keys|tokens|credentials)\b/i,
-
-  // Source/config disclosure requests.
-  /\b(show|give|dump|print|reveal)\b.{0,80}\b(source code|private configuration|internal configuration)\b/i,
-];
+import { OUTPUT_SECRET_PATTERNS, OUTPUT_INTERNAL_PATTERNS } from "./patterns";
 
 export interface OutputGuardResult {
   allowed: boolean;
@@ -58,7 +31,7 @@ export function guardAIOutput(
     };
   }
 
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of OUTPUT_SECRET_PATTERNS) {
     if (pattern.test(value)) {
       return {
         allowed: false,
@@ -72,7 +45,7 @@ export function guardAIOutput(
    * These patterns are intentionally checked against the OUTPUT only.
    * They do not block users from asking ordinary questions about security.
    */
-  for (const pattern of INTERNAL_PATTERNS) {
+  for (const pattern of OUTPUT_INTERNAL_PATTERNS) {
     if (pattern.test(value)) {
       return {
         allowed: false,

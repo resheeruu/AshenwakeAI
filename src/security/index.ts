@@ -12,7 +12,6 @@ export {
 
 export {
   inspectUserInput,
-  sanitizeModelOutput,
   getCreatorResponse,
   isChatAuthentication,
 } from "./gateway";
