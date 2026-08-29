@@ -108,8 +108,8 @@ export const config = {
   },
 
   lavalink: {
-    url: required("LAVALINK_URL"),
-    auth: required("LAVALINK_PASSWORD"),
+    url: optional("LAVALINK_URL") || "",
+    auth: optional("LAVALINK_PASSWORD") || "",
     secure: optional("LAVALINK_SECURE") === "true",
     name: optional("LAVALINK_NAME") || "main",
   },

@@ -134,6 +134,18 @@ export function detectCapabilities(): CapabilityCheck[] {
   const java = checkCmd("java -version 2>&1");
   const ffmpeg = checkCmd("ffmpeg -version 2>&1");
   const npm = checkCmd("npm --version");
+
+  // Parse Java major version from output (e.g., "openjdk version "17.0.20"")
+  let javaMajor = 0;
+  if (java.available && java.version) {
+    const m = java.version.match(/version\s+"?(\d+)/);
+    if (m) javaMajor = parseInt(m[1], 10);
+  }
+  const javaOk = java.available && javaMajor >= 17; // Lavalink 4.x requires Java 17+
+
+  const hasJar = fs.existsSync("lavalink/Lavalink.jar");
+  const hasConfig = fs.existsSync("lavalink/application.yml");
+
   let persistentOk = false;
   try {
     const d = `${process.cwd()}/data`;
@@ -148,9 +160,9 @@ export function detectCapabilities(): CapabilityCheck[] {
     { name: "node.js", available: true, version: v, required: true, reason: major >= 18 ? undefined : `Need 18+, got ${v}` },
     { name: "npm", available: npm.available, version: npm.version, required: true },
     { name: "typescript/build", available: fs.existsSync("node_modules/.bin/tsc") || fs.existsSync("node_modules/typescript"), required: true },
-    { name: "java", available: java.available, version: java.version, required: false, reason: "For Lavalink (music). Optional." },
+    { name: "java", available: javaOk, version: java.version, required: false, reason: javaOk ? "For Lavalink (music). Java 17+ detected." : java.available ? `Java ${javaMajor} found but Lavalink requires 17+` : "For Lavalink (music). Optional." },
     { name: "ffmpeg", available: ffmpeg.available, version: ffmpeg.version, required: false, reason: "For music encoding." },
-    { name: "lavalink", available: fs.existsSync("lavalink/Lavalink.jar") && fs.existsSync("lavalink/application.yml"), required: false, reason: "For music playback." },
+    { name: "lavalink", available: hasJar && hasConfig && javaOk, required: false, reason: hasJar && hasConfig ? (javaOk ? "JAR + config + Java 17+ present." : "JAR + config present but Java 17+ required.") : "Not found." },
     { name: "long-running-process", available: true, required: true },
     { name: "http-server", available: true, required: true },
     { name: "websocket", available: true, required: true },

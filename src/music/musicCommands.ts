@@ -96,7 +96,7 @@ async function requireDJ(
 
 export async function handleMusicCommand(
   message: Message,
-  music: ShoukakuMusicManager,
+  music: ShoukakuMusicManager | null,
   sessions: MusicSessionManager,
   musicReady = true,
 ): Promise<boolean> {
@@ -142,7 +142,7 @@ export async function handleMusicCommand(
     return false;
   }
 
-  if (!musicReady) {
+  if (!musicReady || !music) {
     await message.reply(
       "⚠️ The music system is currently unavailable. AshenAI's AI and Discord systems are still online.",
     );

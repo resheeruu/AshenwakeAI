@@ -143,15 +143,7 @@ const client = new Client({
 
 const lavalinkUrl = (process.env.LAVALINK_URL || "").trim().replace(/^wss?:\/\//, "").replace(/\/$/, "");
 
-if (!lavalinkUrl) {
-  console.error("❌ LAVALINK_URL is missing.");
-}
-
 const lavalinkPassword = process.env.LAVALINK_PASSWORD?.trim();
-
-if (!lavalinkPassword) {
-  console.error("❌ LAVALINK_PASSWORD is missing.");
-}
 
 const lavalinkSecure =
   process.env.LAVALINK_SECURE?.trim().toLowerCase() === "true";
@@ -162,15 +154,22 @@ console.log(`   Secure: ${lavalinkSecure}`);
 console.log(`   Name: ${process.env.LAVALINK_NAME || "main"}`);
 console.log(`   Password: ${lavalinkPassword ? "(set)" : "(missing)"}`);
 
-const shoukakuMusic = new ShoukakuMusicManager(client, {
-  url: lavalinkUrl || "",
-  auth: lavalinkPassword || "",
-  secure: lavalinkSecure,
-  name: process.env.LAVALINK_NAME || "main",
-});
+// Only create ShoukakuMusicManager when Lavalink is configured.
+// When LAVALINK_URL is empty, music degrades gracefully.
+const shoukakuMusic = lavalinkUrl
+  ? new ShoukakuMusicManager(client, {
+      url: lavalinkUrl,
+      auth: lavalinkPassword || "",
+      secure: lavalinkSecure,
+      name: process.env.LAVALINK_NAME || "main",
+    })
+  : null;
 
-// Lavalink/Shoukaku is the active music engine.
-let musicReady = true;
+// musicReady reflects actual Lavalink availability, not a hardcoded flag.
+const musicReady = shoukakuMusic !== null;
+if (!musicReady) {
+  console.log("⚠️ Music unavailable: LAVALINK_URL not configured. Bot, web, and AI remain fully operational.");
+}
 
 /* =====================================================
    MUSIC SESSION SYSTEM
@@ -184,7 +183,7 @@ const musicSessions = new MusicSessionManager(
     );
 
     try {
-      await shoukakuMusic.disconnect(session.guildId);
+      await shoukakuMusic?.disconnect(session.guildId);
 
       console.log(
         `🔌 MUSIC AUTO-DISCONNECTED: guild=${session.guildId}`,
@@ -2533,6 +2532,14 @@ client.on(
       if (!session) {
         await interaction.reply({
           content: "❌ This music session no longer exists.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (!shoukakuMusic) {
+        await interaction.reply({
+          content: "⚠️ Music system is unavailable.",
           flags: MessageFlags.Ephemeral,
         });
         return;
