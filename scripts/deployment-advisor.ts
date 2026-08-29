@@ -1,43 +1,64 @@
-const has = (name: string) => Boolean(process.env[name]?.trim());
-const state = (name: string, required = false) => has(name) ? "present" : required ? "missing" : "optional";
-const platforms: Array<[string, string[]]> = [
-  ["render", ["RENDER", "RENDER_SERVICE_ID", "RENDER_GIT_COMMIT"]],
-  ["railway", ["RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID"]],
-  ["fly.io", ["FLY_APP_NAME", "FLY_REGION", "FLY_ALLOC_ID"]],
-  ["koyeb", ["KOYEB_APP_NAME", "KOYEB_SERVICE_NAME"]],
-  ["heroku", ["DYNO", "HEROKU_APP_NAME"]],
-  ["replit", ["REPL_ID", "REPL_SLUG"]],
-];
-const matches = platforms.map(([provider, signals]) => ({ provider, signals: signals.filter(has) })).filter((match) => match.signals.length);
-const provider = matches.length === 1 ? matches[0].provider : matches.length > 1 ? "unknown/ambiguous" : has("KUBERNETES_SERVICE_HOST") ? "docker/container" : has("TERMUX_VERSION") ? "local development" : "unknown";
-const compatibility = ["unknown", "unknown/ambiguous"].includes(provider) ? "unknown" : "partially compatible";
-const owner = ["ASHENAI_OWNER_USERNAME", "ASHENAI_OWNER_PASSWORD_HASH", "ASHENAI_OWNER_PASSWORD_SALT"];
-const smtp = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS"];
-const statuses: Record<string, string> = {
-  NODE_ENV: process.env.NODE_ENV === "production" ? "present" : "malformed",
-  DISCORD_TOKEN: state("DISCORD_TOKEN", true), DISCORD_CLIENT_ID: state("DISCORD_CLIENT_ID", true),
-  owner_credentials: owner.every(has) ? "present" : owner.some(has) ? "malformed" : "optional (may be stored in persistent data)",
-  AUTH_BASE_URL: state("AUTH_BASE_URL"), SESSION_SECRET: state("SESSION_SECRET", true),
-  LAVALINK_URL: state("LAVALINK_URL", true), LAVALINK_PASSWORD: state("LAVALINK_PASSWORD", true),
-  oauth: has("DISCORD_OAUTH_CLIENT_ID") || has("GOOGLE_OAUTH_CLIENT_ID") || has("DISCORD_CLIENT_SECRET") ? "present" : "optional",
-  smtp: smtp.some(has) ? (has("SMTP_HOST") && has("SMTP_FROM") ? "present" : "malformed") : "optional",
-  ai_provider_keys: Object.keys(process.env).some((name) => /(?:_API_KEY|OLLAMA_BASE_URL)$/.test(name)) ? "present" : "missing",
-  OLLAMA_BASE_URL: state("OLLAMA_BASE_URL"), PORT: state("PORT"),
+#!/usr/bin/env tsx
+import { detectHosting, detectCapabilities } from "./hosting-detect";
+import { detectFeatureCapabilities, getMigrationSteps, validateDeploymentConfig } from "./hosting-features";
+
+const hosting = detectHosting();
+const caps = detectCapabilities();
+const features = detectFeatureCapabilities();
+const validation = validateDeploymentConfig();
+const migrateFrom = process.env.MIGRATE_FROM?.trim().toLowerCase();
+const migrateTo = process.env.MIGRATE_TO?.trim().toLowerCase() || hosting.provider;
+
+console.log("");
+console.log("=== AshenAI Deployment Advisor ===");
+console.log("");
+console.log("> Current Environment");
+console.log("  Provider:       " + hosting.provider);
+console.log("  Confidence:     " + hosting.confidence);
+console.log("  Runtime:        " + hosting.runtime);
+console.log("  OS:             " + hosting.operatingSystem);
+console.log("  Architecture:   " + hosting.architecture);
+console.log("  Containerized:  " + hosting.containerized);
+console.log("  Port source:    " + hosting.portSource);
+console.log("  Persistent:     " + hosting.persistentStorage);
+console.log("  Signals:        " + (hosting.signals.join(", ") || "none"));
+if (hosting.warnings.length) console.log("  Warnings:       " + hosting.warnings.join("; "));
+console.log("");
+console.log("  > Runtime Capabilities");
+for (const c of caps) {
+  const icon = c.available ? "+" : c.required ? "!" : "~";
+  console.log("  [" + icon + "] " + c.name + (c.version ? " " + c.version : "") + (c.reason ? " -- " + c.reason : ""));
+}
+console.log("");
+console.log("  > Feature Availability");
+for (const f of features) {
+  const icon = f.status === "available" ? "+" : f.status === "degraded" ? "~" : "!";
+  console.log("  [" + icon + "] " + f.feature + ": " + f.status + " -- " + f.reason);
+}
+console.log("");
+console.log("  > Configuration");
+for (const i of validation) {
+  const icon = i.severity === "error" ? "!" : i.severity === "warning" ? "~" : "+";
+  console.log("  [" + icon + "] " + i.name + ": " + i.status);
+}
+console.log("");
+console.log("  build:   npm install && npm run build");
+console.log("  start:   bash scripts/start.sh");
+console.log("  health:  GET /api/health");
+console.log("");
+if (migrateFrom) {
+  console.log("  > Migration: " + migrateFrom + " -> " + migrateTo);
+  const steps = getMigrationSteps(migrateFrom, migrateTo);
+  for (const s of steps) console.log("  [" + s.effort + "] [" + s.category + "] " + s.description);
+}
+console.log("");
+const recs: Record<string, string> = {
+  render: "Render: Dockerfile bundles Lavalink. Enable persistent disk.",
+  railway: "Railway: Auto-detects Dockerfile. Enable volume.",
+  "fly.io": "Fly.io: fly launch with Dockerfile. Fly volumes.",
+  termux: "Termux: Development only. Music needs separate Lavalink.",
+  "generic-vps": "VPS: Node.js 22+, Java 21+, FFmpeg. Use systemd.",
+  local: "Local: Development only.",
+  unknown: "Use generic Node.js with persistent data/ volume.",
 };
-console.log(`hosting detected: ${provider}`);
-console.log(`compatibility: ${compatibility}`);
-console.log("required configuration:");
-[
-  "NODE_ENV=production; host-supplied PORT; DISCORD_TOKEN; DISCORD_CLIENT_ID; LAVALINK_URL; LAVALINK_PASSWORD; SESSION_SECRET",
-  "owner account in persistent data/ or all ASHENAI_OWNER_* variables",
-  "persistent writable data/ volume for accounts, sessions, guild configuration, and usage data",
-  "Node.js 22+; Java 21+ and FFmpeg when self-hosting Lavalink/music",
-].forEach((item) => console.log(`- ${item}`));
-console.log("startup: npm start");
-console.log("build: npm run build");
-console.log("warnings:");
-console.log("- data/ is host persistence; an ephemeral filesystem loses state on restart.");
-console.log("- Render scripts are helpers, not application runtime dependencies.");
-console.log(`recommendation: ${compatibility === "unknown" ? "Use a generic Node.js service or Docker image with a persistent data/ volume; confirm outbound Discord/WebSocket support." : "Confirm persistent data/ storage, then use npm run build and npm start (or Docker)."}`);
-console.log("configuration status (values intentionally omitted):");
-for (const [name, value] of Object.entries(statuses)) console.log(`- ${name}: ${value}`);
+console.log("  Recommendation: " + (recs[hosting.provider] || recs.unknown));

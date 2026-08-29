@@ -31,4 +31,4 @@ RUN npm run build
 
 EXPOSE 2333
 
-CMD ["bash", "scripts/render-start.sh"]
+CMD ["bash", "scripts/start.sh"]

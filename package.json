@@ -7,7 +7,7 @@
     "ashen": "dist/cli.js"
   },
   "scripts": {
-    "start": "bash scripts/render-start.sh",
+    "start": "bash scripts/start.sh",
     "agent": "tsx src/agent/index.ts",
     "cli": "tsx src/cli.ts",
     "test": "tsx scripts/test-router.ts && tsx scripts/test-core.ts && tsx scripts/test-commands.ts && tsx scripts/test-rate-limit.ts && tsx scripts/test-security.ts && tsx scripts/test-tasks.ts && tsx scripts/test-settlement.ts",

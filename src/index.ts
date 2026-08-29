@@ -2008,7 +2008,7 @@ const internalSupervisor = new InternalSupervisor({
     );
 
     logger.error(
-      "🔄 Exiting so Render can restart AshenAI.",
+      "🔄 Exiting so the process manager can restart AshenAI.",
     );
 
     process.exit(1);
