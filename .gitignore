@@ -21,7 +21,10 @@ src.v4-backup/
 src/index.working.ts
 
 # AshenAI runtime files
+# AshenAI runtime PID/state files
 .ashennai-mode
+.ashennai-supervisor.pid
+.anomaly-monitor.pid
 .failover-monitor.pid
 .termux-backup.pid
 termux-backup.log
@@ -31,6 +34,19 @@ boot-test.log
 # Auth runtime data (never commit)
 data/accounts.json
 data/sessions.json
+
+# Runtime logs
+*.log
+
+# Legacy root-level scripts (superseded by scripts/)
+check-commands.ts
+cleanup-commands.ts
+clear-guild-commands.ts
+
+# Miscellaneous runtime artifacts
+= 
+🔍
+Thats*
 
 # Lavalink runtime files
 lavalink/Lavalink.jar

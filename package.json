@@ -17,7 +17,8 @@
     "bot": "tsx src/index.ts",
     "agents": "tsx scripts/check-coding-agents.ts",
     "test-agents": "tsx scripts/test-coding-agents.ts",
-    "auth:owner-recover": "tsx scripts/owner-recover.ts"
+    "auth:owner-recover": "tsx scripts/owner-recover.ts",
+    "deploy:advisor": "tsx scripts/deployment-advisor.ts"
   },
   "keywords": [
     "discord",
