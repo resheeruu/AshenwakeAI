@@ -33,6 +33,7 @@ export {
   getCsrfToken,
   rotateSession,
   destroyAllSessionsForAccount,
+  consumePreAuthToken,
 } from "./auth";
 
 export type {
@@ -78,7 +79,45 @@ export type {
 export {
   createSession,
   getActiveSessionCount,
+  listSessionsForAccount,
+  revokeSession,
 } from "./session-store";
+
+export type {
+  SessionInfo,
+} from "./session-store";
+
+export {
+  linkIdentity,
+  unlinkIdentity,
+  findIdentityByProvider,
+  getAccountIdentities,
+  unlinkProviderFromAccount,
+  hasProviderLinked,
+} from "./linked-identities";
+
+export type {
+  LinkedIdentity,
+  IdentityProvider,
+} from "./linked-identities";
+
+export {
+  generateResetToken,
+  validateResetToken,
+  useResetToken,
+  invalidateResetTokens,
+} from "./password-reset";
+
+export {
+  getEmailService,
+  sendPasswordResetEmail,
+  sendSecurityNotification,
+} from "./email-service";
+
+export type {
+  EmailMessage,
+  EmailService,
+} from "./email-service";
 
 export type {
   SystemStatus,

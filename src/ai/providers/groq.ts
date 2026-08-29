@@ -35,6 +35,7 @@ export class GroqProvider implements AIProvider {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           model,
           messages: request.messages,
@@ -45,10 +46,8 @@ export class GroqProvider implements AIProvider {
     );
 
     if (!response.ok) {
-      const body = await response.text();
-
       throw new Error(
-        `Groq HTTP ${response.status}: ${body}`
+        `Groq HTTP ${response.status}`
       );
     }
 

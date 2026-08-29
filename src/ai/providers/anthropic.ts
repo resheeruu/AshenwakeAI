@@ -58,15 +58,14 @@ export class AnthropicProvider implements AIProvider {
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify(body),
       }
     );
 
     if (!response.ok) {
-      const errorBody = await response.text();
-
       throw new Error(
-        `Anthropic HTTP ${response.status}: ${errorBody}`
+        `Anthropic HTTP ${response.status}`
       );
     }
 

@@ -12,8 +12,19 @@ export class OllamaProvider implements AIProvider {
     process.env.OLLAMA_MODEL ||
     "qwen2.5-coder:0.5b";
 
+  private available: boolean | null = null;
+
   isAvailable(): boolean {
-    return true;
+    if (this.available === null) {
+      this.checkAvailability();
+    }
+    return this.available === true;
+  }
+
+  private checkAvailability(): void {
+    fetch(`${this.baseURL}/api/tags`, { signal: AbortSignal.timeout(2000) })
+      .then((r) => { this.available = r.ok; })
+      .catch(() => { this.available = false; });
   }
 
   async generate(
@@ -31,6 +42,7 @@ export class OllamaProvider implements AIProvider {
         headers: {
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           model,
           messages: request.messages,
@@ -49,7 +61,7 @@ export class OllamaProvider implements AIProvider {
       const body = await response.text();
 
       throw new Error(
-        `Ollama HTTP ${response.status}: ${body}`,
+        `Ollama HTTP ${response.status}`,
       );
     }
 

@@ -88,8 +88,12 @@ export function checkAutomod(message: Message, member: GuildMember): AutomodResu
     raid.push({ userId, timestamp: now });
     const recentJoins = raid.filter((r) => now - r.timestamp < 60_000);
     raidTracker.set(raidKey, recentJoins);
-    if (recentJoins.length > 10) {
-      return { flagged: true, action: "kick", reason: "Raid detected", detail: `${recentJoins.length} actions in 60s` };
+    const userRecentCount = recentJoins.filter((r) => r.userId === userId).length;
+    if (userRecentCount > 5) {
+      return { flagged: true, action: "kick", reason: "Raid detected", detail: `${userRecentCount} actions from same user in 60s` };
+    }
+    if (recentJoins.length > 20) {
+      return { flagged: true, action: "warn", reason: "High activity detected", detail: `${recentJoins.length} total actions in 60s` };
     }
   }
 

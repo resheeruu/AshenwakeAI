@@ -235,7 +235,7 @@ export function setSessionCookie(
     `${SESSION_COOKIE}=${sessionId}`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Strict",
+    "SameSite=Lax",
     isProduction ? "Secure" : "",
     `Max-Age=${maxAge}`,
   ]
@@ -253,7 +253,7 @@ export function clearSessionCookie(
     `${SESSION_COOKIE}=`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Strict",
+    "SameSite=Lax",
     isProduction ? "Secure" : "",
     "Max-Age=0",
   ]
@@ -266,6 +266,112 @@ export function clearSessionCookie(
 export function getActiveSessionCount(): number {
   pruneExpired();
   return sessionStore.size;
+}
+
+export interface SessionInfo {
+  sessionId: string;
+  accountId: string;
+  role: "owner" | "admin" | "user";
+  createdAt: number;
+  expiresAt: number;
+  lastSeenIp: string;
+  lastRotatedAt: number;
+}
+
+export function listSessionsForAccount(accountId: string): SessionInfo[] {
+  pruneExpired();
+  const result: SessionInfo[] = [];
+  for (const session of sessionStore.values()) {
+    if (session.accountId === accountId) {
+      result.push({
+        sessionId: session.sessionId,
+        accountId: session.accountId,
+        role: session.role,
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+        lastSeenIp: session.lastSeenIp,
+        lastRotatedAt: session.lastRotatedAt,
+      });
+    }
+  }
+  return result.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function revokeSession(sessionId: string, accountId: string): boolean {
+  const session = sessionStore.get(sessionId);
+  if (!session || session.accountId !== accountId) return false;
+  sessionStore.delete(sessionId);
+  saveSessions();
+  return true;
+}
+
+/* ================================================================
+ * PRE-AUTH TOKENS (for MFA challenge flow)
+ * Short-lived, restricted tokens that grant no access to protected routes
+ * ================================================================ */
+
+const PREAUTH_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_PREAUTH_TOKENS = 100;
+
+interface PreAuthToken {
+  token: string;
+  accountId: string;
+  role: "owner" | "admin" | "user";
+  username: string;
+  createdAt: number;
+  expiresAt: number;
+  ip: string;
+}
+
+let preAuthTokens: Map<string, PreAuthToken> = new Map();
+
+function prunePreAuthTokens(): void {
+  const now = Date.now();
+  for (const [token, record] of preAuthTokens) {
+    if (record.expiresAt <= now) {
+      preAuthTokens.delete(token);
+    }
+  }
+  // Enforce max
+  if (preAuthTokens.size > MAX_PREAUTH_TOKENS) {
+    const entries = Array.from(preAuthTokens.entries());
+    entries.sort((a, b) => a[1].createdAt - b[1].createdAt);
+    const toRemove = entries.slice(0, preAuthTokens.size - MAX_PREAUTH_TOKENS);
+    for (const [token] of toRemove) {
+      preAuthTokens.delete(token);
+    }
+  }
+}
+
+export function createPreAuthToken(
+  accountId: string,
+  role: "owner" | "admin" | "user",
+  username: string,
+  ip: string,
+): string {
+  prunePreAuthTokens();
+  const now = Date.now();
+  const token = crypto.randomBytes(32).toString("hex");
+
+  preAuthTokens.set(token, {
+    token,
+    accountId,
+    role,
+    username,
+    createdAt: now,
+    expiresAt: now + PREAUTH_DURATION_MS,
+    ip,
+  });
+
+  return token;
+}
+
+export function consumePreAuthToken(token: string): PreAuthToken | null {
+  const record = preAuthTokens.get(token);
+  if (!record) return null;
+  preAuthTokens.delete(token); // One-time use
+  if (Date.now() > record.expiresAt) return null;
+  return record;
 }
 
 export { SESSION_COOKIE };

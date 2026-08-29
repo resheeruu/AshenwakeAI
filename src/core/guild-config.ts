@@ -129,8 +129,12 @@ function defaultConfig(guildId: string): GuildConfig {
   };
 }
 
+function sanitizeGuildId(guildId: string): string {
+  return guildId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+}
+
 function getGuildConfigPath(guildId: string): string {
-  return path.join(GUILD_CONFIGS_DIR, `${guildId}.json`);
+  return path.join(GUILD_CONFIGS_DIR, `${sanitizeGuildId(guildId)}.json`);
 }
 
 export function loadGuildConfig(guildId: string): GuildConfig {

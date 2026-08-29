@@ -543,19 +543,29 @@ export class ShoukakuMusicManager {
 
     player.on(
       "exception",
-      (data: any) => {
+      async (data: any) => {
         logger.error(
           `Track exception: guild=${data.guildId}`,
         );
+        try {
+          await this.handleTrackEnd(guildId, { reason: "trackException" });
+        } catch (err) {
+          logger.error(`Auto-skip after exception failed: guild=${guildId}`);
+        }
       },
     );
 
     player.on(
       "stuck",
-      (data: any) => {
+      async (data: any) => {
         logger.warn(
           `Track stuck: guild=${data.guildId} threshold=${data.thresholdMs}ms`,
         );
+        try {
+          await this.handleTrackEnd(guildId, { reason: "stuck" });
+        } catch (err) {
+          logger.error(`Auto-skip after stuck failed: guild=${guildId}`);
+        }
       },
     );
 

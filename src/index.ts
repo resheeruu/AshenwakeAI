@@ -1917,6 +1917,20 @@ if (!token) {
   process.exit(1);
 }
 
+process.on("uncaughtException", (error) => {
+  logger.error("❌ UNCAUGHT EXCEPTION — cleaning up:", error.message || String(error));
+  try { internalSupervisor.stop(); } catch {}
+  try { client.destroy(); } catch {}
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("❌ UNHANDLED REJECTION — cleaning up:", reason instanceof Error ? reason.message : String(reason));
+  try { internalSupervisor.stop(); } catch {}
+  try { client.destroy(); } catch {}
+  process.exit(1);
+});
+
 process.on("SIGINT", async () => {
   internalSupervisor.stop();
   logger.info("🛑 Shutdown signal received.");

@@ -1,3 +1,5 @@
+import { logger } from "../logger";
+
 export interface SupervisorStatus {
   running: boolean;
   lastCheck: number;
@@ -49,7 +51,7 @@ export class InternalSupervisor {
 
     this.timer.unref?.();
 
-    console.log(
+    logger.info(
       `🛡️ INTERNAL SUPERVISOR ACTIVE: checking every ${this.intervalMs / 1000}s`,
     );
   }
@@ -75,7 +77,7 @@ export class InternalSupervisor {
 
       if (result.healthy) {
         if (this.status.consecutiveFailures > 0) {
-          console.log("🟢 INTERNAL SUPERVISOR: system recovered.");
+          logger.info("🟢 INTERNAL SUPERVISOR: system recovered.");
         }
 
         this.status.consecutiveFailures = 0;
@@ -89,7 +91,7 @@ export class InternalSupervisor {
         result.reasons?.join("; ") ||
         "Unknown health failure";
 
-      console.warn(
+      logger.warn(
         `⚠️ INTERNAL SUPERVISOR: unhealthy (${this.status.consecutiveFailures}/${this.failureThreshold}) — ${reason}`,
       );
 
@@ -103,7 +105,7 @@ export class InternalSupervisor {
       this.status.failures++;
       this.status.consecutiveFailures++;
 
-      console.error(
+      logger.error(
         "❌ INTERNAL SUPERVISOR CHECK FAILED:",
         error instanceof Error
           ? error.message

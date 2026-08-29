@@ -13,13 +13,16 @@ export class UserRateLimiter {
 
   private readonly maxRequests: number;
   private readonly windowMs: number;
+  private readonly maxUsers: number;
 
   constructor(
     maxRequests = 10,
-    windowMs = 60_000
+    windowMs = 60_000,
+    maxUsers = 10_000,
   ) {
     this.maxRequests = maxRequests;
     this.windowMs = windowMs;
+    this.maxUsers = maxUsers;
 
     setInterval(
       () => this.cleanup(),
@@ -36,6 +39,10 @@ export class UserRateLimiter {
       state = {
         timestamps: [],
       };
+
+      if (this.users.size >= this.maxUsers) {
+        this.cleanup();
+      }
 
       this.users.set(
         userId,

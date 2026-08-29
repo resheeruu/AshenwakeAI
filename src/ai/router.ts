@@ -561,6 +561,11 @@ export class AIRouter {
     );
   }
 
+  private sanitizeError(error: unknown): string {
+    const raw = error instanceof Error ? error.message : String(error);
+    return raw.slice(0, 200);
+  }
+
   private recordFailure(
     provider: AIProvider,
     error: unknown
@@ -577,10 +582,7 @@ export class AIRouter {
     state.consecutiveFailures++;
     state.lastFailureAt = now;
 
-    state.lastError =
-      error instanceof Error
-        ? error.message
-        : String(error);
+    state.lastError = this.sanitizeError(error);
 
     /*
      * Credit/billing failures are unlikely to recover by themselves

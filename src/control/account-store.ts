@@ -20,8 +20,11 @@ export interface Account {
   createdAt: number;
   updatedAt: number;
   lastLoginAt?: number;
-  oauthProvider?: "google" | "discord";
-  oauthId?: string;
+  email?: string;
+  emailVerified?: boolean;
+  mfaEnabled?: boolean;
+  mfaSecret?: string;
+  recoveryCodesHash?: string;
 }
 
 export interface SanitizedAccount {
@@ -32,7 +35,9 @@ export interface SanitizedAccount {
   createdAt: number;
   updatedAt: number;
   lastLoginAt?: number;
-  oauthProvider?: "google" | "discord";
+  email?: string;
+  emailVerified?: boolean;
+  mfaEnabled?: boolean;
 }
 
 let accounts: Account[] = [];
@@ -102,7 +107,7 @@ export function generateId(): string {
 }
 
 export function sanitizeAccount(account: Account): SanitizedAccount {
-  const { passwordHash: _, passwordSalt: __, ...rest } = account;
+  const { passwordHash: _, passwordSalt: __, mfaSecret: ___, recoveryCodesHash: ____, ...rest } = account;
   return rest;
 }
 
@@ -171,7 +176,7 @@ export function createAccount(params: {
 
 export function updateAccount(
   id: string,
-  updates: Partial<Pick<Account, "username" | "role" | "enabled">>,
+  updates: Partial<Pick<Account, "username" | "role" | "enabled" | "email" | "emailVerified" | "mfaEnabled" | "mfaSecret" | "recoveryCodesHash">>,
 ): { success: boolean; account?: SanitizedAccount; error?: string } {
   const account = getAccountById(id);
   if (!account) {
@@ -208,6 +213,22 @@ export function updateAccount(
       }
     }
     account.enabled = updates.enabled;
+  }
+
+  if (updates.email !== undefined) {
+    account.email = updates.email || undefined;
+  }
+  if (updates.emailVerified !== undefined) {
+    account.emailVerified = updates.emailVerified;
+  }
+  if (updates.mfaEnabled !== undefined) {
+    account.mfaEnabled = updates.mfaEnabled;
+  }
+  if (updates.mfaSecret !== undefined) {
+    account.mfaSecret = updates.mfaSecret || undefined;
+  }
+  if (updates.recoveryCodesHash !== undefined) {
+    account.recoveryCodesHash = updates.recoveryCodesHash || undefined;
   }
 
   account.updatedAt = Date.now();

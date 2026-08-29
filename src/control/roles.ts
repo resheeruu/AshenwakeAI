@@ -60,12 +60,18 @@ export function requireAuth(
 
   const account = getAccountById(session.accountId);
   if (!account || !account.enabled) {
+    // SECURITY: Destroy the session when account is disabled/deleted
+    const { destroySession } = require("./session-store");
+    destroySession(session.sessionId);
     clearSessionCookie(res);
     res.status(401).json({ ok: false, error: "Account not found or disabled." });
     return;
   }
 
   if (account.role !== session.role) {
+    // SECURITY: Destroy the stale session when role has changed
+    const { destroySession } = require("./session-store");
+    destroySession(session.sessionId);
     clearSessionCookie(res);
     res.status(401).json({ ok: false, error: "Session role outdated. Please log in again." });
     return;

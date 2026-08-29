@@ -49,6 +49,7 @@ export class OpenAICompatibleProvider implements AIProvider {
           Authorization: `Bearer ${this.apiKey}`,
           ...this.extraHeaders,
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           model,
           messages: request.messages,
@@ -59,10 +60,8 @@ export class OpenAICompatibleProvider implements AIProvider {
     );
 
     if (!response.ok) {
-      const body = await response.text();
-
       throw new Error(
-        `${this.name} HTTP ${response.status}: ${body}`
+        `${this.name} HTTP ${response.status}`
       );
     }
 

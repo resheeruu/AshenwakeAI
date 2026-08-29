@@ -1,11 +1,14 @@
 import {
   ChatInputCommandInteraction,
+  MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
 
 import { AIRouter } from "../ai/router";
 import { taskEngine } from "../agent/tasks";
 import { AshenCommand } from "./definitions";
+import { config } from "../config/env";
+import { logger } from "../logger";
 
 const MAX = 1900;
 
@@ -129,6 +132,20 @@ export function createTaskCommand(
     ): Promise<void> {
       const subcommand =
         interaction.options.getSubcommand();
+
+      const userId = interaction.user.id;
+      const isCreator = config.creator.discord === userId;
+      const isAdmin = config.admin.discordIds.includes(userId);
+
+      if (subcommand === "run" && !isCreator && !isAdmin) {
+        const denyMsg = "❌ Only the bot owner or an admin can run autonomous tasks.";
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: denyMsg });
+        } else {
+          await interaction.reply({ content: denyMsg, flags: MessageFlags.Ephemeral });
+        }
+        return;
+      }
 
       try {
 

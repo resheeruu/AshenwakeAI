@@ -30,6 +30,7 @@ export class CohereProvider implements AIProvider {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           model,
           messages: request.messages.map((message) => ({
@@ -43,10 +44,8 @@ export class CohereProvider implements AIProvider {
     );
 
     if (!response.ok) {
-      const body = await response.text();
-
       throw new Error(
-        `Cohere HTTP ${response.status}: ${body}`
+        `Cohere HTTP ${response.status}`
       );
     }
 

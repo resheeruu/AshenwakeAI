@@ -158,12 +158,85 @@ a{color:var(--accent);text-decoration:none}
   <div class="login-box">
     <h1>AshenAI</h1>
     <p>Control Center</p>
+
+    <!-- OAuth Buttons -->
+    <button class="btn btn-outline" style="width:100%;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border-strong);padding:10px" onclick="window.location.href='/auth/discord'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+      Continue with Discord
+    </button>
+    <button class="btn btn-outline" style="width:100%;margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border-strong);padding:10px" onclick="window.location.href='/auth/google'">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Continue with Google
+    </button>
+
+    <div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:16px">─── or ───</div>
+
     <form id="loginForm">
       <input type="text" id="loginUser" placeholder="Username" autocomplete="username" required>
       <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" required>
       <button type="submit" id="loginBtn">Sign In</button>
       <div class="login-error" id="loginError"></div>
+      <div style="text-align:right;margin-top:8px">
+        <a href="#" onclick="showForgotPassword();return false" style="font-size:12px;color:var(--muted)">Forgot password?</a>
+      </div>
     </form>
+  </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div id="forgotModal" class="modal-overlay">
+  <div class="modal">
+    <h3>Reset Password</h3>
+    <p>Enter your email address and we'll send you a reset link.</p>
+    <input type="email" id="forgotEmail" placeholder="Email address" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:12px;box-sizing:border-box">
+    <div id="forgotMsg" style="font-size:12px;margin-bottom:12px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeForgotPassword()">Cancel</button>
+      <button class="btn btn-primary" id="forgotBtn" onclick="submitForgotPassword()">Send Reset Link</button>
+    </div>
+  </div>
+</div>
+
+<!-- MFA Challenge Screen -->
+<div id="mfaChallengeScreen" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px">
+  <div class="login-box">
+    <h1>MFA Verification</h1>
+    <p id="mfaChallengeSubtitle">Enter the code from your authenticator app</p>
+
+    <div id="mfaTotpInput" style="margin-bottom:16px">
+      <input type="text" id="mfaCode" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:20px;letter-spacing:4px">
+    </div>
+
+    <div id="mfaRecoverySection" style="margin-bottom:16px;display:none">
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:8px">─── or use a recovery code ───</div>
+      <input type="text" id="mfaRecoveryCode" placeholder="Recovery code (e.g. A1B2C3D4)" style="text-transform:uppercase">
+    </div>
+
+    <button class="btn btn-primary" style="width:100%" id="mfaVerifyBtn" onclick="verifyMfaChallenge()">Verify</button>
+    <div class="login-error" id="mfaError"></div>
+
+    <div style="text-align:right;margin-top:8px">
+      <a href="#" onclick="showRecoveryInput();return false" style="font-size:12px;color:var(--muted)">Use recovery code</a>
+    </div>
+    <div style="text-align:center;margin-top:12px">
+      <a href="#" onclick="cancelMfaChallenge();return false" style="font-size:12px;color:var(--muted)">Cancel</a>
+    </div>
+  </div>
+</div>
+
+<!-- OAuth Linking Confirmation Modal -->
+<div id="linkModal" class="modal-overlay">
+  <div class="modal">
+    <h3>Link Account</h3>
+    <p id="linkModalText">An account with this email already exists. Would you like to link this OAuth provider to your existing account?</p>
+    <div style="background:var(--surface-3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px">
+      <div><strong>Account:</strong> <span id="linkModalUser"></span></div>
+      <div><strong>Provider:</strong> <span id="linkModalProvider"></span></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="cancelLink()">Cancel</button>
+      <button class="btn btn-primary" id="linkConfirmBtn" onclick="confirmLink()">Link Account</button>
+    </div>
   </div>
 </div>
 
@@ -203,6 +276,7 @@ a{color:var(--accent);text-decoration:none}
       <a href="#maintenance" data-section="maintenance" data-min-role="owner"><span class="nav-icon">&#128295;</span><span class="nav-label">Maintenance</span></a>
       <a href="#audit" data-section="audit" data-min-role="owner"><span class="nav-icon">&#128220;</span><span class="nav-label">Audit Logs</span></a>
       <a href="#accounts" data-section="accounts" data-min-role="owner"><span class="nav-icon">&#128101;</span><span class="nav-label">Accounts</span></a>
+      <a href="#security" data-section="security"><span class="nav-icon">&#128274;</span><span class="nav-label">Security</span></a>
       <a href="#account" data-section="account"><span class="nav-icon">&#128100;</span><span class="nav-label">My Account</span></a>
     </nav>
 
@@ -400,6 +474,51 @@ a{color:var(--accent);text-decoration:none}
         </div>
       </div>
 
+      <!-- SECURITY -->
+      <div class="section-page" id="sec-security">
+        <div class="section-title">&#128274; Security</div>
+
+        <div class="card">
+          <h3>Authentication Methods</h3>
+          <div id="securityAuthMethods"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <h3>Multi-Factor Authentication</h3>
+          <div id="securityMFA"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+          <div id="mfaSetup" style="display:none;margin-top:12px">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Scan this QR code or enter the secret in your authenticator app:</p>
+            <div id="mfaQrCode" style="text-align:center;margin-bottom:12px"></div>
+            <div id="mfaSecret" style="font-family:monospace;font-size:14px;padding:8px;background:var(--surface-2);border-radius:6px;margin-bottom:8px;word-break:break-all"></div>
+            <input type="text" id="mfaSetupCode" placeholder="Enter 6-digit code" style="padding:8px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px">
+            <button class="btn btn-primary" onclick="verifyMFA(true)">Enable MFA</button>
+          </div>
+          <div id="mfaDisable" style="display:none;margin-top:12px">
+            <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Enter your password and a TOTP code to disable MFA:</p>
+            <input type="password" id="mfaDisablePw" placeholder="Enter password to confirm" style="padding:8px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px">
+            <input type="text" id="mfaDisableCode" placeholder="6-digit TOTP code" maxlength="6" style="padding:8px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px">
+            <button class="btn btn-danger" onclick="disableMFA()">Disable MFA</button>
+          </div>
+          <div id="mfaRecovery" style="display:none;margin-top:12px">
+            <p style="font-size:13px;color:var(--warning);margin-bottom:8px">Save these recovery codes securely. They will not be shown again.</p>
+            <div id="recoveryCodesList" style="font-family:monospace;font-size:12px;padding:8px;background:var(--surface-2);border-radius:6px;white-space:pre-line"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <h3>Sessions</h3>
+          <div id="securitySessions"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+          <div style="margin-top:8px">
+            <button class="btn btn-danger" style="font-size:12px;padding:6px 12px" onclick="revokeAllSessions()">Revoke All Other Sessions</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <h3>Linked Accounts</h3>
+          <div id="securityIdentities"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -518,6 +637,12 @@ a{color:var(--accent);text-decoration:none}
       var r = await fetch(API+'/auth/login',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
       var j = await r.json();
       if (j.ok) {
+        // MFA required — show challenge screen
+        if (j.mfaRequired) {
+          showMfaChallenge(j.challengeToken, j.username, j.role);
+          btn.disabled = false;
+          return;
+        }
         currentUser = j.user;
         csrfToken = j.csrfToken;
         showDashboard();
@@ -538,6 +663,184 @@ a{color:var(--accent);text-decoration:none}
     currentUser = null;
     showLogin();
     if (refreshInterval) clearInterval(refreshInterval);
+  };
+
+  window.showForgotPassword = function(){
+    document.getElementById('forgotModal').classList.add('show');
+    document.getElementById('forgotEmail').value='';
+    document.getElementById('forgotMsg').textContent='';
+  };
+
+  window.closeForgotPassword = function(){
+    document.getElementById('forgotModal').classList.remove('show');
+  };
+
+  window.submitForgotPassword = async function(){
+    var email = document.getElementById('forgotEmail').value.trim();
+    var msg = document.getElementById('forgotMsg');
+    var btn = document.getElementById('forgotBtn');
+    if(!email){msg.style.color='var(--danger)';msg.textContent='Email required.';return;}
+    btn.disabled=true;
+    try{
+      var r=await fetch(API+'/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})});
+      var d=await r.json();
+      msg.style.color='var(--success)';
+      msg.textContent=d.message||'If that account exists, a reset link has been sent.';
+    }catch(e){
+      msg.style.color='var(--danger)';
+      msg.textContent='Connection failed.';
+    }
+    btn.disabled=false;
+  };
+
+  // Handle OAuth callback parameters
+  (function(){
+    var params=new URLSearchParams(window.location.search);
+    if(params.get('login')==='success'){
+      // OAuth login succeeded - reload to check auth
+      window.location.href='/';
+      return;
+    }
+    if(params.get('login')==='error'){
+      var msg=params.get('message')||'Login failed';
+      var err=document.getElementById('loginError');
+      if(err)err.textContent=decodeURIComponent(msg);
+    }
+    // Handle OAuth linking confirmation
+    if(params.get('link_required')==='true'){
+      var provider=params.get('provider')||'';
+      var linkToken=params.get('linkToken')||'';
+      var accountId=params.get('accountId')||'';
+      var username=decodeURIComponent(params.get('username')||'');
+      showLinkModal(provider,linkToken,accountId,username);
+      // Clean URL
+      window.history.replaceState({},'',window.location.pathname);
+    }
+  })();
+
+  // ============================================================
+  // MFA CHALLENGE
+  // ============================================================
+  var currentMfaChallenge = null;
+
+  window.showMfaChallenge = function(challengeToken, username, role) {
+    currentMfaChallenge = { challengeToken, username, role };
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mfaChallengeScreen').style.display = 'flex';
+    document.getElementById('mfaError').textContent = '';
+    document.getElementById('mfaCode').value = '';
+    document.getElementById('mfaRecoveryCode').value = '';
+    document.getElementById('mfaTotpInput').style.display = 'block';
+    document.getElementById('mfaRecoverySection').style.display = 'none';
+    document.getElementById('mfaChallengeSubtitle').textContent = 'Enter the code from your authenticator app';
+    setTimeout(function(){ document.getElementById('mfaCode').focus(); }, 100);
+  };
+
+  window.showRecoveryInput = function() {
+    document.getElementById('mfaTotpInput').style.display = 'none';
+    document.getElementById('mfaRecoverySection').style.display = 'block';
+    document.getElementById('mfaChallengeSubtitle').textContent = 'Enter one of your recovery codes';
+    setTimeout(function(){ document.getElementById('mfaRecoveryCode').focus(); }, 100);
+  };
+
+  window.cancelMfaChallenge = function() {
+    currentMfaChallenge = null;
+    document.getElementById('mfaChallengeScreen').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('loginError').textContent = '';
+  };
+
+  window.verifyMfaChallenge = async function() {
+    if (!currentMfaChallenge) return;
+    var btn = document.getElementById('mfaVerifyBtn');
+    var err = document.getElementById('mfaError');
+    btn.disabled = true;
+    err.textContent = '';
+
+    var code = document.getElementById('mfaCode').value.trim();
+    var recoveryCode = document.getElementById('mfaRecoveryCode').value.trim();
+
+    if (!code && !recoveryCode) {
+      err.textContent = 'Please enter a code.';
+      btn.disabled = false;
+      return;
+    }
+
+    try {
+      var body = { challengeToken: currentMfaChallenge.challengeToken };
+      if (code) body.code = code;
+      else if (recoveryCode) body.recoveryCode = recoveryCode;
+
+      var r = await fetch(API + '/auth/mfa/challenge', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      var j = await r.json();
+      if (j.ok) {
+        currentUser = j.user;
+        csrfToken = j.csrfToken;
+        document.getElementById('mfaChallengeScreen').style.display = 'none';
+        showDashboard();
+        loadSection('overview');
+        startRefresh();
+      } else {
+        err.textContent = j.error || 'Verification failed';
+      }
+    } catch(ex) {
+      err.textContent = 'Connection failed';
+    }
+    btn.disabled = false;
+  };
+
+  // Handle Enter key in MFA code inputs
+  document.getElementById('mfaCode').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); verifyMfaChallenge(); }
+  });
+  document.getElementById('mfaRecoveryCode').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); verifyMfaChallenge(); }
+  });
+
+  // ============================================================
+  // OAUTH LINKING CONFIRMATION
+  // ============================================================
+  var currentLinkData = null;
+
+  window.showLinkModal = function(provider, linkToken, accountId, username) {
+    currentLinkData = { provider, linkToken, accountId, username };
+    document.getElementById('linkModalUser').textContent = username;
+    document.getElementById('linkModalProvider').textContent = provider.charAt(0).toUpperCase() + provider.slice(1);
+    document.getElementById('linkModal').classList.add('show');
+  };
+
+  window.cancelLink = function() {
+    currentLinkData = null;
+    document.getElementById('linkModal').classList.remove('show');
+  };
+
+  window.confirmLink = async function() {
+    if (!currentLinkData) return;
+    var btn = document.getElementById('linkConfirmBtn');
+    btn.disabled = true;
+    try {
+      var r = await fetch(API + '/api/account/identities/' + currentLinkData.provider + '/link', {
+        method: 'POST',
+        credentials: 'include',
+        headers: apiHeaders('POST'),
+        body: JSON.stringify({ linkToken: currentLinkData.linkToken }),
+      });
+      var j = await r.json();
+      if (j.ok) {
+        // Link succeeded - reload to check auth
+        window.location.href = '/';
+      } else {
+        alert(j.error || 'Linking failed');
+      }
+    } catch(ex) {
+      alert('Connection failed');
+    }
+    btn.disabled = false;
   };
 
   document.querySelectorAll('.sidebar a').forEach(function(a){
@@ -577,6 +880,7 @@ a{color:var(--accent);text-decoration:none}
       case 'config':loadConfig();break;
       case 'audit':loadAudit();break;
       case 'accounts':loadAccounts();break;
+      case 'security':loadSecurity();break;
       case 'account':loadAccount();break;
     }
   }
@@ -844,6 +1148,152 @@ a{color:var(--accent);text-decoration:none}
     if(d&&d.ok){alert(d.message||'Action executed');}
     else{alert('Failed: '+(d&&d.error?'d.error':'Unknown error'));}
     if(action==='restart'||action==='stop'){setTimeout(function(){loadOverview()},3000);}
+  };
+
+  // === SECURITY SECTION ===
+  async function loadSecurity(){
+    var data=await Promise.all([api('/api/account/security'),api('/api/account/sessions')]);
+    var sec=data[0],sess=data[1];
+    if(sec&&sec.security){
+      var s=sec.security;
+      var authMethods='<div style="font-size:13px">';
+      authMethods+='<p><strong>Password:</strong> '+(s.hasPassword?'<span style="color:var(--success)">Configured</span>':'<span style="color:var(--muted)">Not set</span>')+'</p>';
+      authMethods+='<p><strong>Email:</strong> '+(s.email?s.email+(s.emailVerified?' <span style="color:var(--success)">(verified)</span>':' <span style="color:var(--warning)">(unverified)</span>'):'<span style="color:var(--muted)">Not set</span>')+'</p>';
+      authMethods+='</div>';
+      document.getElementById('securityAuthMethods').innerHTML=authMethods;
+
+      var mfaHtml='<div style="font-size:13px">';
+      mfaHtml+='<p><strong>Status:</strong> '+(s.mfaEnabled?'<span style="color:var(--success)">Enabled</span>':'<span style="color:var(--muted)">Disabled</span>')+'</p>';
+      if(!s.mfaEnabled){
+        mfaHtml+='<button class="btn btn-primary" style="font-size:12px;padding:6px 12px;margin-top:8px" onclick="setupMFA()">Enable MFA</button>';
+      } else {
+        mfaHtml+='<button class="btn btn-danger" style="font-size:12px;padding:6px 12px;margin-top:8px" onclick="document.getElementById(\'mfaDisable\').style.display=\'block\'">Disable MFA</button>';
+        mfaHtml+=' <button class="btn btn-outline" style="font-size:12px;padding:6px 12px;margin-top:8px" onclick="regenerateRecovery()">New Recovery Codes</button>';
+      }
+      mfaHtml+='</div>';
+      document.getElementById('securityMFA').innerHTML=mfaHtml;
+    }
+
+    if(sess&&sess.sessions){
+      var sHtml='<div style="font-size:13px">';
+      sess.sessions.forEach(function(s){
+        sHtml+='<div style="padding:8px;border-bottom:1px solid var(--border)">';
+        sHtml+='<span style="font-family:monospace">'+esc(s.sessionId)+'</span>';
+        if(s.isCurrent)sHtml+=' <span class="badge badge-green">Current</span>';
+        sHtml+=' <span style="color:var(--muted);font-size:11px">IP: '+esc(s.lastSeenIp)+'</span>';
+        sHtml+=' <span style="color:var(--muted);font-size:11px">Created: '+new Date(s.createdAt).toLocaleString()+'</span>';
+        sHtml+='</div>';
+      });
+      sHtml+='</div>';
+      document.getElementById('securitySessions').innerHTML=sHtml;
+    }
+
+    await loadSecurityIdentities();
+  }
+
+  async function loadSecurityIdentities(){
+    var sec=await api('/api/account/security');
+    if(!sec||!sec.security)return;
+    var linked=sec.security.linkedProviders||[];
+    var html='<div style="font-size:13px">';
+    if(linked.length){
+      linked.forEach(function(p){
+        html+='<div style="padding:8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
+        html+='<div><strong>'+esc(p.provider)+'</strong> - '+esc(p.displayName||'Connected')+'</div>';
+        html+='<button class="btn btn-danger" style="font-size:10px;padding:4px 8px" onclick="unlinkProvider(\''+esc(p.provider)+'\')">Unlink</button>';
+        html+='</div>';
+      });
+    } else {
+      html+='<p style="color:var(--muted)">No linked accounts</p>';
+    }
+    html+='<div style="margin-top:8px">';
+    if(!linked.find(function(p){return p.provider==='discord'})){
+      html+='<button class="btn btn-outline" style="font-size:12px;padding:6px 12px;margin-right:8px" onclick="linkProvider(\'discord\')">Link Discord</button>';
+    }
+    if(!linked.find(function(p){return p.provider==='google'})){
+      html+='<button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="linkProvider(\'google\')">Link Google</button>';
+    }
+    html+='</div></div>';
+    document.getElementById('securityIdentities').innerHTML=html;
+  }
+
+  window.linkProvider=async function(provider){
+    var d=await api('/api/account/identities/'+provider+'/link',{method:'POST'});
+    if(d&&d.ok&&d.url){window.location.href=d.url;}
+    else{alert((d&&d.error)||'Failed to initiate linking');}
+  };
+
+  window.unlinkProvider=async function(provider){
+    if(!confirm('Unlink '+provider+' account?'))return;
+    var d=await api('/api/account/identities/'+provider+'/unlink',{method:'POST'});
+    if(d&&d.ok){loadSecurityIdentities();}
+    else{alert((d&&d.error)||'Failed to unlink');}
+  };
+
+  window.revokeAllSessions=async function(){
+    if(!confirm('Revoke all other sessions? You will remain logged in.'))return;
+    var d=await api('/api/account/sessions/revoke-all',{method:'POST'});
+    if(d&&d.ok){loadSecurity();}
+    else{alert('Failed to revoke sessions');}
+  };
+
+  window.setupMFA=async function(){
+    var d=await api('/auth/mfa/setup',{method:'POST'});
+    if(d&&d.ok){
+      document.getElementById('mfaSetup').style.display='block';
+      document.getElementById('mfaSecret').textContent=d.secret;
+      // Display QR code if available
+      var qrContainer = document.getElementById('mfaQrCode');
+      if(d.qrCode){
+        qrContainer.innerHTML='<img src="'+d.qrCode+'" alt="MFA QR Code" style="border-radius:8px;max-width:256px">';
+      } else {
+        qrContainer.innerHTML='<p style="color:var(--muted);font-size:12px">QR code unavailable. Use the secret above.</p>';
+      }
+    } else {
+      alert((d&&d.error)||'Failed to setup MFA');
+    }
+  };
+
+  window.verifyMFA=async function(enable){
+    var code=document.getElementById('mfaSetupCode').value;
+    if(!code||code.length!==6){alert('Enter a 6-digit code');return;}
+    var d=await api('/auth/mfa/verify',{method:'POST',body:JSON.stringify({code:code,enable:enable})});
+    if(d&&d.ok){
+      if(d.recoveryCodes){
+        document.getElementById('mfaSetup').style.display='none';
+        document.getElementById('mfaRecovery').style.display='block';
+        document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');
+      }
+      loadSecurity();
+    } else {
+      alert((d&&d.error)||'Invalid code');
+    }
+  };
+
+  window.disableMFA=async function(){
+    var pw=document.getElementById('mfaDisablePw').value;
+    var code=document.getElementById('mfaDisableCode').value;
+    if(!pw){alert('Password required');return;}
+    if(!code||code.length!==6){alert('Enter a 6-digit TOTP code');return;}
+    var d=await api('/auth/mfa/disable',{method:'POST',body:JSON.stringify({password:pw,code:code})});
+    if(d&&d.ok){
+      document.getElementById('mfaDisable').style.display='none';
+      loadSecurity();
+    } else {
+      alert((d&&d.error)||'Failed to disable MFA');
+    }
+  };
+
+  window.regenerateRecovery=async function(){
+    var pw=prompt('Enter your password to regenerate recovery codes:');
+    if(!pw)return;
+    var d=await api('/auth/mfa/recovery-codes',{method:'POST',body:JSON.stringify({password:pw})});
+    if(d&&d.ok){
+      document.getElementById('mfaRecovery').style.display='block';
+      document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');
+    } else {
+      alert((d&&d.error)||'Failed to regenerate codes');
+    }
   };
 
   checkAuth();

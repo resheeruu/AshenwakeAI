@@ -17,6 +17,8 @@ import {
   validateCsrfToken,
   getCsrfToken,
   rotateSession,
+  createPreAuthToken,
+  consumePreAuthToken,
   type Session,
 } from "./session-store";
 
@@ -28,6 +30,9 @@ export interface LoginResult {
   role?: "owner" | "admin" | "user";
   username?: string;
   reason?: "not_configured" | "rate_limited" | "invalid_credentials" | "disabled";
+  mfaRequired?: boolean;
+  challengeToken?: string;
+  mfaAccountId?: string;
 }
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -130,10 +135,33 @@ export function authenticateOwner(
   loginAttempts.delete(ip);
   usernameAttempts.delete(username);
 
-  const session = createSession(account.id, account.role, ip);
-
   const { updateAccountCredentials } = require("./account-store");
   updateAccountCredentials(account.id, { lastLoginAt: Date.now() });
+
+  // Check if MFA is enabled — require challenge before granting full session
+  if (account.mfaEnabled && account.role !== "user") {
+    const challengeToken = createPreAuthToken(account.id, account.role, account.username, ip);
+
+    logger_info(`🔐 MFA required for: ${account.username} from ${ip}`);
+    recordAudit({
+      who: account.username,
+      what: "MFA challenge required",
+      where: "control-auth",
+      result: "denied",
+      details: `IP: ${ip}`,
+    });
+
+    return {
+      success: true,
+      mfaRequired: true,
+      challengeToken,
+      mfaAccountId: account.id,
+      username: account.username,
+      role: account.role,
+    };
+  }
+
+  const session = createSession(account.id, account.role, ip);
 
   logger_info(`✅ Login successful: ${account.username} (role: ${account.role}) from ${ip}`);
   recordAudit({
@@ -166,20 +194,25 @@ export function createLoginRateLimiter(): {
   check: (ip: string) => { allowed: boolean; retryAfterMs?: number };
   reset: (ip: string) => void;
 } {
+  const ownAttempts = new Map<string, number[]>();
+
   return {
     check(ip: string) {
-      const attempts = loginAttempts.get(ip) || [];
       const now = Date.now();
+      const attempts = ownAttempts.get(ip) || [];
       const recentAttempts = attempts.filter((t) => now - t < LOGIN_WINDOW_MS);
       if (recentAttempts.length >= MAX_LOGIN_ATTEMPTS) {
         const oldestAttempt = Math.min(...recentAttempts);
         const retryAfterMs = LOGIN_WINDOW_MS - (now - oldestAttempt);
         return { allowed: false, retryAfterMs };
       }
+      // Record this attempt
+      recentAttempts.push(now);
+      ownAttempts.set(ip, recentAttempts);
       return { allowed: true };
     },
     reset(ip: string) {
-      loginAttempts.delete(ip);
+      ownAttempts.delete(ip);
     },
   };
 }
@@ -192,6 +225,7 @@ export {
   getCsrfToken,
   rotateSession,
   destroyAllSessionsForAccount,
+  consumePreAuthToken,
   type Session,
 };
 

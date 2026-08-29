@@ -234,10 +234,23 @@ export function getGuildConfig(guildId: string): GuildConfig {
   return loadGuildConfig(guildId);
 }
 
+const GUILD_CONFIG_ALLOWED_FIELDS = new Set([
+  "guildName", "enabled", "assistantChannelId", "ticketCategoryId",
+  "logChannelId", "verificationRoleId", "welcomeChannelId",
+  "automod", "moderation", "tickets", "community",
+  "automation", "personality", "memory", "usage",
+]);
+
 export function updateGuildConfig(guildId: string, updates: Partial<GuildConfig>): ActionResult {
   try {
     const config = loadGuildConfig(guildId);
-    const merged = { ...config, ...updates, guildId };
+    const filtered: Record<string, unknown> = {};
+    for (const key of Object.keys(updates)) {
+      if (GUILD_CONFIG_ALLOWED_FIELDS.has(key)) {
+        (filtered as any)[key] = (updates as any)[key];
+      }
+    }
+    const merged = { ...config, ...filtered, guildId };
     saveGuildConfig(merged);
     recordAudit({
       who: "control-layer",

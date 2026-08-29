@@ -68,6 +68,7 @@ export class GeminiProvider implements AIProvider {
           "Content-Type": "application/json",
           "x-goog-api-key": apiKey,
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify(body),
       }
     );
@@ -87,8 +88,7 @@ export class GeminiProvider implements AIProvider {
     if (!response.ok) {
       throw new Error(
         `Gemini HTTP ${response.status}: ${
-          data?.error?.message ||
-          raw.slice(0, 500)
+          data?.error?.message || "Unknown error"
         }`
       );
     }
@@ -114,7 +114,7 @@ export class GeminiProvider implements AIProvider {
 
       throw new Error(
         `Gemini returned no candidates. ` +
-        `Response: ${raw.slice(0, 800)}`
+        `Response: (details redacted)`
       );
     }
 
