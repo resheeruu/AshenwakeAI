@@ -56,7 +56,7 @@ const recs: Record<string, string> = {
   render: "Render: Dockerfile includes FFmpeg. Enable persistent disk.",
   railway: "Railway: Auto-detects Dockerfile. Enable volume.",
   "fly.io": "Fly.io: fly launch with Dockerfile. Fly volumes.",
-  termux: "Termux: Development only. Music runs via Node.js.",
+  termux: "Termux: Development only.",
   "generic-vps": "VPS: Node.js 22+, FFmpeg. Use systemd.",
   local: "Local: Development only.",
   unknown: "Use generic Node.js with persistent data/ volume.",

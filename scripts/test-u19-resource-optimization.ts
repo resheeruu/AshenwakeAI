@@ -123,7 +123,6 @@ test("buildResourceProfile returns valid structure", "LIVE VERIFIED", () => {
   assert.ok(profile.memory.nodeRSS_MB > 0, "nodeRSS must be positive");
   assert.ok(profile.cpu.arch, "arch must be set");
   assert.ok(Array.isArray(profile.capabilities), "capabilities must be array");
-  assert.ok(typeof profile.musicReady === "boolean", "musicReady must be boolean");
   assert.ok(Array.isArray(profile.recommendations), "recommendations must be array");
 });
 
@@ -138,11 +137,6 @@ test("classification reflects actual host state (LIVE)", "LIVE VERIFIED", () => 
   // device (e.g., phone at 98% disk), "critical" or "degraded" is correct.
   assert.ok(["healthy", "constrained", "degraded", "critical"].includes(profile.classification),
     `classification: ${profile.classification}`);
-});
-
-test("musicReady reflects Node-only music (LIVE)", "LIVE VERIFIED", () => {
-  const profile = buildResourceProfile();
-  assert.equal(profile.musicReady, true, "music should be ready on this host (Node-only)");
 });
 
 test("disk usage measured (LIVE)", "LIVE VERIFIED", () => {
@@ -263,10 +257,6 @@ test("backup-manager.ts exists (pre-existing)", "LIVE VERIFIED", () => {
 // PHASE 6: U12-U18 REGRESSION
 // ============================================================
 console.log("\n===== PHASE 6: REGRESSION =====");
-
-test("U18 test file exists", "LIVE VERIFIED", () => {
-  assert.ok(fs.existsSync(path.join(ROOT, "scripts/test-u18-music.ts")));
-});
 
 test("U16 test file exists", "LIVE VERIFIED", () => {
   assert.ok(fs.existsSync(path.join(ROOT, "scripts/test-u16-hosting.ts")));

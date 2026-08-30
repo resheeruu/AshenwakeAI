@@ -6,9 +6,6 @@ set -euo pipefail
 # AshenAI Generic Startup Script
 # Hosting-agnostic: works on Render, Docker, Railway, Fly.io,
 # Koyeb, VPS, Termux, and any generic Node.js environment.
-#
-# Music runs entirely via Node.js (discord-player).
-# No Java or Lavalink required.
 # ============================================================
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,12 +32,6 @@ trap cleanup SIGTERM SIGINT SIGHUP
 echo "[start] AshenAI Generic Startup"
 echo "[start] NODE_ENV=${NODE_ENV:-not set}"
 echo "[start] PORT=${PORT}"
-
-if command -v ffmpeg >/dev/null 2>&1; then
-  echo "[start] FFmpeg: available"
-else
-  echo "[start] FFmpeg: not found (music encoding may be limited)"
-fi
 
 # ---------- Start AshenAI ----------
 

@@ -31,7 +31,6 @@ export function detectFeatureCapabilities(): FeatureCapability[] {
     { feature: "oauth", status: has("external-network") ? "available" : "unavailable", reason: "Requires redirect to providers", configurationRequired: ["DISCORD_OAUTH_CLIENT_ID", "AUTH_BASE_URL"] },
     { feature: "email-password-reset", status: smtpOk ? "available" : "degraded", reason: smtpOk ? "SMTP configured" : "No SMTP — dev mode only", configurationRequired: ["SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM"] },
     { feature: "mfa", status: "available", reason: "TOTP-based with recovery codes", configurationRequired: [] },
-    { feature: "music", status: has("ffmpeg") ? "available" : "degraded", reason: has("ffmpeg") ? "Node-only music via discord-player + FFmpeg" : "Music available but encoding limited without FFmpeg", configurationRequired: [] },
     { feature: "agent", status: "available", reason: "Autonomous agent", configurationRequired: [] },
     { feature: "self-healer", status: "available", reason: "Source watcher", configurationRequired: [] },
     { feature: "background-tasks", status: "available", reason: "Task engine", configurationRequired: [] },
@@ -75,11 +74,6 @@ export function getMigrationSteps(from: string, to: string): MigrationStep[] {
   if (from === "docker" && to === "generic-vps") {
     steps.push({ category: "deployment", description: "Install Node.js 22+, FFmpeg", effort: "medium" });
     steps.push({ category: "process", description: "Use systemd", effort: "medium" });
-  }
-  if (to === "docker") {
-    steps.push({ category: "music", description: "Docker includes FFmpeg for music", effort: "none" });
-  } else {
-    steps.push({ category: "music", description: "FFmpeg required for music encoding", effort: "low" });
   }
   if (from !== to) {
     steps.push({ category: "oauth", description: "Update OAuth callback URLs if AUTH_BASE_URL changes", effort: "low" });

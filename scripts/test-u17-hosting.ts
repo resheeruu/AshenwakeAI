@@ -228,9 +228,9 @@ test("optional caps have reasons (live)", "LIVE VERIFIED", () => {
 // ============================================================
 console.log("\n===== PHASE 4: FEATURE STATES =====");
 
-test("17 features returned (live)", "LIVE VERIFIED", () => {
+test("16 features returned (live)", "LIVE VERIFIED", () => {
   const fs2 = detectFeatureCapabilities();
-  assert.ok(fs2.length >= 16, "Must have 16+ features, got " + fs2.length);
+  assert.ok(fs2.length >= 14, "Must have 14+ features, got " + fs2.length);
 });
 
 test("all features valid (live)", "LIVE VERIFIED", () => {
@@ -262,13 +262,6 @@ test("auth + mfa: always available (live)", "LIVE VERIFIED", () => {
 
 test("email: degraded without SMTP (live)", "LIVE VERIFIED", () => {
   assert.equal(detectFeatureCapabilities().find((x: any) => x.feature === "email-password-reset")?.status, "degraded");
-});
-
-test("music available (live)", "LIVE VERIFIED", () => {
-  const fs2 = detectFeatureCapabilities();
-  const music = fs2.find((x: any) => x.feature === "music");
-  assert.ok(music);
-  assert.ok(["available", "degraded"].includes(music.status));
 });
 
 test("agent, self-healer, bg-tasks: always (live)", "LIVE VERIFIED", () => {
@@ -354,13 +347,6 @@ test("start.sh: signals, cleanup", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
   assert.ok(c.includes("SIGTERM")); assert.ok(c.includes("SIGINT"));
   assert.ok(c.includes("cleanup()")); assert.ok(c.includes("kill -TERM"));
-});
-
-test("start.sh: Node-only music (no Lavalink)", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(!c.includes("start_lavalink"), "Must not have start_lavalink function");
-  assert.ok(!c.includes("wait_for_lavalink"), "Must not have wait_for_lavalink function");
-  assert.ok(c.includes("node --import tsx") || c.includes("node "), "Must start node directly");
 });
 
 test("start.sh: no secrets in logs", "LIVE VERIFIED", () => {
@@ -467,7 +453,6 @@ test("degraded features have reasons (live)", "LIVE VERIFIED", () => {
 test("start.sh starts Node.js directly", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
   assert.ok(c.includes("node"), "Must start node");
-  assert.ok(!c.includes("START_LAVALINK"), "Must not reference START_LAVALINK");
 });
 
 // ============================================================

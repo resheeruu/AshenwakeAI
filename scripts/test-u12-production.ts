@@ -330,35 +330,6 @@ test("Gemini provider does not include raw response in errors", async () => {
 });
 
 /* ======================================================
-   12. MUSIC AUTO-SKIP ON EXCEPTION/STUCK
-   ====================================================== */
-console.log("\n===== MUSIC AUTO-SKIP =====");
-
-test("Music manager auto-skips on playerError event", async () => {
-  const fs = await import("fs");
-  const content = fs.readFileSync(
-    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
-    "utf8"
-  );
-  assert.ok(
-    content.includes("playerError") || content.includes("error"),
-    "NodeMusicManager should handle playerError events"
-  );
-});
-
-test("Music manager handles playerFinish event", async () => {
-  const fs = await import("fs");
-  const content = fs.readFileSync(
-    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
-    "utf8"
-  );
-  assert.ok(
-    content.includes("playerFinish") || content.includes("emptyQueue"),
-    "NodeMusicManager should handle playerFinish and emptyQueue events"
-  );
-});
-
-/* ======================================================
    SUMMARY
    ====================================================== */
 console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

@@ -27,7 +27,6 @@ const manager = new WebSocketManager({
     1 |       // Guilds
     512 |     // GuildMessages
     4096 |    // MessageContent
-    32768 |   // GuildVoiceStates
     65536,   // DirectMessages
   rest,
 });

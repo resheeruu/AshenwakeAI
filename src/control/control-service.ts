@@ -211,7 +211,6 @@ export function getFeatureStatus(): FeatureStatus {
     web: true,
     agent: true,
     selfHealer: true,
-    music: true,
     games: true,
     moderation: true,
     automod: true,

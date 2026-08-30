@@ -3,7 +3,7 @@
  * 200+ assertions across 5 sections
  *
  * Verifies that NO raw error.message content leaks to any user-facing
- * interface across all Discord tools, confirmation handler, music,
+ * interface across all Discord tools, confirmation handler,
  * game, and task commands.
  * ================================================================ */
 
@@ -203,19 +203,12 @@ assertIncludes(confirmContent, "toolRateLimiter.release", "confirmation-handler 
 assertIncludes(confirmContent, 'content: `❌ Execution failed. The issue has been logged.`', "confirmation-handler uses correct content format");
 
 /* ================================================================
- * SECTION D: Music, Game, Task Commands (40+ assertions)
+ * SECTION D: Game, Task Commands (40+ assertions)
  * ================================================================ */
 
-console.log("\nSection D: Music, Game, Task Commands");
+console.log("\nSection D: Game, Task Commands");
 
-// D1-D5: Music commands
-const musicContent = readFile("src/music/musicCommands.ts");
-assertIncludes(musicContent, "The issue has been logged", "musicCommands uses generic message");
-assertNotIncludes(musicContent, "errorMessage.slice", "musicCommands does not leak sliced error");
-assertNotIncludes(musicContent, "${errorMessage}", "musicCommands does not leak errorMessage variable");
-assertIncludes(musicContent, "I couldn't play that track", "musicCommands preserves user-friendly prefix");
-
-// D6-D12: Game commands (7 locations)
+// D1-D7: Game commands (7 locations)
 const gameContent = readFile("src/commands/game.ts");
 assertIncludes(gameContent, "Failed to set pet. The issue has been logged.", "game.ts pet error sanitized");
 assertIncludes(gameContent, "Failed to create party. The issue has been logged.", "game.ts party error sanitized");
@@ -251,7 +244,6 @@ const allModifiedFiles = [
   "src/ai/tools/discord/inspect-ai-config.ts",
   "src/ai/tools/discord/health-check.ts",
   "src/discord/interactions/confirmation-handler.ts",
-  "src/music/musicCommands.ts",
   "src/commands/game.ts",
   "src/commands/task.ts",
 ];

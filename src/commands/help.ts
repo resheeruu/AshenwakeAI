@@ -71,18 +71,6 @@ const ALL_CATEGORIES: HelpCategory[] = [
     ],
   },
   {
-    name: "Music",
-    emoji: "\u{1F3B5}",
-    commands: [
-      { name: "!play", description: "Play a song" },
-      { name: "!pause", description: "Pause playback" },
-      { name: "!resume", description: "Resume playback" },
-      { name: "!skip", description: "Skip current song" },
-      { name: "!queue", description: "View music queue" },
-      { name: "!stop", description: "Stop music and clear queue" },
-    ],
-  },
-  {
     name: "Utility",
     emoji: "\u{1F527}",
     commands: [

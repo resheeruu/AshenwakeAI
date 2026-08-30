@@ -347,35 +347,6 @@ test("Dev email service checks NODE_ENV before enabling reset links", async () =
 });
 
 /* ======================================================
-   11. MUSIC AUTO-SKIP (verifying still present)
-   ====================================================== */
-console.log("\n===== MUSIC AUTO-SKIP =====");
-
-test("Music manager auto-skips on playerError event", async () => {
-  const fs = await import("fs");
-  const content = fs.readFileSync(
-    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
-    "utf8"
-  );
-  assert.ok(
-    content.includes("playerError") || content.includes("error"),
-    "NodeMusicManager should handle playerError events"
-  );
-});
-
-test("Music manager handles playerFinish event", async () => {
-  const fs = await import("fs");
-  const content = fs.readFileSync(
-    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
-    "utf8"
-  );
-  assert.ok(
-    content.includes("playerFinish") || content.includes("emptyQueue"),
-    "NodeMusicManager should handle playerFinish and emptyQueue events"
-  );
-});
-
-/* ======================================================
    12. AI PROVIDER TIMEOUTS
    ====================================================== */
 console.log("\n===== AI PROVIDER TIMEOUTS =====");

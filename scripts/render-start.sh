@@ -5,8 +5,6 @@ set -euo pipefail
 # ============================================================
 # AshenAI Render Startup Script
 # Starts AshenAI directly on Render.
-# Music runs entirely via Node.js (discord-player).
-# No Java or Lavalink required.
 # ============================================================
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,13 +24,6 @@ cleanup() {
 }
 
 trap cleanup SIGTERM SIGINT SIGHUP
-
-# ---------- FFmpeg check ----------
-if command -v ffmpeg >/dev/null 2>&1; then
-  echo "[render-start] FFmpeg: $(ffmpeg -version 2>&1 | head -1)"
-else
-  echo "[render-start] WARNING: FFmpeg not found"
-fi
 
 # ---------- Start AshenAI ----------
 echo "[render-start] Starting AshenAI on port $PORT..."

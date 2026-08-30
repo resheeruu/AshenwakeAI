@@ -287,10 +287,10 @@ test("all optional capabilities have reason", () => {
 // ============================================================
 console.log("\n===== PHASE 4: FEATURE MATRIX =====");
 
-test("17 features in matrix", () => {
+test("16 features in matrix", () => {
   const m = freshFeatures();
   const f = m.detectFeatureCapabilities();
-  assert.ok(f.length >= 16, "Must have 16+ features, got " + f.length);
+  assert.ok(f.length >= 14, "Must have 14+ features, got " + f.length);
 });
 
 test("all features have valid status", () => {
@@ -342,16 +342,11 @@ test("mfa always available", () => {
   assert.ok(mfa && mfa.status === "available");
 });
 
-test("music depends on ffmpeg", () => {
+test("music feature removed", () => {
   const m = freshFeatures();
   const f = m.detectFeatureCapabilities();
   const music = f.find((f: any) => f.feature === "music");
-  assert.ok(music);
-  const mCaps = freshDetect().detectCapabilities();
-  const hasFfmpeg = mCaps.find((c: any) => c.name === "ffmpeg")?.available;
-  if (!hasFfmpeg) {
-    assert.ok(music.status !== "available", "music must not be available without ffmpeg");
-  }
+  assert.ok(!music, "music feature must not exist");
 });
 
 test("agent/self-healer/tasks always available", () => {

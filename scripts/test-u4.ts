@@ -176,10 +176,6 @@ async function main() {
         `Tool ${tool.name} does NOT allow AI_CHAT scope`,
       );
       assert(
-        !tool.allowedScopes.includes("AI_MUSIC"),
-        `Tool ${tool.name} does NOT allow AI_MUSIC scope`,
-      );
-      assert(
         !tool.allowedScopes.includes("AI_GAMES"),
         `Tool ${tool.name} does NOT allow AI_GAMES scope`,
       );

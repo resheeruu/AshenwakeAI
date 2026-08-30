@@ -83,7 +83,6 @@ export interface FeatureStatus {
   web: boolean;
   agent: boolean;
   selfHealer: boolean;
-  music: boolean;
   games: boolean;
   moderation: boolean;
   automod: boolean;

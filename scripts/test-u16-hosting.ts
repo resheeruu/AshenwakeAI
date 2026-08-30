@@ -293,15 +293,6 @@ test("discord-bot is in feature matrix", () => {
   assert.ok(discord, "discord-bot must be in matrix");
 });
 
-// 21. Music depends on ffmpeg
-test("music available with ffmpeg present", () => {
-  const { detectFeatureCapabilities } = require("../scripts/hosting-features");
-  const features = detectFeatureCapabilities();
-  const music = features.find((f: any) => f.feature === "music");
-  assert.ok(music, "music must be in matrix");
-  assert.ok(["available", "degraded"].includes(music.status), "music must be available or degraded based on ffmpeg");
-});
-
 console.log("\n===== U16 VALIDATION =====");
 
 // 22. Config validation
@@ -424,7 +415,7 @@ test("no hardcoded secrets in hosting files", () => {
 // 37. Graceful degradation - application starts without external music server
 test("application code does not require external music server", () => {
   const indexContent = fs.readFileSync("src/index.ts", "utf8");
-  assert.ok(indexContent.includes("NodeMusicManager") || indexContent.includes("nodeMusic"), "index.ts uses NodeMusicManager");
+  assert.ok(!indexContent.includes("NodeMusicManager") && !indexContent.includes("nodeMusic"), "index.ts must not use NodeMusicManager");
 });
 
 // 38. PID file not tracked

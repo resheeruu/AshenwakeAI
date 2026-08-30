@@ -45,9 +45,9 @@ export function createListChannelsTool(getClient: () => Client | null): ToolDefi
       {
         name: "scope",
         type: "string",
-        description: "Filter by AI scope: AI_CHAT, AI_MANAGEMENT, AI_MUSIC, AI_GAMES",
+        description: "Filter by AI scope: AI_CHAT, AI_MANAGEMENT, AI_GAMES",
         required: false,
-        allowedValues: ["AI_CHAT", "AI_MANAGEMENT", "AI_MUSIC", "AI_GAMES"],
+        allowedValues: ["AI_CHAT", "AI_MANAGEMENT", "AI_GAMES"],
       },
     ],
     execute: async (context: ToolContext): Promise<ToolResult> => {

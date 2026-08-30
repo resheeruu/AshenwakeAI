@@ -8,7 +8,6 @@ import type { RiskLevel } from "../../security/risk-engine";
 export type ChannelScope =
   | "AI_CHAT"
   | "AI_MANAGEMENT"
-  | "AI_MUSIC"
   | "AI_GAMES";
 
 /* ================================================================

@@ -149,7 +149,7 @@ export function detectCapabilities(): CapabilityCheck[] {
     { name: "node.js", available: true, version: v, required: true, reason: major >= 18 ? undefined : `Need 18+, got ${v}` },
     { name: "npm", available: npm.available, version: npm.version, required: true },
     { name: "typescript/build", available: fs.existsSync("node_modules/.bin/tsc") || fs.existsSync("node_modules/typescript"), required: true },
-    { name: "ffmpeg", available: ffmpeg.available, version: ffmpeg.version, required: false, reason: "For music encoding." },
+    { name: "ffmpeg", available: ffmpeg.available, version: ffmpeg.version, required: false, reason: "Audio/video encoding support." },
     { name: "long-running-process", available: true, required: true },
     { name: "http-server", available: true, required: true },
     { name: "websocket", available: true, required: true },

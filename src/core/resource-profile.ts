@@ -36,7 +36,6 @@ export interface ResourceProfile {
     uptime: number;
   };
   capabilities: string[];
-  musicReady: boolean;
   recommendations: string[];
 }
 
@@ -95,8 +94,6 @@ export function buildResourceProfile(): ResourceProfile {
   const capabilities: string[] = ["node.js", "npm"];
   if (fs.existsSync("node_modules/typescript")) capabilities.push("typescript/build");
 
-  const musicReady = true; // Node-only music via discord-player
-
   // Classification
   const classification = classifyHost(totalMemMB, freeMemMB, rssMB, heapMB, usedPct);
 
@@ -111,7 +108,6 @@ export function buildResourceProfile(): ResourceProfile {
     disk: { totalGB, freeGB, usedPct, dataDirMB },
     runtime: { nodeVersion: process.version, platform: os.platform(), uptime: Math.round(process.uptime()) },
     capabilities,
-    musicReady,
     recommendations,
   };
 }

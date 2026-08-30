@@ -241,7 +241,7 @@ console.log("\n===== CHANNEL SCOPE VALIDATION =====");
   assert(noScopeRequired.allowed, "Tool with no scope requirements passes any channel");
 
   // Multi-scope channel
-  setChannelScope(config, "ch_multi", ["AI_CHAT", "AI_MANAGEMENT", "AI_MUSIC"]);
+  setChannelScope(config, "ch_multi", ["AI_CHAT", "AI_MANAGEMENT", "AI_GAMES"]);
   const multiScope = validateChannelScope(tool, "ch_multi", config);
   assert(multiScope.allowed, "Multi-scope channel passes for matching scope");
 }
@@ -463,10 +463,10 @@ console.log("\n===== CHANNEL SCOPE PERSISTENCE =====");
   setChannelScope(config, "ch_1", ["AI_CHAT", "AI_MANAGEMENT"]);
   assert(isChannelAllowed(config, "ch_1", "AI_CHAT"), "Channel has AI_CHAT scope");
   assert(isChannelAllowed(config, "ch_1", "AI_MANAGEMENT"), "Channel has AI_MANAGEMENT scope");
-  assert(!isChannelAllowed(config, "ch_1", "AI_MUSIC"), "Channel does not have AI_MUSIC scope");
+  assert(!isChannelAllowed(config, "ch_1", "AI_GAMES"), "Channel does not have AI_GAMES scope");
 
-  addChannelScope(config, "ch_1", "AI_MUSIC");
-  assert(isChannelAllowed(config, "ch_1", "AI_MUSIC"), "Channel now has AI_MUSIC scope after add");
+  addChannelScope(config, "ch_1", "AI_GAMES");
+  assert(isChannelAllowed(config, "ch_1", "AI_GAMES"), "Channel now has AI_GAMES scope after add");
 
   removeChannelScope(config, "ch_1");
   assert(!isChannelAllowed(config, "ch_1", "AI_CHAT"), "Channel scopes removed");
