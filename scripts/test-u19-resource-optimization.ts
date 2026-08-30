@@ -269,7 +269,7 @@ test("U12-U14 test files exist", "LIVE VERIFIED", () => {
 });
 
 test("tsc --noEmit passes", "LIVE VERIFIED", () => {
-  execSync("npx tsc --noEmit", { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+  execSync("node node_modules/.bin/tsc --noEmit", { cwd: ROOT, encoding: "utf8", timeout: 60000 });
 });
 
 test("dist/index.js exists", "LIVE VERIFIED", () => {

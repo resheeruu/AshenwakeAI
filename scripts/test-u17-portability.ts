@@ -514,7 +514,7 @@ test("migration includes storage consideration for all cross-provider moves", ()
 console.log("\n===== PHASE 7: DEPLOYMENT ADVISOR EXECUTION =====");
 
 test("deployment-advisor.ts runs without crashing", () => {
-  const output = execSync("tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  const output = execSync("node node_modules/.bin/tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
   assert.ok(output.includes("AshenAI Deployment Advisor"), "Must print header");
   assert.ok(output.includes("Provider:"), "Must report provider");
   assert.ok(output.includes("Capabilities") || output.includes("Capability"), "Must report capabilities");
@@ -522,19 +522,19 @@ test("deployment-advisor.ts runs without crashing", () => {
 });
 
 test("deployment-advisor does not print secrets", () => {
-  const output = execSync("tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  const output = execSync("node node_modules/.bin/tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
   assert.ok(!output.includes("sk-"), "No API keys");
   assert.ok(!output.match(/DISCORD_TOKEN=\S{20,}/), "No token values");
   assert.ok(!output.match(/SESSION_SECRET=\S{10,}/), "No session secrets");
 });
 
 test("deployment-advisor reports termux correctly", () => {
-  const output = execSync("tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  const output = execSync("node node_modules/.bin/tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
   assert.ok(output.includes("termux"), "Must detect termux");
 });
 
 test("deployment-advisor with MIGRATE_FROM shows migration steps", () => {
-  const output = execSync("MIGRATE_FROM=render tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  const output = execSync("MIGRATE_FROM=render node node_modules/.bin/tsx scripts/deployment-advisor.ts", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
   assert.ok(output.includes("Migration"), "Must show migration section");
   assert.ok(output.includes("render"), "Must mention render");
 });

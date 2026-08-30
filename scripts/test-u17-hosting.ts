@@ -363,14 +363,14 @@ test("start.sh: tsx, no --loader, no Render-specific", "LIVE VERIFIED", () => {
 console.log("\n===== PHASE 8: LOCAL LIVE EXECUTION =====");
 
 test("deployment-advisor runs (live)", "LIVE VERIFIED", () => {
-  const out = execSync("npx tsx scripts/deployment-advisor.ts 2>&1", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  const out = execSync("node node_modules/.bin/tsx scripts/deployment-advisor.ts 2>&1", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
   assert.ok(out.includes("Current Environment")); assert.ok(out.includes("termux"));
   assert.ok(out.includes("Runtime Capabilities")); assert.ok(out.includes("Feature Availability"));
   assert.ok(!out.match(/sk-[a-zA-Z0-9]{20,}/));
 });
 
 test("advisor with MIGRATE_FROM (live)", "LIVE VERIFIED", () => {
-  const out = execSync("MIGRATE_FROM=termux MIGRATE_TO=docker npx tsx scripts/deployment-advisor.ts 2>&1", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  const out = execSync("MIGRATE_FROM=termux MIGRATE_TO=docker node node_modules/.bin/tsx scripts/deployment-advisor.ts 2>&1", { cwd: ROOT, encoding: "utf8", timeout: 15000 });
   assert.ok(out.includes("Migration: termux -> docker"));
 });
 
