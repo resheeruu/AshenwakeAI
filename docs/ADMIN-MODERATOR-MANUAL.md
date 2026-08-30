@@ -8,7 +8,6 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 - Channel management (create, edit, delete, rename)
 - Server protection (protect channels/categories from modification)
 - Governance and policy enforcement
-- Music playback via Lavalink
 - Casino games and RPG adventure system
 - Task automation for safe autonomous operations
 
@@ -19,7 +18,7 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 | **Owner** | The bot owner (set via env vars) | Full control. Bypasses all rate limits and risk checks. Web dashboard access. |
 | **Admin** | Discord members with Administrator permission or listed in `ADMIN_DISCORD_USER_IDS` | Channel management, moderation, governance, protection tools |
 | **Moderator** | Discord members with ModerateMembers permission | Warn, timeout, untimeout, view warnings, purge messages. Read-only governance tools. |
-| **Member** | Any Discord server member | Ask AI questions, play games, use music commands |
+| **Member** | Any Discord server member | Ask AI questions, play games |
 | **Guest** | Discord members without any role | Limited AI chat only |
 
 ## 3. Slash Commands
@@ -56,14 +55,6 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 - `/hunt` - Hunt for items and creatures.
 - `/adventure` - Go on an adventure.
 - `/profile` - View your game profile.
-
-### Music (Prefix commands)
-- `!play <url or search>` - Play a song.
-- `!pause` / `!resume` - Pause/resume playback.
-- `!skip` - Skip current song.
-- `!stop` - Stop music and clear queue.
-- `!queue` - View music queue.
-- `!loop` - Toggle loop mode.
 
 ## 4. Confirmation-Required Actions
 
@@ -233,11 +224,6 @@ Internal details (paths, stack traces, ports) are never shown to Discord users.
 1. Ensure the bot has required permissions in the server
 2. Check if the command requires a specific role
 3. Verify the bot is in the correct channel
-
-### Music Not Playing
-1. Ensure Lavalink server is running
-2. Check if you're in a voice channel
-3. Verify the bot has voice permissions
 
 ### Web Dashboard Issues
 1. Check if the web server is running

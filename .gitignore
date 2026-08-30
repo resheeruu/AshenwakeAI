@@ -47,15 +47,3 @@ clear-guild-commands.ts
 = 
 🔍
 Thats*
-
-# Lavalink runtime files
-lavalink/Lavalink.jar
-lavalink/plugins/
-lavalink/native-libs/
-lavalink/work/
-lavalink/*.log
-lavalink/*.backup*
-lavalink/*.bak
-lavalink/*.before-*
-lavalink/*.pre-*
-lavalink/*.bad-*
