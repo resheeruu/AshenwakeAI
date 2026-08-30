@@ -13,7 +13,7 @@
     "test": "tsx scripts/test-router.ts && tsx scripts/test-core.ts && tsx scripts/test-commands.ts && tsx scripts/test-rate-limit.ts && tsx scripts/test-security.ts && tsx scripts/test-tasks.ts && tsx scripts/test-settlement.ts",
     "check": "tsx scripts/check.ts && npm test",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "build": "tsc && rm -rf dist/web/public && cp -r src/web/public dist/web/public",
     "bot": "tsx src/index.ts",
     "agents": "tsx scripts/check-coding-agents.ts",
     "test-agents": "tsx scripts/test-coding-agents.ts",
