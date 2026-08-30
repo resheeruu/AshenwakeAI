@@ -57,6 +57,7 @@ import { ReactionRoleManager } from "./community/reaction-roles";
 import { runHealthCheck } from "./core/health-checker";
 import { autoBackup } from "./core/backup-manager";
 import { checkLoad, recordRequest } from "./core/load-manager";
+import { detectHostProvider } from "./core/resource-profile";
 
 import { AshenCommand } from "./commands/definitions";
 import { CommandHandler } from "./commands/handler";
@@ -434,23 +435,35 @@ client.once(Events.ClientReady, () => {
     }
 
     if (!client.isReady()) {
-      logger.error(
-        "🚨 DISCORD WATCHDOG: client is no longer ready. Exiting for Render restart."
-      );
-
-      clearInterval(watchdog);
-      process.exit(1);
+      if (detectHostProvider() === "render") {
+        logger.error(
+          "🚨 DISCORD WATCHDOG: client is no longer ready. Exiting for Render restart."
+        );
+        clearInterval(watchdog);
+        process.exit(1);
+      } else {
+        logger.warn(
+          "⚠️ DISCORD WATCHDOG: client is no longer ready. Recovery loop will handle reconnection."
+        );
+      }
+      return;
     }
 
     const ws = client.ws;
 
     if (!ws || ws.shards.size === 0) {
-      logger.error(
-        "🚨 DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Exiting."
-      );
-
-      clearInterval(watchdog);
-      process.exit(1);
+      if (detectHostProvider() === "render") {
+        logger.error(
+          "🚨 DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Exiting."
+        );
+        clearInterval(watchdog);
+        process.exit(1);
+      } else {
+        logger.warn(
+          "⚠️ DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Recovery loop will handle reconnection."
+        );
+      }
+      return;
     }
 
     for (const [shardId, shard] of ws.shards) {
@@ -481,12 +494,17 @@ client.once(Events.ClientReady, () => {
        * than 5 minutes is treated as a genuinely stale gateway.
        */
       if (heartbeatAge > 300_000) {
-        logger.error(
-          `🚨 DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Exiting for Render restart.`
-        );
-
-        clearInterval(watchdog);
-        process.exit(1);
+        if (detectHostProvider() === "render") {
+          logger.error(
+            `🚨 DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Exiting for Render restart.`
+          );
+          clearInterval(watchdog);
+          process.exit(1);
+        } else {
+          logger.warn(
+            `⚠️ DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Recovery loop will handle reconnection.`
+          );
+        }
       }
     }
   }, 30_000);

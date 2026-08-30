@@ -84,6 +84,7 @@ import {
   getRecentErrors,
   runDiagnostics,
   getFeatureStatus,
+  getConfigurationState,
   getGuildConfigs,
   getGuildConfig,
   updateGuildConfig,
@@ -581,6 +582,10 @@ app.get("/api/system/features", requireAuth, requireRole("admin"), (_req: Reques
   res.json({ ok: true, features: getFeatureStatus() });
 });
 
+app.get("/api/system/config", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+  res.json({ ok: true, config: getConfigurationState() });
+});
+
 app.get("/api/providers/status", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
   res.json({ ok: true, providers: getProviderStatus() });
 });
@@ -956,9 +961,11 @@ app.post("/auth/mfa/verify", requireAuth, requireCsrf, (req: Request, res: Respo
     const recoveryCodes = Array.from({ length: 10 }, () =>
       crypto.randomBytes(4).toString("hex").toUpperCase()
     );
-    const recoveryHash = crypto.createHash("sha256")
-      .update(recoveryCodes.join("\n"))
-      .digest("hex");
+    // Store individual SHA-256 hashes (one per code, newline-separated)
+    // so each code can be verified independently
+    const recoveryHash = recoveryCodes
+      .map((code) => crypto.createHash("sha256").update(code).digest("hex"))
+      .join("\n");
 
     updateAccount(account.id, {
       mfaEnabled: true,
@@ -1061,9 +1068,9 @@ app.post("/auth/mfa/recovery-codes", requireAuth, requireCsrf, (req: Request, re
   const recoveryCodes = Array.from({ length: 10 }, () =>
     crypto.randomBytes(4).toString("hex").toUpperCase()
   );
-  const recoveryHash = crypto.createHash("sha256")
-    .update(recoveryCodes.join("\n"))
-    .digest("hex");
+  const recoveryHash = recoveryCodes
+    .map((code) => crypto.createHash("sha256").update(code).digest("hex"))
+    .join("\n");
 
   updateAccount(account.id, { recoveryCodesHash: recoveryHash });
 
@@ -1127,26 +1134,23 @@ app.post("/auth/mfa/challenge", (req: Request, res: Response) => {
     const { authenticator } = require("otplib");
     verified = authenticator.verify({ token: code, secret: account.mfaSecret });
   } else if (recoveryCode && typeof recoveryCode === "string" && account.recoveryCodesHash) {
-    // Recovery code verification
+    // Recovery code verification — check against individual SHA-256 hashes
     const normalizedCode = recoveryCode.replace(/-/g, "").toUpperCase();
-    const recoveryHash = crypto.createHash("sha256")
-      .update(normalizedCode)
-      .digest("hex");
+    const submittedHash = crypto.createHash("sha256").update(normalizedCode).digest("hex");
 
-    // Check if recovery code matches (SHA-256 of the code matches stored hash)
-    // SECURITY: Use timing-safe comparison to prevent timing side-channel attacks
-    const storedHashBuf = Buffer.from(account.recoveryCodesHash, "hex");
-    const computedHashBuf = Buffer.from(recoveryHash, "hex");
-    if (storedHashBuf.length === computedHashBuf.length &&
-        crypto.timingSafeEqual(storedHashBuf, computedHashBuf)) {
+    // Stored hash is newline-separated individual hashes
+    const storedHashes = account.recoveryCodesHash.split("\n");
+    const matchIndex = storedHashes.findIndex((h) => h === submittedHash);
+
+    if (matchIndex !== -1) {
       verified = true;
-      // Regenerate recovery codes after use
+      // Regenerate recovery codes after use (all codes invalidated)
       const newRecoveryCodes = Array.from({ length: 10 }, () =>
         crypto.randomBytes(4).toString("hex").toUpperCase()
       );
-      const newRecoveryHash = crypto.createHash("sha256")
-        .update(newRecoveryCodes.join("\n"))
-        .digest("hex");
+      const newRecoveryHash = newRecoveryCodes
+        .map((code) => crypto.createHash("sha256").update(code).digest("hex"))
+        .join("\n");
       updateAccount(account.id, { recoveryCodesHash: newRecoveryHash });
     }
   }

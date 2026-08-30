@@ -7,10 +7,13 @@ import { ConversationMemory } from "../ai/memory";
 import { recordAudit, getAuditLog } from "../security/audit";
 import { redact } from "../security/redact";
 import { runHealthCheck } from "../core/health-checker";
+import { detectHostProvider } from "../core/resource-profile";
+import { isAnyMfaEnabled } from "./account-store";
 import { scanAshenAI } from "../diagnostics/health-scanner";
 import { generateOptimizations } from "../diagnostics/optimizer";
 import { getRecentLogs } from "../log-stream";
 import { loadGuildConfig, getAllGuildConfigs, saveGuildConfig, GuildConfig } from "../core/guild-config";
+import { config } from "../config/env";
 import {
   SystemStatus,
   ProviderInfo,
@@ -47,6 +50,16 @@ export function initControlLayer(
   if (su) systemUsageRef = su;
 }
 
+function isDataDirectoryAccessible(): boolean {
+  try {
+    const dataDir = path.resolve(process.cwd(), "data");
+    fs.accessSync(dataDir, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getStatus(): SystemStatus {
   return {
     running: isRunning,
@@ -55,6 +68,7 @@ export function getStatus(): SystemStatus {
     nodeVersion: process.version,
     platform: process.platform,
     pid: process.pid,
+    environment: detectHostProvider(),
   };
 }
 
@@ -207,7 +221,7 @@ export function runDiagnostics(): DiagnosticResult {
 
 export function getFeatureStatus(): FeatureStatus {
   return {
-    discord: true,
+    discord: !!config.discord.token,
     web: true,
     agent: true,
     selfHealer: true,
@@ -218,6 +232,57 @@ export function getFeatureStatus(): FeatureStatus {
     community: true,
     vision: true,
     codingAgents: true,
+  };
+}
+
+export interface ConfigurationState {
+  discord: { configured: boolean; clientId: boolean; guildId: boolean };
+  web: { running: boolean; port: number };
+  aiProviders: { configured: number; names: string[] };
+  oauth: {
+    discord: { configured: boolean };
+    google: { configured: boolean };
+  };
+  email: { configured: boolean };
+  persistentStorage: { enabled: boolean };
+  mfa: { enabled: boolean };
+  environment: string;
+}
+
+export function getConfigurationState(): ConfigurationState {
+  const providerNames: string[] = [];
+  for (const [name, key] of Object.entries(config.providers)) {
+    if (key) providerNames.push(name);
+  }
+
+  return {
+    discord: {
+      configured: !!config.discord.token,
+      clientId: !!config.discord.clientId,
+      guildId: !!config.discord.guildId,
+    },
+    web: {
+      running: true,
+      port: Number(process.env.PORT || process.env.WEB_PORT || 3000),
+    },
+    aiProviders: {
+      configured: providerNames.length,
+      names: providerNames,
+    },
+    oauth: {
+      discord: {
+        configured: !!config.discord.clientSecret,
+      },
+      google: {
+        configured: !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET),
+      },
+    },
+    email: {
+      configured: !!(process.env.SMTP_HOST || process.env.SMTP_USER),
+    },
+    persistentStorage: { enabled: isDataDirectoryAccessible() },
+    mfa: { enabled: isAnyMfaEnabled() },
+    environment: detectHostProvider(),
   };
 }
 

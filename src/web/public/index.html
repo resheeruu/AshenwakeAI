@@ -10,73 +10,62 @@
 html{min-height:100%;background:var(--bg)}
 body{min-height:100vh;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:radial-gradient(circle at 50% -10%,rgba(123,92,255,.18),transparent 34%),radial-gradient(circle at 100% 45%,rgba(73,91,255,.08),transparent 30%),var(--bg)}
 a{color:var(--accent);text-decoration:none}
-
-/* Login */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
 .login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 32px;max-width:380px;width:100%;text-align:center;backdrop-filter:blur(20px)}
-.login-box h1{font-size:22px;margin-bottom:6px}
-.login-box p{color:var(--muted);font-size:13px;margin-bottom:24px}
-.login-box input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:14px;margin-bottom:12px;outline:none}
+.login-box h1{font-size:22px;margin-bottom:4px}
+.login-box>p{color:var(--muted);font-size:13px;margin-bottom:20px}
+.login-box input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:13px;margin-bottom:10px;outline:none}
 .login-box input:focus{border-color:var(--accent)}
-.login-box button{width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:transform .15s}
+.login-box button[type=submit]{width:100%;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:transform .15s}
 .login-box button:hover{transform:translateY(-1px)}
 .login-box button:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.login-error{color:var(--danger);font-size:12px;margin-top:8px;min-height:18px}
-
-/* Layout */
+.login-error{color:var(--danger);font-size:12px;margin-top:6px;min-height:16px}
+.login-hint{color:var(--muted);font-size:11px;margin-top:12px;line-height:1.5}
 #app{display:none;min-height:100vh}
-.topbar{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(7,7,11,.85);border-bottom:1px solid var(--border);backdrop-filter:blur(20px)}
-.topbar-brand{display:flex;align-items:center;gap:10px}
-.topbar-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#a98cff,#6253ed);display:grid;place-items:center;font-size:18px;font-weight:900;color:#fff}
-.topbar-title{font-size:15px;font-weight:700}
-.topbar-sub{font-size:11px;color:var(--muted)}
-.topbar-right{display:flex;align-items:center;gap:10px}
-.topbar-status{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--success)}
-.topbar-status .dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 8px rgba(97,226,148,.6)}
-.hamburger{display:none;background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:4px 8px}
-.btn-logout{background:rgba(255,255,255,.06);border:1px solid var(--border-strong);color:var(--muted);padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;font-weight:600}
+.topbar{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(7,7,11,.85);border-bottom:1px solid var(--border);backdrop-filter:blur(20px)}
+.topbar-brand{display:flex;align-items:center;gap:8px}
+.topbar-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#a98cff,#6253ed);display:grid;place-items:center;font-size:16px;font-weight:900;color:#fff}
+.topbar-title{font-size:14px;font-weight:700}
+.topbar-sub{font-size:10px;color:var(--muted)}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.topbar-status{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--success)}
+.topbar-status .dot{width:5px;height:5px;border-radius:50%;background:var(--success);box-shadow:0 0 6px rgba(97,226,148,.5)}
+.hamburger{display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:2px 6px}
+.btn-logout{background:rgba(255,255,255,.06);border:1px solid var(--border-strong);color:var(--muted);padding:5px 10px;border-radius:6px;font-size:10px;cursor:pointer;font-weight:600}
 .btn-logout:hover{background:rgba(255,111,125,.15);color:var(--danger);border-color:var(--danger)}
-.role-badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.role-badge{font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
 .role-owner{background:rgba(155,124,255,.2);color:var(--accent)}
 .role-admin{background:rgba(97,226,148,.15);color:var(--success)}
 .role-user{background:rgba(255,179,71,.15);color:var(--warning)}
-
-.layout{display:flex;min-height:calc(100vh - 52px)}
-.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:12px 0;overflow-y:auto;position:sticky;top:52px;height:calc(100vh - 52px)}
-.sidebar a{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:13px;color:var(--muted);transition:all .15s;border-left:3px solid transparent}
+.layout{display:flex;min-height:calc(100vh - 46px)}
+.sidebar{width:200px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:8px 0;overflow-y:auto;position:sticky;top:46px;height:calc(100vh - 46px)}
+.sidebar a{display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:12px;color:var(--muted);transition:all .15s;border-left:3px solid transparent}
 .sidebar a:hover{color:var(--text);background:rgba(255,255,255,.04)}
 .sidebar a.active{color:var(--accent);background:rgba(155,124,255,.08);border-left-color:var(--accent);font-weight:600}
-.sidebar .nav-icon{width:18px;text-align:center;font-size:14px}
+.sidebar .nav-icon{width:16px;text-align:center;font-size:12px}
 .sidebar .nav-label{white-space:nowrap}
-.main{flex:1;padding:20px 16px;max-width:1100px;overflow-x:hidden}
-
-/* Cards */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px;backdrop-filter:blur(10px)}
-.card h3{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-.stat-card{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
-.stat-card .stat-value{font-size:22px;font-weight:800;margin-bottom:4px}
-.stat-card .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.main{flex:1;padding:14px 14px;max-width:1000px;overflow-x:hidden}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;backdrop-filter:blur(10px)}
+.card h3{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.stat-card{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+.stat-card .stat-value{font-size:18px;font-weight:800;margin-bottom:2px}
+.stat-card .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .stat-card.green .stat-value{color:var(--success)}
 .stat-card.red .stat-value{color:var(--danger)}
 .stat-card.yellow .stat-value{color:var(--warning)}
 .stat-card.purple .stat-value{color:var(--accent)}
-
-/* Status badges */
-.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:16px;font-size:10px;font-weight:600}
 .badge-green{background:rgba(97,226,148,.15);color:var(--success)}
 .badge-red{background:rgba(255,111,125,.15);color:var(--danger)}
 .badge-yellow{background:rgba(255,179,71,.15);color:var(--warning)}
 .badge-purple{background:rgba(155,124,255,.15);color:var(--accent)}
-
-/* Tables */
-.data-table{width:100%;border-collapse:collapse;font-size:13px}
-.data-table th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border-strong);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
-.data-table td{padding:10px 12px;border-bottom:1px solid var(--border)}
+.badge-muted{background:rgba(255,255,255,.05);color:var(--muted)}
+.data-table{width:100%;border-collapse:collapse;font-size:12px}
+.data-table th{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border-strong);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.data-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
 .data-table tr:hover td{background:rgba(255,255,255,.02)}
-
-/* Buttons */
-.btn{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border-strong);transition:all .15s}
+.btn{padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border-strong);transition:all .15s}
 .btn:hover{transform:translateY(-1px)}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border:none}
@@ -84,112 +73,98 @@ a{color:var(--accent);text-decoration:none}
 .btn-danger:hover{background:rgba(255,111,125,.25)}
 .btn-success{background:rgba(97,226,148,.15);color:var(--success);border-color:rgba(97,226,148,.3)}
 .btn-outline{background:transparent;color:var(--text)}
-
-/* Modal */
+.btn-sm{padding:4px 8px;font-size:10px}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;padding:20px}
 .modal-overlay.show{display:flex}
-.modal{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:16px;padding:24px;max-width:420px;width:100%;backdrop-filter:blur(20px)}
-.modal h3{margin-bottom:8px}
-.modal p{color:var(--muted);font-size:13px;margin-bottom:16px}
-.modal-actions{display:flex;gap:10px;justify-content:flex-end}
-
-/* Log viewer */
-.log-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
-.log-controls input,.log-controls select{padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px}
-.log-controls input{flex:1;min-width:150px}
-.log-list{max-height:500px;overflow-y:auto;font-family:"SF Mono",Monaco,Consolas,monospace;font-size:12px;line-height:1.7}
-.log-entry{padding:4px 8px;border-radius:4px;border-bottom:1px solid var(--border)}
+.modal{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:12px;padding:20px;max-width:400px;width:100%;backdrop-filter:blur(20px)}
+.modal h3{margin-bottom:6px;font-size:15px}
+.modal p{color:var(--muted);font-size:12px;margin-bottom:12px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+.log-controls{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
+.log-controls input,.log-controls select{padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px}
+.log-controls input{flex:1;min-width:120px}
+.log-list{max-height:400px;overflow-y:auto;font-family:"SF Mono",Monaco,Consolas,monospace;font-size:11px;line-height:1.6}
+.log-entry{padding:3px 6px;border-radius:3px;border-bottom:1px solid var(--border)}
 .log-entry:hover{background:rgba(255,255,255,.03)}
-.log-entry .log-ts{color:var(--muted);margin-right:8px}
-.log-entry .log-level{font-weight:700;margin-right:8px;text-transform:uppercase;font-size:10px}
+.log-entry .log-ts{color:var(--muted);margin-right:6px;font-size:10px}
+.log-entry .log-level{font-weight:700;margin-right:6px;text-transform:uppercase;font-size:9px}
 .log-entry.error .log-level{color:var(--danger)}
 .log-entry.warn .log-level{color:var(--warning)}
 .log-entry.info .log-level{color:var(--accent)}
-
-/* Search */
 .section-page{display:none}
 .section-page.active{display:block}
-.section-title{font-size:18px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:10px}
-
-/* Provider rows */
-.provider-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
+.section-title{font-size:16px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.provider-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border)}
 .provider-row:last-child{border-bottom:none}
-.provider-name{font-weight:600;font-size:13px}
-.provider-meta{display:flex;gap:12px;font-size:11px;color:var(--muted)}
-
-/* Guild cards */
-.guild-card{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
-.guild-card h4{font-size:14px;margin-bottom:8px}
-.guild-meta{display:flex;gap:12px;font-size:11px;color:var(--muted);flex-wrap:wrap}
-.guild-features{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.feature-tag{padding:2px 8px;border-radius:10px;font-size:10px;background:rgba(155,124,255,.1);color:var(--accent)}
-.feature-tag.off{background:rgba(255,255,255,.05);color:var(--muted)}
-
-/* Investigation */
-.inv-finding{padding:10px 12px;border-left:3px solid var(--border);margin-bottom:8px;border-radius:0 8px 8px 0;background:var(--surface-2)}
+.provider-name{font-weight:600;font-size:12px}
+.provider-meta{display:flex;gap:10px;font-size:10px;color:var(--muted)}
+.guild-card{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
+.guild-card h4{font-size:13px;margin-bottom:6px}
+.guild-meta{display:flex;gap:10px;font-size:10px;color:var(--muted);flex-wrap:wrap}
+.inv-finding{padding:8px 10px;border-left:3px solid var(--border);margin-bottom:6px;border-radius:0 6px 6px 0;background:var(--surface-2);font-size:12px}
 .inv-finding.error{border-left-color:var(--danger)}
 .inv-finding.warning{border-left-color:var(--warning)}
 .inv-finding.info{border-left-color:var(--accent)}
-
-/* Responsive */
+.help-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);font-size:10px;cursor:pointer;position:relative;font-style:normal}
+.help-btn:hover{background:rgba(155,124,255,.15);color:var(--accent);border-color:var(--accent)}
+.help-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--surface-3);border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--muted);white-space:nowrap;max-width:280px;white-space:normal;z-index:50;line-height:1.4;font-style:normal}
+.help-btn:hover .help-tip{display:block}
+.error-box{text-align:center;padding:20px;color:var(--danger);font-size:12px}
+.error-box .retry-btn{margin-top:8px}
 @media(max-width:768px){
   .hamburger{display:block}
-  .sidebar{display:none;position:fixed;top:52px;left:0;bottom:0;z-index:90;width:240px;box-shadow:var(--shadow)}
+  .sidebar{display:none;position:fixed;top:46px;left:0;bottom:0;z-index:90;width:220px;box-shadow:var(--shadow)}
   .sidebar.open{display:block}
   .card-grid{grid-template-columns:1fr 1fr}
   .topbar-sub{display:none}
 }
 @media(max-width:480px){
   .card-grid{grid-template-columns:1fr}
-  .stat-card .stat-value{font-size:18px}
+  .stat-card .stat-value{font-size:16px}
 }
-
-/* Spinner */
-.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading{text-align:center;padding:40px;color:var(--muted)}
-.empty{text-align:center;padding:30px;color:var(--muted);font-size:13px}
+.loading{text-align:center;padding:24px;color:var(--muted);font-size:12px}
+.empty{text-align:center;padding:20px;color:var(--muted);font-size:12px}
+.info-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 </style>
 </head>
 <body>
 
-<!-- Login Screen -->
 <div id="loginScreen">
   <div class="login-box">
     <h1>AshenAI</h1>
     <p>Control Center</p>
-
-    <!-- OAuth Buttons -->
-    <button class="btn btn-outline" style="width:100%;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border-strong);padding:10px" onclick="window.location.href='/auth/discord'">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
-      Continue with Discord
-    </button>
-    <button class="btn btn-outline" style="width:100%;margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--border-strong);padding:10px" onclick="window.location.href='/auth/google'">
-      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-      Continue with Google
-    </button>
-
-    <div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:16px">─── or ───</div>
-
+    <div id="oauthButtons">
+      <button class="btn btn-outline" id="discordBtn" style="width:100%;margin-bottom:6px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:8px;font-size:12px" onclick="window.location.href='/auth/discord'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+        Sign in with Discord
+      </button>
+      <button class="btn btn-outline" id="googleBtn" style="width:100%;margin-bottom:12px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:8px;font-size:12px" onclick="window.location.href='/auth/google'">
+        <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Sign in with Google
+      </button>
+    </div>
+    <div style="text-align:center;color:var(--muted);font-size:11px;margin-bottom:12px" id="loginDivider">─── or ───</div>
     <form id="loginForm">
       <input type="text" id="loginUser" placeholder="Username" autocomplete="username" required>
       <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" required>
       <button type="submit" id="loginBtn">Sign In</button>
       <div class="login-error" id="loginError"></div>
-      <div style="text-align:right;margin-top:8px">
-        <a href="#" onclick="showForgotPassword();return false" style="font-size:12px;color:var(--muted)">Forgot password?</a>
+      <div style="text-align:right;margin-top:6px">
+        <a href="#" onclick="showForgotPassword();return false" style="font-size:11px;color:var(--muted)">Forgot password?</a>
       </div>
     </form>
+    <div class="login-hint">Local accounts use an AshenAI username and password. OAuth accounts can be linked later from Account Settings.</div>
   </div>
 </div>
 
-<!-- Forgot Password Modal -->
 <div id="forgotModal" class="modal-overlay">
   <div class="modal">
     <h3>Reset Password</h3>
-    <p>Enter your email address and we'll send you a reset link.</p>
-    <input type="email" id="forgotEmail" placeholder="Email address" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:12px;box-sizing:border-box">
-    <div id="forgotMsg" style="font-size:12px;margin-bottom:12px"></div>
+    <p>Enter the email address associated with your account. If the account exists and email is configured, a reset link will be sent.</p>
+    <input type="email" id="forgotEmail" placeholder="Email address" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px;box-sizing:border-box;font-size:12px">
+    <div id="forgotMsg" style="font-size:11px;margin-bottom:8px"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeForgotPassword()">Cancel</button>
       <button class="btn btn-primary" id="forgotBtn" onclick="submitForgotPassword()">Send Reset Link</button>
@@ -197,39 +172,33 @@ a{color:var(--accent);text-decoration:none}
   </div>
 </div>
 
-<!-- MFA Challenge Screen -->
 <div id="mfaChallengeScreen" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px">
   <div class="login-box">
     <h1>MFA Verification</h1>
     <p id="mfaChallengeSubtitle">Enter the code from your authenticator app</p>
-
-    <div id="mfaTotpInput" style="margin-bottom:16px">
-      <input type="text" id="mfaCode" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:20px;letter-spacing:4px">
+    <div id="mfaTotpInput" style="margin-bottom:12px">
+      <input type="text" id="mfaCode" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:18px;letter-spacing:4px">
     </div>
-
-    <div id="mfaRecoverySection" style="margin-bottom:16px;display:none">
-      <div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:8px">─── or use a recovery code ───</div>
+    <div id="mfaRecoverySection" style="margin-bottom:12px;display:none">
+      <div style="text-align:center;color:var(--muted);font-size:11px;margin-bottom:6px">─── or use a recovery code ───</div>
       <input type="text" id="mfaRecoveryCode" placeholder="Recovery code (e.g. A1B2C3D4)" style="text-transform:uppercase">
     </div>
-
     <button class="btn btn-primary" style="width:100%" id="mfaVerifyBtn" onclick="verifyMfaChallenge()">Verify</button>
     <div class="login-error" id="mfaError"></div>
-
-    <div style="text-align:right;margin-top:8px">
-      <a href="#" onclick="showRecoveryInput();return false" style="font-size:12px;color:var(--muted)">Use recovery code</a>
+    <div style="text-align:right;margin-top:6px">
+      <a href="#" onclick="showRecoveryInput();return false" style="font-size:11px;color:var(--muted)">Use recovery code</a>
     </div>
-    <div style="text-align:center;margin-top:12px">
-      <a href="#" onclick="cancelMfaChallenge();return false" style="font-size:12px;color:var(--muted)">Cancel</a>
+    <div style="text-align:center;margin-top:8px">
+      <a href="#" onclick="cancelMfaChallenge();return false" style="font-size:11px;color:var(--muted)">Cancel</a>
     </div>
   </div>
 </div>
 
-<!-- OAuth Linking Confirmation Modal -->
 <div id="linkModal" class="modal-overlay">
   <div class="modal">
     <h3>Link Account</h3>
-    <p id="linkModalText">An account with this email already exists. Would you like to link this OAuth provider to your existing account?</p>
-    <div style="background:var(--surface-3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px">
+    <p>An account with this email already exists. Link this OAuth provider to your existing account?</p>
+    <div style="background:var(--surface-3);border-radius:6px;padding:10px;margin-bottom:12px;font-size:12px">
       <div><strong>Account:</strong> <span id="linkModalUser"></span></div>
       <div><strong>Provider:</strong> <span id="linkModalProvider"></span></div>
     </div>
@@ -240,7 +209,6 @@ a{color:var(--accent);text-decoration:none}
   </div>
 </div>
 
-<!-- Dashboard -->
 <div id="app">
   <header class="topbar">
     <div class="topbar-brand">
@@ -278,69 +246,63 @@ a{color:var(--accent);text-decoration:none}
       <a href="#accounts" data-section="accounts" data-min-role="owner"><span class="nav-icon">&#128101;</span><span class="nav-label">Accounts</span></a>
       <a href="#security" data-section="security"><span class="nav-icon">&#128274;</span><span class="nav-label">Security</span></a>
       <a href="#account" data-section="account"><span class="nav-icon">&#128100;</span><span class="nav-label">My Account</span></a>
+      <a href="#help" data-section="help"><span class="nav-icon">?</span><span class="nav-label">Help</span></a>
     </nav>
 
     <main class="main" id="mainContent">
 
-      <!-- OVERVIEW -->
       <div class="section-page active" id="sec-overview">
-        <div class="section-title">&#9673; Overview</div>
+        <div class="section-title">&#9673; Overview <i class="help-btn">?<span class="help-tip">System overview showing AshenAI status, Discord connection, AI providers, health score, and recent errors.</span></i></div>
         <div class="card-grid" id="overviewStats"></div>
-        <div class="card" style="margin-top:14px"><h3>Provider Health</h3><div id="overviewProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
+        <div class="card"><h3>Provider Health</h3><div id="overviewProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
         <div class="card"><h3>Recent Errors</h3><div id="overviewErrors"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- BOT CONTROL (OWNER ONLY) -->
       <div class="section-page" id="sec-bot-control">
         <div class="section-title">&#9881; Bot Control</div>
         <div class="card">
           <h3>System Actions</h3>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="confirmAction('restart')">Restart</button>
             <button class="btn btn-danger" onclick="confirmAction('stop')">Stop</button>
             <button class="btn btn-success" onclick="confirmAction('reload_config')">Reload Config</button>
             <button class="btn btn-outline" onclick="confirmAction('run_diagnostics')">Run Diagnostics</button>
             <button class="btn btn-outline" onclick="confirmAction('backup')">Backup</button>
           </div>
+          <div class="info-note">Restart: briefly restarts the process. Stop: halts until manually started. Reload Config: refreshes runtime config. Backup: creates a data snapshot.</div>
         </div>
         <div class="card"><h3>Status</h3><div id="botStatus"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- AI PROVIDERS -->
       <div class="section-page" id="sec-providers">
-        <div class="section-title">&#9889; AI Providers</div>
+        <div class="section-title">&#9889; AI Providers <i class="help-btn">?<span class="help-tip">AI services AshenAI can use. Healthy: responding normally. Degraded: experiencing issues. Offline: not available.</span></i></div>
         <div class="card" id="providerList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card"><h3>Performance</h3><div id="providerPerf"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- USAGE -->
       <div class="section-page" id="sec-usage">
-        <div class="section-title">&#9776; Usage Center</div>
+        <div class="section-title">&#9776; Usage <i class="help-btn">?<span class="help-tip">Tracks AI requests, credits, and token usage across all providers and internal systems.</span></i></div>
         <div class="card-grid" id="usageGlobal"></div>
-        <div class="card" style="margin-top:14px"><h3>Provider Usage</h3><div id="usageProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
+        <div class="card"><h3>Provider Usage</h3><div id="usageProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- MEMORY -->
       <div class="section-page" id="sec-memory">
-        <div class="section-title">&#9997; Memory Center</div>
+        <div class="section-title">&#9997; Memory <i class="help-btn">?<span class="help-tip">Conversation memory tracks chat context per user. Persistent storage saves conversations to disk.</span></i></div>
         <div class="card-grid" id="memoryStats"></div>
       </div>
 
-      <!-- SERVERS -->
       <div class="section-page" id="sec-servers">
-        <div class="section-title">&#9878; Server Management</div>
+        <div class="section-title">&#9878; Servers <i class="help-btn">?<span class="help-tip">Discord servers where AshenAI is active. Shows connection status and guild configuration.</span></i></div>
         <div id="serverList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
-      <!-- DIAGNOSTICS -->
       <div class="section-page" id="sec-diagnostics">
-        <div class="section-title">&#9883; Diagnostics</div>
+        <div class="section-title">&#9883; Diagnostics <i class="help-btn">?<span class="help-tip">System health checks covering files, memory, uptime, providers, and project structure. Score 0-100.</span></i></div>
         <div class="card" id="diagResults"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
-      <!-- LOGS -->
       <div class="section-page" id="sec-logs">
-        <div class="section-title">&#9776; Log Viewer</div>
+        <div class="section-title">&#9776; Logs <i class="help-btn">?<span class="help-tip">Real-time application logs. Filter by level or search for specific messages.</span></i></div>
         <div class="card">
           <div class="log-controls">
             <input type="text" id="logSearch" placeholder="Search logs...">
@@ -350,172 +312,185 @@ a{color:var(--accent);text-decoration:none}
               <option value="warn">Warning</option>
               <option value="info">Info</option>
             </select>
-            <button class="btn btn-outline" onclick="loadLogs()">Refresh</button>
+            <button class="btn btn-outline btn-sm" onclick="loadLogs()">Refresh</button>
           </div>
           <div class="log-list" id="logList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         </div>
         <div class="card"><h3>Recent Errors</h3><div id="logErrors"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- SERAPH -->
       <div class="section-page" id="sec-seraph">
-        <div class="section-title">&#9733; Seraph Center</div>
+        <div class="section-title">&#9733; Seraph <i class="help-btn">?<span class="help-tip">Seraph monitors AshenAI health, runs diagnostics, and provides system recommendations.</span></i></div>
         <div class="card-grid" id="seraphStats"></div>
-        <div class="card" style="margin-top:14px"><h3>Components</h3><div id="seraphComponents"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
+        <div class="card"><h3>Components</h3><div id="seraphComponents"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
         <div class="card"><h3>Tools</h3><div id="seraphTools"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
         <div class="card"><h3>System Information</h3><div id="seraphSys"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- INVESTIGATIONS (OWNER ONLY) -->
       <div class="section-page" id="sec-investigations">
         <div class="section-title">&#128269; Investigations</div>
         <div class="card">
           <h3>Run Investigation</h3>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <input type="text" id="invProblem" placeholder="Describe the problem..." style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:13px">
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <input type="text" id="invProblem" placeholder="Describe the problem..." style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
             <button class="btn btn-primary" onclick="runInvestigation()">Investigate</button>
           </div>
-          <div id="invResult" style="margin-top:12px"></div>
+          <div id="invResult" style="margin-top:10px"></div>
         </div>
       </div>
 
-      <!-- REPORTS -->
       <div class="section-page" id="sec-reports">
         <div class="section-title">&#128196; Reports</div>
         <div class="card">
           <h3>Generate Report</h3>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
             <button class="btn btn-outline" onclick="generateReport('health')">Health</button>
             <button class="btn btn-outline" onclick="generateReport('performance')">Performance</button>
             <button class="btn btn-outline" onclick="generateReport('security')">Security</button>
             <button class="btn btn-outline" onclick="generateReport('diagnostic')">Diagnostic</button>
           </div>
         </div>
-        <div class="card" style="margin-top:14px"><h3>Recent Reports</h3><div id="reportList"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
+        <div class="card"><h3>Recent Reports</h3><div id="reportList"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
-      <!-- CONFIGURATION -->
       <div class="section-page" id="sec-config">
-        <div class="section-title">&#9874; Configuration</div>
+        <div class="section-title">&#9874; Configuration <i class="help-btn">?<span class="help-tip">Shows which subsystems are configured and available. Does not display secret values.</span></i></div>
         <div class="card" id="configDisplay"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
-      <!-- BACKUPS (OWNER ONLY) -->
       <div class="section-page" id="sec-backups">
-        <div class="section-title">&#128190; Backups</div>
+        <div class="section-title">&#128190; Backups <i class="help-btn">?<span class="help-tip">Backups protect persistent data so it can be restored after failure or migration.</span></i></div>
         <div class="card">
           <h3>Backup Status</h3>
-          <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Backup system manages data persistence for AshenAI.</p>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:8px">Creates a snapshot of guild configs, conversation memory, usage stats, audit logs, and other persistent data.</p>
           <button class="btn btn-primary" onclick="confirmAction('backup')">Trigger Backup</button>
         </div>
       </div>
 
-      <!-- MAINTENANCE (OWNER ONLY) -->
       <div class="section-page" id="sec-maintenance">
         <div class="section-title">&#128295; Maintenance</div>
         <div class="card">
           <h3>Dangerous Actions</h3>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
             <button class="btn btn-danger" onclick="confirmAction('clear_memory')">Clear Memory</button>
             <button class="btn btn-danger" onclick="confirmAction('reset_usage')">Reset Usage</button>
           </div>
-          <p style="color:var(--muted);font-size:12px;margin-top:10px">These actions are irreversible and will be logged in the audit trail.</p>
+          <div class="info-note" style="color:var(--warning)">Warning: These actions are irreversible. All destructive operations are logged in the audit trail.</div>
         </div>
       </div>
 
-      <!-- AUDIT (OWNER ONLY) -->
       <div class="section-page" id="sec-audit">
-        <div class="section-title">&#128220; Audit Logs</div>
+        <div class="section-title">&#128220; Audit Logs <i class="help-btn">?<span class="help-tip">Security audit trail. Every login, configuration change, and destructive action is recorded.</span></i></div>
         <div class="card">
           <div class="log-controls">
             <input type="text" id="auditSearch" placeholder="Search audit...">
-            <button class="btn btn-outline" onclick="loadAudit()">Refresh</button>
+            <button class="btn btn-outline btn-sm" onclick="loadAudit()">Refresh</button>
           </div>
           <div class="log-list" id="auditList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         </div>
       </div>
 
-      <!-- ACCOUNTS (OWNER ONLY) -->
       <div class="section-page" id="sec-accounts">
         <div class="section-title">&#128101; Account Management</div>
         <div class="card">
           <h3>Accounts</h3>
+          <div class="info-note" style="margin-bottom:6px">Accounts created here use AshenAI username/password authentication. OAuth accounts can be linked separately from Security settings.</div>
           <div id="accountList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         </div>
         <div class="card">
           <h3>Create Account</h3>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-            <input type="text" id="newUsername" placeholder="Username" style="flex:1;min-width:120px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
-            <input type="password" id="newPassword" placeholder="Password (min 8 chars)" style="flex:1;min-width:120px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
-            <select id="newRole" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <input type="text" id="newUsername" placeholder="Username" style="flex:1;min-width:100px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
+            <input type="password" id="newPassword" placeholder="Password (min 8 chars)" style="flex:1;min-width:100px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
+            <select id="newRole" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
               <option value="user">User</option>
               <option value="admin">Admin</option>
               <option value="owner">Owner</option>
             </select>
             <button class="btn btn-primary" onclick="createAccount()">Create</button>
           </div>
-          <div id="createAccountError" style="color:var(--danger);font-size:12px;margin-top:8px;min-height:16px"></div>
+          <div id="createAccountError" style="color:var(--danger);font-size:11px;margin-top:6px;min-height:14px"></div>
         </div>
       </div>
 
-      <!-- MY ACCOUNT -->
       <div class="section-page" id="sec-account">
         <div class="section-title">&#128100; My Account</div>
         <div class="card" id="accountInfo"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card">
           <h3>Change Password</h3>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-            <input type="password" id="currentPassword" placeholder="Current password" style="flex:1;min-width:150px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
-            <input type="password" id="newPasswordInput" placeholder="New password (min 8 chars)" style="flex:1;min-width:150px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <input type="password" id="currentPassword" placeholder="Current password" style="flex:1;min-width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
+            <input type="password" id="newPasswordInput" placeholder="New password (min 8 chars)" style="flex:1;min-width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
             <button class="btn btn-primary" onclick="changePassword()">Change Password</button>
           </div>
-          <div id="changePwError" style="color:var(--danger);font-size:12px;margin-top:8px;min-height:16px"></div>
-          <div id="changePwSuccess" style="color:var(--success);font-size:12px;margin-top:8px;min-height:16px"></div>
+          <div id="changePwError" style="color:var(--danger);font-size:11px;margin-top:6px;min-height:14px"></div>
+          <div id="changePwSuccess" style="color:var(--success);font-size:11px;margin-top:6px;min-height:14px"></div>
         </div>
       </div>
 
-      <!-- SECURITY -->
       <div class="section-page" id="sec-security">
         <div class="section-title">&#128274; Security</div>
-
-        <div class="card">
-          <h3>Authentication Methods</h3>
-          <div id="securityAuthMethods"><div class="loading"><span class="spinner"></span> Loading...</div></div>
-        </div>
-
-        <div class="card" style="margin-top:14px">
-          <h3>Multi-Factor Authentication</h3>
-          <div id="securityMFA"><div class="loading"><span class="spinner"></span> Loading...</div></div>
-          <div id="mfaSetup" style="display:none;margin-top:12px">
-            <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Scan this QR code or enter the secret in your authenticator app:</p>
-            <div id="mfaQrCode" style="text-align:center;margin-bottom:12px"></div>
-            <div id="mfaSecret" style="font-family:monospace;font-size:14px;padding:8px;background:var(--surface-2);border-radius:6px;margin-bottom:8px;word-break:break-all"></div>
-            <input type="text" id="mfaSetupCode" placeholder="Enter 6-digit code" style="padding:8px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px">
-            <button class="btn btn-primary" onclick="verifyMFA(true)">Enable MFA</button>
+        <div class="card"><h3>Authentication Methods</h3><div id="securityAuthMethods"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
+        <div class="card"><h3>Multi-Factor Authentication</h3><div id="securityMFA"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+          <div id="mfaSetup" style="display:none;margin-top:10px">
+            <p style="font-size:12px;color:var(--muted);margin-bottom:6px">Scan this QR code or enter the secret in your authenticator app:</p>
+            <div id="mfaQrCode" style="text-align:center;margin-bottom:8px"></div>
+            <div id="mfaSecret" style="font-family:monospace;font-size:12px;padding:6px;background:var(--surface-2);border-radius:4px;margin-bottom:6px;word-break:break-all"></div>
+            <input type="text" id="mfaSetupCode" placeholder="Enter 6-digit code" style="padding:6px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:6px;font-size:12px">
+            <button class="btn btn-primary btn-sm" onclick="verifyMFA(true)">Enable MFA</button>
           </div>
-          <div id="mfaDisable" style="display:none;margin-top:12px">
-            <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Enter your password and a TOTP code to disable MFA:</p>
-            <input type="password" id="mfaDisablePw" placeholder="Enter password to confirm" style="padding:8px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px">
-            <input type="text" id="mfaDisableCode" placeholder="6-digit TOTP code" maxlength="6" style="padding:8px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px">
-            <button class="btn btn-danger" onclick="disableMFA()">Disable MFA</button>
+          <div id="mfaDisable" style="display:none;margin-top:10px">
+            <p style="font-size:11px;color:var(--muted);margin-bottom:6px">Enter your password and a TOTP code to disable MFA:</p>
+            <input type="password" id="mfaDisablePw" placeholder="Password" style="padding:6px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:6px;font-size:12px">
+            <input type="text" id="mfaDisableCode" placeholder="6-digit TOTP code" maxlength="6" style="padding:6px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:6px;font-size:12px">
+            <button class="btn btn-danger btn-sm" onclick="disableMFA()">Disable MFA</button>
           </div>
-          <div id="mfaRecovery" style="display:none;margin-top:12px">
-            <p style="font-size:13px;color:var(--warning);margin-bottom:8px">Save these recovery codes securely. They will not be shown again.</p>
-            <div id="recoveryCodesList" style="font-family:monospace;font-size:12px;padding:8px;background:var(--surface-2);border-radius:6px;white-space:pre-line"></div>
+          <div id="mfaRecovery" style="display:none;margin-top:10px">
+            <p style="font-size:12px;color:var(--warning);margin-bottom:6px">Recovery codes provide access if you lose your MFA device. Store them somewhere secure. They will not be shown again.</p>
+            <div id="recoveryCodesList" style="font-family:monospace;font-size:11px;padding:6px;background:var(--surface-2);border-radius:4px;white-space:pre-line"></div>
           </div>
         </div>
-
-        <div class="card" style="margin-top:14px">
-          <h3>Sessions</h3>
-          <div id="securitySessions"><div class="loading"><span class="spinner"></span> Loading...</div></div>
-          <div style="margin-top:8px">
-            <button class="btn btn-danger" style="font-size:12px;padding:6px 12px" onclick="revokeAllSessions()">Revoke All Other Sessions</button>
-          </div>
+        <div class="card"><h3>Sessions</h3><div id="securitySessions"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+          <div style="margin-top:6px"><button class="btn btn-danger btn-sm" onclick="revokeAllSessions()">Revoke All Other Sessions</button></div>
         </div>
+        <div class="card"><h3>Linked Accounts</h3><div id="securityIdentities"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
+      </div>
 
-        <div class="card" style="margin-top:14px">
-          <h3>Linked Accounts</h3>
-          <div id="securityIdentities"><div class="loading"><span class="spinner"></span> Loading...</div></div>
+      <div class="section-page" id="sec-help">
+        <div class="section-title">? Help</div>
+        <div class="card"><h3>Getting Started</h3>
+          <ol style="font-size:12px;color:var(--muted);margin-left:16px;line-height:1.8">
+            <li>Sign in with your AshenAI account, Discord, or Google.</li>
+            <li>Check <strong>Overview</strong> to verify Discord connection and AI providers.</li>
+            <li>Run <strong>Diagnostics</strong> to verify system health.</li>
+            <li>Review <strong>Configuration</strong> to see what is set up.</li>
+          </ol>
+        </div>
+        <div class="card"><h3>Section Guide</h3>
+          <table class="data-table"><thead><tr><th>Section</th><th>What It Shows</th></tr></thead><tbody>
+            <tr><td><strong>Overview</strong></td><td>System status, Discord connection, provider health, recent errors</td></tr>
+            <tr><td><strong>Bot Control</strong></td><td>Restart, stop, reload, diagnostics, backup (owner only)</td></tr>
+            <tr><td><strong>AI Providers</strong></td><td>Provider availability, latency, success/failure counts, performance</td></tr>
+            <tr><td><strong>Usage</strong></td><td>Request counts, credits, token usage, provider breakdown</td></tr>
+            <tr><td><strong>Memory</strong></td><td>Conversation count, stored messages, persistent storage status</td></tr>
+            <tr><td><strong>Servers</strong></td><td>Connected Discord guilds and their configuration</td></tr>
+            <tr><td><strong>Diagnostics</strong></td><td>Health score, individual checks, warnings, failures</td></tr>
+            <tr><td><strong>Logs</strong></td><td>Real-time application logs with search and level filtering</td></tr>
+            <tr><td><strong>Seraph</strong></td><td>System monitor components, diagnostic tools, system info</td></tr>
+            <tr><td><strong>Configuration</strong></td><td>Which subsystems are configured (Discord, providers, OAuth, etc.)</td></tr>
+            <tr><td><strong>Security</strong></td><td>Auth methods, MFA setup, sessions, linked OAuth providers</td></tr>
+            <tr><td><strong>Audit Logs</strong></td><td>Security trail of logins, changes, and destructive actions</td></tr>
+          </tbody></table>
+        </div>
+        <div class="card"><h3>Status Legend</h3>
+          <div style="font-size:12px;color:var(--muted);line-height:1.8">
+            <span class="badge badge-green">Healthy</span> Operating normally<br>
+            <span class="badge badge-green">Connected</span> Active connection<br>
+            <span class="badge badge-yellow">Degraded</span> Working but with issues<br>
+            <span class="badge badge-red">Unavailable</span> Cannot be used<br>
+            <span class="badge badge-muted">Not configured</span> Requires setup first<br>
+            <span class="badge badge-muted">---</span> No data available yet
+          </div>
         </div>
       </div>
 
@@ -523,7 +498,6 @@ a{color:var(--accent);text-decoration:none}
   </div>
 </div>
 
-<!-- Confirmation Modal -->
 <div class="modal-overlay" id="confirmModal">
   <div class="modal">
     <h3 id="confirmTitle">Confirm Action</h3>
@@ -556,6 +530,14 @@ a{color:var(--accent);text-decoration:none}
     return h;
   }
 
+  function renderError(container, msg){
+    container.innerHTML='<div class="error-box">'+esc(msg||'Unable to load data.')+'<br><button class="btn btn-outline btn-sm retry-btn" onclick="location.reload()">Retry</button></div>';
+  }
+
+  function renderEmpty(container, msg){
+    container.innerHTML='<div class="empty">'+esc(msg||'No data available.')+'</div>';
+  }
+
   async function api(path, opts){
     opts = opts || {};
     var method = opts.method || 'GET';
@@ -563,17 +545,21 @@ a{color:var(--accent);text-decoration:none}
     if (opts.headers) {
       for (var k in opts.headers) headers[k] = opts.headers[k];
     }
-    var r = await fetch(API + path, {credentials:'include', method:method, headers:headers, body:opts.body});
-    if (r.status === 401 || r.status === 403) {
-      var data = await r.json().catch(function(){return null});
-      if (data && data.error && data.error.indexOf('CSRF') >= 0) {
-        await refreshCsrf();
+    try {
+      var r = await fetch(API + path, {credentials:'include', method:method, headers:headers, body:opts.body});
+      if (r.status === 401 || r.status === 403) {
+        var data = await r.json().catch(function(){return null});
+        if (data && data.error && data.error.indexOf('CSRF') >= 0) {
+          await refreshCsrf();
+          return null;
+        }
+        showLogin();
         return null;
       }
-      showLogin();
+      return r.json();
+    } catch(e) {
       return null;
     }
-    return r.json();
   }
 
   async function refreshCsrf(){
@@ -593,6 +579,7 @@ a{color:var(--accent);text-decoration:none}
       startRefresh();
     } else {
       showLogin();
+      loadOAuthConfig();
     }
   }
 
@@ -613,7 +600,6 @@ a{color:var(--accent);text-decoration:none}
     document.getElementById('topRoleBadge').textContent = role;
     document.getElementById('topRoleBadge').className = 'role-badge role-' + role;
     document.getElementById('topRoleLabel').textContent = role.charAt(0).toUpperCase() + role.slice(1) + ' Control Center';
-
     var navItems = document.querySelectorAll('.sidebar a[data-min-role]');
     navItems.forEach(function(a){
       var minRole = a.getAttribute('data-min-role');
@@ -623,6 +609,28 @@ a{color:var(--accent);text-decoration:none}
         a.style.display = '';
       }
     });
+  }
+
+  async function loadOAuthConfig(){
+    try {
+      var r = await fetch(API+'/api/system/config',{credentials:'include'});
+      var d = await r.json();
+      if(d&&d.ok&&d.config){
+        var cfg=d.config;
+        if(cfg.oauth&&cfg.oauth.discord&&cfg.oauth.discord.configured){
+          document.getElementById('discordBtn').style.display='flex';
+        }
+        if(cfg.oauth&&cfg.oauth.google&&cfg.oauth.google.configured){
+          document.getElementById('googleBtn').style.display='flex';
+        }
+        var anyOauth=(cfg.oauth&&cfg.oauth.discord&&cfg.oauth.discord.configured)||(cfg.oauth&&cfg.oauth.google&&cfg.oauth.google.configured);
+        if(!anyOauth){
+          document.getElementById('loginDivider').style.display='none';
+        }
+      }
+    } catch(e){
+      document.getElementById('loginDivider').style.display='none';
+    }
   }
 
   document.getElementById('loginForm').addEventListener('submit', async function(e){
@@ -637,7 +645,6 @@ a{color:var(--accent);text-decoration:none}
       var r = await fetch(API+'/auth/login',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
       var j = await r.json();
       if (j.ok) {
-        // MFA required — show challenge screen
         if (j.mfaRequired) {
           showMfaChallenge(j.challengeToken, j.username, j.role);
           btn.disabled = false;
@@ -662,6 +669,7 @@ a{color:var(--accent);text-decoration:none}
     csrfToken = null;
     currentUser = null;
     showLogin();
+    loadOAuthConfig();
     if (refreshInterval) clearInterval(refreshInterval);
   };
 
@@ -670,11 +678,9 @@ a{color:var(--accent);text-decoration:none}
     document.getElementById('forgotEmail').value='';
     document.getElementById('forgotMsg').textContent='';
   };
-
   window.closeForgotPassword = function(){
     document.getElementById('forgotModal').classList.remove('show');
   };
-
   window.submitForgotPassword = async function(){
     var email = document.getElementById('forgotEmail').value.trim();
     var msg = document.getElementById('forgotMsg');
@@ -693,11 +699,9 @@ a{color:var(--accent);text-decoration:none}
     btn.disabled=false;
   };
 
-  // Handle OAuth callback parameters
   (function(){
     var params=new URLSearchParams(window.location.search);
     if(params.get('login')==='success'){
-      // OAuth login succeeded - reload to check auth
       window.location.href='/';
       return;
     }
@@ -706,23 +710,17 @@ a{color:var(--accent);text-decoration:none}
       var err=document.getElementById('loginError');
       if(err)err.textContent=decodeURIComponent(msg);
     }
-    // Handle OAuth linking confirmation
     if(params.get('link_required')==='true'){
       var provider=params.get('provider')||'';
       var linkToken=params.get('linkToken')||'';
       var accountId=params.get('accountId')||'';
       var username=decodeURIComponent(params.get('username')||'');
       showLinkModal(provider,linkToken,accountId,username);
-      // Clean URL
       window.history.replaceState({},'',window.location.pathname);
     }
   })();
 
-  // ============================================================
-  // MFA CHALLENGE
-  // ============================================================
   var currentMfaChallenge = null;
-
   window.showMfaChallenge = function(challengeToken, username, role) {
     currentMfaChallenge = { challengeToken, username, role };
     document.getElementById('loginScreen').style.display = 'none';
@@ -735,111 +733,61 @@ a{color:var(--accent);text-decoration:none}
     document.getElementById('mfaChallengeSubtitle').textContent = 'Enter the code from your authenticator app';
     setTimeout(function(){ document.getElementById('mfaCode').focus(); }, 100);
   };
-
   window.showRecoveryInput = function() {
     document.getElementById('mfaTotpInput').style.display = 'none';
     document.getElementById('mfaRecoverySection').style.display = 'block';
     document.getElementById('mfaChallengeSubtitle').textContent = 'Enter one of your recovery codes';
     setTimeout(function(){ document.getElementById('mfaRecoveryCode').focus(); }, 100);
   };
-
   window.cancelMfaChallenge = function() {
     currentMfaChallenge = null;
     document.getElementById('mfaChallengeScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('loginError').textContent = '';
   };
-
   window.verifyMfaChallenge = async function() {
     if (!currentMfaChallenge) return;
     var btn = document.getElementById('mfaVerifyBtn');
     var err = document.getElementById('mfaError');
     btn.disabled = true;
     err.textContent = '';
-
     var code = document.getElementById('mfaCode').value.trim();
     var recoveryCode = document.getElementById('mfaRecoveryCode').value.trim();
-
-    if (!code && !recoveryCode) {
-      err.textContent = 'Please enter a code.';
-      btn.disabled = false;
-      return;
-    }
-
+    if (!code && !recoveryCode) { err.textContent = 'Please enter a code.'; btn.disabled = false; return; }
     try {
       var body = { challengeToken: currentMfaChallenge.challengeToken };
       if (code) body.code = code;
       else if (recoveryCode) body.recoveryCode = recoveryCode;
-
-      var r = await fetch(API + '/auth/mfa/challenge', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      var r = await fetch(API + '/auth/mfa/challenge', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       var j = await r.json();
       if (j.ok) {
-        currentUser = j.user;
-        csrfToken = j.csrfToken;
+        currentUser = j.user; csrfToken = j.csrfToken;
         document.getElementById('mfaChallengeScreen').style.display = 'none';
-        showDashboard();
-        loadSection('overview');
-        startRefresh();
-      } else {
-        err.textContent = j.error || 'Verification failed';
-      }
-    } catch(ex) {
-      err.textContent = 'Connection failed';
-    }
+        showDashboard(); loadSection('overview'); startRefresh();
+      } else { err.textContent = j.error || 'Verification failed'; }
+    } catch(ex) { err.textContent = 'Connection failed'; }
     btn.disabled = false;
   };
+  document.getElementById('mfaCode').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); verifyMfaChallenge(); } });
+  document.getElementById('mfaRecoveryCode').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); verifyMfaChallenge(); } });
 
-  // Handle Enter key in MFA code inputs
-  document.getElementById('mfaCode').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); verifyMfaChallenge(); }
-  });
-  document.getElementById('mfaRecoveryCode').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); verifyMfaChallenge(); }
-  });
-
-  // ============================================================
-  // OAUTH LINKING CONFIRMATION
-  // ============================================================
   var currentLinkData = null;
-
   window.showLinkModal = function(provider, linkToken, accountId, username) {
     currentLinkData = { provider, linkToken, accountId, username };
     document.getElementById('linkModalUser').textContent = username;
     document.getElementById('linkModalProvider').textContent = provider.charAt(0).toUpperCase() + provider.slice(1);
     document.getElementById('linkModal').classList.add('show');
   };
-
-  window.cancelLink = function() {
-    currentLinkData = null;
-    document.getElementById('linkModal').classList.remove('show');
-  };
-
+  window.cancelLink = function() { currentLinkData = null; document.getElementById('linkModal').classList.remove('show'); };
   window.confirmLink = async function() {
     if (!currentLinkData) return;
     var btn = document.getElementById('linkConfirmBtn');
     btn.disabled = true;
     try {
-      var r = await fetch(API + '/api/account/identities/' + currentLinkData.provider + '/link', {
-        method: 'POST',
-        credentials: 'include',
-        headers: apiHeaders('POST'),
-        body: JSON.stringify({ linkToken: currentLinkData.linkToken }),
-      });
+      var r = await fetch(API + '/api/account/identities/' + currentLinkData.provider + '/link', { method: 'POST', credentials: 'include', headers: apiHeaders('POST'), body: JSON.stringify({ linkToken: currentLinkData.linkToken }) });
       var j = await r.json();
-      if (j.ok) {
-        // Link succeeded - reload to check auth
-        window.location.href = '/';
-      } else {
-        alert(j.error || 'Linking failed');
-      }
-    } catch(ex) {
-      alert('Connection failed');
-    }
+      if (j.ok) { window.location.href = '/'; } else { alert(j.error || 'Linking failed'); }
+    } catch(ex) { alert('Connection failed'); }
     btn.disabled = false;
   };
 
@@ -889,118 +837,151 @@ a{color:var(--accent);text-decoration:none}
     container.innerHTML=items.map(function(s){return '<div class="stat-card '+(s.color||'')+'"><div class="stat-value">'+esc(s.value)+'</div><div class="stat-label">'+esc(s.label)+'</div></div>'}).join('');
   }
 
+  function fmtTs(ts){
+    if(!ts) return '';
+    try{ return new Date(ts).toLocaleTimeString(); }catch(e){ return ts; }
+  }
+  function fmtDuration(secs){
+    if(!secs&&secs!==0) return '---';
+    var h=Math.floor(secs/3600),m=Math.floor((secs%3600)/60);
+    return h+'h '+m+'m';
+  }
+
   async function loadOverview(){
-    var data = await Promise.all([api('/api/system/status'),api('/api/system/health'),api('/api/providers/status'),api('/api/system/features'),api('/api/logs/errors?limit=5')]);
-    var status=data[0],health=data[1],providers=data[2],features=data[3],errors=data[4];
-    if(!status)return;
-    var uptime=Math.floor((status.uptime||0)/3600)+'h '+Math.floor(((status.uptime||0)%3600)/60)+'m';
+    var data = await Promise.all([api('/api/system/status'),api('/api/system/health'),api('/api/providers/status'),api('/api/system/config'),api('/api/logs/errors?limit=5')]);
+    var status=data[0],health=data[1],providers=data[2],cfg=data[3],errors=data[4];
+    if(!status){renderError(document.getElementById('overviewStats'),'Unable to load system status.');renderEmpty(document.getElementById('overviewProviders'),'No provider data.');renderEmpty(document.getElementById('overviewErrors'),'No error data.');return;}
+    var s=status.status||status;
+    var uptime=fmtDuration(s.uptime);
     var avail=providers?providers.filter(function(p){return p.available}).length:0;
     var total=providers?providers.length:0;
-    var healthScore=health?health.score:'--';
-    var healthColor=health?(health.overall==='healthy'?'green':health.overall==='degraded'?'yellow':'red'):'';
+    var healthScore=health?(health.health?health.health:health).score:'---';
+    var healthObj=health?(health.health?health.health:health):null;
+    var healthColor=healthObj?(healthObj.overall==='healthy'?'green':healthObj.overall==='degraded'?'yellow':'red'):'';
+    var provCount=cfg&&cfg.config&&cfg.config.aiProviders?cfg.config.aiProviders.configured:0;
     renderStats(document.getElementById('overviewStats'),[
-      {value:status.running?'Online':'Offline',label:'Status',color:status.running?'green':'red'},
+      {value:s.running?'Online':'Offline',label:'Status',color:s.running?'green':'red'},
       {value:uptime,label:'Uptime'},
       {value:healthScore,label:'Health Score',color:healthColor},
-      {value:avail+'/'+total,label:'Providers Online',color:avail>0?'green':'red'},
-      {value:features?(features.discord?'Yes':'No'):'--',label:'Discord',color:features&&features.discord?'green':'red'},
-      {value:features?(features.selfHealer?'Active':'Off'):'--',label:'Self-Healer'},
+      {value:avail+'/'+total,label:'Providers',color:avail>0?'green':'red'},
+      {value:provCount,label:'Configured',color:provCount>0?'purple':''},
+      {value:cfg&&cfg.config?cfg.config.environment:'---',label:'Environment'},
     ]);
     if(providers){
-      document.getElementById('overviewProviders').innerHTML=providers.map(function(p){return '<div class="provider-row"><span class="provider-name">'+esc(p.name)+'</span><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Online':'Offline')+'</span><span class="provider-meta"><span>'+p.successes+' ok</span><span>'+p.failures+' fail</span><span>'+(p.averageLatencyMs||0)+'ms</span></span></div>'}).join('');
+      var el=document.getElementById('overviewProviders');
+      if(!providers.length){renderEmpty(el,'No provider data available.');}
+      else{el.innerHTML=providers.map(function(p){return '<div class="provider-row"><span class="provider-name">'+esc(p.name)+'</span><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Online':'Offline')+'</span><span class="provider-meta"><span>'+p.successes+' ok</span><span>'+p.failures+' fail</span><span>'+(p.averageLatencyMs?p.averageLatencyMs+'ms':'---')+'</span></span></div>'}).join('');}
     }
-    if(errors&&errors.entries){
-      document.getElementById('overviewErrors').innerHTML=errors.entries.length?errors.entries.map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(e.timestamp)+'</span><span class="log-level">ERR</span>'+esc(redact(e.message))+'</div>'}).join(''):'<div class="empty">No recent errors</div>';
+    if(errors){
+      var eEl=document.getElementById('overviewErrors');
+      if(errors.entries&&errors.entries.length){
+        eEl.innerHTML=errors.entries.map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(fmtTs(e.timestamp))+'</span><span class="log-level">ERR</span>'+esc(redact(e.message))+'</div>'}).join('');
+      } else { renderEmpty(eEl,'No recent errors.'); }
     }
-    document.getElementById('topStatus').textContent=status.running?'Online':'Offline';
+    document.getElementById('topStatus').textContent=s.running?'Online':'Offline';
   }
 
   async function loadBotControl(){
     var d=await api('/api/system/status');
-    if(!d)return;
-    document.getElementById('botStatus').innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px"><span>Status: <b>'+(d.running?'Running':'Stopped')+'</b></span><span>PID: '+(d.pid||'N/A')+'</span><span>Version: '+esc(d.version||'unknown')+'</span><span>Node: '+esc(d.nodeVersion||'')+'</span><span>Platform: '+esc(d.platform||'')+'</span></div>';
+    if(!d){renderError(document.getElementById('botStatus'),'Unable to load status.');return;}
+    var s=d.status||d;
+    document.getElementById('botStatus').innerHTML='<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px"><span>Status: <b>'+(s.running?'Running':'Stopped')+'</b></span><span>PID: '+(s.pid||'Unavailable')+'</span><span>Version: '+esc(s.version||'Unavailable')+'</span><span>Node: '+esc(s.nodeVersion||'Unavailable')+'</span><span>Platform: '+esc(s.platform||'Unavailable')+'</span><span>Environment: '+esc(s.environment||'Unavailable')+'</span></div>';
   }
 
   async function loadProviders(){
     var data=await Promise.all([api('/api/providers/status'),api('/api/providers/performance')]);
     var status=data[0],perf=data[1];
-    if(status){
-      document.getElementById('providerList').innerHTML=status.length?status.map(function(p){return '<div class="provider-row"><div><span class="provider-name">'+esc(p.name)+'</span><div class="provider-meta" style="margin-top:4px"><span>Latency: '+(p.averageLatencyMs||0)+'ms</span><span>Success: '+p.successes+'</span><span>Fail: '+p.failures+'</span>'+(p.disabledUntil?'<span>Cooldown until '+new Date(p.disabledUntil).toLocaleTimeString()+'</span>':'')+(p.lastError?'<span style="color:var(--danger)">Last: '+esc(p.lastError)+'</span>':'')+'</div></div><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Available':'Disabled')+'</span></div>'}).join(''):'<div class="empty">No providers configured</div>';
-    }
-    if(perf){
-      var entries=Object.entries(perf);
-      document.getElementById('providerPerf').innerHTML=entries.length?'<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency||0)+'ms</td></tr>'}).join('')+'</tbody></table>':'<div class="empty">No performance data</div>';
-    }
+    var el=document.getElementById('providerList');
+    if(!status||!status.length){renderEmpty(el,'No provider health data available yet.');}
+    else{el.innerHTML='<div>'+status.map(function(p){return '<div class="provider-row"><div><span class="provider-name">'+esc(p.name)+'</span><div class="provider-meta" style="margin-top:2px"><span>Latency: '+(p.averageLatencyMs?p.averageLatencyMs+'ms':'---')+'</span><span>Success: '+p.successes+'</span><span>Fail: '+p.failures+'</span>'+(p.disabledUntil?'<span>Cooldown until '+new Date(p.disabledUntil).toLocaleTimeString()+'</span>':'')+(p.lastError?'<span style="color:var(--danger)">Last: '+esc(p.lastError)+'</span>':'')+'</div></div><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Available':'Disabled')+'</span></div>'}).join('')+'</div>';}
+    var pEl=document.getElementById('providerPerf');
+    if(!perf){renderEmpty(pEl,'No performance data available.');}
+    else{var entries=Object.entries(perf);if(!entries.length){renderEmpty(pEl,'No performance data available.');}
+    else{pEl.innerHTML='<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency?v.latency+'ms':'---')+'</td></tr>'}).join('')+'</tbody></table>';}}
   }
 
   async function loadUsage(){
     var data=await Promise.all([api('/api/usage/global'),api('/api/usage/system')]);
     var d=data[0],sd=data[1];
-    if(d&&d.usage){
-      var g=d.usage.global||{};
-      renderStats(document.getElementById('usageGlobal'),[
-        {value:g.totalRequests||0,label:'Total Requests',color:'purple'},
-        {value:g.totalCredits||0,label:'Total Credits'},
-        {value:g.totalTokens||0,label:'Total Tokens'},
-        {value:g.failures||0,label:'Failures',color:g.failures?'red':''},
-      ]);
-      var provs=d.usage.providers||{};
-      var entries=Object.entries(provs);
-      document.getElementById('usageProviders').innerHTML=entries.length?'<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency||0)+'ms</td></tr>'}).join('')+'</tbody></table>':'<div class="empty">No provider usage data</div>';
-    }
+    if(!d||!d.usage){renderError(document.getElementById('usageGlobal'),'Unable to load usage data.');renderEmpty(document.getElementById('usageProviders'),'No provider usage data.');return;}
+    var g=d.usage.global||{};
+    renderStats(document.getElementById('usageGlobal'),[
+      {value:g.totalRequests||0,label:'Total Requests',color:'purple'},
+      {value:g.totalCredits||0,label:'Total Credits'},
+      {value:g.totalTokens||0,label:'Total Tokens'},
+      {value:g.failures||0,label:'Failures',color:g.failures?'red':''},
+    ]);
+    var provs=d.usage.providers||{};
+    var entries=Object.entries(provs);
+    var pEl=document.getElementById('usageProviders');
+    if(!entries.length){renderEmpty(pEl,'No provider usage data available.');}
+    else{pEl.innerHTML='<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency?v.latency+'ms':'---')+'</td></tr>'}).join('')+'</tbody></table>';}
     if(sd&&sd.systemUsage){
-      var su=sd.systemUsage;
-      var budget=su.budget||{};
-      var systems=su.systems||{};
+      var su=sd.systemUsage;var budget=su.budget||{};var systems=su.systems||{};
       var sysEntries=Object.entries(systems);
       if(sysEntries.length){
-        var container=document.getElementById('usageProviders');
-        container.innerHTML+='<h3 style="margin-top:16px">Internal AI Usage</h3>'+
-          '<table class="data-table"><thead><tr><th>System</th><th>Requests</th><th>Credits</th><th>Failures</th></tr></thead><tbody>'+
-          sysEntries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.failures||0)+'</td></tr>'}).join('')+
+        pEl.innerHTML+='<h3 style="margin-top:12px;font-size:12px">Internal AI Usage</h3>'+
+          '<table class="data-table"><thead><tr><th>System</th><th>Credits</th><th>Failures</th></tr></thead><tbody>'+
+          sysEntries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.failures||0)+'</td></tr>'}).join('')+
           '</tbody></table>'+
-          '<div style="margin-top:8px;font-size:11px;color:var(--muted)">Budget: '+(budget.dailyCredits||0)+' daily, '+(budget.maxConcurrent||0)+' concurrent, '+(budget.cooldownMs||0)+'ms cooldown</div>';
+          '<div class="info-note">Budget: '+(budget.dailyCredits||0)+' daily, '+(budget.maxConcurrent||0)+' concurrent</div>';
       }
     }
   }
 
   async function loadMemory(){
     var d=await api('/api/memory/stats');
-    if(!d||!d.memory)return;
+    if(!d||!d.memory){renderError(document.getElementById('memoryStats'),'Unable to load memory data.');return;}
     var m=d.memory;
     renderStats(document.getElementById('memoryStats'),[
       {value:m.conversations||0,label:'Conversations',color:'purple'},
       {value:m.messages||0,label:'Stored Messages'},
-      {value:m.persistent?'Yes':'No',label:'Persistent Storage'},
+      {value:m.persistent?'Enabled':'Disabled',label:'Persistent Storage',color:m.persistent?'green':'red'},
     ]);
   }
 
   async function loadServers(){
     var d=await api('/api/guilds');
-    if(!d||!d.guilds)return;
+    if(!d||!d.guilds){renderError(document.getElementById('serverList'),'Unable to load server data.');return;}
     var guilds=d.guilds;
-    document.getElementById('serverList').innerHTML=guilds.length?guilds.map(function(g){return '<div class="guild-card"><h4>'+esc(g.guildName||g.guildId)+'</h4><div class="guild-meta"><span>ID: '+esc(g.guildId)+'</span><span class="badge '+(g.enabled?'badge-green':'badge-red')+'">'+(g.enabled?'Enabled':'Disabled')+'</span></div></div>'}).join(''):'<div class="empty">No servers configured</div>';
+    var el=document.getElementById('serverList');
+    if(!guilds.length){renderEmpty(el,'No Discord servers connected.');}
+    else{el.innerHTML=guilds.map(function(g){return '<div class="guild-card"><h4>'+esc(g.guildName||g.guildId)+'</h4><div class="guild-meta"><span>ID: '+esc(g.guildId)+'</span><span class="badge '+(g.enabled?'badge-green':'badge-red')+'">'+(g.enabled?'Enabled':'Disabled')+'</span></div></div>'}).join('');}
   }
 
   async function loadDiagnostics(){
     var d=await api('/api/system/diagnostics');
-    if(!d)return;
-    document.getElementById('diagResults').innerHTML='<div style="margin-bottom:12px"><span class="badge '+(d.overall==='healthy'?'badge-green':d.overall==='degraded'?'badge-yellow':'badge-red')+'">'+d.overall+' ('+d.score+'/100)</span></div>'+(d.checks?d.checks.map(function(c){return '<div class="provider-row"><div><span class="provider-name">'+esc(c.name)+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">'+esc(c.message)+'</div></div><span class="badge '+(c.status==='pass'?'badge-green':c.status==='warn'?'badge-yellow':'badge-red')+'">'+c.status+'</span></div>'}).join(''):'<div class="empty">No checks available</div>');
+    if(!d){renderError(document.getElementById('diagResults'),'Unable to load diagnostics.');return;}
+    var diag=d.diagnostics||d;
+    var score=diag.score!=null?diag.score:'---';
+    var overall=diag.overall||'unknown';
+    var checks=diag.checks||[];
+    var passed=checks.filter(function(c){return c.status==='pass'}).length;
+    var warns=checks.filter(function(c){return c.status==='warn'}).length;
+    var fails=checks.filter(function(c){return c.status==='fail'}).length;
+    document.getElementById('diagResults').innerHTML=
+      '<div style="margin-bottom:10px"><span class="badge '+(overall==='healthy'?'badge-green':overall==='degraded'?'badge-yellow':'badge-red')+'">'+esc(overall)+' ('+score+'/100)</span> '+
+      '<span style="font-size:11px;color:var(--muted);margin-left:8px">'+checks.length+' checks: '+passed+' passed, '+warns+' warnings, '+fails+' failures</span></div>'+
+      (checks.length?checks.map(function(c){return '<div class="provider-row"><div><span class="provider-name">'+esc(c.name)+'</span><div style="font-size:11px;color:var(--muted);margin-top:1px">'+esc(c.message)+'</div></div><span class="badge '+(c.status==='pass'?'badge-green':c.status==='warn'?'badge-yellow':'badge-red')+'">'+c.status+'</span></div>'}).join(''):'<div class="empty">No checks available.</div>');
   }
 
   window.loadLogs=async function(){
     var d=await api('/api/logs?limit=200');
-    if(!d||!d.entries)return;
+    var logEl=document.getElementById('logList');
+    var errEl=document.getElementById('logErrors');
+    if(!d||!d.entries){renderError(logEl,'Unable to load logs.');renderEmpty(errEl,'No error data.');return;}
     var search=(document.getElementById('logSearch').value||'').toLowerCase();
     var level=document.getElementById('logLevel').value;
     var entries=d.entries;
     if(level)entries=entries.filter(function(e){return e.level===level});
     if(search)entries=entries.filter(function(e){return(e.message||'').toLowerCase().includes(search)});
-    document.getElementById('logList').innerHTML=entries.length?entries.slice(-100).reverse().map(function(e){return '<div class="log-entry '+e.level+'"><span class="log-ts">'+esc(e.timestamp)+'</span><span class="log-level">'+esc(e.level)+'</span>'+esc(redact(e.message))+'</div>'}).join(''):'<div class="empty">No logs found</div>';
+    if(!entries.length){renderEmpty(logEl,'No logs found.');}
+    else{logEl.innerHTML=entries.slice(-100).reverse().map(function(e){return '<div class="log-entry '+e.level+'"><span class="log-ts">'+esc(fmtTs(e.timestamp))+'</span><span class="log-level">'+esc(e.level)+'</span>'+esc(redact(e.message))+'</div>'}).join('');}
     var errD=await api('/api/logs/errors?limit=10');
     if(errD&&errD.entries){
-      document.getElementById('logErrors').innerHTML=errD.entries.length?errD.entries.reverse().map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(e.timestamp)+'</span>'+esc(redact(e.message))+'</div>'}).join(''):'<div class="empty">No recent errors</div>';
-    }
+      if(!errD.entries.length){renderEmpty(errEl,'No recent errors.');}
+      else{errEl.innerHTML=errD.entries.reverse().map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(fmtTs(e.timestamp))+'</span>'+esc(redact(e.message))+'</div>'}).join('');}
+    } else {renderEmpty(errEl,'No error data.');}
   };
   document.getElementById('logSearch').addEventListener('input',function(){loadLogs()});
   document.getElementById('logLevel').addEventListener('change',function(){loadLogs()});
@@ -1008,22 +989,22 @@ a{color:var(--accent);text-decoration:none}
   async function loadSeraph(){
     var data=await Promise.all([api('/api/seraph/status'),api('/api/seraph/tools'),api('/api/seraph/system')]);
     var status=data[0],tools=data[1],sys=data[2];
-    if(status){
-      renderStats(document.getElementById('seraphStats'),[
-        {value:status.active?'Active':'Inactive',label:'Status',color:'green'},
-        {value:status.version,label:'Version'},
-        {value:Math.floor((status.uptime||0)/3600)+'h '+Math.floor(((status.uptime||0)%3600)/60)+'m',label:'Uptime'},
-      ]);
-      if(status.components){
-        document.getElementById('seraphComponents').innerHTML=status.components.map(function(c){return '<div class="provider-row"><span class="provider-name">'+esc(c.name)+'</span><span class="badge '+(c.status==='operational'?'badge-green':c.status==='degraded'?'badge-yellow':'badge-red')+'">'+c.status+'</span><span class="provider-meta">'+(c.message?esc(c.message):'')+'</span></div>'}).join('');
-      }
-    }
-    if(tools){
-      document.getElementById('seraphTools').innerHTML=tools.map(function(t){return '<div class="provider-row"><div><span class="provider-name">'+esc(t.name)+'</span><div style="font-size:11px;color:var(--muted)">'+esc(t.description)+'</div></div><span class="badge badge-purple">'+esc(t.category)+'</span></div>'}).join('');
-    }
-    if(sys){
-      document.getElementById('seraphSys').innerHTML='<table class="data-table"><tbody>'+Object.entries(sys).map(function(kv){return '<tr><td style="font-weight:600">'+esc(kv[0])+'</td><td>'+esc(kv[1])+'</td></tr>'}).join('')+'</tbody></table>';
-    }
+    if(!status){renderError(document.getElementById('seraphStats'),'Unable to load Seraph data.');renderEmpty(document.getElementById('seraphComponents'),'No component data.');renderEmpty(document.getElementById('seraphTools'),'No tools available.');renderEmpty(document.getElementById('seraphSys'),'No system information.');return;}
+    var st=status.status||status;
+    renderStats(document.getElementById('seraphStats'),[
+      {value:st.active!==false?'Active':'Inactive',label:'Status',color:st.active!==false?'green':'yellow'},
+      {value:st.version||'---',label:'Version'},
+      {value:fmtDuration(st.uptime),label:'Uptime'},
+    ]);
+    var cEl=document.getElementById('seraphComponents');
+    if(st.components&&st.components.length){cEl.innerHTML=st.components.map(function(c){return '<div class="provider-row"><span class="provider-name">'+esc(c.name)+'</span><span class="badge '+(c.status==='operational'?'badge-green':c.status==='degraded'?'badge-yellow':'badge-red')+'">'+c.status+'</span><span class="provider-meta">'+(c.message?esc(c.message):'')+'</span></div>'}).join('');}
+    else{renderEmpty(cEl,'No component data available.');}
+    var tEl=document.getElementById('seraphTools');
+    if(tools&&tools.length){tEl.innerHTML=tools.map(function(t){return '<div class="provider-row"><div><span class="provider-name">'+esc(t.name)+'</span><div style="font-size:10px;color:var(--muted)">'+esc(t.description)+'</div></div><span class="badge badge-purple">'+esc(t.category)+'</span></div>'}).join('');}
+    else{renderEmpty(tEl,'No tools available.');}
+    var sEl=document.getElementById('seraphSys');
+    if(sys&&Object.keys(sys).length){sEl.innerHTML='<table class="data-table"><tbody>'+Object.entries(sys).map(function(kv){return '<tr><td style="font-weight:600">'+esc(kv[0])+'</td><td>'+esc(String(kv[1]))+'</td></tr>'}).join('')+'</tbody></table>';}
+    else{renderEmpty(sEl,'No system information available.');}
   }
 
   window.runInvestigation=async function(){
@@ -1032,15 +1013,17 @@ a{color:var(--accent);text-decoration:none}
     var container=document.getElementById('invResult');
     container.innerHTML='<div class="loading"><span class="spinner"></span> Investigating...</div>';
     var d=await api('/api/seraph/investigate',{method:'POST',body:JSON.stringify({problem:problem})});
-    if(!d||!d.investigation){container.innerHTML='<div style="color:var(--danger)">Investigation failed</div>';return;}
+    if(!d||!d.investigation){renderError(container,'Investigation failed. Check Seraph status.');return;}
     var inv=d.investigation;
-    container.innerHTML='<div class="card"><h3>Result: '+esc(inv.status)+'</h3>'+(inv.findings.length?inv.findings.map(function(f){return '<div class="inv-finding '+f.severity+'"><strong>'+esc(f.severity.toUpperCase())+'</strong> - '+esc(f.area)+': '+esc(f.message)+(f.evidence?'<div style="font-size:11px;color:var(--muted);margin-top:4px">Evidence: '+esc(f.evidence)+'</div>':'')+'</div>'}).join(''):'<div class="empty">No findings</div>')+(inv.recommendations.length?'<h3 style="margin-top:12px">Recommendations</h3><ul style="margin:8px 0 0 16px;font-size:13px;color:var(--muted)">'+inv.recommendations.map(function(r){return '<li>'+esc(r)+'</li>'}).join('')+'</ul>':'')+'</div>';
+    container.innerHTML='<div class="card"><h3>Result: '+esc(inv.status)+'</h3>'+(inv.findings.length?inv.findings.map(function(f){return '<div class="inv-finding '+f.severity+'"><strong>'+esc(f.severity.toUpperCase())+'</strong> - '+esc(f.area)+': '+esc(f.message)+(f.evidence?'<div style="font-size:10px;color:var(--muted);margin-top:2px">Evidence: '+esc(f.evidence)+'</div>':'')+'</div>'}).join(''):'<div class="empty">No findings.</div>')+(inv.recommendations.length?'<h3 style="margin-top:10px;font-size:12px">Recommendations</h3><ul style="margin:6px 0 0 14px;font-size:12px;color:var(--muted)">'+inv.recommendations.map(function(r){return '<li>'+esc(r)+'</li>'}).join('')+'</ul>':'')+'</div>';
   };
 
   async function loadReports(){
     var d=await api('/api/seraph/reports');
-    if(!d||!d.reports)return;
-    document.getElementById('reportList').innerHTML=d.reports.length?d.reports.map(function(r){return '<div class="provider-row"><div><span class="provider-name">['+esc(r.type)+'] '+esc(r.summary)+'</span><div style="font-size:11px;color:var(--muted)">'+new Date(r.generatedAt).toLocaleString()+'</div></div></div>'}).join(''):'<div class="empty">No reports yet. Generate one above.</div>';
+    var el=document.getElementById('reportList');
+    if(!d||!d.reports){renderError(el,'Unable to load reports.');return;}
+    if(!d.reports.length){renderEmpty(el,'No reports yet. Generate one above.');}
+    else{el.innerHTML=d.reports.map(function(r){return '<div class="provider-row"><div><span class="provider-name">['+esc(r.type)+'] '+esc(r.summary)+'</span><div style="font-size:10px;color:var(--muted)">'+fmtTs(r.generatedAt)+'</div></div></div>'}).join('');}
   }
   window.generateReport=async function(type){
     await api('/api/seraph/reports/generate',{method:'POST',body:JSON.stringify({type:type})});
@@ -1048,33 +1031,56 @@ a{color:var(--accent);text-decoration:none}
   };
 
   async function loadConfig(){
-    var d=await api('/api/system/features');
-    if(!d)return;
-    document.getElementById('configDisplay').innerHTML='<table class="data-table"><tbody>'+Object.entries(d).map(function(kv){return '<tr><td style="font-weight:600;text-transform:capitalize">'+esc(kv[0])+'</td><td><span class="badge '+(kv[1]?'badge-green':'badge-red')+'">'+(kv[1]?'Enabled':'Disabled')+'</span></td></tr>'}).join('')+'</tbody></table>';
+    var d=await api('/api/system/config');
+    var el=document.getElementById('configDisplay');
+    if(!d||!d.config){renderError(el,'Unable to load configuration.');return;}
+    var c=d.config;
+    var rows=[
+      ['Discord',c.discord&&c.discord.configured,c.discord&&c.discord.configured?'Connected':'Not configured'],
+      ['AI Providers',c.aiProviders&&c.aiProviders.configured>0,c.aiProviders?c.aiProviders.configured+' configured':'Not configured'],
+      ['Discord OAuth',c.oauth&&c.oauth.discord&&c.oauth.discord.configured,c.oauth&&c.oauth.discord&&c.oauth.discord.configured?'Configured':'Not configured'],
+      ['Google OAuth',c.oauth&&c.oauth.google&&c.oauth.google.configured,c.oauth&&c.oauth.google&&c.oauth.google.configured?'Configured':'Not configured'],
+      ['Email',c.email&&c.email.configured,c.email&&c.email.configured?'Configured':'Not configured'],
+      ['Persistent Storage',c.persistentStorage&&c.persistentStorage.enabled,c.persistentStorage&&c.persistentStorage.enabled?'Enabled':'Disabled'],
+      ['MFA',c.mfa&&c.mfa.enabled,c.mfa&&c.mfa.enabled?'Enabled':'Not enabled'],
+      ['Environment',true,c.environment||'Unknown'],
+    ];
+    el.innerHTML='<table class="data-table"><thead><tr><th>Subsystem</th><th>Status</th></tr></thead><tbody>'+
+      rows.map(function(r){return '<tr><td style="font-weight:600">'+esc(r[0])+'</td><td><span class="badge '+(r[1]?'badge-green':'badge-muted')+'">'+esc(r[2])+'</span></td></tr>'}).join('')+
+      '</tbody></table>';
   }
 
   window.loadAudit=async function(){
     var d=await api('/api/audit?limit=100');
-    if(!d||!d.entries)return;
+    var el=document.getElementById('auditList');
+    if(!d||!d.entries){renderError(el,'Unable to load audit data.');return;}
     var search=(document.getElementById('auditSearch').value||'').toLowerCase();
     var entries=d.entries;
     if(search)entries=entries.filter(function(e){return(e.what||'').toLowerCase().includes(search)||(e.who||'').toLowerCase().includes(search)});
-    document.getElementById('auditList').innerHTML=entries.length?entries.slice(-50).reverse().map(function(e){return '<div class="log-entry '+(e.result==='failure'||e.result==='denied'?'error':'')+'"><span class="log-ts">'+esc(e.timestamp||new Date(e.createdAt||Date.now()).toLocaleString())+'</span><span class="log-level">'+esc(e.result||'info')+'</span><strong>'+esc(e.who||'system')+'</strong> '+esc(e.what||'')+(e.guildId?' (guild: '+esc(e.guildId)+')':'')+(e.details?' <span style="color:var(--muted)">- '+esc(e.details)+'</span>':'')+'</div>'}).join(''):'<div class="empty">No audit entries</div>';
+    if(!entries.length){renderEmpty(el,'No audit entries found.');}
+    else{el.innerHTML=entries.slice(-50).reverse().map(function(e){
+      var ts=fmtTs(e.timestamp||e.createdAt);
+      var resultClass=e.result==='failure'||e.result==='denied'?'error':'';
+      var resultBadge=e.result==='failure'?'badge-red':e.result==='denied'?'badge-red':e.result==='success'?'badge-green':'badge-muted';
+      return '<div class="log-entry '+resultClass+'"><span class="log-ts">'+esc(ts)+'</span><span class="badge '+resultBadge+'" style="margin-right:6px">'+esc(e.result||'info')+'</span><strong>'+esc(e.who||'system')+'</strong> '+esc(e.what||'')+(e.details?' <span style="color:var(--muted)">- '+esc(e.details)+'</span>':'')+'</div>';
+    }).join('');}
   };
   document.getElementById('auditSearch').addEventListener('input',function(){loadAudit()});
 
   async function loadAccount(){
     var d=await api('/api/me');
-    if(!d||!d.authenticated)return;
-    document.getElementById('accountInfo').innerHTML='<div style="font-size:13px"><p><strong>Username:</strong> '+esc(d.user.username)+'</p><p><strong>Role:</strong> '+esc(d.user.role)+'</p><p style="color:var(--muted);margin-top:8px">All actions are logged in the audit trail.</p></div>';
+    if(!d||!d.authenticated){renderError(document.getElementById('accountInfo'),'Unable to load account data.');return;}
+    document.getElementById('accountInfo').innerHTML='<div style="font-size:12px"><p><strong>Username:</strong> '+esc(d.user.username)+'</p><p><strong>Role:</strong> '+esc(d.user.role)+'</p><p class="info-note">All actions are logged in the audit trail.</p></div>';
   }
 
   async function loadAccounts(){
     var d=await api('/api/accounts');
-    if(!d||!d.accounts)return;
-    document.getElementById('accountList').innerHTML=d.accounts.length?'<table class="data-table"><thead><tr><th>Username</th><th>Role</th><th>Enabled</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>'+d.accounts.map(function(a){
-      return '<tr><td>'+esc(a.username)+'</td><td><span class="role-badge role-'+a.role+'">'+a.role+'</span></td><td><span class="badge '+(a.enabled?'badge-green':'badge-red')+'">'+(a.enabled?'Yes':'No')+'</span></td><td>'+(a.lastLoginAt?new Date(a.lastLoginAt).toLocaleString():'Never')+'</td><td><button class="btn btn-outline" style="padding:4px 8px;font-size:10px" onclick="toggleAccount(\''+a.id+'\','+(!a.enabled)+')">'+(a.enabled?'Disable':'Enable')+'</button> <button class="btn btn-danger" style="padding:4px 8px;font-size:10px" onclick="deleteAccountConfirm(\''+a.id+'\',\''+esc(a.username)+'\')">Delete</button></td></tr>';
-    }).join('')+'</tbody></table>':'<div class="empty">No accounts</div>';
+    var el=document.getElementById('accountList');
+    if(!d||!d.accounts){renderError(el,'Unable to load accounts.');return;}
+    if(!d.accounts.length){renderEmpty(el,'No accounts.');}
+    else{el.innerHTML='<table class="data-table"><thead><tr><th>Username</th><th>Role</th><th>Enabled</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>'+d.accounts.map(function(a){
+      return '<tr><td>'+esc(a.username)+'</td><td><span class="role-badge role-'+a.role+'">'+a.role+'</span></td><td><span class="badge '+(a.enabled?'badge-green':'badge-red')+'">'+(a.enabled?'Yes':'No')+'</span></td><td>'+(a.lastLoginAt?fmtTs(a.lastLoginAt):'Never')+'</td><td><button class="btn btn-outline btn-sm" onclick="toggleAccount(\''+a.id+'\','+(!a.enabled)+')">'+(a.enabled?'Disable':'Enable')+'</button> <button class="btn btn-danger btn-sm" onclick="deleteAccountConfirm(\''+a.id+'\',\''+esc(a.username)+'\')">Delete</button></td></tr>';
+    }).join('')+'</tbody></table>';}
   }
 
   window.createAccount=async function(){
@@ -1086,20 +1092,13 @@ a{color:var(--accent);text-decoration:none}
     if(!username||!password){errDiv.textContent='Username and password required.';return;}
     if(password.length<8){errDiv.textContent='Password must be at least 8 characters.';return;}
     var d=await api('/api/accounts',{method:'POST',body:JSON.stringify({username:username,password:password,role:role})});
-    if(d&&d.ok){
-      document.getElementById('newUsername').value='';
-      document.getElementById('newPassword').value='';
-      loadAccounts();
-    } else {
-      errDiv.textContent=(d&&d.error)?d.error:'Failed to create account';
-    }
+    if(d&&d.ok){document.getElementById('newUsername').value='';document.getElementById('newPassword').value='';loadAccounts();}
+    else{errDiv.textContent=(d&&d.error)?d.error:'Failed to create account';}
   };
-
   window.toggleAccount=async function(id,enabled){
     await api('/api/accounts/'+id,{method:'PUT',body:JSON.stringify({enabled:enabled})});
     loadAccounts();
   };
-
   window.deleteAccountConfirm=function(id,username){
     if(!confirm('Delete account "'+username+'"? This cannot be undone.'))return;
     api('/api/accounts/'+id,{method:'DELETE'}).then(function(){loadAccounts()});
@@ -1110,34 +1109,25 @@ a{color:var(--accent);text-decoration:none}
     var newPw=document.getElementById('newPasswordInput').value;
     var errDiv=document.getElementById('changePwError');
     var okDiv=document.getElementById('changePwSuccess');
-    errDiv.textContent='';
-    okDiv.textContent='';
+    errDiv.textContent='';okDiv.textContent='';
     if(!current||!newPw){errDiv.textContent='Both fields required.';return;}
     if(newPw.length<8){errDiv.textContent='New password must be at least 8 characters.';return;}
     var d=await api('/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword:current,newPassword:newPw})});
-    if(d&&d.ok){
-      okDiv.textContent=d.message||'Password changed.';
-      if(d.csrfToken) csrfToken=d.csrfToken;
-      document.getElementById('currentPassword').value='';
-      document.getElementById('newPasswordInput').value='';
-    } else {
-      errDiv.textContent=(d&&d.error)?d.error:'Failed to change password';
-    }
+    if(d&&d.ok){okDiv.textContent=d.message||'Password changed.';if(d.csrfToken)csrfToken=d.csrfToken;document.getElementById('currentPassword').value='';document.getElementById('newPasswordInput').value='';}
+    else{errDiv.textContent=(d&&d.error)?d.error:'Failed to change password';}
   };
 
   window.confirmAction=function(action){
     pendingAction=action;
     var dangerous=['stop','clear_memory','reset_usage','provider_disable'];
     var titles={restart:'Restart Bot',stop:'Stop Bot',reload_config:'Reload Configuration',clear_memory:'Clear Memory',reset_usage:'Reset Usage',run_diagnostics:'Run Diagnostics',backup:'Trigger Backup',provider_disable:'Disable Provider',provider_enable:'Enable Provider'};
-    var msgs={restart:'This will restart the AshenAI process. The bot will be briefly unavailable.',stop:'This will stop AshenAI completely. It will not restart automatically.',clear_memory:'This will clear ALL conversation memory. This cannot be undone.',reset_usage:'This will reset ALL usage statistics. This cannot be undone.',run_diagnostics:'This will run a full system diagnostic scan.',backup:'This will trigger a data backup.',reload_config:'This will reload the configuration.',provider_disable:'This will disable the specified AI provider.',provider_enable:'This will enable the specified AI provider.'};
+    var msgs={restart:'Restarts the AshenAI process. Users may temporarily lose access.',stop:'Stops AshenAI completely. It will not restart automatically.',clear_memory:'This permanently removes ALL conversation memory.',reset_usage:'This permanently resets ALL usage statistics.',run_diagnostics:'Runs a full system diagnostic scan.',backup:'Creates a data backup.',reload_config:'Reloads supported runtime configuration.',provider_disable:'Disables the specified AI provider.',provider_enable:'Enables the specified AI provider.'};
     document.getElementById('confirmTitle').textContent=titles[action]||'Confirm Action';
     document.getElementById('confirmMsg').textContent=msgs[action]||'Are you sure?';
     document.getElementById('confirmBtn').className=dangerous.includes(action)?'btn btn-danger':'btn btn-primary';
     document.getElementById('confirmModal').classList.add('show');
   };
-
   window.closeModal=function(){document.getElementById('confirmModal').classList.remove('show');pendingAction=null;};
-
   window.executeConfirmedAction=async function(){
     if(!pendingAction)return;
     var action=pendingAction;
@@ -1146,75 +1136,63 @@ a{color:var(--accent);text-decoration:none}
     if((action==='provider_disable'||action==='provider_enable')&&!target)return;
     var d=await api('/api/actions/execute',{method:'POST',body:JSON.stringify({action:action,target:target,confirmed:true})});
     if(d&&d.ok){alert(d.message||'Action executed');}
-    else{alert('Failed: '+(d&&d.error?'d.error':'Unknown error'));}
+    else{alert('Failed: '+(d&&d.error?d.error:'Unknown error'));}
     if(action==='restart'||action==='stop'){setTimeout(function(){loadOverview()},3000);}
   };
 
-  // === SECURITY SECTION ===
   async function loadSecurity(){
     var data=await Promise.all([api('/api/account/security'),api('/api/account/sessions')]);
     var sec=data[0],sess=data[1];
-    if(sec&&sec.security){
-      var s=sec.security;
-      var authMethods='<div style="font-size:13px">';
-      authMethods+='<p><strong>Password:</strong> '+(s.hasPassword?'<span style="color:var(--success)">Configured</span>':'<span style="color:var(--muted)">Not set</span>')+'</p>';
-      authMethods+='<p><strong>Email:</strong> '+(s.email?s.email+(s.emailVerified?' <span style="color:var(--success)">(verified)</span>':' <span style="color:var(--warning)">(unverified)</span>'):'<span style="color:var(--muted)">Not set</span>')+'</p>';
-      authMethods+='</div>';
-      document.getElementById('securityAuthMethods').innerHTML=authMethods;
+    if(!sec||!sec.security){renderError(document.getElementById('securityAuthMethods'),'Unable to load security data.');renderEmpty(document.getElementById('securitySessions'),'No session data.');renderEmpty(document.getElementById('securityIdentities'),'No identity data.');return;}
+    var s=sec.security;
+    var authMethods='<div style="font-size:12px">';
+    authMethods+='<p><strong>Password:</strong> '+(s.hasPassword?'<span style="color:var(--success)">Configured</span>':'<span style="color:var(--muted)">Not set</span>')+'</p>';
+    authMethods+='<p><strong>Email:</strong> '+(s.email?s.email+(s.emailVerified?' <span style="color:var(--success)">(verified)</span>':' <span style="color:var(--warning)">(unverified)</span>'):'<span style="color:var(--muted)">Not set</span>')+'</p>';
+    authMethods+='</div>';
+    document.getElementById('securityAuthMethods').innerHTML=authMethods;
 
-      var mfaHtml='<div style="font-size:13px">';
-      mfaHtml+='<p><strong>Status:</strong> '+(s.mfaEnabled?'<span style="color:var(--success)">Enabled</span>':'<span style="color:var(--muted)">Disabled</span>')+'</p>';
-      if(!s.mfaEnabled){
-        mfaHtml+='<button class="btn btn-primary" style="font-size:12px;padding:6px 12px;margin-top:8px" onclick="setupMFA()">Enable MFA</button>';
-      } else {
-        mfaHtml+='<button class="btn btn-danger" style="font-size:12px;padding:6px 12px;margin-top:8px" onclick="document.getElementById(\'mfaDisable\').style.display=\'block\'">Disable MFA</button>';
-        mfaHtml+=' <button class="btn btn-outline" style="font-size:12px;padding:6px 12px;margin-top:8px" onclick="regenerateRecovery()">New Recovery Codes</button>';
-      }
-      mfaHtml+='</div>';
-      document.getElementById('securityMFA').innerHTML=mfaHtml;
-    }
+    var mfaHtml='<div style="font-size:12px">';
+    mfaHtml+='<p><strong>Status:</strong> '+(s.mfaEnabled?'<span style="color:var(--success)">Enabled</span>':'<span style="color:var(--muted)">Disabled</span>')+'</p>';
+    if(!s.mfaEnabled){mfaHtml+='<button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="setupMFA()">Enable MFA</button>';}
+    else{mfaHtml+='<button class="btn btn-danger btn-sm" style="margin-top:6px" onclick="document.getElementById(\'mfaDisable\').style.display=\'block\'">Disable MFA</button> <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="regenerateRecovery()">New Recovery Codes</button>';}
+    mfaHtml+='</div>';
+    document.getElementById('securityMFA').innerHTML=mfaHtml;
 
     if(sess&&sess.sessions){
-      var sHtml='<div style="font-size:13px">';
+      var sHtml='<div style="font-size:12px">';
       sess.sessions.forEach(function(s){
-        sHtml+='<div style="padding:8px;border-bottom:1px solid var(--border)">';
+        sHtml+='<div style="padding:6px;border-bottom:1px solid var(--border)">';
         sHtml+='<span style="font-family:monospace">'+esc(s.sessionId)+'</span>';
         if(s.isCurrent)sHtml+=' <span class="badge badge-green">Current</span>';
-        sHtml+=' <span style="color:var(--muted);font-size:11px">IP: '+esc(s.lastSeenIp)+'</span>';
-        sHtml+=' <span style="color:var(--muted);font-size:11px">Created: '+new Date(s.createdAt).toLocaleString()+'</span>';
+        sHtml+=' <span style="color:var(--muted);font-size:10px">IP: '+esc(s.lastSeenIp)+'</span>';
+        sHtml+=' <span style="color:var(--muted);font-size:10px">Created: '+fmtTs(s.createdAt)+'</span>';
         sHtml+='</div>';
       });
       sHtml+='</div>';
       document.getElementById('securitySessions').innerHTML=sHtml;
-    }
-
-    await loadSecurityIdentities();
+    } else {renderEmpty(document.getElementById('securitySessions'),'No session data.');}
+    await loadSecurityIdentities(sec);
   }
 
-  async function loadSecurityIdentities(){
-    var sec=await api('/api/account/security');
-    if(!sec||!sec.security)return;
+  async function loadSecurityIdentities(secData){
+    var sec=secData||await api('/api/account/security');
+    if(!sec||!sec.security){renderEmpty(document.getElementById('securityIdentities'),'No identity data.');return;}
     var linked=sec.security.linkedProviders||[];
-    var html='<div style="font-size:13px">';
+    var el=document.getElementById('securityIdentities');
+    var html='<div style="font-size:12px">';
     if(linked.length){
       linked.forEach(function(p){
-        html+='<div style="padding:8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
+        html+='<div style="padding:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
         html+='<div><strong>'+esc(p.provider)+'</strong> - '+esc(p.displayName||'Connected')+'</div>';
-        html+='<button class="btn btn-danger" style="font-size:10px;padding:4px 8px" onclick="unlinkProvider(\''+esc(p.provider)+'\')">Unlink</button>';
+        html+='<button class="btn btn-danger btn-sm" onclick="unlinkProvider(\''+esc(p.provider)+'\')">Unlink</button>';
         html+='</div>';
       });
-    } else {
-      html+='<p style="color:var(--muted)">No linked accounts</p>';
-    }
-    html+='<div style="margin-top:8px">';
-    if(!linked.find(function(p){return p.provider==='discord'})){
-      html+='<button class="btn btn-outline" style="font-size:12px;padding:6px 12px;margin-right:8px" onclick="linkProvider(\'discord\')">Link Discord</button>';
-    }
-    if(!linked.find(function(p){return p.provider==='google'})){
-      html+='<button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="linkProvider(\'google\')">Link Google</button>';
-    }
+    } else { html+='<p style="color:var(--muted)">No linked accounts</p>'; }
+    html+='<div style="margin-top:6px">';
+    if(!linked.find(function(p){return p.provider==='discord'})){html+='<button class="btn btn-outline btn-sm" style="margin-right:6px" onclick="linkProvider(\'discord\')">Link Discord</button>';}
+    if(!linked.find(function(p){return p.provider==='google'})){html+='<button class="btn btn-outline btn-sm" onclick="linkProvider(\'google\')">Link Google</button>';}
     html+='</div></div>';
-    document.getElementById('securityIdentities').innerHTML=html;
+    el.innerHTML=html;
   }
 
   window.linkProvider=async function(provider){
@@ -1222,78 +1200,50 @@ a{color:var(--accent);text-decoration:none}
     if(d&&d.ok&&d.url){window.location.href=d.url;}
     else{alert((d&&d.error)||'Failed to initiate linking');}
   };
-
   window.unlinkProvider=async function(provider){
     if(!confirm('Unlink '+provider+' account?'))return;
     var d=await api('/api/account/identities/'+provider+'/unlink',{method:'POST'});
-    if(d&&d.ok){loadSecurityIdentities();}
-    else{alert((d&&d.error)||'Failed to unlink');}
+    if(d&&d.ok){loadSecurityIdentities();}else{alert((d&&d.error)||'Failed to unlink');}
   };
-
   window.revokeAllSessions=async function(){
     if(!confirm('Revoke all other sessions? You will remain logged in.'))return;
     var d=await api('/api/account/sessions/revoke-all',{method:'POST'});
-    if(d&&d.ok){loadSecurity();}
-    else{alert('Failed to revoke sessions');}
+    if(d&&d.ok){loadSecurity();}else{alert('Failed to revoke sessions');}
   };
-
   window.setupMFA=async function(){
     var d=await api('/auth/mfa/setup',{method:'POST'});
     if(d&&d.ok){
       document.getElementById('mfaSetup').style.display='block';
       document.getElementById('mfaSecret').textContent=d.secret;
-      // Display QR code if available
-      var qrContainer = document.getElementById('mfaQrCode');
-      if(d.qrCode){
-        qrContainer.innerHTML='<img src="'+d.qrCode+'" alt="MFA QR Code" style="border-radius:8px;max-width:256px">';
-      } else {
-        qrContainer.innerHTML='<p style="color:var(--muted);font-size:12px">QR code unavailable. Use the secret above.</p>';
-      }
-    } else {
-      alert((d&&d.error)||'Failed to setup MFA');
-    }
+      var qrContainer=document.getElementById('mfaQrCode');
+      if(d.qrCode){qrContainer.innerHTML='<img src="'+d.qrCode+'" alt="MFA QR Code" style="border-radius:6px;max-width:200px">';}
+      else{qrContainer.innerHTML='<p style="color:var(--muted);font-size:11px">QR code unavailable. Use the secret above.</p>';}
+    } else {alert((d&&d.error)||'Failed to setup MFA');}
   };
-
   window.verifyMFA=async function(enable){
     var code=document.getElementById('mfaSetupCode').value;
     if(!code||code.length!==6){alert('Enter a 6-digit code');return;}
     var d=await api('/auth/mfa/verify',{method:'POST',body:JSON.stringify({code:code,enable:enable})});
     if(d&&d.ok){
-      if(d.recoveryCodes){
-        document.getElementById('mfaSetup').style.display='none';
-        document.getElementById('mfaRecovery').style.display='block';
-        document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');
-      }
+      if(d.recoveryCodes){document.getElementById('mfaSetup').style.display='none';document.getElementById('mfaRecovery').style.display='block';document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');}
       loadSecurity();
-    } else {
-      alert((d&&d.error)||'Invalid code');
-    }
+    } else {alert((d&&d.error)||'Invalid code');}
   };
-
   window.disableMFA=async function(){
     var pw=document.getElementById('mfaDisablePw').value;
     var code=document.getElementById('mfaDisableCode').value;
     if(!pw){alert('Password required');return;}
     if(!code||code.length!==6){alert('Enter a 6-digit TOTP code');return;}
     var d=await api('/auth/mfa/disable',{method:'POST',body:JSON.stringify({password:pw,code:code})});
-    if(d&&d.ok){
-      document.getElementById('mfaDisable').style.display='none';
-      loadSecurity();
-    } else {
-      alert((d&&d.error)||'Failed to disable MFA');
-    }
+    if(d&&d.ok){document.getElementById('mfaDisable').style.display='none';loadSecurity();}
+    else{alert((d&&d.error)||'Failed to disable MFA');}
   };
-
   window.regenerateRecovery=async function(){
     var pw=prompt('Enter your password to regenerate recovery codes:');
     if(!pw)return;
     var d=await api('/auth/mfa/recovery-codes',{method:'POST',body:JSON.stringify({password:pw})});
-    if(d&&d.ok){
-      document.getElementById('mfaRecovery').style.display='block';
-      document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');
-    } else {
-      alert((d&&d.error)||'Failed to regenerate codes');
-    }
+    if(d&&d.ok){document.getElementById('mfaRecovery').style.display='block';document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');}
+    else{alert((d&&d.error)||'Failed to regenerate codes');}
   };
 
   checkAuth();

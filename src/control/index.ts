@@ -13,6 +13,7 @@ export {
   getRecentErrors,
   runDiagnostics,
   getFeatureStatus,
+  getConfigurationState,
   getGuildConfigs,
   getGuildConfig,
   updateGuildConfig,
@@ -133,3 +134,7 @@ export type {
   ActionConfirmation,
   AdminAction,
 } from "./types";
+
+export type {
+  ConfigurationState,
+} from "./control-service";

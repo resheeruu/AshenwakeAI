@@ -40,7 +40,7 @@ export interface ResourceProfile {
 }
 
 /** Detect hosting provider from environment (inline, no scripts/ import). */
-function detectHostProvider(): string {
+export function detectHostProvider(): string {
   if (process.env.RENDER) return "render";
   if (process.env.RAILWAY_ENVIRONMENT) return "railway";
   if (process.env.FLY_APP_NAME) return "fly.io";

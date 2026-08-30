@@ -1,6 +1,6 @@
 import { recordAudit } from "../security/audit";
 import {
-  getEnabledAccountByUsername,
+  getAccountByUsername,
   verifyPassword,
   hashPassword,
   changePassword as changeAccountPassword,
@@ -92,7 +92,7 @@ export function authenticateOwner(
     return { success: false, reason: "rate_limited" };
   }
 
-  const account = getEnabledAccountByUsername(username);
+  const account = getAccountByUsername(username);
   if (!account) {
     recentIpAttempts.push(now);
     loginAttempts.set(ip, recentIpAttempts);
@@ -139,7 +139,7 @@ export function authenticateOwner(
   updateAccountCredentials(account.id, { lastLoginAt: Date.now() });
 
   // Check if MFA is enabled — require challenge before granting full session
-  if (account.mfaEnabled && account.role !== "user") {
+  if (account.mfaEnabled) {
     const challengeToken = createPreAuthToken(account.id, account.role, account.username, ip);
 
     logger_info(`🔐 MFA required for: ${account.username} from ${ip}`);

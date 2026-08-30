@@ -5,6 +5,7 @@ export interface SystemStatus {
   nodeVersion: string;
   platform: string;
   pid: number;
+  environment: string;
 }
 
 export interface ProviderInfo {

@@ -332,6 +332,10 @@ export function hasOwnerAccount(): boolean {
   return accounts.some((a) => a.role === "owner" && a.enabled);
 }
 
+export function isAnyMfaEnabled(): boolean {
+  return accounts.some((a) => a.mfaEnabled);
+}
+
 export function reloadAccounts(): void {
   loadAccounts();
 }
