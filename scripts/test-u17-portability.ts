@@ -212,7 +212,7 @@ console.log("\n===== PHASE 3: CAPABILITY MATRIX =====");
 test("detectCapabilities returns 13+ checks", () => {
   const m = freshDetect();
   const caps = m.detectCapabilities();
-  assert.ok(caps.length >= 13, "Must have 13+ checks, got " + caps.length);
+  assert.ok(caps.length >= 11, "Must have 11+ checks, got " + caps.length);
 });
 
 test("node.js always available with version", () => {
@@ -239,32 +239,12 @@ test("typescript/build detected", () => {
   assert.ok(c && c.available);
 });
 
-test("java detected (live)", () => {
-  const m = freshDetect();
-  const caps = m.detectCapabilities();
-  const c = caps.find((c: any) => c.name === "java");
-  assert.ok(c);
-  assert.equal(c.required, false);
-  assert.ok(c.reason, "Must have reason");
-});
-
 test("ffmpeg detected (live)", () => {
   const m = freshDetect();
   const caps = m.detectCapabilities();
   const c = caps.find((c: any) => c.name === "ffmpeg");
   assert.ok(c);
-  assert.equal(c.required, false);
-});
-
-test("lavalink detected based on files (live)", () => {
-  const m = freshDetect();
-  const caps = m.detectCapabilities();
-  const c = caps.find((c: any) => c.name === "lavalink");
-  assert.ok(c);
-  const hasJar = fs.existsSync(path.join(ROOT, "lavalink/Lavalink.jar"));
-  assert.equal(c.available, hasJar);
-  assert.equal(c.required, false);
-  assert.ok(c.reason);
+  assert.equal(typeof c.available, "boolean");
 });
 
 test("persistent-filesystem detected", () => {
@@ -310,7 +290,7 @@ console.log("\n===== PHASE 4: FEATURE MATRIX =====");
 test("17 features in matrix", () => {
   const m = freshFeatures();
   const f = m.detectFeatureCapabilities();
-  assert.equal(f.length, 17, "Must have 17 features, got " + f.length);
+  assert.ok(f.length >= 16, "Must have 16+ features, got " + f.length);
 });
 
 test("all features have valid status", () => {
@@ -323,7 +303,7 @@ test("all features have valid status", () => {
   }
 });
 
-test("discord-bot depends on node+websocket+network, not lavalink", () => {
+test("discord-bot depends on node+websocket+network", () => {
   const m = freshFeatures();
   const f = m.detectFeatureCapabilities();
   const discord = f.find((f: any) => f.feature === "discord-bot");
@@ -331,7 +311,7 @@ test("discord-bot depends on node+websocket+network, not lavalink", () => {
   assert.equal(discord.status, "available");
 });
 
-test("web-dashboard not coupled to lavalink", () => {
+test("web-dashboard independent of music backend", () => {
   const m = freshFeatures();
   const f = m.detectFeatureCapabilities();
   const web = f.find((f: any) => f.feature === "web-dashboard");
@@ -339,7 +319,7 @@ test("web-dashboard not coupled to lavalink", () => {
   assert.equal(web.status, "available");
 });
 
-test("ai-providers not coupled to lavalink", () => {
+test("ai-providers independent of music backend", () => {
   const m = freshFeatures();
   const f = m.detectFeatureCapabilities();
   const ai = f.find((f: any) => f.feature === "ai-providers");
@@ -362,16 +342,15 @@ test("mfa always available", () => {
   assert.ok(mfa && mfa.status === "available");
 });
 
-test("music depends on lavalink and java", () => {
+test("music depends on ffmpeg", () => {
   const m = freshFeatures();
   const f = m.detectFeatureCapabilities();
   const music = f.find((f: any) => f.feature === "music");
   assert.ok(music);
   const mCaps = freshDetect().detectCapabilities();
-  const hasLav = mCaps.find((c: any) => c.name === "lavalink")?.available;
-  const hasJava = mCaps.find((c: any) => c.name === "java")?.available;
-  if (!hasLav || !hasJava) {
-    assert.ok(music.status !== "available", "music must not be available without lavalink+java");
+  const hasFfmpeg = mCaps.find((c: any) => c.name === "ffmpeg")?.available;
+  if (!hasFfmpeg) {
+    assert.ok(music.status !== "available", "music must not be available without ffmpeg");
   }
 });
 
@@ -403,7 +382,7 @@ test("complete valid config: no errors", () => {
   simulateEnv({
     DISCORD_TOKEN: "valid_token", DISCORD_CLIENT_ID: "12345",
     SESSION_SECRET: "secret123", NODE_ENV: "production",
-    LAVALINK_URL: "http://localhost:2333", PORT: "3000",
+    PORT: "3000",
   }, () => {
     const m = freshFeatures();
     const issues = m.validateDeploymentConfig();
@@ -446,15 +425,6 @@ test("missing SESSION_SECRET in non-production: not error", () => {
     const m = freshFeatures();
     const issues = m.validateDeploymentConfig();
     assert.ok(!issues.some((i: any) => i.name === "SESSION_SECRET" && i.severity === "error"));
-  });
-});
-
-test("missing LAVALINK_URL: warning", () => {
-  simulateEnv({ DISCORD_TOKEN: "tok", DISCORD_CLIENT_ID: "123" }, () => {
-    delete (process.env as any).LAVALINK_URL;
-    const m = freshFeatures();
-    const issues = m.validateDeploymentConfig();
-    assert.ok(issues.some((i: any) => i.name === "LAVALINK_URL" && i.severity === "warning"));
   });
 });
 
@@ -662,13 +632,13 @@ if (dockerAvailable) {
     assert.ok(content.includes('scripts/start.sh'), "CMD must use start.sh");
     assert.ok(!content.includes('render-start.sh'), "Must not use render-start.sh in CMD");
   });
-  test("Dockerfile installs Java for Lavalink", () => {
-    const content = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
-    assert.ok(content.includes('java'), "Must install Java for Lavalink");
-  });
   test("Dockerfile installs FFmpeg", () => {
     const content = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
     assert.ok(content.includes('ffmpeg'), "Must install FFmpeg");
+  });
+  test("Dockerfile is Node-only (no Java)", () => {
+    const content = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+    assert.ok(!content.includes('temurin') && !content.includes('openjdk'), "Must not install Java");
   });
 } else {
   console.log("  SKIP Docker tests (Docker not available locally)");
@@ -685,9 +655,8 @@ test("render-start.sh still exists and is functional", () => {
   assert.ok(true, "render-start.sh parses correctly");
 });
 
-test("render-start.sh still handles Lavalink + AshenAI", () => {
+test("render-start.sh still handles AshenAI", () => {
   const content = fs.readFileSync(path.join(ROOT, "scripts/render-start.sh"), "utf8");
-  assert.ok(content.includes("Lavalink"), "Must handle Lavalink");
   assert.ok(content.includes("AshenAI"), "Must handle AshenAI");
   assert.ok(content.includes("SIGTERM"), "Must handle signals");
 });

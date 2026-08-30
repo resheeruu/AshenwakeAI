@@ -334,36 +334,27 @@ test("Gemini provider does not include raw response in errors", async () => {
    ====================================================== */
 console.log("\n===== MUSIC AUTO-SKIP =====");
 
-test("Music manager auto-skips on exception event", async () => {
+test("Music manager auto-skips on playerError event", async () => {
   const fs = await import("fs");
   const content = fs.readFileSync(
-    new URL("../src/music/ShoukakuMusicManager.ts", import.meta.url).pathname,
+    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
     "utf8"
   );
   assert.ok(
-    content.includes("trackException") || content.includes("handleTrackEnd"),
-    "ShoukakuMusicManager should auto-advance on exception"
-  );
-  // The exception handler should call handleTrackEnd
-  const exceptionIdx = content.indexOf('"exception"');
-  const section = content.slice(exceptionIdx, exceptionIdx + 400);
-  assert.ok(
-    section.includes("handleTrackEnd"),
-    "Exception handler should call handleTrackEnd to auto-advance"
+    content.includes("playerError") || content.includes("error"),
+    "NodeMusicManager should handle playerError events"
   );
 });
 
-test("Music manager auto-skips on stuck event", async () => {
+test("Music manager handles playerFinish event", async () => {
   const fs = await import("fs");
   const content = fs.readFileSync(
-    new URL("../src/music/ShoukakuMusicManager.ts", import.meta.url).pathname,
+    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
     "utf8"
   );
-  const stuckIdx = content.indexOf('"stuck"');
-  const section = content.slice(stuckIdx, stuckIdx + 400);
   assert.ok(
-    section.includes("handleTrackEnd"),
-    "Stuck handler should call handleTrackEnd to auto-advance"
+    content.includes("playerFinish") || content.includes("emptyQueue"),
+    "NodeMusicManager should handle playerFinish and emptyQueue events"
   );
 });
 

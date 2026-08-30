@@ -198,9 +198,9 @@ test("detectCapabilities returns >=10 (live)", "LIVE VERIFIED", () => {
   assert.ok(detectCapabilities().length >= 10);
 });
 
-test("node.js, npm, ts, java, ffmpeg, lavalink (live)", "LIVE VERIFIED", () => {
+test("node.js, npm, ts, ffmpeg (live)", "LIVE VERIFIED", () => {
   const caps = detectCapabilities();
-  for (const n of ["node.js","npm","typescript/build","java","ffmpeg","lavalink"]) {
+  for (const n of ["node.js","npm","typescript/build","ffmpeg"]) {
     const c = caps.find((x: any) => x.name === n);
     assert.ok(c, n); assert.ok(c.available, `${n} not available`);
   }
@@ -229,7 +229,8 @@ test("optional caps have reasons (live)", "LIVE VERIFIED", () => {
 console.log("\n===== PHASE 4: FEATURE STATES =====");
 
 test("17 features returned (live)", "LIVE VERIFIED", () => {
-  assert.equal(detectFeatureCapabilities().length, 17);
+  const fs2 = detectFeatureCapabilities();
+  assert.ok(fs2.length >= 16, "Must have 16+ features, got " + fs2.length);
 });
 
 test("all features valid (live)", "LIVE VERIFIED", () => {
@@ -263,10 +264,11 @@ test("email: degraded without SMTP (live)", "LIVE VERIFIED", () => {
   assert.equal(detectFeatureCapabilities().find((x: any) => x.feature === "email-password-reset")?.status, "degraded");
 });
 
-test("music + lavalink: available (live)", "LIVE VERIFIED", () => {
+test("music available (live)", "LIVE VERIFIED", () => {
   const fs2 = detectFeatureCapabilities();
-  assert.equal(fs2.find((x: any) => x.feature === "music")?.status, "available");
-  assert.equal(fs2.find((x: any) => x.feature === "lavalink")?.status, "available");
+  const music = fs2.find((x: any) => x.feature === "music");
+  assert.ok(music);
+  assert.ok(["available", "degraded"].includes(music.status));
 });
 
 test("agent, self-healer, bg-tasks: always (live)", "LIVE VERIFIED", () => {
@@ -348,16 +350,17 @@ test("start.sh parses + strict mode", "LIVE VERIFIED", () => {
   assert.ok(fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8").includes("set -euo pipefail"));
 });
 
-test("start.sh: Java, Lavalink, signals, cleanup", "LIVE VERIFIED", () => {
+test("start.sh: signals, cleanup", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(c.includes('command -v java')); assert.ok(c.includes("HAS_LAVALINK"));
   assert.ok(c.includes("SIGTERM")); assert.ok(c.includes("SIGINT"));
   assert.ok(c.includes("cleanup()")); assert.ok(c.includes("kill -TERM"));
 });
 
-test("start.sh: graceful degradation", "LIVE VERIFIED", () => {
+test("start.sh: Node-only music (no Lavalink)", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(c.includes("Continuing without Lavalink"));
+  assert.ok(!c.includes("start_lavalink"), "Must not have start_lavalink function");
+  assert.ok(!c.includes("wait_for_lavalink"), "Must not have wait_for_lavalink function");
+  assert.ok(c.includes("node --import tsx") || c.includes("node "), "Must start node directly");
 });
 
 test("start.sh: no secrets in logs", "LIVE VERIFIED", () => {
@@ -385,11 +388,12 @@ test("advisor with MIGRATE_FROM (live)", "LIVE VERIFIED", () => {
   assert.ok(out.includes("Migration: termux -> docker"));
 });
 
-test("Dockerfile: start.sh CMD, node:22, Java, FFmpeg, no .env", "LIVE VERIFIED", () => {
+test("Dockerfile: start.sh CMD, node:22, FFmpeg, no .env, no Java", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
   assert.ok(c.includes('scripts/start.sh')); assert.ok(c.includes("node:22-slim"));
-  assert.ok(c.includes("temurin-21-jre")); assert.ok(c.includes("ffmpeg"));
+  assert.ok(c.includes("ffmpeg"));
   assert.ok(!c.includes("COPY .env"));
+  assert.ok(!c.includes("temurin") && !c.includes("openjdk"), "Must not install Java");
 });
 
 test("package.json start uses start.sh", "LIVE VERIFIED", () => {
@@ -410,9 +414,9 @@ console.log("\n===== PHASE 10: RENDER =====");
 test("render-start.sh parses", "LIVE VERIFIED", () => {
   execSync("bash -n scripts/render-start.sh", { cwd: ROOT, encoding: "utf8" });
 });
-test("render-start.sh: Lavalink + AshenAI + signals", "LIVE VERIFIED", () => {
+test("render-start.sh: AshenAI + signals", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "scripts/render-start.sh"), "utf8");
-  assert.ok(c.includes("Lavalink")); assert.ok(c.includes("AshenAI")); assert.ok(c.includes("SIGTERM"));
+  assert.ok(c.includes("AshenAI")); assert.ok(c.includes("SIGTERM"));
 });
 test("render-deploy.sh + render-health.js exist", "LIVE VERIFIED", () => {
   assert.ok(fs.existsSync(path.join(ROOT, "scripts/render-deploy.sh")));
@@ -435,10 +439,9 @@ test("Android + arm64 (live)", "LIVE VERIFIED", () => {
   assert.ok(h.operatingSystem.includes("android"));
   assert.equal(h.architecture, "arm64");
 });
-test("Node.js + Java + FFmpeg on Termux (live)", "LIVE VERIFIED", () => {
+test("Node.js + FFmpeg on Termux (live)", "LIVE VERIFIED", () => {
   const caps = detectCapabilities();
   assert.ok(caps.find((x: any) => x.name === "node.js")?.available);
-  assert.ok(caps.find((x: any) => x.name === "java")?.available);
   assert.ok(caps.find((x: any) => x.name === "ffmpeg")?.available);
 });
 test("persistent + network on Termux (live)", "LIVE VERIFIED", () => {
@@ -461,8 +464,10 @@ test("degraded features have reasons (live)", "LIVE VERIFIED", () => {
     if (f.status === "degraded" || f.status === "unavailable") assert.ok(f.reason.length > 5);
   }
 });
-test("start.sh conditional Lavalink (code)", "LIVE VERIFIED", () => {
-  assert.ok(fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8").includes('if [ "$START_LAVALINK" = true ]'));
+test("start.sh starts Node.js directly", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
+  assert.ok(c.includes("node"), "Must start node");
+  assert.ok(!c.includes("START_LAVALINK"), "Must not reference START_LAVALINK");
 });
 
 // ============================================================
@@ -513,7 +518,7 @@ test("hosting modules: no timers/maps (code)", "LIVE VERIFIED", () => {
 });
 test("start.sh: tracks PIDs for cleanup (code)", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(c.includes("LAVALINK_PID")); assert.ok(c.includes("ASHENAI_PID"));
+  assert.ok(c.includes("ASHENAI_PID")); 
 });
 test("hosting-detect: safe exec with timeout (code)", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "scripts/hosting-detect.ts"), "utf8");

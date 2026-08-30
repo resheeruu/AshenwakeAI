@@ -94,10 +94,8 @@ export function buildResourceProfile(): ResourceProfile {
   // Capabilities from env
   const capabilities: string[] = ["node.js", "npm"];
   if (fs.existsSync("node_modules/typescript")) capabilities.push("typescript/build");
-  if (process.env.JAVA_HOME || fs.existsSync("/usr/bin/java")) capabilities.push("java");
-  if (fs.existsSync("lavalink/Lavalink.jar")) capabilities.push("lavalink");
 
-  const musicReady = capabilities.includes("lavalink") && (capabilities.includes("java") || !!process.env.JAVA_HOME);
+  const musicReady = true; // Node-only music via discord-player
 
   // Classification
   const classification = classifyHost(totalMemMB, freeMemMB, rssMB, heapMB, usedPct);

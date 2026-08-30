@@ -31,8 +31,7 @@ export function detectFeatureCapabilities(): FeatureCapability[] {
     { feature: "oauth", status: has("external-network") ? "available" : "unavailable", reason: "Requires redirect to providers", configurationRequired: ["DISCORD_OAUTH_CLIENT_ID", "AUTH_BASE_URL"] },
     { feature: "email-password-reset", status: smtpOk ? "available" : "degraded", reason: smtpOk ? "SMTP configured" : "No SMTP — dev mode only", configurationRequired: ["SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM"] },
     { feature: "mfa", status: "available", reason: "TOTP-based with recovery codes", configurationRequired: [] },
-    { feature: "music", status: has("lavalink") && has("java") ? "available" : has("lavalink") ? "degraded" : "unavailable", reason: !has("lavalink") ? "No Lavalink JAR/config or Java 17+ required" : !has("java") ? "No Java for Lavalink" : "Music ready — Lavalink + Java 17+ + FFmpeg", configurationRequired: ["LAVALINK_URL", "LAVALINK_PASSWORD"] },
-    { feature: "lavalink", status: has("lavalink") ? "available" : "unavailable", reason: has("lavalink") ? "JAR + config + Java 17+ present" : "Not found or Java 17+ missing", configurationRequired: ["LAVALINK_URL", "LAVALINK_PASSWORD", "Java 17+", "FFmpeg"] },
+    { feature: "music", status: has("ffmpeg") ? "available" : "degraded", reason: has("ffmpeg") ? "Node-only music via discord-player + FFmpeg" : "Music available but encoding limited without FFmpeg", configurationRequired: [] },
     { feature: "agent", status: "available", reason: "Autonomous agent", configurationRequired: [] },
     { feature: "self-healer", status: "available", reason: "Source watcher", configurationRequired: [] },
     { feature: "background-tasks", status: "available", reason: "Task engine", configurationRequired: [] },
@@ -50,7 +49,7 @@ export function getMigrationSteps(from: string, to: string): MigrationStep[] {
   ];
 
   if (from === "render" && to === "docker") {
-    steps.push({ category: "deployment", description: "Use Dockerfile. Docker bundles Lavalink.", effort: "low" });
+    steps.push({ category: "deployment", description: "Use Dockerfile. Docker bundles AshenAI.", effort: "low" });
     steps.push({ category: "storage", description: "Mount Docker volume for data/", effort: "low" });
     steps.push({ category: "environment", description: "Pass env via --env-file or docker-compose", effort: "low" });
   }
@@ -67,20 +66,20 @@ export function getMigrationSteps(from: string, to: string): MigrationStep[] {
     steps.push({ category: "storage", description: "Fly volumes for data/", effort: "medium" });
   }
   if (from === "render" && to === "generic-vps") {
-    steps.push({ category: "deployment", description: "Install Node.js 22+, Java 21+, FFmpeg", effort: "medium" });
+    steps.push({ category: "deployment", description: "Install Node.js 22+, FFmpeg", effort: "medium" });
     steps.push({ category: "process", description: "Use systemd or pm2", effort: "medium" });
   }
   if (from === "termux" && to === "docker") {
     steps.push({ category: "deployment", description: "Docker bundles everything", effort: "low" });
   }
   if (from === "docker" && to === "generic-vps") {
-    steps.push({ category: "deployment", description: "Install Node.js 22+, Java 21+, FFmpeg", effort: "medium" });
+    steps.push({ category: "deployment", description: "Install Node.js 22+, FFmpeg", effort: "medium" });
     steps.push({ category: "process", description: "Use systemd", effort: "medium" });
   }
   if (to === "docker") {
-    steps.push({ category: "music", description: "Docker bundles Lavalink", effort: "none" });
+    steps.push({ category: "music", description: "Docker includes FFmpeg for music", effort: "none" });
   } else {
-    steps.push({ category: "music", description: "Lavalink must be available separately", effort: "medium" });
+    steps.push({ category: "music", description: "FFmpeg required for music encoding", effort: "low" });
   }
   if (from !== to) {
     steps.push({ category: "oauth", description: "Update OAuth callback URLs if AUTH_BASE_URL changes", effort: "low" });
@@ -98,7 +97,7 @@ export function validateDeploymentConfig(): Array<{ severity: "error" | "warning
   if (process.env.NODE_ENV === "production") {
     issues.push(has("SESSION_SECRET") ? { severity: "info", name: "SESSION_SECRET", status: "present", message: "OK" } : { severity: "error", name: "SESSION_SECRET", status: "missing", message: "Required in production" });
   }
-  for (const [name, msg] of [["LAVALINK_URL", "Music unavailable"], ["PORT", "Defaults to 3000"], ["AUTH_BASE_URL", "OAuth/password reset"]] as const) {
+  for (const [name, msg] of [["PORT", "Defaults to 3000"], ["AUTH_BASE_URL", "OAuth/password reset"]] as const) {
     issues.push(has(name) ? { severity: "info", name, status: "present", message: "OK" } : { severity: "warning", name, status: "not set", message: msg });
   }
   const port = parseInt(process.env.PORT || "3000", 10);

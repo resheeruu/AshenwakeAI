@@ -107,7 +107,7 @@ for (const { error, desc } of stackErrors) {
 const internalErrors = [
   { error: "Configuration error: missing ASHENAI_OWNER_PASSWORD_HASH in environment", desc: "Config variable name" },
   { error: "PID 12345 died unexpectedly", desc: "Process ID" },
-  { error: "Port 2333 already in use by Lavalink", desc: "Internal port" },
+  { error: "Port 2333 already in use by another process", desc: "Internal port" },
   { error: "Failed to authenticate with Discord gateway: 401 Unauthorized", desc: "Gateway auth failure" },
   { error: "Token expired: MTUzNTY3OTk3NDM1NzM0NDI4Ng.GQGtua...", desc: "Discord token fragment" },
 ];

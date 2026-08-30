@@ -283,8 +283,6 @@ Run these to verify AshenAI is healthy:
 ### Required Environment Variables
 - `DISCORD_TOKEN` - Discord bot token
 - `DISCORD_CLIENT_ID` - Discord application client ID
-- `LAVALINK_URL` - Lavalink server URL
-- `LAVALINK_PASSWORD` - Lavalink server password
 - `ASHENAI_OWNER_USERNAME` - Owner login username
 - `ASHENAI_OWNER_PASSWORD_HASH` - Owner password hash (PBKDF2)
 - `ASHENAI_OWNER_PASSWORD_SALT` - Owner password salt

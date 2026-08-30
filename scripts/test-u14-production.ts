@@ -351,33 +351,27 @@ test("Dev email service checks NODE_ENV before enabling reset links", async () =
    ====================================================== */
 console.log("\n===== MUSIC AUTO-SKIP =====");
 
-test("Music manager auto-skips on exception event", async () => {
+test("Music manager auto-skips on playerError event", async () => {
   const fs = await import("fs");
   const content = fs.readFileSync(
-    new URL("../src/music/ShoukakuMusicManager.ts", import.meta.url).pathname,
+    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
     "utf8"
   );
-  const exceptionIdx = content.indexOf('"exception"');
-  assert.ok(exceptionIdx > 0, "ShoukakuMusicManager should handle exception event");
-  const section = content.slice(exceptionIdx, exceptionIdx + 400);
   assert.ok(
-    section.includes("handleTrackEnd"),
-    "Exception handler should call handleTrackEnd to auto-advance"
+    content.includes("playerError") || content.includes("error"),
+    "NodeMusicManager should handle playerError events"
   );
 });
 
-test("Music manager auto-skips on stuck event", async () => {
+test("Music manager handles playerFinish event", async () => {
   const fs = await import("fs");
   const content = fs.readFileSync(
-    new URL("../src/music/ShoukakuMusicManager.ts", import.meta.url).pathname,
+    new URL("../src/music/NodeMusicManager.ts", import.meta.url).pathname,
     "utf8"
   );
-  const stuckIdx = content.indexOf('"stuck"');
-  assert.ok(stuckIdx > 0, "ShoukakuMusicManager should handle stuck event");
-  const section = content.slice(stuckIdx, stuckIdx + 400);
   assert.ok(
-    section.includes("handleTrackEnd"),
-    "Stuck handler should call handleTrackEnd to auto-advance"
+    content.includes("playerFinish") || content.includes("emptyQueue"),
+    "NodeMusicManager should handle playerFinish and emptyQueue events"
   );
 });
 

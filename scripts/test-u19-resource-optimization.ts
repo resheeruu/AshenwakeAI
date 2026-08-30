@@ -140,9 +140,9 @@ test("classification reflects actual host state (LIVE)", "LIVE VERIFIED", () => 
     `classification: ${profile.classification}`);
 });
 
-test("musicReady reflects Lavalink (LIVE)", "LIVE VERIFIED", () => {
+test("musicReady reflects Node-only music (LIVE)", "LIVE VERIFIED", () => {
   const profile = buildResourceProfile();
-  assert.equal(profile.musicReady, true, "music should be ready on this host");
+  assert.equal(profile.musicReady, true, "music should be ready on this host (Node-only)");
 });
 
 test("disk usage measured (LIVE)", "LIVE VERIFIED", () => {

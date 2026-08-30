@@ -53,11 +53,11 @@ if (migrateFrom) {
 }
 console.log("");
 const recs: Record<string, string> = {
-  render: "Render: Dockerfile bundles Lavalink. Enable persistent disk.",
+  render: "Render: Dockerfile includes FFmpeg. Enable persistent disk.",
   railway: "Railway: Auto-detects Dockerfile. Enable volume.",
   "fly.io": "Fly.io: fly launch with Dockerfile. Fly volumes.",
-  termux: "Termux: Development only. Music needs separate Lavalink.",
-  "generic-vps": "VPS: Node.js 22+, Java 21+, FFmpeg. Use systemd.",
+  termux: "Termux: Development only. Music runs via Node.js.",
+  "generic-vps": "VPS: Node.js 22+, FFmpeg. Use systemd.",
   local: "Local: Development only.",
   unknown: "Use generic Node.js with persistent data/ volume.",
 };

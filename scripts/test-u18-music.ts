@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /**
- * U18 — Unified Music Runtime + Hosting-Adaptive Lavalink Tests
+ * U18 — Node-only Music Runtime Validation
  * Labels: LIVE VERIFIED / SIMULATED / NOT AVAILABLE / NOT TESTED
  */
 import { strict as assert } from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import os from "node:os";
 
 let P = 0, F = 0;
 const ROOT = path.resolve(__dirname, "..");
@@ -17,237 +16,163 @@ function test(n: string, l: string, fn: () => void) {
   catch (e: any) { F++; console.log(`  FAIL [${l}] ${n}: ${e.message?.slice(0, 200)}`); }
 }
 
-const { detectHosting, detectCapabilities } = require("../scripts/hosting-detect");
-const { detectFeatureCapabilities, validateDeploymentConfig } = require("../scripts/hosting-features");
-
 // ============================================================
-// PHASE 1: JAVA + LAVALINK DETECTION
+// PHASE 1: NODE MUSIC MANAGER SOURCE
 // ============================================================
-console.log("\n===== PHASE 1: JAVA + LAVALINK DETECTION =====");
+console.log("\n===== PHASE 1: NODE MUSIC MANAGER =====");
 
-test("Java detected with version", "LIVE VERIFIED", () => {
-  const caps = detectCapabilities();
-  const java = caps.find((c: any) => c.name === "java");
-  assert.ok(java?.available, "Java must be available");
-  assert.ok(java?.version, "Java must have version string");
-  assert.ok(java.version.includes("17") || java.version.includes("21"), `Java version: ${java.version}`);
+test("NodeMusicManager.ts exists", "LIVE VERIFIED", () => {
+  assert.ok(fs.existsSync(path.join(ROOT, "src/music/NodeMusicManager.ts")), "NodeMusicManager.ts must exist");
 });
 
-test("Java 17+ check works", "LIVE VERIFIED", () => {
-  const caps = detectCapabilities();
-  const java = caps.find((c: any) => c.name === "java");
-  assert.ok(java.available, "Java 17+ should be available");
-  assert.ok(!java.required, "Java should be optional");
+test("NodeMusicManager uses discord-player", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(c.includes('from "discord-player"'), "Must import discord-player");
+  assert.ok(c.includes("Player"), "Must use Player class");
 });
 
-test("Lavalink JAR present", "LIVE VERIFIED", () => {
-  assert.ok(fs.existsSync(path.join(ROOT, "lavalink/Lavalink.jar")), "Lavalink.jar must exist");
+test("NodeMusicManager has error handling", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(c.includes("playerError") || c.includes('"error"'), "Must handle playerError/error events");
 });
 
-test("Lavalink application.yml present", "LIVE VERIFIED", () => {
-  assert.ok(fs.existsSync(path.join(ROOT, "lavalink/application.yml")), "application.yml must exist");
+test("NodeMusicManager has queue handling", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(c.includes("playerFinish") || c.includes("emptyQueue"), "Must handle track finish/empty queue");
 });
 
-test("Lavalink YouTube plugin present", "LIVE VERIFIED", () => {
-  assert.ok(fs.existsSync(path.join(ROOT, "lavalink/plugins/youtube-plugin-1.18.2.jar")), "YouTube plugin must exist");
+test("NodeMusicManager has play method", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(c.includes("async play"), "Must have play method");
 });
 
-test("Lavalink capability includes Java version in reason", "LIVE VERIFIED", () => {
-  const caps = detectCapabilities();
-  const lav = caps.find((c: any) => c.name === "lavalink");
-  assert.ok(lav?.available, "Lavalink should be available");
-  assert.ok(lav.reason.includes("Java 17+"), `Reason: ${lav.reason}`);
+test("NodeMusicManager has init method", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(c.includes("async init"), "Must have init method");
+  assert.ok(c.includes("extractor"), "Must load extractors in init");
 });
 
-// ============================================================
-// PHASE 2: CAPABILITY INTEGRATION
-// ============================================================
-console.log("\n===== PHASE 2: CAPABILITY INTEGRATION =====");
-
-test("music feature available (LIVE)", "LIVE VERIFIED", () => {
-  const features = detectFeatureCapabilities();
-  const music = features.find((f: any) => f.feature === "music");
-  assert.equal(music?.status, "available");
-  assert.ok(music.reason.includes("Java 17+"), `Reason: ${music.reason}`);
+test("NodeMusicManager uses @discordjs/voice", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(c.includes("@discordjs/voice") || c.includes("discord-player"), "Must use discord voice integration");
 });
 
-test("lavalink feature available (LIVE)", "LIVE VERIFIED", () => {
-  const features = detectFeatureCapabilities();
-  const lav = features.find((f: any) => f.feature === "lavalink");
-  assert.equal(lav?.status, "available");
-  assert.ok(lav.configurationRequired.includes("LAVALINK_URL"));
-});
-
-test("music not coupled to discord/web/AI (LIVE)", "LIVE VERIFIED", () => {
-  const features = detectFeatureCapabilities();
-  assert.equal(features.find((f: any) => f.feature === "discord-bot")?.status, "available");
-  assert.equal(features.find((f: any) => f.feature === "web-dashboard")?.status, "available");
-  assert.equal(features.find((f: any) => f.feature === "ai-providers")?.status, "available");
-  assert.equal(features.find((f: any) => f.feature === "music")?.status, "available");
+test("No ShoukakuMusicManager references in NodeMusicManager", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(!c.includes("Shoukaku"), "Must not reference Shoukaku");
+  assert.ok(!c.includes("shoukaku"), "Must not reference shoukaku");
 });
 
 // ============================================================
-// PHASE 3: CONFIG VALIDATION
+// PHASE 2: INTEGRATION
 // ============================================================
-console.log("\n===== PHASE 3: CONFIG VALIDATION =====");
+console.log("\n===== PHASE 2: INTEGRATION =====");
 
-test("config.ts makes LAVALINK_URL optional", "LIVE VERIFIED", () => {
-  const content = fs.readFileSync(path.join(ROOT, "src/config/env.ts"), "utf8");
-  assert.ok(content.includes('optional("LAVALINK_URL")'), "LAVALINK_URL must use optional()");
-  assert.ok(!content.includes('required("LAVALINK_URL")'), "LAVALINK_URL must not use required()");
+test("index.ts uses NodeMusicManager", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
+  assert.ok(c.includes("NodeMusicManager") || c.includes("nodeMusic"), "index.ts must use NodeMusicManager");
+  assert.ok(!c.includes("ShoukakuMusicManager"), "index.ts must not use ShoukakuMusicManager");
+  assert.ok(!c.includes("LAVALINK_URL"), "index.ts must not reference LAVALINK_URL");
 });
 
-test("config.ts makes LAVALINK_PASSWORD optional", "LIVE VERIFIED", () => {
-  const content = fs.readFileSync(path.join(ROOT, "src/config/env.ts"), "utf8");
-  assert.ok(content.includes('optional("LAVALINK_PASSWORD")'), "LAVALINK_PASSWORD must use optional()");
-  assert.ok(!content.includes('required("LAVALINK_PASSWORD")'), "LAVALINK_PASSWORD must not use required()");
+test("musicCommands.ts uses NodeMusicManager", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/musicCommands.ts"), "utf8");
+  assert.ok(c.includes("NodeMusicManager"), "musicCommands.ts must import NodeMusicManager");
+  assert.ok(!c.includes("ShoukakuMusicManager"), "musicCommands.ts must not import ShoukakuMusicManager");
 });
 
-test("index.ts: conditional ShoukakuMusicManager creation", "LIVE VERIFIED", () => {
-  const content = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
-  assert.ok(content.includes("const shoukakuMusic = lavalinkUrl"), "Must be conditional on lavalinkUrl");
-  assert.ok(content.includes("? new ShoukakuMusicManager"), "Must use ternary");
-  assert.ok(content.includes(": null;"), "Must be null when no URL");
+test("MusicQueueManager has local MusicTrack type", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/MusicQueueManager.ts"), "utf8");
+  assert.ok(c.includes("MusicTrack") || c.includes("QueuedTrack"), "Must define local track type");
+  assert.ok(!c.includes('from "shoukaku"'), "Must not import from shoukaku");
 });
 
-test("index.ts: musicReady derived from shoukakuMusic", "LIVE VERIFIED", () => {
-  const content = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
-  assert.ok(content.includes("const musicReady = shoukakuMusic !== null"), "musicReady must reflect actual availability");
+test("config.ts has no LAVALINK config", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/config/env.ts"), "utf8");
+  assert.ok(!c.includes("LAVALINK"), "env.ts must not reference LAVALINK");
 });
 
-test("index.ts: graceful degradation log", "LIVE VERIFIED", () => {
-  const content = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
-  assert.ok(content.includes("Music unavailable: LAVALINK_URL not configured"), "Must log degradation");
+// ============================================================
+// PHASE 3: HOSTING MATRIX
+// ============================================================
+console.log("\n===== PHASE 3: HOSTING MATRIX =====");
+
+test("start.sh is Node-only (no Lavalink lifecycle)", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
+  assert.ok(!c.includes("start_lavalink"), "Must not have start_lavalink function");
+  assert.ok(!c.includes("wait_for_lavalink"), "Must not have wait_for_lavalink function");
+  assert.ok(!c.includes("HAS_LAVALINK"), "Must not reference HAS_LAVALINK");
+  assert.ok(!c.includes("LAVALINK_PID"), "Must not reference LAVALINK_PID");
+  assert.ok(!c.includes("Lavalink.jar"), "Must not reference Lavalink.jar");
 });
 
-test("musicCommands.ts: accepts nullable music", "LIVE VERIFIED", () => {
-  const content = fs.readFileSync(path.join(ROOT, "src/music/musicCommands.ts"), "utf8");
-  assert.ok(content.includes("ShoukakuMusicManager | null"), "Must accept null music");
-  assert.ok(content.includes("!musicReady || !music"), "Must check both musicReady and music");
+test("render-start.sh is Node-only", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "scripts/render-start.sh"), "utf8");
+  assert.ok(!c.includes("start_lavalink"), "Must not have start_lavalink");
+  assert.ok(!c.includes("Lavalink.jar"), "Must not reference Lavalink.jar");
+  assert.ok(!c.includes("wait_for_lavalink"), "Must not have wait_for_lavalink");
 });
 
-test("index.ts: null guard on music interaction", "LIVE VERIFIED", () => {
-  const content = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
-  assert.ok(content.includes("if (!shoukakuMusic)"), "Must have null guard for interaction handler");
+test("Dockerfile is Node-only (no Java)", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  assert.ok(!c.includes("temurin") && !c.includes("openjdk"), "Must not install Java");
+  assert.ok(!c.includes("Lavalink.jar"), "Must not download Lavalink");
 });
 
-test("no secrets in modified files", "LIVE VERIFIED", () => {
-  for (const f of ["src/config/env.ts", "src/index.ts", "src/music/musicCommands.ts"]) {
+test("no lavalink/ directory exists", "LIVE VERIFIED", () => {
+  assert.ok(!fs.existsSync(path.join(ROOT, "lavalink")), "lavalink/ directory must not exist");
+});
+
+// ============================================================
+// PHASE 4: FAILURE/RECOVERY
+// ============================================================
+console.log("\n===== PHASE 4: FAILURE/RECOVERY =====");
+
+test("musicCommands: handles musicReady=false", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/musicCommands.ts"), "utf8");
+  assert.ok(c.includes("unavailable") || c.includes("not available") || c.includes("!music"), "Must show unavailability message");
+});
+
+test("NodeMusicManager: reconnect/error handling", "LIVE VERIFIED", () => {
+  const c = fs.readFileSync(path.join(ROOT, "src/music/NodeMusicManager.ts"), "utf8");
+  assert.ok(c.includes("logger"), "Must log errors");
+  assert.ok(c.includes("error") || c.includes("Error"), "Must handle errors");
+});
+
+// ============================================================
+// PHASE 5: SECURITY
+// ============================================================
+console.log("\n===== PHASE 5: SECURITY =====");
+
+test("no secrets in music code", "LIVE VERIFIED", () => {
+  for (const f of ["src/music/NodeMusicManager.ts", "src/music/musicCommands.ts", "src/music/MusicQueueManager.ts"]) {
     const c = fs.readFileSync(path.join(ROOT, f), "utf8");
     assert.ok(!c.match(/sk-[a-zA-Z0-9]{20,}/), `${f} contains API key`);
   }
 });
 
-// ============================================================
-// PHASE 4: HOSTING MATRIX
-// ============================================================
-console.log("\n===== PHASE 4: HOSTING MATRIX =====");
-
-test("Termux: music available (LIVE)", "LIVE VERIFIED", () => {
-  const features = detectFeatureCapabilities();
-  const music = features.find((f: any) => f.feature === "music");
-  assert.equal(music?.status, "available", `Status: ${music?.status}, reason: ${music?.reason}`);
-});
-
-test("start.sh handles Lavalink lifecycle", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(c.includes("start_lavalink"), "Must have start_lavalink function");
-  assert.ok(c.includes("wait_for_lavalink"), "Must have wait_for_lavalink function");
-  assert.ok(c.includes("cleanup"), "Must have cleanup function");
-  assert.ok(c.includes("SIGTERM"), "Must handle SIGTERM");
-});
-
-test("start.sh graceful Lavalink degradation", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(c.includes("Continuing without Lavalink"), "Must degrade gracefully");
-  assert.ok(c.includes("Music features will be unavailable"), "Must warn about music");
-});
-
-test("Dockerfile: Lavalink bundled", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
-  assert.ok(c.includes("Lavalink.jar"), "Must download Lavalink");
-  assert.ok(c.includes("temurin-21-jre") || c.includes("java"), "Must install Java");
-});
-
-test("application.yml: localhost binding", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "lavalink/application.yml"), "utf8");
-  assert.ok(c.includes("127.0.0.1"), "Must bind to localhost");
-  assert.ok(c.includes("2333"), "Must use port 2333");
-});
-
-// ============================================================
-// PHASE 5: FAILURE/RECOVERY
-// ============================================================
-console.log("\n===== PHASE 5: FAILURE/RECOVERY =====");
-
-test("musicCommands: handles musicReady=false", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "src/music/musicCommands.ts"), "utf8");
-  assert.ok(c.includes("music system is currently unavailable"), "Must show unavailability message");
-});
-
-test("Shoukaku: reconnect configuration", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "src/music/ShoukakuMusicManager.ts"), "utf8");
-  assert.ok(c.includes("reconnectTries"), "Must have reconnectTries");
-  assert.ok(c.includes("reconnectInterval"), "Must have reconnectInterval");
-  assert.ok(c.includes("resume"), "Must support resume");
-});
-
-test("Shoukaku: error/close/ready handlers", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "src/music/ShoukakuMusicManager.ts"), "utf8");
-  assert.ok(c.includes('"ready"'), "Must handle ready event");
-  assert.ok(c.includes('"error"'), "Must handle error event");
-  assert.ok(c.includes('"close"'), "Must handle close event");
-  assert.ok(c.includes('"debug"'), "Must handle debug event");
-});
-
-test("Shoukaku: auto-skip on stuck/exception", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "src/music/ShoukakuMusicManager.ts"), "utf8");
-  assert.ok(c.includes("stuck") || c.includes("Stuck"), "Must handle stuck events");
-  assert.ok(c.includes("exception") || c.includes("Exception"), "Must handle exception events");
-});
-
-// ============================================================
-// PHASE 6: SECURITY
-// ============================================================
-console.log("\n===== PHASE 6: SECURITY =====");
-
-test("no secrets in config.ts", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "src/config/env.ts"), "utf8");
-  assert.ok(!c.match(/sk-[a-zA-Z0-9]{20,}/));
-});
-
 test("no eval in music code", "LIVE VERIFIED", () => {
-  for (const f of ["src/music/ShoukakuMusicManager.ts", "src/music/musicCommands.ts"]) {
+  for (const f of ["src/music/NodeMusicManager.ts", "src/music/musicCommands.ts"]) {
     assert.ok(!fs.readFileSync(path.join(ROOT, f), "utf8").match(/\beval\b/), `${f} has eval`);
   }
 });
 
 test("no arbitrary exec in music code", "LIVE VERIFIED", () => {
-  for (const f of ["src/music/ShoukakuMusicManager.ts", "src/music/musicCommands.ts"]) {
+  for (const f of ["src/music/NodeMusicManager.ts", "src/music/musicCommands.ts"]) {
     assert.ok(!fs.readFileSync(path.join(ROOT, f), "utf8").match(/execSync|exec\(/), `${f} has exec`);
   }
 });
 
-test("Lavalink password not logged", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
-  assert.ok(!c.match(/console\.log.*LAVALINK_PASSWORD/), "Must not log password value");
-});
-
-test("Lavalink binds to localhost only", "LIVE VERIFIED", () => {
-  const c = fs.readFileSync(path.join(ROOT, "lavalink/application.yml"), "utf8");
-  assert.ok(c.includes("127.0.0.1"), "Must bind to 127.0.0.1");
-});
-
 // ============================================================
-// PHASE 7: BUILD + TYPE CHECK
+// PHASE 6: BUILD
 // ============================================================
-console.log("\n===== PHASE 7: BUILD =====");
+console.log("\n===== PHASE 6: BUILD =====");
 
 test("tsc --noEmit passes", "LIVE VERIFIED", () => {
   execSync("npx tsc --noEmit", { cwd: ROOT, encoding: "utf8", timeout: 60000 });
 });
 
-test("dist/index.js exists (build output)", "LIVE VERIFIED", () => {
+test("dist/index.js exists", "LIVE VERIFIED", () => {
   assert.ok(fs.existsSync(path.join(ROOT, "dist/index.js")));
 });
 
@@ -255,7 +180,7 @@ test("dist/index.js exists (build output)", "LIVE VERIFIED", () => {
 // SUMMARY
 // ============================================================
 console.log("\n========================================");
-console.log("U18 MUSIC RUNTIME VALIDATION");
+console.log("U18 NODE-ONLY MUSIC VALIDATION");
 console.log("========================================");
 console.log(`Passed:  ${P}`);
 console.log(`Failed:  ${F}`);

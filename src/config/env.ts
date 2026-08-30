@@ -107,13 +107,6 @@ export const config = {
     guildId: optional("DISCORD_GUILD_ID"),
   },
 
-  lavalink: {
-    url: optional("LAVALINK_URL") || "",
-    auth: optional("LAVALINK_PASSWORD") || "",
-    secure: optional("LAVALINK_SECURE") === "true",
-    name: optional("LAVALINK_NAME") || "main",
-  },
-
   creator: {
     name:
       process.env.CREATOR_NAME?.trim() ||
@@ -162,13 +155,6 @@ export const config = {
     clientSecret?: string;
     redirectUri?: string;
     guildId?: string;
-  };
-
-  lavalink: {
-    url: string;
-    auth: string;
-    secure: boolean;
-    name: string;
   };
 
   creator: {

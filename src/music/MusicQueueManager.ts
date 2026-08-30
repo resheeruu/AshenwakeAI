@@ -1,9 +1,17 @@
-import type { Track } from "shoukaku";
+export interface MusicTrack {
+  info: {
+    title: string;
+    author: string;
+    uri: string;
+    length: number;
+    position: number;
+  };
+}
 
 export type LoopMode = "off" | "track" | "queue";
 
 export interface QueuedTrack {
-  track: Track;
+  track: MusicTrack;
   requestedBy: string;
   requestedAt: number;
 }
@@ -16,7 +24,7 @@ export class MusicQueueManager {
 
   enqueue(
     guildId: string,
-    track: Track,
+    track: MusicTrack,
     requestedBy: string,
   ): QueuedTrack {
     const item: QueuedTrack = {

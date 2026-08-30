@@ -252,14 +252,13 @@ test("npm is available", () => {
   assert.ok(npmCap.available, "npm must be available");
 });
 
-// 17. Lavalink detection
-test("lavalink detected based on file presence", () => {
+// 17. FFmpeg detection
+test("ffmpeg detected based on command availability", () => {
   const { detectCapabilities } = require("../scripts/hosting-detect");
   const caps = detectCapabilities();
-  const lavCap = caps.find((c: any) => c.name === "lavalink");
-  assert.ok(lavCap, "must have lavalink cap");
-  const hasJar = fs.existsSync("lavalink/Lavalink.jar");
-  assert.equal(lavCap.available, hasJar, "lavalink availability must match file presence");
+  const ffmpegCap = caps.find((c: any) => c.name === "ffmpeg");
+  assert.ok(ffmpegCap, "must have ffmpeg cap");
+  assert.equal(typeof ffmpegCap.available, "boolean", "ffmpeg availability must be boolean");
 });
 
 // 18. Architecture detection
@@ -294,16 +293,13 @@ test("discord-bot is in feature matrix", () => {
   assert.ok(discord, "discord-bot must be in matrix");
 });
 
-// 21. Music degrades without lavalink
-test("music degrades when lavalink unavailable", () => {
+// 21. Music depends on ffmpeg
+test("music available with ffmpeg present", () => {
   const { detectFeatureCapabilities } = require("../scripts/hosting-features");
   const features = detectFeatureCapabilities();
   const music = features.find((f: any) => f.feature === "music");
   assert.ok(music, "music must be in matrix");
-  const hasLav = fs.existsSync("lavalink/Lavalink.jar");
-  if (!hasLav) {
-    assert.ok(music.status !== "available", "music must not be available without lavalink");
-  }
+  assert.ok(["available", "degraded"].includes(music.status), "music must be available or degraded based on ffmpeg");
 });
 
 console.log("\n===== U16 VALIDATION =====");
@@ -425,13 +421,10 @@ test("no hardcoded secrets in hosting files", () => {
   }
 });
 
-// 37. Graceful degradation - application continues without lavalink
-test("application code does not crash when lavalink is unavailable", () => {
+// 37. Graceful degradation - application starts without external music server
+test("application code does not require external music server", () => {
   const indexContent = fs.readFileSync("src/index.ts", "utf8");
-  // Should not throw on missing lavalink
-  assert.ok(indexContent.includes("LAVALINK_URL"), "index.ts references LAVALINK_URL");
-  // Should have error handling around lavalink
-  assert.ok(indexContent.includes("connect ECONNREFUSED") || indexContent.includes("lavalink"), "handles lavalink errors");
+  assert.ok(indexContent.includes("NodeMusicManager") || indexContent.includes("nodeMusic"), "index.ts uses NodeMusicManager");
 });
 
 // 38. PID file not tracked

@@ -3,7 +3,7 @@ import {
   GuildMember,
 } from "discord.js";
 
-import { ShoukakuMusicManager } from "./ShoukakuMusicManager";
+import { NodeMusicManager } from "./NodeMusicManager";
 import { MusicSessionManager } from "./MusicSessionManager";
 import { buildMusicPanel } from "./musicPanel";
 import { logger } from "../logger";
@@ -96,7 +96,7 @@ async function requireDJ(
 
 export async function handleMusicCommand(
   message: Message,
-  music: ShoukakuMusicManager | null,
+  music: NodeMusicManager | null,
   sessions: MusicSessionManager,
   musicReady = true,
 ): Promise<boolean> {

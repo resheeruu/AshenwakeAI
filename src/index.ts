@@ -107,7 +107,7 @@ import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
 import { UsageStats } from "./analytics/usage-stats";
 import { handleMusicCommand } from "./music/musicCommands";
-import { ShoukakuMusicManager } from "./music/ShoukakuMusicManager";
+import { NodeMusicManager } from "./music/NodeMusicManager";
 import { MusicSessionManager } from "./music/MusicSessionManager";
 import {
   buildMusicPanel,
@@ -138,38 +138,17 @@ const client = new Client({
 });
 
 /* =====================================================
-   AI SYSTEM
+   MUSIC SYSTEM (Node-only via discord-player)
    ===================================================== */
 
-const lavalinkUrl = (process.env.LAVALINK_URL || "").trim().replace(/^wss?:\/\//, "").replace(/\/$/, "");
+const nodeMusic = new NodeMusicManager(client);
+const musicReady = true;
 
-const lavalinkPassword = process.env.LAVALINK_PASSWORD?.trim();
+nodeMusic.init().catch((error) => {
+  console.error("❌ Failed to initialize music extractors:", error);
+});
 
-const lavalinkSecure =
-  process.env.LAVALINK_SECURE?.trim().toLowerCase() === "true";
-
-console.log("🎵 Lavalink configuration:");
-console.log(`   URL: ${lavalinkUrl ? "(configured)" : "(missing)"}`);
-console.log(`   Secure: ${lavalinkSecure}`);
-console.log(`   Name: ${process.env.LAVALINK_NAME || "main"}`);
-console.log(`   Password: ${lavalinkPassword ? "(set)" : "(missing)"}`);
-
-// Only create ShoukakuMusicManager when Lavalink is configured.
-// When LAVALINK_URL is empty, music degrades gracefully.
-const shoukakuMusic = lavalinkUrl
-  ? new ShoukakuMusicManager(client, {
-      url: lavalinkUrl,
-      auth: lavalinkPassword || "",
-      secure: lavalinkSecure,
-      name: process.env.LAVALINK_NAME || "main",
-    })
-  : null;
-
-// musicReady reflects actual Lavalink availability, not a hardcoded flag.
-const musicReady = shoukakuMusic !== null;
-if (!musicReady) {
-  console.log("⚠️ Music unavailable: LAVALINK_URL not configured. Bot, web, and AI remain fully operational.");
-}
+console.log("🎵 Music system: Node-only (discord-player)");
 
 /* =====================================================
    MUSIC SESSION SYSTEM
@@ -183,7 +162,7 @@ const musicSessions = new MusicSessionManager(
     );
 
     try {
-      await shoukakuMusic?.disconnect(session.guildId);
+      await nodeMusic?.disconnect(session.guildId);
 
       console.log(
         `🔌 MUSIC AUTO-DISCONNECTED: guild=${session.guildId}`,
@@ -1364,7 +1343,7 @@ client.on(
       if (musicPrefixMatch) {
         await handleMusicCommand(
           message,
-          shoukakuMusic,
+          nodeMusic,
           musicSessions,
           musicReady,
         );
@@ -2537,7 +2516,7 @@ client.on(
         return;
       }
 
-      if (!shoukakuMusic) {
+      if (!nodeMusic) {
         await interaction.reply({
           content: "⚠️ Music system is unavailable.",
           flags: MessageFlags.Ephemeral,
@@ -2579,21 +2558,21 @@ client.on(
         interaction.customId.split(":")[1];
 
       const player =
-        shoukakuMusic.getPlayer(
+        nodeMusic.getPlayer(
           interaction.guild.id,
         );
 
       if (!player) {
         await interaction.reply({
           content:
-            "❌ There is no active Lavalink player for this session.",
+            "❌ There is no active music player for this session.",
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
 
       if (action === "pause") {
-        await shoukakuMusic.pause(
+        await nodeMusic.pause(
           interaction.guild.id,
         );
 
@@ -2605,7 +2584,7 @@ client.on(
       }
 
       if (action === "resume") {
-        await shoukakuMusic.resume(
+        await nodeMusic.resume(
           interaction.guild.id,
         );
 
@@ -2617,7 +2596,7 @@ client.on(
       }
 
       if (action === "stop") {
-        await shoukakuMusic.stop(
+        await nodeMusic.stop(
           interaction.guild.id,
         );
 
@@ -2629,7 +2608,7 @@ client.on(
       }
 
       if (action === "skip") {
-        const next = await shoukakuMusic.skip(
+        const next = await nodeMusic.skip(
           interaction.guild.id,
         );
 
@@ -2659,7 +2638,7 @@ client.on(
 
       if (action === "previous") {
         const previous =
-          await shoukakuMusic.previous(
+          await nodeMusic.previous(
             interaction.guild.id,
           );
 
@@ -2691,7 +2670,7 @@ client.on(
 
       if (action === "shuffle") {
         const size =
-          shoukakuMusic.shuffle(
+          nodeMusic.shuffle(
             interaction.guild.id,
           );
 
@@ -2708,7 +2687,7 @@ client.on(
 
       if (action === "loop") {
         const mode =
-          shoukakuMusic.cycleLoop(
+          nodeMusic.cycleLoop(
             interaction.guild.id,
           );
 
@@ -2729,7 +2708,7 @@ client.on(
 
       if (action === "volume") {
         const current =
-          shoukakuMusic.getVolume(
+          nodeMusic.getVolume(
             interaction.guild.id,
           );
 
@@ -2745,12 +2724,12 @@ client.on(
 
       if (action === "queue") {
         const current =
-          shoukakuMusic.getCurrent(
+          nodeMusic.getCurrent(
             interaction.guild.id,
           );
 
         const queue =
-          shoukakuMusic.getQueue(
+          nodeMusic.getQueue(
             interaction.guild.id,
           );
 
@@ -2796,7 +2775,7 @@ client.on(
       }
 
       if (action === "disconnect") {
-        await shoukakuMusic.disconnect(
+        await nodeMusic.disconnect(
           interaction.guild.id,
         );
 
@@ -2816,7 +2795,7 @@ client.on(
 
       if (action === "refresh") {
         const current =
-          shoukakuMusic.getCurrent(
+          nodeMusic.getCurrent(
             interaction.guild.id,
           );
 
