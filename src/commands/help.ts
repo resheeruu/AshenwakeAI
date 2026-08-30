@@ -18,7 +18,6 @@ const ALL_CATEGORIES: HelpCategory[] = [
     commands: [
       { name: "/ask", description: "Ask AshenAI anything" },
       { name: "/reset", description: "Reset your conversation memory" },
-      { name: "/usage", description: "Check your AI usage stats" },
     ],
   },
   {
