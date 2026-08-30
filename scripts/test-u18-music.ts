@@ -230,7 +230,6 @@ test("no arbitrary exec in music code", "LIVE VERIFIED", () => {
 
 test("Lavalink password not logged", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
-  // Password is logged as "(set)" or "(missing)" — never the actual value
   assert.ok(!c.match(/console\.log.*LAVALINK_PASSWORD/), "Must not log password value");
 });
 
