@@ -1,4 +1,5 @@
 import { Player, GuildQueue, QueueRepeatMode } from "discord-player";
+import { YoutubeiExtractor } from "discord-player-youtubei";
 import type { Client } from "discord.js";
 import { logger } from "../logger";
 import {
@@ -7,6 +8,17 @@ import {
   type QueuedTrack,
   type MusicTrack,
 } from "./MusicQueueManager";
+
+const URL_PATTERN = /^https?:\/\//i;
+const SEARCH_PREFIX_PATTERN = /^(ytsearch|scsearch|spsearch|soundcloud:|youtube:|attachment):/i;
+
+function isUrl(query: string): boolean {
+  return URL_PATTERN.test(query.trim());
+}
+
+function hasSearchPrefix(query: string): boolean {
+  return SEARCH_PREFIX_PATTERN.test(query.trim());
+}
 
 export class NodeMusicManager {
   public readonly player: Player;
@@ -18,45 +30,47 @@ export class NodeMusicManager {
   private readonly autoplayEnabled = new Map<string, boolean>();
 
   constructor(client: Client) {
-    this.player = new Player(client, {
-      ytdlOptions: {
-        filter: "audioonly",
-        quality: "highest",
-        highWaterMark: 1 << 25,
-      },
-    });
+    this.player = new Player(client);
 
     this.player.events.on("error", (queue, error) => {
-      logger.error(`Music error: guild=${queue.id} ${error.message}`);
+      logger.error(`[Music] Error guild=${queue.id}: ${error.message}`);
     });
 
     this.player.events.on("playerError", (queue, error) => {
-      logger.error(`Player error: guild=${queue.id} ${error.message}`);
+      logger.error(`[Music] Player error guild=${queue.id}: ${error.message}`);
     });
 
     this.player.events.on("audioTrackAdd", (queue, track) => {
-      logger.debug(`Track added: guild=${queue.id} title=${track.title}`);
+      logger.debug(`[Music] Track added guild=${queue.id} title=${track.title}`);
     });
 
     this.player.events.on("emptyQueue", (queue) => {
-      logger.debug(`Queue empty: guild=${queue.id}`);
+      logger.debug(`[Music] Queue empty guild=${queue.id}`);
       this.handleQueueEmpty(queue.id);
     });
 
     this.player.events.on("playerFinish", (queue, track) => {
-      logger.debug(`Track finished: guild=${queue.id} title=${track.title}`);
+      logger.debug(`[Music] Track finished guild=${queue.id} title=${track.title}`);
       this.handleTrackFinished(queue, track);
     });
 
-    logger.info("Node music manager initialized (discord-player)");
+    logger.info("[Music] Node music manager initialized (discord-player)");
   }
 
   async init(): Promise<void> {
     try {
-      await this.player.extractors.loadDefault();
-      logger.info("Discord-player extractors loaded");
+      await this.player.extractors.loadDefault((ext) => ext !== "YouTubeExtractor");
+      logger.info("[Music] Default extractors loaded (excluding built-in YouTube)");
     } catch (error) {
-      logger.error(`Failed to load extractors: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[Music] Failed to load default extractors: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    try {
+      await this.player.extractors.register(YoutubeiExtractor, {});
+      logger.info("[Music] YoutubeiExtractor registered (innertube API)");
+    } catch (error) {
+      logger.error(`[Music] Failed to register YoutubeiExtractor: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warn("[Music] Falling back to built-in extractors only");
     }
   }
 
@@ -91,6 +105,14 @@ export class NodeMusicManager {
     };
   }
 
+  private resolveSearchQuery(query: string): string {
+    const trimmed = query.trim();
+    if (isUrl(trimmed) || hasSearchPrefix(trimmed)) {
+      return trimmed;
+    }
+    return `ytsearch:${trimmed}`;
+  }
+
   async play(
     guildId: string,
     channelId: string,
@@ -99,13 +121,20 @@ export class NodeMusicManager {
     shardId = 0,
   ): Promise<MusicTrack["info"] | null> {
     const queue = this.ensureGuildQueue(guildId, channelId, shardId);
+    const resolvedQuery = this.resolveSearchQuery(query);
 
-    const searchResult = await this.player.search(query, {
-      requestedBy: undefined,
-    });
+    let searchResult;
+    try {
+      searchResult = await this.player.search(resolvedQuery, {
+        requestedBy: undefined,
+      });
+    } catch (error) {
+      logger.error(`[Music] Search failed guild=${guildId} query="${resolvedQuery}" error=${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
 
     if (!searchResult || !searchResult.hasTracks()) {
-      logger.warn(`No results for query: ${query}`);
+      logger.warn(`[Music] No results guild=${guildId} query="${resolvedQuery}"`);
       return null;
     }
 
@@ -118,7 +147,7 @@ export class NodeMusicManager {
 
     if (current) {
       const queued = this.queue.enqueue(guildId, this.toMusicTrack(track), requestedBy);
-      logger.info(`Music queued: guild=${guildId} position=${this.queue.size(guildId)} title=${queued.track.info.title}`);
+      logger.info(`[Music] Queued guild=${guildId} position=${this.queue.size(guildId)} title=${queued.track.info.title}`);
       return queued.track.info;
     }
 
@@ -133,7 +162,7 @@ export class NodeMusicManager {
     try {
       await queue.connect(channelId);
     } catch (error) {
-      logger.error(`Voice connect failed: guild=${guildId}`);
+      logger.error(`[Music] Voice connect failed guild=${guildId} channel=${channelId} error=${error instanceof Error ? error.message : String(error)}`);
       this.queue.setCurrent(guildId, null);
       return null;
     }
@@ -142,9 +171,9 @@ export class NodeMusicManager {
 
     try {
       await queue.node.play(track);
-      logger.info(`Playing: guild=${guildId} title=${track.title}`);
+      logger.info(`[Music] Playing guild=${guildId} title=${track.title} source=${track.source}`);
     } catch (error) {
-      logger.error(`Play failed: guild=${guildId}`);
+      logger.error(`[Music] Playback failed guild=${guildId} title=${track.title} error=${error instanceof Error ? error.message : String(error)}`);
       this.queue.setCurrent(guildId, null);
       return null;
     }
@@ -165,7 +194,9 @@ export class NodeMusicManager {
     if (loop === "track") {
       const dpTrack = queue.tracks.data[0] ?? null;
       if (dpTrack) {
-        queue.node.play(dpTrack).catch(() => {});
+        queue.node.play(dpTrack).catch((error) => {
+          logger.error(`[Music] Loop-track replay failed guild=${guildId} error=${error instanceof Error ? error.message : String(error)}`);
+        });
       }
       return;
     }
@@ -188,8 +219,8 @@ export class NodeMusicManager {
 
     const dpTrack = queue.tracks.data[0] ?? null;
     if (dpTrack) {
-      queue.node.play(dpTrack).catch((err) => {
-        logger.error(`Auto-play failed: guild=${guildId}`);
+      queue.node.play(dpTrack).catch((error) => {
+        logger.error(`[Music] Auto-play failed guild=${guildId} error=${error instanceof Error ? error.message : String(error)}`);
         this.queue.setCurrent(guildId, null);
       });
     }
@@ -250,7 +281,8 @@ export class NodeMusicManager {
       if (addedCount >= target) break;
 
       try {
-        const result = await this.player.search(search, { requestedBy: undefined });
+        const resolvedQuery = this.resolveSearchQuery(search);
+        const result = await this.player.search(resolvedQuery, { requestedBy: undefined });
         if (!result || !result.hasTracks()) continue;
 
         for (const candidate of result.tracks) {
@@ -271,14 +303,14 @@ export class NodeMusicManager {
           if (artist) artists.add(artist);
           addedCount++;
 
-          logger.debug(`Radio add: guild=${guildId} title=${candidate.title}`);
+          logger.debug(`[Music] Radio add guild=${guildId} title=${candidate.title}`);
         }
       } catch (error) {
-        logger.error(`Radio search failed: guild=${guildId} query="${search}"`);
+        logger.error(`[Music] Radio search failed guild=${guildId} query="${search}" error=${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
-    logger.info(`Radio filled: guild=${guildId} added=${addedCount} queue=${this.queue.size(guildId)}`);
+    logger.info(`[Music] Radio filled guild=${guildId} added=${addedCount} queue=${this.queue.size(guildId)}`);
     return addedCount;
   }
 
@@ -331,7 +363,12 @@ export class NodeMusicManager {
           queue.node.stop();
           const dpTrack = queue.tracks.data[0] ?? null;
           if (dpTrack) {
-            await queue.node.play(dpTrack);
+            try {
+              await queue.node.play(dpTrack);
+            } catch (error) {
+              logger.error(`[Music] Auto-play failed guild=${guildId} error=${error instanceof Error ? error.message : String(error)}`);
+              this.queue.setCurrent(guildId, null);
+            }
           }
           return radioNext.track.info;
         }
@@ -347,7 +384,12 @@ export class NodeMusicManager {
     queue.node.stop();
     const dpTrack = queue.tracks.data[0] ?? null;
     if (dpTrack) {
-      await queue.node.play(dpTrack);
+      try {
+        await queue.node.play(dpTrack);
+      } catch (error) {
+        logger.error(`[Music] Skip-play failed guild=${guildId} error=${error instanceof Error ? error.message : String(error)}`);
+        this.queue.setCurrent(guildId, null);
+      }
     }
     return next.track.info;
   }
@@ -449,7 +491,12 @@ export class NodeMusicManager {
     queue.node.stop();
     const dpTrack = queue.tracks.data[0] ?? null;
     if (dpTrack) {
-      await queue.node.play(dpTrack);
+      try {
+        await queue.node.play(dpTrack);
+      } catch (error) {
+        logger.error(`[Music] Previous-play failed guild=${guildId} error=${error instanceof Error ? error.message : String(error)}`);
+        this.queue.setCurrent(guildId, null);
+      }
     }
 
     return previous.track.info;
