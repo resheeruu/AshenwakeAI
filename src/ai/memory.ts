@@ -242,6 +242,60 @@ export class ConversationMemory {
     this.save();
   }
 
+  /**
+   * Batch-mode: accumulate messages in memory without writing to disk.
+   * Call flushBatch() at the end of the request to write once.
+   */
+  addBatch(
+    userId: string,
+    message: ChatMessage,
+    channelId?: string
+  ): void {
+    const key = this.makeKey(
+      userId,
+      channelId
+    );
+
+    const history =
+      this.conversations.get(key) ?? [];
+
+    history.push(message);
+
+    const maxMessages = Math.max(
+      2,
+      config.ai.maxContextMessages
+    );
+
+    if (
+      history.length > maxMessages
+    ) {
+      history.splice(
+        0,
+        history.length - maxMessages
+      );
+    }
+
+    this.conversations.set(
+      key,
+      history
+    );
+
+    this.lastActivity.set(
+      key,
+      Date.now()
+    );
+
+    this.cleanupExpired();
+  }
+
+  /**
+   * Flush all batched writes to disk in a single write.
+   * Call this once at the end of a request after all addBatch() calls.
+   */
+  flushBatch(): void {
+    this.save();
+  }
+
   reset(
     userId: string,
     channelId?: string

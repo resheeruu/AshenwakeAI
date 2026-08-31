@@ -1,901 +1,830 @@
-# ASHENAI — MASTER IMPLEMENTATION INSTRUCTIONS
-
-You are working on the existing AshenAI Discord bot repository.
-
-IMPORTANT:
-- Inspect the existing codebase BEFORE modifying anything.
-- Preserve the existing architecture.
-- Do NOT create duplicate executors, routers, confirmation systems, tool registries, permission systems, memory systems, or Discord management systems.
-- Reuse existing registered tools and pipelines.
-- Do not invent nonexistent APIs, functions, files, or tools.
-- Do not replace working systems merely to implement these features.
-- Integrate with what already exists.
-- Maintain existing security, authorization, audit logging, rate limits, protected-resource checks, verification, undo support, and confirmation flows.
-- Do not register virtual/meta operations such as `apply_template` as real tools.
-- Templates must decompose into existing registered Discord tools.
-- All destructive or server-changing actions must remain confirmation-gated unless the existing architecture explicitly determines that confirmation has already occurred.
-- Never silently mutate a server when the user only asks for a preview/generation.
-- Never execute a newly generated plan merely because it was generated.
-- Never interpret shell commands, code, prompt text, or documentation as user Discord commands.
-
-==================================================
-1. FIX OPENCONVERSATION / DOUBLE RESPONSE BUG
-==================================================
-
-Current problem:
-
-When the user sends:
-
-"hii"
-
-AshenAI sometimes replies twice:
-
-"Hey! What's up!"
-
-and:
-
-"Hii! How can I help you today?"
-
-Find the actual cause in the event/message handling pipeline.
-
-Inspect:
-- Discord messageCreate listeners
-- conversational-agent
-- AI router
-- command/message handlers
-- mention handling
-- interaction handlers
-- any fallback conversational handlers
-- duplicate event registration
-- startup initialization
-- imported modules that register listeners
-- bot/client event subscriptions
-
-Determine why ONE user message can trigger TWO conversational responses.
-
-Fix the root cause.
-
-Requirements:
-- One user message must produce at most one conversational response.
-- Do not simply suppress one response after generating it.
-- Prevent duplicate handlers/listeners from processing the same message.
-- Do not break slash commands.
-- Do not break mentions.
-- Do not break DM handling if supported.
-- Do not break AI tool execution.
-- Do not break confirmations.
-- Do not break server-management requests.
-- Do not add arbitrary global cooldowns as a workaround.
-- Ensure initialization cannot register the same listener multiple times.
-- Ensure a single message has a single processing path.
+ASHENAI — SERVER ASSISTANT FINAL UX + PERFORMANCE + /PROMPT + /HELP
 
-Add regression tests proving:
-- normal greeting -> exactly one response
-- mention -> exactly one response
-- normal conversational message -> exactly one response
-- confirmation -> exactly one response
-- server-management request -> exactly one response
-
-==================================================
-2. TEMPLATE GENERATION MUST BE FAST
-==================================================
-
-Current problem:
+Work directly on the existing AshenAI codebase. Inspect the actual implementation first, then implement the changes. Preserve the existing architecture, security, tools, confirmation, memory, router, and permission systems.
 
-User says:
+Do NOT create duplicate executors, routers, AI engines, confirmation systems, permission databases, memory systems, template executors, or trusted-user systems.
 
-"generate me a template"
+---
 
-and AshenAI can take 10–15+ minutes.
-
-This is unacceptable.
+1. CORE BEHAVIOR
 
-Find the actual performance bottleneck.
+AshenAI should behave like a fast, capable Discord server assistant that understands natural language.
 
-Inspect:
-- conversational-agent
-- template generation
-- server-state collection
-- Discord API calls
-- AI provider calls
-- router/fallback logic
-- health inspection
-- resource comparison
-- template planning
-- unnecessary sequential API calls
-- repeated server scans
-- verification before confirmation
-- tool execution accidentally occurring during generation
+These should work naturally:
 
-Generation MUST be preview/planning only.
+@AshenAI hi
+@AshenAI remove callerss
+@AshenAI remove the bot from #general
+@AshenAI rename general to lobby
+@AshenAI delete all except general
+@AshenAI clean this server
+@AshenAI make my server better
 
-When user says:
+Do not require predefined command-like wording.
 
-"generate me a template"
+If a request is understandable, resolve it against the actual Discord server.
 
-AshenAI should:
-1. Understand the requested template.
-2. Inspect the necessary server state efficiently.
-3. Build the template plan.
-4. Compare desired structure against current structure.
-5. Show a compact preview.
-6. Ask for confirmation.
-7. Make ZERO server mutations before confirmation.
+Never unnecessarily respond:
 
-Do not execute create_role/create_category/create_channel during generation.
+"I'm not sure what you'd like me to do."
 
-Optimize server inspection:
-- Avoid repeated fetches of the same guild resources.
-- Reuse already available server state.
-- Fetch independent resources concurrently where safe.
-- Avoid unnecessary Discord API calls.
-- Avoid calling AI providers multiple times for the same request.
-- Avoid provider fallback when the first provider already succeeded.
-- Do not perform post-action verification during preview.
-- Do not execute every template step just to determine what would happen.
+---
 
-Target normal template planning to complete in seconds, not minutes.
+2. IMPORTANT MODE SEPARATION
 
-If an AI provider is used for template interpretation, use ONE efficient call where possible and deterministic local logic for the rest.
+Keep these modes completely separate:
 
-==================================================
-3. CLEAN TEMPLATE PREVIEW
-==================================================
+@AshenAI / replies
+→ FAST normal conversational AI
 
-The current template output is too large and messy.
+/ask
+→ FAST normal AI chat
 
-Current example:
+/prompt
+→ ONLY server-builder/management mode
 
-📋 INFORMATION
-# rules
-# announcements
-# roles
+ash! <text>
+→ trusted-only "send this message as the bot"
 
-💬 GENERAL
-# general
-# introductions
-# off-topic
+Mentions and replies MUST NOT enter builder mode.
 
-🎯 TOPICS
-...
+If somebody says:
 
-It also dumps:
+@AshenAI generate a gaming template
 
-14 operations will be performed
+respond briefly:
 
-and duplicate information.
+"Use /prompt for server building and template operations."
 
-Make the presentation similar to a polished Discord server-management assistant such as Ava/Sato-style UX.
+Do not run the builder from the mention path.
 
-Do NOT copy proprietary implementation or branding.
-Use the UX pattern only as inspiration:
-- concise
-- grouped
-- readable
-- action-oriented
-- minimal clutter
-- clear confirmation
-- details available only when requested
+---
 
-Preferred output:
+3. /PROMPT BUILDER
 
-✨ Community Server
+"/prompt" is the ONLY builder interface.
 
-A general community server with discussions, events, and support.
+When an authorized user runs "/prompt":
 
-Create
-• 1 role
-• 3 categories
-• 8 channels
-
-Preserve
-• 2 existing resources
-
-Skip
-• 2 resources already matching
-
-Review
-• 2 duplicate #general channels found
-• I won't delete ambiguous duplicates automatically
-
-Want me to apply this template?
-
-[Apply] [Preview] [Cancel]
-
-The exact UI can use the existing Discord interaction/button system.
-
-Do NOT dump every individual operation by default.
-
-Provide detailed operations only when the user asks:
-- "details"
-- "show me everything"
-- "what exactly will you create?"
-- "preview details"
-
-==================================================
-4. UNIFIED TEMPLATE + SERVER FIX
-==================================================
-
-When user says:
-
-"generate a template and fix my server"
-
-This MUST be interpreted as ONE unified request.
-
-Do NOT produce:
-
-Template confirmation
-
-then:
-
-Server health confirmation
-
-Instead:
-
-1. Inspect server.
-2. Generate desired template.
-3. Compare template to current state.
-4. Detect health problems.
-5. Build ONE unified plan.
-6. Show ONE summary.
-7. Ask ONE confirmation.
-8. Execute ONE plan.
-9. Produce ONE execution report.
+- Create a private Discord thread/session.
+- Only the initiating user can see/use it.
+- Keep builder conversation context inside the session.
+- Name it clearly, e.g. "AshenAI Builder".
+- Do not create duplicate active sessions.
+- Expire the session after 10 minutes of inactivity.
+- Warn shortly before expiration.
+- Expire and clean up automatically.
 
 Example:
 
-✨ Community Server
+AshenAI Builder
 
-Create
-• 1 role
-• 3 categories
-• 8 channels
+New Session
 
-Fix
-• Configure Moderator permissions
-
-Preserve
-• Existing #general
-
-Review
-• 2 duplicate #general channels
-  I won't delete these automatically.
-
-Nothing else will be changed.
-
-Apply these changes?
-
-[Apply] [Preview] [Cancel]
-
-==================================================
-5. SERVER TEMPLATE TYPES
-==================================================
-
-Support natural-language template requests such as:
-
-- community server
-- gaming server
-- Minecraft server
-- support server
-- study server
-- social server
-- creator server
-- clan server
-- friends server
-- custom template
-
-Do not require rigid syntax.
+Tell me what you want to build, change, inspect, or fix.
 
 Examples:
+• "Inspect my server"
+• "Create a gaming server"
+• "Delete all channels except general"
+• "Make my server better"
 
-"make me a gaming server"
+Keep the UI compact.
 
-"generate a Minecraft template"
+---
 
-"make my server like a community server"
+4. /PROMPT SESSION PRIVACY
 
-"build a support server"
+The builder session must not become visible to ordinary server members.
 
-"create a clean server for my gaming community"
+Use the existing Discord/thread architecture where possible.
 
-Interpret naturally.
+Do not create a completely separate permission system.
 
-==================================================
-6. IDEMPOTENT TEMPLATE PLANNING
-==================================================
+Ensure only the initiating user and required bot functionality can access the private session.
 
-Templates must be server-aware.
+If Discord permissions make a fully private thread impossible in the current architecture, inspect the existing implementation and use the safest supported approach.
 
-Compare desired resources with actual resources.
+---
 
-Classify each resource as:
+5. /PROMPT SESSION EXPIRATION
 
-- missing
-- existsAndMatches
-- existsButDifferent
-- duplicate
-- protected
+Inactive builder sessions expire after 10 minutes.
 
-Rules:
+Before expiration:
 
-existsAndMatches:
-- preserve
-- do not recreate
+"⏳ This builder session will expire soon if unused."
 
-missing:
-- plan creation
+After expiration:
 
-existsButDifferent:
-- only propose modification when safe and necessary
-- require confirmation
+"⌛ This builder session expired. Start a new "/prompt" session when you're ready."
 
-duplicate:
-- report
-- NEVER automatically delete ambiguous duplicates
+Do not leave stale sessions indefinitely.
 
-protected:
-- preserve
-- never bypass protection
+---
 
-Template application must be idempotent.
+6. FAST /PROMPT PROCESSING
 
-Running the same template again must NOT create duplicates.
+Investigate why "/prompt" or template generation can take 10–15+ minutes.
 
-==================================================
-7. CATEGORY / CHANNEL DEPENDENCIES
-==================================================
+Do NOT guess.
 
-Correctly handle:
+Trace the actual request path and identify:
 
-new category -> channels inside that category
+- repeated AI calls
+- repeated guild scans
+- repeated Discord API calls
+- sequential resource resolution
+- repeated intent classification
+- duplicate template generation
+- unnecessary provider routing
+- unnecessary provider health checks
+- unnecessary web requests
+- blocking filesystem I/O
+- duplicate confirmation processing
+- unnecessary member fetching
+- unnecessary channel fetching
 
-existing category -> channels inside existing category
+Optimize the real bottleneck.
 
-new category created during same execution -> dynamically resolve its newly-created Discord category ID before creating child channels.
+For deterministic Discord operations:
 
-Never create child channels without the intended parent category when the template specifies one.
+1. Detect intent locally.
+2. Read guild state once.
+3. Resolve resources locally.
+4. Build the plan locally.
+5. Use the existing security/confirmation/executor pipeline.
+6. Return the result.
 
-Do not assume IDs from preview time will remain valid.
+Do not call an LLM repeatedly for deterministic operations.
 
-Use the result of create_category when necessary.
+Cache/reuse guild state during one request.
 
-==================================================
-8. TEMPLATE EXECUTION
-==================================================
+Target seconds, not minutes.
 
-`apply_template` may remain a virtual/meta plan identifier.
+---
 
-DO NOT register `apply_template` as a Discord tool.
+7. SERVER INSPECTION
 
-Templates must decompose into existing registered tools such as:
+After "/prompt", support:
 
-create_role
-create_category
-create_channel
-configure_role_permissions
-manage_channel_permissions
-apply_channel_preset
+"inspect my server"
 
-Use the existing execution pipeline.
+"what should I add?"
 
-After the user confirms the entire template:
-- execute the registered steps
-- bypass duplicate confirmation prompts only because the parent plan has already been explicitly confirmed
-- retain authorization
-- retain permission checks
-- retain protected-resource checks
-- retain audit logging
-- retain verification
-- retain rate-limit/security controls appropriate to confirmed execution
-
-Never bypass security merely because `skipConfirmation` is enabled.
-
-`skipConfirmation` means:
-"The user already confirmed this parent plan."
-
-It must NOT mean:
-"skip authorization/security."
-
-==================================================
-9. PARTIAL FAILURE HANDLING
-==================================================
-
-If a multi-step template fails halfway through, do NOT claim success.
-
-Report:
-
-Completed
-• 1 role
-• 2 categories
-• 5 channels
-
-Failed
-• #events could not be created
-
-Reason
-• Discord permission error
-
-The response must distinguish:
-- created
-- fixed
-- verified
-- failed
-- skipped
-- preserved
-
-Do not dump stack traces to normal users.
-
-Log technical details internally.
-
-==================================================
-10. CONFIRMATION SYSTEM
-==================================================
-
-Confirmation must be context-aware.
-
-Accepted confirmations may include:
-
-yes
-y
-yeah
-yep
-sure
-okay
-ok
-go ahead
-do it
-make it
-apply
-apply it
-confirmed
-sounds good
-let's go
-absolutely
-definitely
-
-When a plan is pending:
-
-"yes"
-
-MUST execute the pending plan.
-
-It must NOT:
-- generate another template
-- start a new intent
-- produce another plan
-- ask another confirmation
-
-Likewise:
-
-"no"
-
-must cancel the pending plan.
-
-"preview"
-
-must show the current plan without executing.
-
-"details"
-
-must show detailed operations without executing.
-
-==================================================
-11. PREVIEW / DRY RUN
-==================================================
-
-Support:
-
-preview
-dry run
-show me what you'll change
-what will you change
-show me details
-details
-
-Preview must:
-- never mutate the server
-- never execute Discord write tools
-- show the current plan
-- show create/fix/preserve/skip/review
-- remain concise
-
-==================================================
-12. "MAKE MY SERVER BETTER"
-==================================================
-
-Support:
+"what should I delete?"
 
 "make my server better"
 
-"improve my server"
+"fix my server organization"
 
-"clean up my server"
+"clean my server"
 
-"organize my server"
+The bot should inspect the actual guild.
 
-"fix my server"
+Detect:
 
-Inspect:
-- categories
 - channels
+- categories
 - roles
-- permissions
-- duplicate names
+- duplicates
 - uncategorized channels
-- missing useful structure
-- obvious organization problems
-- unsafe/broken configuration
+- missing structure
+- suspicious/ambiguous resources
+- protected resources
+- permission configuration problems
 
-Do not automatically perform destructive cleanup.
+Never hard-code assumed server contents.
 
-Instead generate a safe improvement plan.
+---
 
-If nothing meaningful needs changing:
+8. NATURAL-LANGUAGE RESOURCE RESOLUTION
 
-"✅ Your server is already well-organized. I checked the channels, categories, roles, and permissions, and I don't see any changes that would meaningfully improve it."
+Understand:
 
-==================================================
-13. DUPLICATE CHANNEL HANDLING
-==================================================
+"remove callerss"
 
-Detect duplicates by normalized name.
+"delete the callerss channel"
 
-Example:
+"rename general to lobby"
 
-general
-General
-#general
-
-Treat them according to the existing server-state normalization policy.
-
-Report:
-
-"I found 2 channels named #general. I won't delete or merge them automatically."
-
-Never delete duplicates merely because they have the same name.
-
-Deletion requires:
-- explicit user request
-- appropriate confirmation
-- existing authorization
-- protected-resource checks
-- audit logging
-- verification
-
-==================================================
-14. DELETE EVERYTHING EXCEPT SPECIFIED CHANNELS
-==================================================
-
-Support natural-language destructive requests like:
+"remove the bot from general"
 
 "delete all except general"
 
-"delete everything except #general"
+Resolve names against actual Discord resources.
 
-"remove every channel except general"
+Support partial names and aliases only when safe.
 
-"clean the server and keep general"
+If genuinely ambiguous, ask ONE concise clarification.
 
-Interpret carefully.
+Do not expose internal tool names.
 
-The assistant must:
-1. Identify exactly which resources are protected by the user's exception.
-2. Show the deletion plan.
-3. Ask for confirmation.
-4. Only delete after confirmation.
-5. Preserve all matching exceptions.
-6. Never delete protected/system-required resources.
-7. Never silently delete roles/categories unless the request explicitly includes them.
-8. Use existing deletion tools/pipelines.
-9. Log every deletion.
-10. Verify the result.
+---
 
-Do NOT produce dozens of individual "Bye-bye" messages.
+9. DELETE ALL EXCEPT
 
-Instead provide ONE concise report:
+Support:
 
-⚠️ I found 12 channels to remove.
+delete all except general
 
-Keep
+remove every channel except #general
+
+clean everything except general and rules
+
+delete all categories except information
+
+Behavior:
+
+- Inspect actual guild state.
+- Resolve exceptions using real resource IDs.
+- Preserve exceptions.
+- Preserve protected resources.
+- Never delete ambiguous resources automatically.
+- Use ONE confirmation.
+- Use the existing executor/security/confirmation/audit/undo system.
+
+Compact preview:
+
+🧹 Cleanup Plan
+
+Remove
+• 12 channels
+
+Preserve
 • #general
 
-Delete
-• #callerss
-• #call1
-• #call2
-• 9 more
+Protected / skipped
+• 2 resources
 
-This is destructive. Continue?
+Proceed?
 
-After confirmation:
+After execution:
 
-✅ Cleanup complete.
+✅ Cleanup complete
 
-Deleted 12 channels.
-Preserved #general.
+Removed: 12 channels
+Preserved: #general
+Protected/skipped: 2
 
-If useful, allow "details" to show the complete deletion list.
+NEVER send one message for every deleted channel.
 
-Never use cutesy repetitive messages for every deleted channel.
+---
 
-==================================================
-15. TRUSTED USER SYSTEM
-==================================================
+10. TEMPLATE UX
 
-Add a trusted-user management interface similar in UX to:
+Template generation must be preview-only.
 
-/trusted add
-Add a trusted user who can use server-management features.
+Examples:
 
- /trusted list
-List trusted users.
+/prompt generate a community template
 
- /trusted remove
-Remove a trusted user's access.
+/prompt create a gaming server
 
-Integrate with the EXISTING authorization/security architecture.
+/prompt make my server like a Minecraft server
 
-Do not create a second independent authorization system.
+Show:
 
-Requirements:
+📋 Community Template
 
-`/trusted add`
-- server owner/admin authorized only
-- accepts a Discord user
-- validates target
-- stores trusted access using existing persistent storage architecture
-- audit logs the change
-- prevents duplicate entries
-- confirms success
+Create
+• 1 role
+• 3 categories
+• 10 channels
 
-`/trusted list`
-- shows trusted users
-- safe to use according to existing access-control policy
+Already present
+• 2 matching resources
 
-`/trusted remove`
-- owner/admin authorized only
-- removes trusted access
-- audit logs the change
+Skip
+• 2 duplicates
 
-Trusted users should be able to use the intended AshenAI management features without giving them unrestricted Discord permissions.
+Nothing has been changed.
 
-Do not allow trusted users to bypass:
-- Discord permissions
-- protected resources
-- security restrictions
-- dangerous-action confirmation
-- audit logging
+Apply this template?
 
-Respect existing owner/admin rules.
+Only execute after confirmation.
 
-If the project already has an access-control/trusted-user implementation, extend it rather than creating another.
+Do not dump the complete raw operation list unless the user asks for details.
 
-==================================================
-16. /HELP REPLACEMENT
-==================================================
+---
 
-Replace the old `/help` experience with a polished interactive help menu.
+11. UNIFIED TEMPLATE + SERVER FIXES
 
-UX inspiration:
+If the user says:
 
-"Ava, Help
+"generate a template and fix my server"
 
-Hi! I'm Ava, your AI-powered server assistant.
+create ONE unified plan.
 
-Pick a category from the menu below to see what I can do.
+The plan may contain:
 
-AI Chat
-Talk to the assistant and manage your server.
-
-Moderation
-Keep the server safe, warn, punish, and manage channels.
-
-Welcome & Leave
-Greet new members and send farewells automatically.
-
-Tickets
-Run a support ticket system for your members.
-
-Access Control
-Decide who is allowed to use the assistant.
-
-Select a category below to get started."
-
-For AshenAI, use AshenAI's actual branding/name.
-
-Do NOT copy Ava's branding or wording exactly.
-
-Create a polished AshenAI help interface.
-
-Suggested categories:
-
-🤖 AI & CHAT
-• Ask AshenAI
-• Conversation
-• Context & memory
-
-🛡️ MODERATION
-• Warnings
-• Moderation
-• Channel management
-• Server cleanup
-
-🏗️ SERVER
-• Templates
-• Server improvements
-• Roles
-• Categories
-• Channels
-
-🎫 COMMUNITY
-• Tickets
-• Welcome/leave
-• Events
-• Suggestions
-
-🔐 ACCESS CONTROL
-• Trusted users
-• Permissions
-• Owner/admin controls
-
-🎵 MUSIC
-• Music commands if the music system exists
-
-⚙️ SYSTEM
-• Status
-• Diagnostics
-• Configuration
-
-Use Discord select menus/buttons if the existing architecture supports them.
-
-The initial help message should be concise.
-
-Use ephemeral responses for private help panels when appropriate.
-
-==================================================
-17. BOT JOIN / ONBOARDING MESSAGE
-==================================================
-
-When AshenAI joins a server, send a polished onboarding message.
-
-Example UX inspiration:
-
-"Hi! I'm AshenAI — your AI-powered server assistant! ✨
-
-I'm here to help you:
-
-> 🏗️ Create and organize server structures
-> 🛠️ Customize and improve your community
-> 🛡️ Moderate and manage your server
-> 🤖 Chat with you using AI
-
-Ready to explore what I can do?
-
-Getting started:
-
-🤖 Chat with me
-Mention me or use the AI command.
-
-📋 See what I can do
-Use /help.
-
-🔐 Server owner
-Use /trusted add to allow other members to use server-management features.
-
-That's it. Ask me what you need and I'll take it from there."
-
-Use AshenAI's actual command names.
-
-Do NOT use `/prompt` if the actual command is different.
-
-Do NOT advertise commands that are not actually registered.
-
-If the bot currently supports both mention and slash-command interaction, explain the real supported methods.
-
-The onboarding message should be:
-- concise
-- polished
-- friendly
-- not huge
-- not spammy
-
-Only send it according to the existing bot-join/onboarding policy.
-
-Do not send duplicate onboarding messages.
-
-==================================================
-18. ASHENAI PERSONALITY
-==================================================
-
-AshenAI should be friendly and conversational.
-
-Avoid:
-- excessive pet names
-- repetitive emoji spam
-- huge walls of text
-- repetitive deletion messages
-- robotic operation dumps
-- unnecessary confirmations
-- claiming actions succeeded before verification
-
-Prefer:
-
-"Sure — I can do that."
-
-"I found a couple of things I'd change."
-
-"Nothing has been changed yet."
-
-"Want me to apply it?"
-
-After success:
-
-"Done — everything was created and verified."
-
-Keep normal chat responses short.
-
-==================================================
-19. RESPONSE SIZE / DISCORD UX
-==================================================
-
-Discord messages must be compact.
-
-Do NOT produce massive operation dumps unless requested.
-
-Prefer:
-
-Summary
 Create
 Fix
+Configure
 Preserve
+Skip
 Review
 
-Use buttons/select menus where appropriate.
+ONE confirmation.
 
-Avoid:
-- unnecessary blank lines
-- repeated headings
-- repeated confirmation prompts
-- repeated status messages
-- one message per operation
+ONE execution.
 
-For large plans:
-- summarize
-- provide "Details"
-- provide "Apply"
-- provide "Cancel"
+ONE final report.
 
-If Discord limits are relevant, paginate or use embeds according to the existing architecture.
+Never create two separate confirmation flows.
 
-==================================================
-20. ARCHITECTURE PRESERVATION
-==================================================
+---
 
-Before coding, inspect the existing architecture.
+12. BULK OPERATION OUTPUT
 
-Relevant areas likely include:
+Never produce:
 
-src/discord/
-src/ai/tools/
-src/ai/tools/discord/
-src/commands/
-src/security/
-src/memory/
-src/web/
-confirmation-store
-executor
-validator
-registry
-agent-orchestrator
-conversational-agent
-confirmation-handler
+"Bye-bye channel1..."
+"Bye-bye channel2..."
+"Bye-bye channel3..."
 
-Do not assume these paths are identical.
-Inspect the repository.
+Instead use one compact summary.
 
-Reuse:
-- existing tool registry
-- existing executor
-- existing authorization
-- existing action plans
-- e
+Example:
+
+✅ Done.
+
+Removed: 12 channels
+Preserved: #general
+Protected/skipped: 2
+
+Use the existing audit and undo functionality.
+
+---
+
+13. /ASK PERFORMANCE
+
+Do NOT redesign "/ask".
+
+Inspect its actual path and optimize only genuine bottlenecks.
+
+Preserve:
+
+- provider routing
+- memory
+- security
+- rate limits
+- existing AI behavior
+
+Avoid duplicate:
+
+- prompt extraction
+- memory loading
+- context building
+- provider selection
+- filesystem writes
+- analytics writes
+
+The AI provider is expected to remain the primary latency source.
+
+Do not add arbitrary delays or fake loading.
+
+---
+
+14. MENTION + REPLY PERFORMANCE
+
+@AshenAI and replies must remain fast.
+
+Do not accidentally route normal chat through "/prompt".
+
+For simple:
+
+@AshenAI hi
+
+the bot should quickly reach the normal AI path.
+
+Replies should use the same fast conversational path.
+
+Do not perform unnecessary builder inspection for ordinary conversation.
+
+---
+
+15. DOUBLE RESPONSE BUG
+
+Every user message must be processed exactly once.
+
+For:
+
+xYkel: hii
+
+AshenAI must send exactly ONE response.
+
+Inspect:
+
+- MessageCreate listeners
+- interaction handlers
+- mention handlers
+- reply handlers
+- command handlers
+- startup registration
+- duplicate dispatch
+- async races
+
+Ignore bot-authored messages.
+
+Use the existing deduplication mechanism if present.
+
+Do not create multiple competing dedup systems.
+
+---
+
+16. ash! PREFIX
+
+"ash!" means:
+
+SEND THE FOLLOWING TEXT AS ASHENAI.
+
+Example:
+
+ash! Hi everyone
+
+AshenAI sends:
+
+"Hi everyone"
+
+as the Discord bot.
+
+This is NOT an AI builder.
+
+This is NOT an AI generation command.
+
+It is simply bot-message control.
+
+Only trusted users can use it.
+
+Trusted user:
+
+ash! Server maintenance starts now.
+
+→ AshenAI sends that message as the bot.
+
+Untrusted user:
+
+ash! hello
+
+→ NOTHING happens.
+
+No error message.
+No AI response.
+No visible response.
+
+The existing authorization/security system must determine whether the user is trusted.
+
+Do not create another trusted-user database.
+
+Do not bypass audit/security policies.
+
+---
+
+17. TRUSTED USERS
+
+Preserve:
+
+/trusted add
+/trusted list
+/trusted remove
+
+Only authorized server owners/admins can manage trusted users.
+
+Use the existing:
+
+GuildAIConfig.trustedUserIds
+
+and existing role-resolution/security infrastructure.
+
+Trusted users may use privileged features according to the existing policy.
+
+---
+
+18. BOT JOIN ONBOARDING
+
+When AshenAI joins a guild, send exactly ONE compact onboarding message in an appropriate channel.
+
+Use:
+
+✨ Hi! I'm AshenAI — your AI-powered server assistant.
+
+I can help you:
+
+«🛠️ Create and customize your server
+🤖 Manage channels, roles, and permissions
+🛡️ Moderate and protect your community
+✨ Generate server templates
+💬 Chat naturally with your server»
+
+Get started
+
+• Mention me and tell me what you need
+• Use "/ask" for AI chat
+• Use "/prompt" for server building
+• Use "/help" to explore features
+• Server owner: use "/trusted add"
+• Trusted users can use "ash! <message>" to speak as the bot
+
+Nothing should be changed simply because AshenAI joined.
+
+Never send duplicate onboarding messages.
+
+---
+
+19. /HELP — FIX INTERMITTENT FAILURE
+
+There is currently an intermittent problem:
+
+❌ Help command failed. Check the Termux logs.
+
+Sometimes "/help" fails once and works on the next attempt.
+
+Inspect the actual implementation and find the ROOT CAUSE.
+
+Check:
+
+- interaction acknowledgement
+- deferReply/reply/editReply lifecycle
+- duplicate execution
+- expired interactions
+- select menu handling
+- invalid component payloads
+- invalid embed payloads
+- race conditions
+- duplicate listeners
+- command registration
+- Discord API errors
+- ephemeral handling
+
+Do not simply catch and hide the error.
+
+Fix the root cause.
+
+"/help" must work on the FIRST attempt.
+
+Never expose "Check the Termux logs" to normal Discord users.
+
+---
+
+20. POLISHED /HELP EMBED
+
+Replace the messy giant help output with a clean Discord Embed.
+
+Use a neutral dark/grey Discord-style embed color.
+
+Initial response:
+
+AshenAI — Help
+
+Hi! I'm AshenAI, your AI-powered server assistant.
+
+Pick a category below to see what I can do.
+
+Try asking me...
+
+• "How do I set up my server?"
+• "Create a gaming server template"
+• "Fix my server organization"
+• "Delete all channels except general"
+
+[Choose a category...]
+
+Use the existing interactive select-menu architecture.
+
+Make the initial response ephemeral where appropriate.
+
+---
+
+21. HELP CATEGORIES
+
+Use:
+
+🤖 AI Chat
+🛠️ Server Management
+📋 Templates
+🛡️ Moderation
+👋 Welcome & Leave
+🎫 Tickets
+🔐 Access Control
+🎵 Music
+
+Selecting a category should EDIT the same help message.
+
+Do not send a new message for every category.
+
+Provide a Back option.
+
+Keep descriptions short.
+
+Example:
+
+🛠️ Server Management
+
+Manage your Discord server using natural language.
+
+• Create channels/categories
+• Rename resources
+• Organize channels
+• Inspect server structure
+• Clean up resources
+
+Try asking:
+"Rename general to lobby"
+
+---
+
+22. HELP EMBED STYLE
+
+Use the existing Discord.js embed/component system.
+
+Embed should have:
+
+- clean title
+- short description
+- grey/dark neutral color
+- clean spacing
+- minimal emojis
+- category-specific information only when selected
+- no raw JSON
+- no internal implementation details
+- no giant command dump
+
+---
+
+23. HELP ERROR HANDLING
+
+If "/help" genuinely fails:
+
+1. Log the real error internally.
+2. Correctly acknowledge the interaction.
+3. Send one clean fallback message.
+
+Example:
+
+⚠️ I couldn't open the help menu right now. Please try "/help" again.
+
+Never send both an error and successful response.
+
+Never expose stack traces or Termux logs.
+
+Do not use arbitrary delays to hide the problem.
+
+---
+
+24. ARCHITECTURE
+
+PRESERVE the existing:
+
+- AIRouter
+- provider adapters
+- conversational agent
+- executor
+- tool registry
+- confirmation store
+- confirmation handler
+- server-state system
+- resource resolver
+- permission system
+- trusted-user storage
+- audit system
+- verification
+- undo
+- memory
+- rate limiting
+- analytics
+
+Do NOT create:
+
+- another executor
+- another AI engine
+- another router
+- another confirmation system
+- another permission database
+- another trusted-user database
+- another template executor
+- another memory system
+
+Templates remain virtual/meta plans decomposed into existing registered tools.
+
+---
+
+25. TESTS
+
+Run:
+
+npm run typecheck
+npm run build
+
+Then run ALL existing tests.
+
+Add/update tests for:
+
+1. "@AshenAI hi" → exactly one response.
+2. Replies → exactly one response.
+3. Bot messages are ignored.
+4. Natural-language channel resolution.
+5. "remove the bot from #general".
+6. "delete all except general".
+7. Exceptions are preserved.
+8. Protected resources are preserved.
+9. Bulk deletion uses one confirmation.
+10. Bulk output is compact.
+11. "/prompt" creates the correct private session.
+12. "/prompt" session expires.
+13. "/prompt" does not mutate during preview.
+14. Template confirmation executes the current plan.
+15. Template generation avoids unnecessary AI calls.
+16. Template generation is fast.
+17. Unified template + server fix uses one plan.
+18. "/ask" remains normal AI chat.
+19. "/ask" does not enter builder mode.
+20. Mentions do not enter builder mode.
+21. Replies do not enter builder mode.
+22. "/trusted add" works.
+23. "/trusted list" works.
+24. "/trusted remove" works.
+25. Trusted users can use "ash!".
+26. Untrusted users get absolutely no "ash!" response.
+27. "ash!" sends text as the bot without AI generation.
+28. "/help" works on first invocation.
+29. "/help" repeated invocation works.
+30. "/help" select menu works.
+31. "/help" edits the same message.
+32. "/help" Back navigation works.
+33. "/help" embed is valid and grey/dark styled.
+34. "/help" failure produces a clean fallback.
+35. Bot join sends exactly one onboarding message.
+
+---
+
+26. PERFORMANCE VERIFICATION
+
+Measure actual latency for:
+
+@AshenAI hi
+reply hi
+/ask hi
+/prompt inspect my server
+/prompt generate a template
+/prompt delete all except general
+
+Identify the slowest stage.
+
+Do not claim an optimization without inspecting the actual bottleneck.
+
+Do not optimize already-fast code unnecessarily.
+
+---
+
+27. FINAL VERIFICATION REPORT
+
+At the end report:
+
+- files changed
+- duplicate-response root cause
+- "/ask" latency root cause
+- "/prompt" latency root cause
+- "/help" intermittent failure root cause
+- exact optimizations
+- natural-language resolution behavior
+- delete-all-except behavior
+- "/prompt" session behavior
+- template behavior
+- "ash!" behavior
+- trusted-user behavior
+- onboarding behavior
+- "/help" UI behavior
+- tests passed
+- typecheck result
+- build result
+
+IMPORTANT:
+
+Implement the changes directly.
+
+Do not merely describe what should be done.
+
+Do not rewrite unrelated architecture.
+
+Do not weaken security.
+
+Do not create duplicate systems.
+
+The final AshenAI experience should be:
+
+FAST normal chat
++
+PRIVATE /prompt builder
++
+NATURAL-LANGUAGE server management
++
+TRUSTED-ONLY ash! bot messaging
++
+POLISHED /help embed
++
+RELIABLE onboarding
++
+ONE confirmation for destructive/bulk plans
++
+COMPACT Discord responses

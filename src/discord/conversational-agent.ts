@@ -1026,7 +1026,22 @@ export async function handleConversation(
 
     logIntent(userContext.userId, guild.id, classification.intent, classification.confidence);
 
-    // 3. Handle each intent type
+    // 3. Builder intents are ONLY allowed through /prompt — redirect mentions/replies
+    const BUILDER_INTENTS: ConversationIntent[] = [
+      "server_template", "server_modify", "server_inspect",
+      "server_repair", "server_better", "delete_except",
+    ];
+
+    if (BUILDER_INTENTS.includes(classification.intent)) {
+      return {
+        shouldReply: true,
+        reply: "🛠️ Server-building requests are available through \"/prompt\".",
+        executed: false,
+        requiresConfirmation: false,
+      };
+    }
+
+    // 4. Handle each intent type
     switch (classification.intent) {
       case "confirmation": {
         return handleConfirmation(state, userContext, guild, message);

@@ -17,6 +17,7 @@ import { config } from "../config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
 import { guardAIOutput } from "../security/output-guard";
 import { wrapUntrustedContent } from "../security/context";
+import { StageTimer } from "../ai/timing";
 
 const MAX_DISCORD_LENGTH = 1900;
 
@@ -56,11 +57,15 @@ export function createAskCommand(
       interaction: ChatInputCommandInteraction
     ): Promise<void> {
 
+      const t = new StageTimer("/ask");
       const userId = interaction.user.id;
       const guildId = interaction.guildId || "";
       const prompt = interaction.options.getString("prompt", true).trim();
 
+      t.mark("extract_args");
+
       const usageCheck = usageManager.check(userId, guildId, "ask", prompt.length);
+      t.mark("usage_check");
 
       if (!usageCheck.allowed) {
         const retrySeconds = usageCheck.retryAfterMs
@@ -82,36 +87,8 @@ export function createAskCommand(
         return;
       }
 
-      /*
-       * Discord interactions must be acknowledged quickly.
-       * Do this BEFORE any AI work.
-       */
       try {
-        if (!interaction.isRepliable()) {
-          console.error("❌ /ask interaction is no longer repliable.");
-          return;
-        }
-
-      } catch (error) {
-        console.error(
-          "❌ Could not acknowledge /ask interaction:",
-          error
-        );
-
-        console.error(
-          "⚠️ The Discord interaction probably expired before AshenAI acknowledged it."
-        );
-
-        return;
-      }
-
-      try {
-        const prompt = interaction.options.getString(
-          "prompt",
-          true
-        ).trim();
-
-        // Boundary behavior (single source, no duplication)
+        // Boundary behavior — checkBoundary() already handles "I know", abuse, "fair enough"
         const boundary = checkBoundary(prompt);
         if (boundary.matched && boundary.response) {
           await interaction.editReply(boundary.response);
@@ -120,30 +97,6 @@ export function createAskCommand(
 
         // Security boundary: inspect untrusted Discord input before AI processing.
         const security = inspectUserInput(prompt);
-
-        // Boundary behavior: calmly handle excessive patterns
-        const lower = prompt.toLowerCase().trim();
-
-        // "I know" detection
-        if (/^\s*i\s+know\s*$/.test(lower)) {
-          await interaction.editReply("I know what? Tell me.");
-          return;
-        }
-
-        // Abuse boundary: calm refusal + redirect
-        if (/\b(useless|stupid|dumb|idiot|garbage|trash)\b/.test(lower)) {
-          await interaction.editReply(
-            "I'm here to help. If something wasn't clear, tell me what confused you and I'll re-explain."
-          );
-          return;
-        }
-
-        // "Fair enough" reciprocation (playful)
-        if (/\bfair enough\b/.test(lower)) {
-          await interaction.editReply("Glad we're on the same page. What's on your mind?");
-          return;
-        }
-
         if (security.decision === "BLOCK") {
           await interaction.editReply(
             security.safeResponse ||
@@ -159,13 +112,7 @@ export function createAskCommand(
           return;
         }
 
-        logger.debug(
-          `📩 /ask: userId=${userId} guildId=${guildId} promptLength=${prompt.length}`
-        );
-
-        /*
-         * Creator question
-         */
+        // Creator question — fast regex, no AI needed
         const creatorQuestion =
           /\b(who|what)\b.*\b(creator|created|made|owner)\b/i.test(
             prompt
@@ -176,31 +123,26 @@ export function createAskCommand(
 
         if (creatorQuestion) {
           const creatorId = config.creator.discord;
-
           await interaction.editReply(
             creatorId
               ? `👑 My creator is <@${creatorId}>.`
               : "👑 My creator is not configured yet."
           );
-
           return;
         }
 
+        t.mark("pre_ai");
+
         /*
-         * Conversation memory
+         * Conversation memory — in-memory read, fast
          */
-
         const history = memory.get(userId, interaction.channelId);
-
-        logger.debug(
-          `🧠 /ask memory messages: ${history.length}`
-        );
+        t.mark("memory_get");
 
         const messages = [
           {
             role: "system" as const,
-            content:
-              ASHENAI_SYSTEM_PROMPT,
+            content: ASHENAI_SYSTEM_PROMPT,
           },
 
           ...history.map((entry) => ({
@@ -219,31 +161,17 @@ export function createAskCommand(
             ),
           },
         ];
-
-        logger.debug(
-          `🧠 /ask context messages: ${messages.length}`
-        );
+        t.mark("build_messages");
 
         /*
          * Ask the smart AI router.
-         *
-         * The router handles:
-         * - provider ranking
-         * - provider failures
-         * - rate limits
-         * - credit/billing failures
-         * - provider switching
-         * - timeout handling
          */
-        logger.debug(
-          "🤖 /ask sending request to AI router..."
-        );
-
         const response = await router.generate({
           messages,
           temperature: 0.7,
           maxTokens: 1200,
         });
+        t.mark("ai_generate");
 
         if (
           !response ||
@@ -255,7 +183,7 @@ export function createAskCommand(
           );
         }
 
-        usageManager.record({
+        usageManager.recordDeferred({
           userId,
           guildId,
           feature: "ask",
@@ -264,6 +192,7 @@ export function createAskCommand(
           latencyMs: response.latencyMs,
           success: true,
         });
+        t.mark("usage_record");
 
         /*
          * Final application-level security check.
@@ -278,34 +207,31 @@ export function createAskCommand(
         }
 
         const reply = cleanResponse(guarded.text);
+        t.mark("guard_and_format");
 
         /*
-         * Save conversation only after successful generation
-         * and after output has passed the application security guard.
+         * Save conversation after successful generation.
+         * Batch both writes into a single flush at the end.
          */
-        memory.add(
+        memory.addBatch(
           userId,
-          {
-            role: "user",
-            content: prompt,
-          },
+          { role: "user", content: prompt },
           interaction.channelId
         );
 
-        memory.add(
+        memory.addBatch(
           userId,
-          {
-            role: "assistant",
-            content: guarded.text,
-          },
+          { role: "assistant", content: guarded.text },
           interaction.channelId
         );
+        t.mark("memory_save");
 
-        /*
-         * Interaction was already deferred, so editReply()
-         * is safe as long as the interaction remains valid.
-         */
         await interaction.editReply(reply);
+        t.mark("discord_reply");
+
+        memory.flushBatch();
+        usageManager.flush();
+        t.log();
 
         logger.debug(
           `✅ /ask response sent using ${response.provider} in ${response.latencyMs}ms`
@@ -324,11 +250,6 @@ export function createAskCommand(
           success: false,
         });
 
-        /*
-         * The interaction may have expired while the AI router
-         * was working. Never attempt another interaction
-         * response blindly.
-         */
         try {
           if (interaction.isRepliable()) {
             await interaction.editReply(

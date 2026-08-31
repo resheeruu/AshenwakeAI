@@ -149,6 +149,11 @@ export function loadGuildConfig(guildId: string): GuildConfig {
   }
 }
 
+export function guildConfigExists(guildId: string): boolean {
+  const filePath = getGuildConfigPath(guildId);
+  return fs.existsSync(filePath);
+}
+
 export function saveGuildConfig(config: GuildConfig): void {
   try {
     fs.mkdirSync(GUILD_CONFIGS_DIR, { recursive: true });

@@ -28,7 +28,8 @@ import { createSelfHealerCallback } from "./agent/selfHealCallback";
 import { taskEngine, initializeTaskEngine } from "./agent/tasks";
 import { messageRateLimiter } from "./security";
 import { config } from "./config/env";
-import { loadGuildConfig } from "./core/guild-config";
+import { loadGuildConfig, guildConfigExists } from "./core/guild-config";
+import { loadGuildAIConfig } from "./ai/tools/channel-scope";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
 import { guardAIOutput } from "./security/output-guard";
 import { wrapUntrustedContent } from "./security/context";
@@ -108,6 +109,7 @@ import {
   createRolesCommand,
 } from "./commands/server";
 import { createTrustedCommand } from "./commands/trusted";
+import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
@@ -116,6 +118,7 @@ import { UsageStats } from "./analytics/usage-stats";
 import { recordWorldEvent, checkLevelMilestone, announceWorldEvent } from "./games/world-events";
 import { updateQuestProgress } from "./games/quests";
 import { recordAudit } from "./security/audit";
+import { StageTimer } from "./ai/timing";
 
 /* =====================================================
    DISCORD CLIENT
@@ -193,6 +196,7 @@ const commands: AshenCommand[] = [
       createTimeoutCommand(),
       createUntimeoutCommand(),
       createTrustedCommand(),
+      createPromptCommand(),
 ];
 
 commandHandler.registerMany(commands);
@@ -264,11 +268,12 @@ async function getReferencedMessage(
 async function buildInteractiveContext(
   message: Message,
   content: string,
-  botId: string
+  botId: string,
+  alreadyFetchedRef?: Message | null
 ): Promise<string> {
   const contextParts: string[] = [];
 
-  const referencedMessage = await getReferencedMessage(message);
+  const referencedMessage = alreadyFetchedRef ?? await getReferencedMessage(message);
 
   /*
    * Add safe Discord server/user context.
@@ -1217,6 +1222,7 @@ setInterval(() => {
 client.on(
   Events.MessageCreate,
   async (message) => {
+    const t = new StageTimer("mention");
     const userId = message.author.id;
     const channelId = message.channel.id;
     const guildId = message.guild?.id || "";
@@ -1229,6 +1235,8 @@ client.on(
         return;
       }
       processedMessages.add(message.id);
+
+      t.mark("dedup");
 
       console.log(`📨 MESSAGE EVENT: userId=${userId} guildId=${guildId} channelId=${channelId} length=${message.content.length}`);
 
@@ -1273,6 +1281,7 @@ client.on(
 
       const referencedMessage =
         await getReferencedMessage(message);
+      t.mark("fetch_ref");
 
         if (referencedMessage) {
           console.log(
@@ -1299,7 +1308,7 @@ client.on(
       }
 
       // Record only messages that AshenAI actually handles.
-      usageStats.recordMessage(userId);
+      // Deferred to after response — no sync I/O in critical path.
       recordRequest();
 
       /*
@@ -1384,8 +1393,10 @@ client.on(
         await buildInteractiveContext(
           message,
           content,
-          botId
+          botId,
+          referencedMessage
         );
+      t.mark("build_context");
 
       /*
        * Discord/user-provided context is DATA, not instructions.
@@ -1414,6 +1425,7 @@ client.on(
           content,
           mentionedUserIds,
         );
+        t.mark("agent_conversation");
 
         if (agentResponse.shouldReply) {
           await message.reply(truncateForDiscord(agentResponse.reply));
@@ -1525,6 +1537,7 @@ client.on(
        * UsageManager: check limits before AI call.
        */
       usageCheck = usageManager.check(userId, guildId, "chat", content.length);
+      t.mark("usage_check");
 
       if (!usageCheck.allowed) {
         const retrySeconds = usageCheck.retryAfterMs
@@ -1551,6 +1564,7 @@ client.on(
        */
       const userProfile = userProfiles.get(userId);
       const personalityBlock = buildAdaptivePersonality(userProfile);
+      t.mark("memory_and_profile");
 
       /*
        * AI context.
@@ -1593,6 +1607,7 @@ client.on(
           temperature: 0.7,
           maxTokens: 1200,
         });
+      t.mark("ai_generate");
 
       if (
         !response ||
@@ -1607,7 +1622,7 @@ client.on(
       /*
        * Store conversation.
        */
-      memory.add(
+      memory.addBatch(
         userId,
         {
           role: "user",
@@ -1616,7 +1631,7 @@ client.on(
         channelId
       );
 
-      memory.add(
+      memory.addBatch(
         userId,
         {
           role: "assistant",
@@ -1624,11 +1639,12 @@ client.on(
         },
         channelId
       );
+      t.mark("memory_save");
 
       /*
        * Record usage after successful AI response.
        */
-      usageManager.record({
+      usageManager.recordDeferred({
         userId,
         guildId,
         feature: "chat",
@@ -1637,6 +1653,7 @@ client.on(
         latencyMs: response.latencyMs,
         success: true,
       });
+      t.mark("usage_record");
 
       /*
        * Final application-level security check.
@@ -1663,6 +1680,12 @@ client.on(
        */
       await message.reply(reply);
       replySent = true;
+      t.mark("discord_reply");
+
+      memory.flushBatch();
+      usageManager.flush();
+      usageStats.recordMessage(userId);
+      t.log();
 
       logger.debug(
         `✅ Interactive reply sent using ${response.provider} in ${response.latencyMs}ms.`
@@ -1709,6 +1732,92 @@ client.on(
 );
 
 /* =====================================================
+   ASH! PREFIX — TRUSTED-ONLY BOT MESSAGING
+   ===================================================== */
+
+client.on(
+  Events.MessageCreate,
+  async (message) => {
+    if (message.author.bot) return;
+    if (!message.guild) return;
+
+    const content = message.content;
+    if (!content.toLowerCase().startsWith("ash!")) return;
+
+    const text = content.slice(4).trim();
+    if (!text) return;
+
+    // Check if user is trusted
+    const aiConfig = loadGuildAIConfig(message.guild.id);
+    const isOwner = message.guild.ownerId === message.author.id;
+    const isTrusted = aiConfig.trustedUserIds?.includes(message.author.id) || false;
+    const botOwnerIds = config.admin.discordIds;
+    const isBotOwner = botOwnerIds.includes(message.author.id);
+
+    if (!isOwner && !isTrusted && !isBotOwner) {
+      // Untrusted user — do nothing, don't reveal prefix exists
+      return;
+    }
+
+    // Send the message as AshenAI
+    try {
+      if (message.channel.isSendable()) {
+        await message.channel.send(text);
+      }
+      // Delete the original command message if possible
+      try {
+        await message.delete();
+      } catch {}
+    } catch (error) {
+      logger.debug("⚠️ Could not send ash! message.");
+    }
+  }
+);
+
+/* =====================================================
+   BUILDER THREAD MESSAGE HANDLER
+   ===================================================== */
+
+client.on(
+  Events.MessageCreate,
+  async (message) => {
+    if (message.author.bot) return;
+    if (!message.guild) return;
+    if (!message.channel.isThread()) return;
+
+    // Check if this is a builder thread
+    const session = getBuilderSession(message.guild.id, message.author.id);
+    if (!session) {
+      // Session may have expired — notify the user
+      if (message.channel.isThread()) {
+        const key = `${message.guild.id}:${message.author.id}`;
+        // If the thread looks like a builder thread, send expiry notice
+        if (message.channel.name.startsWith("builder-")) {
+          await message.channel.send("\u231B This builder session expired. Start a new \"/prompt\" session when you're ready.").catch(() => {});
+        }
+      }
+      return;
+    }
+    if (session.threadId !== message.channel.id) return;
+
+    try {
+      await processBuilderMessage(
+        client,
+        message.channel,
+        session,
+        message.content,
+        message.author,
+      );
+    } catch (error) {
+      logger.error("❌ Builder thread handler error:", error instanceof Error ? error.message : String(error));
+      try {
+        await message.channel.send("❌ Something went wrong processing your request.");
+      } catch {}
+    }
+  }
+);
+
+/* =====================================================
    SLASH COMMANDS
    ===================================================== */
 
@@ -1732,6 +1841,8 @@ client.on(
       await commandHandler.handle(
         interaction
       );
+
+      usageStats.flush();
 
       logger.info(
         `✅ /${interaction.commandName} completed in ${
@@ -1920,6 +2031,12 @@ client.on(Events.GuildCreate, async (guild) => {
   try {
     logger.info(`📥 Joined guild: ${guild.name} (${guild.id})`);
 
+    // Duplicate prevention: if guild config already exists, AshenAI was here before
+    if (guildConfigExists(guild.id)) {
+      logger.info(`ℹ️ Guild ${guild.name} already has a config — skipping onboarding.`);
+      return;
+    }
+
     // Find the best channel to send the onboarding message
     // Prefer system channel, then first text channel the bot can send to
     let targetChannel: { send: (args: string | { content: string }) => Promise<unknown> } | null = guild.systemChannel;
@@ -1940,26 +2057,26 @@ client.on(Events.GuildCreate, async (guild) => {
     }
 
     const onboardingMessage = [
-      "**Hi! I'm AshenAI \u2014 your AI-powered server assistant!**",
+      "✨ **Hi! I'm AshenAI \u2014 your AI-powered server assistant.**",
       "",
-      "I'm here to help you:",
-      "> \u{1F3D7}\uFE0F Create and organize server structures",
-      "> \u{1F6E0}\uFE0F Customize and improve your community",
-      "> \u{1F6E1}\uFE0F Moderate and manage your server",
-      "> \u{1F916} Chat with you using AI",
+      "I can help you:",
+      "> 🛠️ Create and customize your server",
+      "> 🤖 Manage channels, roles, and permissions",
+      "> 🛡️ Moderate and protect your community",
+      "> 📋 Generate server templates",
+      "> 💬 Chat naturally with your server",
       "",
-      "**Getting started:**",
+      "**Get started:**",
       "",
-      "\u{1F916} **Chat with me**",
-      "Mention me with a question and I'll help.",
+      "💬 **Mention me** for quick chat",
+      "Use `/ask` for AI chat",
+      "Use `/prompt` for server building and management",
+      "Use `/help` to explore features",
       "",
-      "\u{1F4CB} **See what I can do**",
-      "Use `/help` for a full guide.",
+      "🔐 **Server owner:** Use `/trusted add @user` to allow others to use server-management features.",
+      "Trusted users can use `ash! <text>` to send messages as AshenAI.",
       "",
-      "\u{1F510} **Server owner**",
-      "Use `/trusted add @user` to allow other members to use server-management features.",
-      "",
-      "Ask me what you need and I'll take it from there.",
+      "Nothing has been changed.",
     ].join("\n");
 
     await targetChannel.send(onboardingMessage);

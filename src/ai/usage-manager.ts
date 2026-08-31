@@ -287,7 +287,56 @@ export class UsageManager {
     return { allowed: true, credits };
   }
 
+  private writePending = false;
+
   record(params: {
+    userId: string;
+    guildId?: string;
+    feature: AIFeature;
+    credits: number;
+    tokens?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    provider?: string;
+    latencyMs?: number;
+    success: boolean;
+  }): void {
+    this.recordInternal(params);
+    writeJSON(DATA_FILE, this.data);
+  }
+
+  /**
+   * Record usage without writing to disk immediately.
+   * Call flush() after response delivery to persist.
+   * In-memory state is updated immediately so check() stays accurate.
+   */
+  recordDeferred(params: {
+    userId: string;
+    guildId?: string;
+    feature: AIFeature;
+    credits: number;
+    tokens?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    provider?: string;
+    latencyMs?: number;
+    success: boolean;
+  }): void {
+    this.recordInternal(params);
+    this.writePending = true;
+  }
+
+  /**
+   * Flush any deferred record to disk. Call after response delivery.
+   */
+  flush(): void {
+    if (this.writePending) {
+      this.writePending = false;
+      writeJSON(DATA_FILE, this.data);
+    }
+  }
+
+  private recordInternal(params: {
     userId: string;
     guildId?: string;
     feature: AIFeature;
@@ -351,8 +400,6 @@ export class UsageManager {
     if (!success) {
       user.cooldownUntil = Date.now() + this.limits.cooldownMs;
     }
-
-    writeJSON(DATA_FILE, this.data);
   }
 
   acquire(): boolean {

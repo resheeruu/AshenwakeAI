@@ -146,7 +146,7 @@ export function createTrustedCommand(): AshenCommand {
         console.error("❌ /trusted failed:", error);
         try {
           if (interaction.deferred || interaction.replied) {
-            await interaction.editReply("❌ Failed to manage trusted users. Check the logs.");
+            await interaction.editReply("❌ Failed to manage trusted users. Please try again.");
           }
         } catch (replyError) {
           console.error("❌ Could not edit /trusted response:", replyError);

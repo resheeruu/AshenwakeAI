@@ -66,6 +66,7 @@ function uniquePush(list: string[], value: string): void {
 
 export class UsageStats {
   private stats: UsageStatsData;
+  private writePending = false;
 
   constructor() {
     this.stats = this.load();
@@ -154,8 +155,6 @@ export class UsageStats {
 
     uniquePush(this.stats.dailyUsers[today], userId);
     uniquePush(this.stats.weeklyUsers[week], userId);
-
-    this.save();
   }
 
   /**
@@ -171,6 +170,7 @@ export class UsageStats {
 
   /**
    * Records a slash command invocation.
+   * Defers disk write — call flush() after the Discord response is delivered.
    */
   recordCommand(userId: string, commandName?: string): void {
     this.recordUser(userId);
@@ -182,7 +182,17 @@ export class UsageStats {
         (this.stats.commandUsage[commandName] ?? 0) + 1;
     }
 
-    this.save();
+    this.writePending = true;
+  }
+
+  /**
+   * Flush any deferred analytics write to disk.
+   */
+  flush(): void {
+    if (this.writePending) {
+      this.writePending = false;
+      this.save();
+    }
   }
 
   /**

@@ -259,7 +259,33 @@ export class AIRouter {
     }
   }
 
+  private healthSavePending = false;
+  private healthSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Fire-and-forget health persistence.
+   * Debounced: rapid consecutive calls coalesce into one disk write.
+   */
   private saveHealth(): void {
+    if (!this.persistentHealth) {
+      return;
+    }
+
+    this.healthSavePending = true;
+
+    if (this.healthSaveTimer) {
+      return;
+    }
+
+    this.healthSaveTimer = setTimeout(() => {
+      this.healthSaveTimer = null;
+      if (!this.healthSavePending) return;
+      this.healthSavePending = false;
+      this.flushHealthSync();
+    }, 50);
+  }
+
+  private flushHealthSync(): void {
     if (!this.persistentHealth) {
       return;
     }
@@ -914,8 +940,11 @@ export class AIRouter {
   async generate(
     request: AIRequest
   ): Promise<AIResponse> {
+    const t0 = Date.now();
+
     const providers =
       this.orderedProviders();
+    const orderedMs = Date.now() - t0;
 
     if (
       providers.length === 0
@@ -938,7 +967,7 @@ export class AIRouter {
     let attempts = 0;
 
     logger.debug(
-      `🧠 Smart router: ${providers.length} provider(s) available`
+      `🧠 Smart router: ${providers.length} provider(s) available (ordered in ${orderedMs}ms)`
     );
 
     for (
@@ -958,16 +987,13 @@ export class AIRouter {
       attemptedProviders.add(provider.name);
       attempts++;
 
-      logger.debug(
-        `🔢 Provider attempt ${attempts}/${maxAttempts}`
-      );
       const score =
         this.providerScore(
           provider
         );
 
       logger.debug(
-        `🤖 Trying ${provider.name} (score ${score}ms)...`
+        `🤖 Trying ${provider.name} (score ${score}ms, attempt ${attempts}/${maxAttempts})...`
       );
 
       const startedAt =
@@ -989,13 +1015,15 @@ export class AIRouter {
           response.latencyMs ??
           measuredLatency;
 
+        const saveStart = Date.now();
         this.recordSuccess(
           provider,
           latency
         );
+        const saveMs = Date.now() - saveStart;
 
         logger.debug(
-          `✅ ${provider.name} responded in ${latency}ms`
+          `✅ ${provider.name} responded in ${latency}ms (saveHealth ${saveMs}ms, ordered ${orderedMs}ms)`
         );
 
         return response;
@@ -1003,10 +1031,12 @@ export class AIRouter {
         lastError =
           error;
 
+        const saveStart = Date.now();
         this.recordFailure(
           provider,
           error
         );
+        const saveMs = Date.now() - saveStart;
 
         if (
           this.isCreditError(
