@@ -100,6 +100,8 @@ export type ConversationIntent =
   | "confirmation"
   | "denial"
   | "preview"
+  | "details"
+  | "delete_except"
   | "help";
 
 export interface ClassifiedIntent {
@@ -242,6 +244,11 @@ export function classifyIntent(
     return { intent: "preview", confidence: 0.85 };
   }
 
+  // ── Detailed view requests ───────────────────────────────────────
+  if (/\b(details|show.?me.?everything|what.?exactly|full.?list|all.?operations|show.?all|verbose)\b/i.test(lower)) {
+    return { intent: "details", confidence: 0.85 };
+  }
+
   // ── Undo request ─────────────────────────────────────────────────
   if (/\b(undo|reverse|revert|take back|cancel that)\b/i.test(lower)) {
     return { intent: "undo", confidence: 0.9 };
@@ -289,7 +296,7 @@ export function classifyIntent(
   }
 
   // ── Server transformation: "make my server a gaming server" ──────
-  if (/\b(make|turn|set|convert)\b.*\b(my|the|this)\b.*\b(server|guild)\b.*\b(a|into|like)\b.*\b(gaming|community|minecraft|support|creator|study)\b/i.test(lower)) {
+  if (/\b(make|turn|set|convert)\b.*\b(my|the|this)\b.*\b(server|guild)\b.*\b(a|into|like)\b.*\b(gaming|community|minecraft|support|creator|study|clan|social|friends)\b/i.test(lower)) {
     return buildTemplateIntent(lower, false, 0.88);
   }
 
@@ -302,6 +309,17 @@ export function classifyIntent(
   }
   if (/\b(set up|setup|configure|build|organize)\b.*\b(template|layout)\b/i.test(lower)) {
     return buildTemplateIntent(lower, false, 0.85);
+  }
+
+  // ── Delete everything except ──────────────────────────────────────
+  if (/\b(delete|remove|clear|clean)\b.*\b(all|everything|every|all channels|all categories)\b.*\b(except|but|keep|preserve|leave|save)\b/i.test(lower)) {
+    return { intent: "delete_except", confidence: 0.9 };
+  }
+  if (/\b(except|but|keep|preserve|leave|save)\b.*\b(all|everything|every)\b.*\b(delete|remove|clear|clean)\b/i.test(lower)) {
+    return { intent: "delete_except", confidence: 0.85 };
+  }
+  if (/\b(delete|remove|clear)\b.*\b(everything|all)\b.*\b(except|but)\b/i.test(lower)) {
+    return { intent: "delete_except", confidence: 0.9 };
   }
 
   // ── General server modification requests ─────────────────────────
@@ -330,9 +348,12 @@ function buildTemplateIntent(
   if (/\b(minecraft|mc)\b/i.test(lower)) templateType = "minecraft";
   else if (/\b(gaming|game)\b/i.test(lower)) templateType = "gaming";
   else if (/\b(support|help\s*desk|ticket)\b/i.test(lower)) templateType = "support";
+  else if (/\b(study|studygroup|learning|school|university|college|academic)\b/i.test(lower)) templateType = "study";
+  else if (/\b(creator|content|youtube|twitch|streamer|art)\b/i.test(lower)) templateType = "creator";
+  else if (/\b(clan|competitive|esports|team|tryout)\b/i.test(lower)) templateType = "clan";
+  else if (/\b(social|hangout|chill|casual)\b/i.test(lower)) templateType = "social";
+  else if (/\b(friends|friend|private)\b/i.test(lower)) templateType = "friends";
   else if (/\b(community)\b/i.test(lower)) templateType = "community";
-  else if (/\b(creator|content)\b/i.test(lower)) templateType = "community";
-  else if (/\b(study|studygroup|learning)\b/i.test(lower)) templateType = "community";
 
   return {
     intent: "server_template",
@@ -767,34 +788,25 @@ async function verifyPostAction(
 /* ================================================================
  * TEMPLATE PREVIEW
  *
- * Renders a polished preview of a template without mutations.
+ * Renders a polished, compact preview of a template without mutations.
  * ================================================================ */
 
 function buildTemplatePreview(
   templateName: string,
   template: { name: string; description: string; categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }>; roles: Array<{ name: string; color?: string }> },
 ): string {
+  const totalChannels = template.categories.reduce((a, c) => a + c.channels.length, 0);
+
   const lines = [
-    `✨ **${template.name} Template**`,
+    `✨ **${template.name}**`,
     template.description,
     "",
+    `**Create**`,
+    `• ${template.roles.length} role${template.roles.length > 1 ? "s" : ""}`,
+    `• ${template.categories.length} categor${template.categories.length > 1 ? "ies" : "y"}`,
+    `• ${totalChannels} channel${totalChannels > 1 ? "s" : ""}`,
   ];
 
-  for (const cat of template.categories) {
-    lines.push(`**${cat.name}**`);
-    for (const ch of cat.channels) {
-      const icon = ch.type === "voice" ? "🔊" : "#";
-      lines.push(`${icon} ${ch.name}`);
-    }
-    lines.push("");
-  }
-
-  lines.push("**Roles:**");
-  for (const role of template.roles) {
-    lines.push(`👤 ${role.name}`);
-  }
-
-  lines.push("", "This is a preview only — nothing has been changed yet.");
   return lines.join("\n");
 }
 
@@ -807,7 +819,6 @@ function buildTemplatePreview(
 function formatUnifiedPlanSummary(plan: UnifiedActionPlan): string {
   const creates = plan.steps.filter(s => s.category === "create" && s.status === "pending");
   const fixes = plan.steps.filter(s => s.category === "fix" && s.status === "pending");
-  const configures = plan.steps.filter(s => s.category === "configure" && s.status === "pending");
   const preserves = plan.steps.filter(s => s.category === "preserve");
   const skips = plan.steps.filter(s => s.category === "skip");
 
@@ -826,46 +837,38 @@ function formatUnifiedPlanSummary(plan: UnifiedActionPlan): string {
     if (roleCreates.length > 0) lines.push(`• ${roleCreates.length} role${roleCreates.length > 1 ? "s" : ""}`);
     if (catCreates.length > 0) lines.push(`• ${catCreates.length} categor${catCreates.length > 1 ? "ies" : "y"}`);
     if (chCreates.length > 0) lines.push(`• ${chCreates.length} channel${chCreates.length > 1 ? "s" : ""}`);
-    lines.push("");
   }
 
   if (fixes.length > 0) {
+    if (creates.length > 0) lines.push("");
     lines.push("**Fix:**");
     for (const f of fixes) lines.push(`• ${f.description}`);
-    lines.push("");
-  }
-
-  if (configures.length > 0) {
-    lines.push("**Configure:**");
-    for (const c of configures) lines.push(`• ${c.description}`);
-    lines.push("");
   }
 
   if (preserves.length > 0) {
+    if (creates.length > 0 || fixes.length > 0) lines.push("");
     lines.push("**Preserve:**");
     lines.push(`• ${preserves.length} existing resource${preserves.length > 1 ? "s" : ""} that already match`);
-    lines.push("");
   }
 
   if (skips.length > 0) {
+    if (creates.length > 0 || fixes.length > 0 || preserves.length > 0) lines.push("");
     lines.push("**Skip:**");
     for (const s of skips) {
-      lines.push(`• ${s.description}${s.skipReason ? ` — ${s.skipReason}` : ""}`);
+      lines.push(`• ${s.description}`);
     }
-    lines.push("");
   }
 
   if (plan.duplicates.length > 0) {
+    if (creates.length > 0 || fixes.length > 0 || preserves.length > 0 || skips.length > 0) lines.push("");
     lines.push("**Review:**");
     for (const dup of plan.duplicates) {
-      lines.push(`• ${dup.ids.length} duplicate ${dup.type} "${dup.name}" — I won't touch these unless you ask`);
+      lines.push(`• ${dup.ids.length} duplicate ${dup.type} "${dup.name}"`);
     }
-    lines.push("");
+    lines.push(`• I won't delete ambiguous duplicates automatically`);
   }
 
-  lines.push("🔒 Protected resources will be preserved.");
-  lines.push("Nothing will be deleted.");
-  lines.push("", "**Proceed?**");
+  lines.push("", "Want me to apply this template?");
 
   return lines.join("\n");
 }
@@ -883,23 +886,33 @@ function formatExecutionReport(
   const unverified = steps.filter(s => s.status === "success" && s.verified === false);
 
   if (isPartial || failed.length > 0) {
-    const lines = ["⚠️ **Partially completed.**", ""];
+    const lines = ["**Partially completed.**", ""];
 
-    if (succeeded.length > 0) {
-      lines.push("**Completed:**");
-      for (const s of succeeded) lines.push(`• ✅ ${s.description}`);
-      lines.push("");
+    const createdRoles = succeeded.filter(s => s.toolName === "create_role").length;
+    const createdCats = succeeded.filter(s => s.toolName === "create_category").length;
+    const createdChs = succeeded.filter(s => s.toolName === "create_channel").length;
+    const fixed = succeeded.filter(s => s.category === "fix").length;
+
+    const parts: string[] = [];
+    if (createdRoles > 0) parts.push(`${createdRoles} role${createdRoles > 1 ? "s" : ""}`);
+    if (createdCats > 0) parts.push(`${createdCats} categor${createdCats > 1 ? "ies" : "y"}`);
+    if (createdChs > 0) parts.push(`${createdChs} channel${createdChs > 1 ? "s" : ""}`);
+    if (fixed > 0) parts.push(`${fixed} fix${fixed > 1 ? "es" : ""}`);
+
+    if (parts.length > 0) {
+      lines.push(`**Completed:** ${parts.join(", ")}`);
     }
 
     if (failed.length > 0) {
-      lines.push("**Failed:**");
-      for (const f of failed) lines.push(`• ❌ ${f.description}: ${f.error || "Unknown error"}`);
       lines.push("");
+      lines.push("**Failed:**");
+      for (const f of failed) lines.push(`• ${f.description}`);
     }
 
     if (unverified.length > 0) {
+      lines.push("");
       lines.push("**Verification failed:**");
-      for (const u of unverified) lines.push(`• ⚠️ ${u.description}`);
+      for (const u of unverified) lines.push(`• ${u.description}`);
     }
 
     return lines.join("\n");
@@ -912,21 +925,20 @@ function formatExecutionReport(
   const catCreates = creates.filter(s => s.toolName === "create_category");
   const chCreates = creates.filter(s => s.toolName === "create_channel");
 
-  const lines = ["✅ **Done.**", ""];
+  const lines = ["**Done.**", ""];
 
-  if (creates.length > 0) {
-    lines.push("**Created:**");
-    if (roleCreates.length > 0) lines.push(`• ${roleCreates.length} role${roleCreates.length > 1 ? "s" : ""}`);
-    if (catCreates.length > 0) lines.push(`• ${catCreates.length} categor${catCreates.length > 1 ? "ies" : "y"}`);
-    if (chCreates.length > 0) lines.push(`• ${chCreates.length} channel${chCreates.length > 1 ? "s" : ""}`);
+  const parts: string[] = [];
+  if (roleCreates.length > 0) parts.push(`${roleCreates.length} role${roleCreates.length > 1 ? "s" : ""}`);
+  if (catCreates.length > 0) parts.push(`${catCreates.length} categor${catCreates.length > 1 ? "ies" : "y"}`);
+  if (chCreates.length > 0) parts.push(`${chCreates.length} channel${chCreates.length > 1 ? "s" : ""}`);
+
+  if (parts.length > 0) {
+    lines.push(`**Created:** ${parts.join(", ")}`);
   }
 
   if (fixes.length > 0) {
-    lines.push("", "**Fixed:**");
-    for (const f of fixes) lines.push(`• ${f.description}`);
+    lines.push(`**Fixed:** ${fixes.length} issue${fixes.length > 1 ? "s" : ""}`);
   }
-
-  lines.push("", "🔍 All created resources verified. Existing resources preserved.");
 
   return lines.join("\n");
 }
@@ -1030,6 +1042,14 @@ export async function handleConversation(
 
       case "preview": {
         return handlePreview(state, userContext, guild, message);
+      }
+
+      case "details": {
+        return handleDetails(state, userContext, guild, message);
+      }
+
+      case "delete_except": {
+        return handleDeleteExcept(guild, userContext, state, message, content);
       }
 
       case "server_inspect": {
@@ -1309,24 +1329,32 @@ async function executeTemplateSteps(
   };
 
   if (failedSteps.length === 0) {
+    const parts: string[] = [];
+    const createdRoles = executedSteps.filter(s => s.includes("role")).length;
+    const createdCats = executedSteps.filter(s => s.includes("category")).length;
+    const createdChs = executedSteps.filter(s => s.includes("channel")).length;
+
+    if (createdRoles > 0) parts.push(`${createdRoles} role${createdRoles > 1 ? "s" : ""}`);
+    if (createdCats > 0) parts.push(`${createdCats} categor${createdCats > 1 ? "ies" : "y"}`);
+    if (createdChs > 0) parts.push(`${createdChs} channel${createdChs > 1 ? "s" : ""}`);
+
     return {
       shouldReply: true,
-      reply: `✅ **Template applied successfully!**\n\n**Completed ${executedSteps.length} operations:**\n${executedSteps.map(s => `• ${s}`).join("\n")}`,
+      reply: `**Done.** Created ${parts.join(", ")}.`,
       executed: true,
       requiresConfirmation: false,
     };
   }
 
-  const lines = ["⚠️ **Template partially applied.**", ""];
+  const lines = ["**Partially applied.**", ""];
 
   if (executedSteps.length > 0) {
-    lines.push("**Succeeded:**");
-    for (const s of executedSteps) lines.push(`• ✅ ${s}`);
-    lines.push("");
+    lines.push(`**Completed:** ${executedSteps.length} operation${executedSteps.length > 1 ? "s" : ""}`);
   }
 
+  lines.push("");
   lines.push("**Failed:**");
-  for (const f of failedSteps) lines.push(`• ❌ ${f.step}: ${f.error}`);
+  for (const f of failedSteps) lines.push(`• ${f.step}: ${f.error}`);
 
   return {
     shouldReply: true,
@@ -1470,6 +1498,219 @@ async function handlePreview(
     reply: "No pending plan to preview. Ask me to set up or fix your server first.",
     executed: false,
     requiresConfirmation: false,
+  };
+}
+
+/* ================================================================
+ * DETAILS HANDLER
+ *
+ * Shows detailed operations for the current pending plan.
+ * ================================================================ */
+
+async function handleDetails(
+  state: ConversationState,
+  userContext: ResolvedUserContext,
+  guild: Guild,
+  message: Message,
+): Promise<AgentResponse> {
+  if (state.unifiedPlan) {
+    const plan = state.unifiedPlan;
+    const lines = [`**Detailed plan: ${plan.goal}**`, ""];
+
+    const creates = plan.steps.filter(s => s.category === "create" && s.status === "pending");
+    const fixes = plan.steps.filter(s => s.category === "fix" && s.status === "pending");
+    const preserves = plan.steps.filter(s => s.category === "preserve");
+    const skips = plan.steps.filter(s => s.category === "skip");
+
+    if (creates.length > 0) {
+      lines.push("**Create:**");
+      for (const s of creates) lines.push(`• ${s.description}`);
+      lines.push("");
+    }
+
+    if (fixes.length > 0) {
+      lines.push("**Fix:**");
+      for (const s of fixes) lines.push(`• ${s.description}`);
+      lines.push("");
+    }
+
+    if (preserves.length > 0) {
+      lines.push("**Preserve:**");
+      for (const s of preserves) lines.push(`• ${s.description}`);
+      lines.push("");
+    }
+
+    if (skips.length > 0) {
+      lines.push("**Skip:**");
+      for (const s of skips) lines.push(`• ${s.description}`);
+      lines.push("");
+    }
+
+    if (plan.duplicates.length > 0) {
+      lines.push("**Review:**");
+      for (const dup of plan.duplicates) {
+        lines.push(`• ${dup.ids.length} duplicate ${dup.type} "${dup.name}" — I won't touch these unless you ask`);
+      }
+      lines.push("");
+    }
+
+    lines.push("Want me to apply this template?");
+
+    return {
+      shouldReply: true,
+      reply: lines.join("\n"),
+      executed: false,
+      requiresConfirmation: true,
+      planId: plan.id,
+    };
+  }
+
+  if (state.pendingConfirmation) {
+    const plan = getPendingPlan(state.pendingConfirmation.planId);
+    if (plan) {
+      const lines = [
+        `**Detailed plan:** ${plan.toolName.replace(/_/g, " ")}`,
+        `**Risk:** ${plan.riskLevel}`,
+        "",
+        ...plan.changes.map(c => `• ${c.description}`),
+        "",
+        "Want me to apply this?",
+      ];
+      return {
+        shouldReply: true,
+        reply: lines.join("\n"),
+        executed: false,
+        requiresConfirmation: true,
+        planId: plan.id,
+      };
+    }
+  }
+
+  return {
+    shouldReply: true,
+    reply: "No pending plan to show details for. Ask me to set up or fix your server first.",
+    executed: false,
+    requiresConfirmation: false,
+  };
+}
+
+/* ================================================================
+ * DELETE EXCEPT HANDLER
+ *
+ * Handles destructive requests like "delete all except general".
+ * Shows a preview and asks for confirmation before deleting.
+ * ================================================================ */
+
+async function handleDeleteExcept(
+  guild: Guild,
+  userContext: ResolvedUserContext,
+  state: ConversationState,
+  message: Message,
+  content: string,
+): Promise<AgentResponse> {
+  if (userContext.ashenRole !== "owner" && userContext.ashenRole !== "admin") {
+    return {
+      shouldReply: true,
+      reply: "❌ Deleting channels requires administrator permissions.",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  const serverState = await getCachedServerState(guild, state);
+
+  // Extract the exception pattern: what to keep
+  const keepPattern = content.match(/(?:except|but|keep|preserve|leave|save)\s+(?:the\s+)?(?:#)?(\S+)/i);
+  const keepName = keepPattern?.[1]?.toLowerCase();
+
+  if (!keepName) {
+    return {
+      shouldReply: true,
+      reply: "I'm not sure which channels you want to keep. Could you be more specific?\n\nExample: \"delete all except general\"",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  // Find channels to keep (matching the exception)
+  const keepChannels = serverState.channels.filter(ch =>
+    ch.name.toLowerCase().includes(keepName)
+  );
+
+  // Find channels to delete (everything except the keep list and protected channels)
+  const keepIds = new Set(keepChannels.map(ch => ch.id));
+  const deleteChannels = serverState.channels.filter(ch =>
+    !keepIds.has(ch.id) && !serverState.protectedChannels.includes(ch.id)
+  );
+
+  if (deleteChannels.length === 0) {
+    return {
+      shouldReply: true,
+      reply: `✅ Nothing to delete — all channels either match "${keepName}" or are protected.`,
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  // Build the deletion plan
+  const steps: UnifiedPlanStep[] = [];
+  for (const ch of deleteChannels) {
+    steps.push({
+      toolName: "delete_channel",
+      args: { channelId: ch.id },
+      description: `Delete #${ch.name}`,
+      category: "create", // Using "create" so it gets executed
+      status: "pending",
+    });
+  }
+
+  const plan: UnifiedActionPlan = {
+    id: `delete-except-${Date.now()}`,
+    goal: "Delete channels except specified",
+    steps,
+    duplicates: [],
+    riskLevel: "high",
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  };
+
+  state.unifiedPlan = plan;
+  state.pendingConfirmation = {
+    planId: plan.id,
+    toolName: "delete_except",
+    args: { deleteChannels: deleteChannels.map(ch => ch.id), keepChannels: keepChannels.map(ch => ch.id) },
+    timestamp: Date.now(),
+  };
+
+  // Format the preview
+  const lines = [
+    `⚠️ **${deleteChannels.length} channel${deleteChannels.length > 1 ? "s" : ""} to remove.**`,
+    "",
+    "**Keep:**",
+    ...keepChannels.map(ch => `• #${ch.name}`),
+    "",
+    "**Delete:**",
+    ...deleteChannels.slice(0, 10).map(ch => `• #${ch.name}`),
+  ];
+
+  if (deleteChannels.length > 10) {
+    lines.push(`• ${deleteChannels.length - 10} more`);
+  }
+
+  if (serverState.protectedChannels.length > 0) {
+    lines.push("");
+    lines.push(`• ${serverState.protectedChannels.length} protected channel(s) will be preserved`);
+  }
+
+  lines.push("");
+  lines.push("This is destructive. Continue?");
+
+  return {
+    shouldReply: true,
+    reply: lines.join("\n"),
+    executed: false,
+    requiresConfirmation: true,
+    planId: plan.id,
   };
 }
 
@@ -1637,24 +1878,21 @@ async function handleServerRepair(
   }
 
   // Format the response
-  const lines = ["🔍 **Server Health Report**", ""];
+  const lines = ["**Server Health Report**", ""];
 
   if (issues.length > 0) {
     for (const issue of issues) lines.push(`• ${issue}`);
-    lines.push("");
   }
 
   if (duplicates.length > 0) {
-    lines.push("**Duplicate resources found:**");
-    for (const dup of duplicates) {
-      lines.push(`• ${dup.ids.length} ${dup.type} named "${dup.name}" — I won't delete these automatically`);
-    }
     lines.push("");
+    for (const dup of duplicates) {
+      lines.push(`• ${dup.ids.length} duplicate ${dup.type} "${dup.name}" — I won't delete these automatically`);
+    }
   }
 
   if (fixes.length > 0) {
-    lines.push(`I can fix ${fixes.length} issue(s) automatically.`);
-    lines.push("", "Proceed? (yes/no)");
+    lines.push("", `I can fix ${fixes.length} issue${fixes.length > 1 ? "s" : ""} automatically. Want me to apply these fixes?`);
   }
 
   return {
@@ -1748,17 +1986,15 @@ async function handleServerBetter(
   }
 
   const lines = [
-    "🔍 **I checked your server and found:**",
+    "**Server Improvement**",
     "",
     ...recommendations,
-    "",
   ];
 
   if (fixes.length > 0) {
-    lines.push(`I can fix ${fixes.length} issue(s) automatically.`);
-    lines.push("Want me to apply these fixes? (yes/no)");
+    lines.push("", `I can fix ${fixes.length} issue${fixes.length > 1 ? "s" : ""} automatically. Want me to apply these fixes?`);
   } else {
-    lines.push("Would you like me to set up a template to organize things better?");
+    lines.push("", "Would you like me to set up a template to organize things better?");
   }
 
   if (fixes.length > 0) {
@@ -1826,9 +2062,10 @@ async function handleServerTemplateUnified(
     };
   }
 
+  // Fetch server state with caching (single API call set, parallelized)
   const serverState = await getCachedServerState(guild, state);
 
-  // Classify resources against the template
+  // Classify resources against the template (pure local computation)
   const classification = classifyResources(serverState, template);
 
   // Check if everything already exists (idempotency)
@@ -1845,28 +2082,31 @@ async function handleServerTemplateUnified(
   if (!wantsFix) {
     const preview = buildTemplatePreview(templateName, template);
 
-    const comparisonLines: string[] = [];
-    if (classification.existsAndMatches.length > 0) {
-      comparisonLines.push(`✓ **Already have:** ${classification.existsAndMatches.length} resource${classification.existsAndMatches.length > 1 ? "s" : ""} matching this template`);
-    }
-    if (classification.missing.length > 0) {
-      comparisonLines.push(`+ **Missing:** ${classification.missing.length} resource${classification.missing.length > 1 ? "s" : ""} to create`);
-    }
-    if (classification.duplicates.length > 0) {
-      for (const dup of classification.duplicates) {
-        comparisonLines.push(`? **Duplicate:** ${dup.ids.length} ${dup.type} named "${dup.name}"`);
-      }
-    }
-
     const reply = [
       preview,
       "",
-      ...comparisonLines,
-      "",
-      `**${classification.missing.length} missing resource${classification.missing.length > 1 ? "s" : ""}** to create.`,
-      "",
-      "Want me to apply this template to your server? (yes/no)",
-    ].join("\n");
+    ];
+
+    if (classification.existsAndMatches.length > 0) {
+      reply.push(`**Preserve:**`);
+      reply.push(`• ${classification.existsAndMatches.length} existing resource${classification.existsAndMatches.length > 1 ? "s" : ""}`);
+    }
+
+    if (classification.missing.length > 0) {
+      reply.push(`**Skip:**`);
+      reply.push(`• ${classification.missing.length} resource${classification.missing.length > 1 ? "s" : ""} already matching`);
+    }
+
+    if (classification.duplicates.length > 0) {
+      reply.push("");
+      reply.push("**Review:**");
+      for (const dup of classification.duplicates) {
+        reply.push(`• ${dup.ids.length} duplicate ${dup.type} "${dup.name}"`);
+      }
+      reply.push(`• I won't delete ambiguous duplicates automatically`);
+    }
+
+    reply.push("", "Want me to apply this template?");
 
     // Build a lightweight plan so "yes" applies the template
     const steps: UnifiedPlanStep[] = [];
@@ -1972,7 +2212,7 @@ async function handleServerTemplateUnified(
 
     return {
       shouldReply: true,
-      reply,
+      reply: reply.join("\n"),
       executed: false,
       requiresConfirmation: true,
       planId: plan.id,

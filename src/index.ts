@@ -107,6 +107,7 @@ import {
   createUserInfoCommand,
   createRolesCommand,
 } from "./commands/server";
+import { createTrustedCommand } from "./commands/trusted";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
@@ -114,6 +115,7 @@ import { UsageStats } from "./analytics/usage-stats";
 
 import { recordWorldEvent, checkLevelMilestone, announceWorldEvent } from "./games/world-events";
 import { updateQuestProgress } from "./games/quests";
+import { recordAudit } from "./security/audit";
 
 /* =====================================================
    DISCORD CLIENT
@@ -190,6 +192,7 @@ const commands: AshenCommand[] = [
       createWarningsCommand(),
       createTimeoutCommand(),
       createUntimeoutCommand(),
+      createTrustedCommand(),
 ];
 
 commandHandler.registerMany(commands);
@@ -1202,6 +1205,15 @@ client.on(
    INTERACTIVE MESSAGE HANDLER
    ===================================================== */
 
+// Message deduplication: prevent processing the same message twice
+// (e.g., from Discord gateway redelivery or race conditions)
+const processedMessages = new Set<string>();
+const MESSAGE_DEDUP_TTL_MS = 30_000;
+
+setInterval(() => {
+  processedMessages.clear();
+}, MESSAGE_DEDUP_TTL_MS).unref();
+
 client.on(
   Events.MessageCreate,
   async (message) => {
@@ -1209,8 +1221,15 @@ client.on(
     const channelId = message.channel.id;
     const guildId = message.guild?.id || "";
     let usageCheck: { allowed: boolean; reason?: string; credits: number; retryAfterMs?: number } = { allowed: true, credits: 0 };
+    let replySent = false;
 
     try {
+      // Deduplication: skip if this message was already processed
+      if (processedMessages.has(message.id)) {
+        return;
+      }
+      processedMessages.add(message.id);
+
       console.log(`📨 MESSAGE EVENT: userId=${userId} guildId=${guildId} channelId=${channelId} length=${message.content.length}`);
 
       /*
@@ -1300,6 +1319,7 @@ client.on(
         await message.reply(
           "👋 Hi! Mention me with a question and I'll answer."
         );
+        replySent = true;
 
         return;
       }
@@ -1322,6 +1342,7 @@ client.on(
         await message.reply(
           `⏳ You're sending messages too quickly. Please try again in ${retrySeconds}s.`
         );
+        replySent = true;
 
         logger.warn(
           `🛑 Rate limit blocked ${message.author.tag} (${userId}).`
@@ -1350,6 +1371,7 @@ client.on(
             ? `👑 My creator is <@${creatorId}>.`
             : "👑 My creator is not configured yet."
         );
+        replySent = true;
 
         return;
       }
@@ -1395,6 +1417,7 @@ client.on(
 
         if (agentResponse.shouldReply) {
           await message.reply(truncateForDiscord(agentResponse.reply));
+          replySent = true;
           logger.debug(
             `🤖 Conversational agent responded: intent handled, executed=${agentResponse.executed}`,
           );
@@ -1424,6 +1447,7 @@ client.on(
         await message.reply(
           "ℹ️ That moderation action is not available through natural-language confirmation yet. Please use the corresponding slash command."
         );
+        replySent = true;
         return;
       }
 
@@ -1485,6 +1509,7 @@ client.on(
               `Please confirm this action:`,
             components: [row],
           });
+          replySent = true;
 
           logger.info(
             `⏳ Pending moderation action: ${JSON.stringify(
@@ -1508,6 +1533,7 @@ client.on(
         await message.reply(
           `⏳ ${usageCheck.reason === "daily_limit" ? "You've reached your daily AI limit." : usageCheck.reason === "monthly_limit" ? "You've reached your monthly AI limit." : "Request limit reached."} Try again in ${retrySeconds}s.`
         );
+        replySent = true;
         return;
       }
 
@@ -1636,6 +1662,7 @@ client.on(
        * Reply directly to the triggering message.
        */
       await message.reply(reply);
+      replySent = true;
 
       logger.debug(
         `✅ Interactive reply sent using ${response.provider} in ${response.latencyMs}ms.`
@@ -1663,10 +1690,11 @@ client.on(
 
       /*
        * Try to tell the user something went wrong,
-       * but don't crash the bot if Discord rejects it.
+       * but only if we haven't already sent a reply.
+       * Don't crash the bot if Discord rejects it.
        */
       try {
-        if (message.channel.isSendable()) {
+        if (!replySent && message.channel.isSendable()) {
           await message.reply(
             "❌ I couldn't process that message right now. Please try again."
           );
@@ -1882,6 +1910,73 @@ client.on("shardReconnecting", (shardId) => {
 
 client.on("shardReady", (shardId) => {
   logger.info(`🟢 DISCORD SHARD ${shardId} READY EVENT CONFIRMED`);
+});
+
+/* =====================================================
+   BOT JOIN / ONBOARDING MESSAGE
+   ===================================================== */
+
+client.on(Events.GuildCreate, async (guild) => {
+  try {
+    logger.info(`📥 Joined guild: ${guild.name} (${guild.id})`);
+
+    // Find the best channel to send the onboarding message
+    // Prefer system channel, then first text channel the bot can send to
+    let targetChannel: { send: (args: string | { content: string }) => Promise<unknown> } | null = guild.systemChannel;
+
+    if (!targetChannel) {
+      const textChannels = guild.channels.cache.filter(
+        ch => ch.isTextBased() && !ch.isDMBased() && ch.permissionsFor(guild.members.me!)?.has("SendMessages")
+      );
+      const first = textChannels.first();
+      if (first) {
+        targetChannel = first as { send: (args: string | { content: string }) => Promise<unknown> };
+      }
+    }
+
+    if (!targetChannel) {
+      logger.warn(`⚠️ No suitable channel found in ${guild.name} for onboarding message.`);
+      return;
+    }
+
+    const onboardingMessage = [
+      "**Hi! I'm AshenAI \u2014 your AI-powered server assistant!**",
+      "",
+      "I'm here to help you:",
+      "> \u{1F3D7}\uFE0F Create and organize server structures",
+      "> \u{1F6E0}\uFE0F Customize and improve your community",
+      "> \u{1F6E1}\uFE0F Moderate and manage your server",
+      "> \u{1F916} Chat with you using AI",
+      "",
+      "**Getting started:**",
+      "",
+      "\u{1F916} **Chat with me**",
+      "Mention me with a question and I'll help.",
+      "",
+      "\u{1F4CB} **See what I can do**",
+      "Use `/help` for a full guide.",
+      "",
+      "\u{1F510} **Server owner**",
+      "Use `/trusted add @user` to allow other members to use server-management features.",
+      "",
+      "Ask me what you need and I'll take it from there.",
+    ].join("\n");
+
+    await targetChannel.send(onboardingMessage);
+
+    recordAudit({
+      who: "system",
+      what: `Sent onboarding message to ${guild.name}`,
+      where: "guild-join",
+      guildId: guild.id,
+      result: "success",
+    });
+  } catch (error) {
+    logger.error(
+      `❌ Failed to send onboarding message to ${guild.name}:`,
+      error instanceof Error ? error.message : String(error)
+    );
+  }
 });
 
 client.on("error", (error) => {

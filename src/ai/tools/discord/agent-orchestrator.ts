@@ -63,6 +63,7 @@ export async function resolveUserContext(
     ownerIds: botOwnerIds,
     managementRoleIds: aiConfig.managementRoleIds,
     userRoleIds: [...member.roles.cache.keys()],
+    trustedUserIds: aiConfig.trustedUserIds,
   });
 
   return {

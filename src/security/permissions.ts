@@ -21,8 +21,9 @@ export function resolveRole(params: {
   moderatorIds?: string[];
   managementRoleIds?: string[];
   userRoleIds?: string[];
+  trustedUserIds?: string[];
 }): AshenRole {
-  const { userId, guildOwnerId, ownerIds = [], adminIds = [], moderatorIds = [], managementRoleIds = [], userRoleIds = [] } = params;
+  const { userId, guildOwnerId, ownerIds = [], adminIds = [], moderatorIds = [], managementRoleIds = [], userRoleIds = [], trustedUserIds = [] } = params;
 
   // Bot-level owners always get owner role
   if (ownerIds.includes(userId)) return "owner";
@@ -35,6 +36,9 @@ export function resolveRole(params: {
 
   // Explicit moderator IDs
   if (moderatorIds.includes(userId)) return "moderator";
+
+  // Trusted users get moderator access for server management
+  if (trustedUserIds.includes(userId)) return "moderator";
 
   // Users with a management role get moderator access
   if (managementRoleIds.length > 0 && userRoleIds.length > 0) {

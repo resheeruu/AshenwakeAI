@@ -30,6 +30,9 @@ export interface GuildAIConfig {
   /** Protected category IDs — cannot be deleted or have permissions modified via AI */
   protectedCategories: string[];
 
+  /** Trusted user IDs — can use server-management features without being admin */
+  trustedUserIds: string[];
+
   /** Config version for future migration */
   version: number;
 
@@ -53,6 +56,7 @@ function defaultGuildAIConfig(guildId: string): GuildAIConfig {
     chatRoleIds: [],
     protectedChannels: [],
     protectedCategories: [],
+    trustedUserIds: [],
     version: CURRENT_VERSION,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -239,4 +243,43 @@ export function assertGuildIsolation(
   requestGuildId: string,
 ): boolean {
   return configGuildId === requestGuildId;
+}
+
+/* ================================================================
+ * TRUSTED USER MANAGEMENT
+ * ================================================================ */
+
+export function addTrustedUser(
+  config: GuildAIConfig,
+  userId: string,
+): boolean {
+  if (config.trustedUserIds.includes(userId)) {
+    return false; // Already trusted
+  }
+  config.trustedUserIds.push(userId);
+  config.updatedAt = Date.now();
+  return true;
+}
+
+export function removeTrustedUser(
+  config: GuildAIConfig,
+  userId: string,
+): boolean {
+  const before = config.trustedUserIds.length;
+  config.trustedUserIds = config.trustedUserIds.filter((id) => id !== userId);
+  config.updatedAt = Date.now();
+  return config.trustedUserIds.length < before;
+}
+
+export function isTrustedUser(
+  config: GuildAIConfig,
+  userId: string,
+): boolean {
+  return config.trustedUserIds.includes(userId);
+}
+
+export function getTrustedUsers(
+  config: GuildAIConfig,
+): string[] {
+  return [...config.trustedUserIds];
 }

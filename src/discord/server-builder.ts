@@ -76,6 +76,79 @@ export const TEMPLATES: Record<string, ServerTemplate> = {
       { name: "Member", color: "#0066ff" },
     ],
   },
+  study: {
+    name: "Study Server",
+    description: "A study/learning server with resources, study groups, and academic discussion.",
+    categories: [
+      { name: "📋 INFORMATION", channels: [{ name: "rules", type: "text" }, { name: "announcements", type: "text" }, { name: "resources", type: "text" }] },
+      { name: "💬 GENERAL", channels: [{ name: "general", type: "text" }, { name: "introductions", type: "text" }, { name: "off-topic", type: "text" }] },
+      { name: "📚 STUDY", channels: [{ name: "study-groups", type: "text" }, { name: "homework-help", type: "text" }, { name: "study-voice", type: "voice" }] },
+    ],
+    roles: [
+      { name: "Admin", color: "#ff0000", hoist: true },
+      { name: "Moderator", color: "#00aa00", hoist: true },
+      { name: "Tutor", color: "#ffaa00", hoist: true },
+      { name: "Student", color: "#0066ff" },
+    ],
+  },
+  creator: {
+    name: "Creator Server",
+    description: "A content creator server with showcases, feedback, and collaboration.",
+    categories: [
+      { name: "📋 INFORMATION", channels: [{ name: "rules", type: "text" }, { name: "announcements", type: "text" }, { name: "socials", type: "text" }] },
+      { name: "💬 GENERAL", channels: [{ name: "general", type: "text" }, { name: "introductions", type: "text" }, { name: "off-topic", type: "text" }] },
+      { name: "🎨 CREATIVE", channels: [{ name: "showcase", type: "text" }, { name: "feedback", type: "text" }, { name: "collab", type: "text" }] },
+      { name: "🔊 VOICE", channels: [{ name: "General Voice", type: "voice" }, { name: "Stream Lounge", type: "voice" }] },
+    ],
+    roles: [
+      { name: "Admin", color: "#ff0000", hoist: true },
+      { name: "Moderator", color: "#00aa00", hoist: true },
+      { name: "Creator", color: "#aa00ff", hoist: true },
+      { name: "Member", color: "#0066ff" },
+    ],
+  },
+  clan: {
+    name: "Clan Server",
+    description: "A competitive gaming clan server with tryouts, scrims, and team coordination.",
+    categories: [
+      { name: "📋 INFORMATION", channels: [{ name: "rules", type: "text" }, { name: "announcements", type: "text" }, { name: "roster", type: "text" }] },
+      { name: "💬 GENERAL", channels: [{ name: "general", type: "text" }, { name: "off-topic", type: "text" }] },
+      { name: "🎮 COMPETITIVE", channels: [{ name: "strategies", type: "text" }, { name: "scrims", type: "text" }, { name: "tryouts", type: "text" }] },
+      { name: "🔊 VOICE", channels: [{ name: "Team Voice", type: "voice" }, { name: "Scrim Room", type: "voice" }] },
+    ],
+    roles: [
+      { name: "Leader", color: "#ff0000", hoist: true },
+      { name: "Officer", color: "#ffaa00", hoist: true },
+      { name: "Member", color: "#0066ff" },
+      { name: "Recruit", color: "#888888" },
+    ],
+  },
+  social: {
+    name: "Social Server",
+    description: "A casual social server for hanging out, sharing, and chatting.",
+    categories: [
+      { name: "📋 INFORMATION", channels: [{ name: "rules", type: "text" }, { name: "announcements", type: "text" }] },
+      { name: "💬 GENERAL", channels: [{ name: "general", type: "text" }, { name: "introductions", type: "text" }, { name: "memes", type: "text" }, { name: "off-topic", type: "text" }] },
+      { name: "🔊 VOICE", channels: [{ name: "General Voice", type: "voice" }, { name: "Music", type: "voice" }, { name: "AFK", type: "voice" }] },
+    ],
+    roles: [
+      { name: "Admin", color: "#ff0000", hoist: true },
+      { name: "Moderator", color: "#00aa00", hoist: true },
+      { name: "Member", color: "#0066ff" },
+    ],
+  },
+  friends: {
+    name: "Friends Server",
+    description: "A private server for friends with voice channels and casual chat.",
+    categories: [
+      { name: "💬 GENERAL", channels: [{ name: "general", type: "text" }, { name: "memes", type: "text" }, { name: "off-topic", type: "text" }] },
+      { name: "🔊 VOICE", channels: [{ name: "Hangout", type: "voice" }, { name: "Gaming", type: "voice" }, { name: "AFK", type: "voice" }] },
+    ],
+    roles: [
+      { name: "Admin", color: "#ff0000", hoist: true },
+      { name: "Friend", color: "#00ff00" },
+    ],
+  },
 };
 
 export async function buildFromTemplate(
