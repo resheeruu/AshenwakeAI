@@ -228,31 +228,36 @@ a{color:var(--accent);text-decoration:none}
 
   <div class="layout">
     <nav class="sidebar" id="sidebar">
+      <div style="font-size:9px;color:var(--muted);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:1px">General</div>
       <a href="#overview" class="active" data-section="overview"><span class="nav-icon">&#9673;</span><span class="nav-label">Overview</span></a>
-      <a href="#bot-control" data-section="bot-control" data-min-role="owner"><span class="nav-icon">&#9881;</span><span class="nav-label">Bot Control</span></a>
       <a href="#providers" data-section="providers"><span class="nav-icon">&#9889;</span><span class="nav-label">AI Providers</span></a>
       <a href="#usage" data-section="usage"><span class="nav-icon">&#9776;</span><span class="nav-label">Usage</span></a>
       <a href="#memory" data-section="memory"><span class="nav-icon">&#9997;</span><span class="nav-label">Memory</span></a>
-      <a href="#servers" data-section="servers"><span class="nav-icon">&#9878;</span><span class="nav-label">Servers</span></a>
-      <a href="#diagnostics" data-section="diagnostics"><span class="nav-icon">&#9883;</span><span class="nav-label">Diagnostics</span></a>
-      <a href="#logs" data-section="logs"><span class="nav-icon">&#9776;</span><span class="nav-label">Logs</span></a>
-      <a href="#seraph" data-section="seraph"><span class="nav-icon">&#9733;</span><span class="nav-label">Seraph</span></a>
+      <a href="#account" data-section="account"><span class="nav-icon">&#128100;</span><span class="nav-label">My Account</span></a>
+      <a href="#security" data-section="security"><span class="nav-icon">&#128274;</span><span class="nav-label">Security</span></a>
+      <a href="#help" data-section="help"><span class="nav-icon">?</span><span class="nav-label">Help</span></a>
+
+      <div style="font-size:9px;color:var(--muted);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:1px" data-min-role="admin">Server Management</div>
+      <a href="#servers" data-section="servers" data-min-role="admin"><span class="nav-icon">&#9878;</span><span class="nav-label">Servers</span></a>
+      <a href="#diagnostics" data-section="diagnostics" data-min-role="admin"><span class="nav-icon">&#9883;</span><span class="nav-label">Diagnostics</span></a>
+      <a href="#logs" data-section="logs" data-min-role="admin"><span class="nav-icon">&#9776;</span><span class="nav-label">Logs</span></a>
+      <a href="#seraph" data-section="seraph" data-min-role="admin"><span class="nav-icon">&#9733;</span><span class="nav-label">Seraph</span></a>
+      <a href="#config" data-section="config" data-min-role="admin"><span class="nav-icon">&#9874;</span><span class="nav-label">Configuration</span></a>
+
+      <div style="font-size:9px;color:var(--muted);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:1px" data-min-role="owner">System</div>
+      <a href="#bot-control" data-section="bot-control" data-min-role="owner"><span class="nav-icon">&#9881;</span><span class="nav-label">Bot Control</span></a>
       <a href="#investigations" data-section="investigations" data-min-role="owner"><span class="nav-icon">&#128269;</span><span class="nav-label">Investigations</span></a>
-      <a href="#reports" data-section="reports"><span class="nav-icon">&#128196;</span><span class="nav-label">Reports</span></a>
-      <a href="#config" data-section="config"><span class="nav-icon">&#9874;</span><span class="nav-label">Configuration</span></a>
+      <a href="#reports" data-section="reports" data-min-role="owner"><span class="nav-icon">&#128196;</span><span class="nav-label">Reports</span></a>
       <a href="#backups" data-section="backups" data-min-role="owner"><span class="nav-icon">&#128190;</span><span class="nav-label">Backups</span></a>
       <a href="#maintenance" data-section="maintenance" data-min-role="owner"><span class="nav-icon">&#128295;</span><span class="nav-label">Maintenance</span></a>
       <a href="#audit" data-section="audit" data-min-role="owner"><span class="nav-icon">&#128220;</span><span class="nav-label">Audit Logs</span></a>
       <a href="#accounts" data-section="accounts" data-min-role="owner"><span class="nav-icon">&#128101;</span><span class="nav-label">Accounts</span></a>
-      <a href="#security" data-section="security"><span class="nav-icon">&#128274;</span><span class="nav-label">Security</span></a>
-      <a href="#account" data-section="account"><span class="nav-icon">&#128100;</span><span class="nav-label">My Account</span></a>
-      <a href="#help" data-section="help"><span class="nav-icon">?</span><span class="nav-label">Help</span></a>
     </nav>
 
     <main class="main" id="mainContent">
 
       <div class="section-page active" id="sec-overview">
-        <div class="section-title">&#9673; Overview <i class="help-btn">?<span class="help-tip">System overview showing AshenAI status, Discord connection, AI providers, health score, and recent errors.</span></i></div>
+        <div class="section-title">&#9673; Overview <i class="help-btn">?<span class="help-tip">System overview showing AshenAI status, Discord connection, AI providers, health score, and recent errors. Visible to all users.</span></i></div>
         <div class="card-grid" id="overviewStats"></div>
         <div class="card"><h3>Provider Health</h3><div id="overviewProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
         <div class="card"><h3>Recent Errors</h3><div id="overviewErrors"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
@@ -275,24 +280,24 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-providers">
-        <div class="section-title">&#9889; AI Providers <i class="help-btn">?<span class="help-tip">AI services AshenAI can use. Healthy: responding normally. Degraded: experiencing issues. Offline: not available.</span></i></div>
+        <div class="section-title">&#9889; AI Providers <i class="help-btn">?<span class="help-tip">AI services AshenAI can use. Shows configured vs available providers, latency, and success rates. Providers may be temporarily disabled after failures.</span></i></div>
         <div class="card" id="providerList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card"><h3>Performance</h3><div id="providerPerf"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
       <div class="section-page" id="sec-usage">
-        <div class="section-title">&#9776; Usage <i class="help-btn">?<span class="help-tip">Tracks AI requests, credits, and token usage across all providers and internal systems.</span></i></div>
+        <div class="section-title">&#9776; Usage <i class="help-btn">?<span class="help-tip">Tracks AI requests, credits, and token usage across all providers. Credits shown only when the provider actually reports them.</span></i></div>
         <div class="card-grid" id="usageGlobal"></div>
         <div class="card"><h3>Provider Usage</h3><div id="usageProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
       <div class="section-page" id="sec-memory">
-        <div class="section-title">&#9997; Memory <i class="help-btn">?<span class="help-tip">Conversation memory tracks chat context per user. Persistent storage saves conversations to disk.</span></i></div>
+        <div class="section-title">&#9997; Memory <i class="help-btn">?<span class="help-tip">Conversation memory tracks chat context per user. Shows stored conversations and messages.</span></i></div>
         <div class="card-grid" id="memoryStats"></div>
       </div>
 
       <div class="section-page" id="sec-servers">
-        <div class="section-title">&#9878; Servers <i class="help-btn">?<span class="help-tip">Discord servers where AshenAI is active. Shows connection status and guild configuration.</span></i></div>
+        <div class="section-title">&#9878; Servers <i class="help-btn">?<span class="help-tip">Discord servers where AshenAI is active. Admins see only servers they are authorized to manage.</span></i></div>
         <div id="serverList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
@@ -320,7 +325,7 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-seraph">
-        <div class="section-title">&#9733; Seraph <i class="help-btn">?<span class="help-tip">Seraph monitors AshenAI health, runs diagnostics, and provides system recommendations.</span></i></div>
+        <div class="section-title">&#9733; Seraph <i class="help-btn">?<span class="help-tip">System monitoring and diagnostic tools. Shows component health, available tools, and system information.</span></i></div>
         <div class="card-grid" id="seraphStats"></div>
         <div class="card"><h3>Components</h3><div id="seraphComponents"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
         <div class="card"><h3>Tools</h3><div id="seraphTools"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
@@ -354,7 +359,7 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-config">
-        <div class="section-title">&#9874; Configuration <i class="help-btn">?<span class="help-tip">Shows which subsystems are configured and available. Does not display secret values.</span></i></div>
+        <div class="section-title">&#9874; Configuration <i class="help-btn">?<span class="help-tip">Shows which subsystems are configured: Discord, AI providers, OAuth, email, storage, and environment.</span></i></div>
         <div class="card" id="configDisplay"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
@@ -429,7 +434,7 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-security">
-        <div class="section-title">&#128274; Security</div>
+        <div class="section-title">&#128274; Security <i class="help-btn">?<span class="help-tip">Authentication methods, multi-factor authentication, active sessions, and linked OAuth providers.</span></i></div></div>
         <div class="card"><h3>Authentication Methods</h3><div id="securityAuthMethods"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
         <div class="card"><h3>Multi-Factor Authentication</h3><div id="securityMFA"><div class="loading"><span class="spinner"></span> Loading...</div></div>
           <div id="mfaSetup" style="display:none;margin-top:10px">
@@ -458,29 +463,52 @@ a{color:var(--accent);text-decoration:none}
 
       <div class="section-page" id="sec-help">
         <div class="section-title">? Help</div>
-        <div class="card"><h3>Getting Started</h3>
-          <ol style="font-size:12px;color:var(--muted);margin-left:16px;line-height:1.8">
-            <li>Sign in with your AshenAI account, Discord, or Google.</li>
-            <li>Check <strong>Overview</strong> to verify Discord connection and AI providers.</li>
-            <li>Run <strong>Diagnostics</strong> to verify system health.</li>
-            <li>Review <strong>Configuration</strong> to see what is set up.</li>
-          </ol>
+        <div class="card"><h3>What is AshenAI?</h3>
+          <p style="font-size:12px;color:var(--muted);line-height:1.8">AshenAI is an AI-powered Discord assistant and Control Center. It manages Discord servers, provides AI conversation, and offers server administration tools.</p>
+        </div>
+        <div class="card"><h3>Account Types</h3>
+          <div style="font-size:12px;color:var(--muted);line-height:1.8">
+            <p><strong>Local accounts</strong> use AshenAI username/password authentication.</p>
+            <p><strong>Discord/Google accounts</strong> authenticate through OAuth. After successful authorization, you are automatically signed in.</p>
+            <p><strong>Roles:</strong></p>
+            <ul style="margin:4px 0 0 16px">
+              <li><strong>User</strong> — Personal AI features, account management, Help</li>
+              <li><strong>Admin</strong> — Manage authorized Discord servers, server diagnostics, utilities</li>
+              <li><strong>Owner</strong> — Full AshenAI system control, providers, backups, audit</li>
+            </ul>
+          </div>
         </div>
         <div class="card"><h3>Section Guide</h3>
-          <table class="data-table"><thead><tr><th>Section</th><th>What It Shows</th></tr></thead><tbody>
-            <tr><td><strong>Overview</strong></td><td>System status, Discord connection, provider health, recent errors</td></tr>
-            <tr><td><strong>Bot Control</strong></td><td>Restart, stop, reload, diagnostics, backup (owner only)</td></tr>
-            <tr><td><strong>AI Providers</strong></td><td>Provider availability, latency, success/failure counts, performance</td></tr>
-            <tr><td><strong>Usage</strong></td><td>Request counts, credits, token usage, provider breakdown</td></tr>
-            <tr><td><strong>Memory</strong></td><td>Conversation count, stored messages, persistent storage status</td></tr>
-            <tr><td><strong>Servers</strong></td><td>Connected Discord guilds and their configuration</td></tr>
-            <tr><td><strong>Diagnostics</strong></td><td>Health score, individual checks, warnings, failures</td></tr>
-            <tr><td><strong>Logs</strong></td><td>Real-time application logs with search and level filtering</td></tr>
-            <tr><td><strong>Seraph</strong></td><td>System monitor components, diagnostic tools, system info</td></tr>
-            <tr><td><strong>Configuration</strong></td><td>Which subsystems are configured (Discord, providers, OAuth, etc.)</td></tr>
-            <tr><td><strong>Security</strong></td><td>Auth methods, MFA setup, sessions, linked OAuth providers</td></tr>
-            <tr><td><strong>Audit Logs</strong></td><td>Security trail of logins, changes, and destructive actions</td></tr>
+          <table class="data-table"><thead><tr><th>Section</th><th>What It Shows</th><th>Access</th></tr></thead><tbody>
+            <tr><td><strong>Overview</strong></td><td>System status, provider health, recent errors</td><td>All</td></tr>
+            <tr><td><strong>AI Providers</strong></td><td>Provider availability, latency, success/failure counts</td><td>All</td></tr>
+            <tr><td><strong>Usage</strong></td><td>Request counts, credits, token usage</td><td>All</td></tr>
+            <tr><td><strong>Memory</strong></td><td>Conversation count, stored messages</td><td>All</td></tr>
+            <tr><td><strong>My Account</strong></td><td>Account details, password change</td><td>All</td></tr>
+            <tr><td><strong>Security</strong></td><td>MFA setup, sessions, linked OAuth providers</td><td>All</td></tr>
+            <tr><td><strong>Servers</strong></td><td>Connected Discord guilds</td><td>Admin</td></tr>
+            <tr><td><strong>Diagnostics</strong></td><td>Health score, individual checks</td><td>Admin</td></tr>
+            <tr><td><strong>Logs</strong></td><td>Real-time application logs</td><td>Admin</td></tr>
+            <tr><td><strong>Seraph</strong></td><td>System monitor, diagnostic tools</td><td>Admin</td></tr>
+            <tr><td><strong>Configuration</strong></td><td>Subsystem configuration status</td><td>Admin</td></tr>
+            <tr><td><strong>Bot Control</strong></td><td>Restart, stop, reload (Owner only)</td><td>Owner</td></tr>
+            <tr><td><strong>Backups</strong></td><td>Create data backups</td><td>Owner</td></tr>
+            <tr><td><strong>Audit Logs</strong></td><td>Security audit trail</td><td>Owner</td></tr>
+            <tr><td><strong>Accounts</strong></td><td>Manage all accounts</td><td>Owner</td></tr>
           </tbody></table>
+        </div>
+        <div class="card"><h3>Discord Server Management (Admin)</h3>
+          <div style="font-size:12px;color:var(--muted);line-height:1.8">
+            <p>Admins can manage Discord servers they are authorized for. Use the <strong>Servers</strong> section to view and configure authorized servers.</p>
+            <p>Examples:</p>
+            <ul style="margin:4px 0 0 16px">
+              <li>Inspect server channels, categories, and roles</li>
+              <li>Diagnose server configuration problems</li>
+              <li>Create and organize channels</li>
+              <li>Moderate where Discord permissions permit</li>
+            </ul>
+            <p style="margin-top:6px">Destructive changes require confirmation. AshenAI respects both its own permissions and your Discord permissions.</p>
+          </div>
         </div>
         <div class="card"><h3>Status Legend</h3>
           <div style="font-size:12px;color:var(--muted);line-height:1.8">
@@ -600,7 +628,7 @@ a{color:var(--accent);text-decoration:none}
     document.getElementById('topRoleBadge').textContent = role;
     document.getElementById('topRoleBadge').className = 'role-badge role-' + role;
     document.getElementById('topRoleLabel').textContent = role.charAt(0).toUpperCase() + role.slice(1) + ' Control Center';
-    var navItems = document.querySelectorAll('.sidebar a[data-min-role]');
+    var navItems = document.querySelectorAll('.sidebar [data-min-role]');
     navItems.forEach(function(a){
       var minRole = a.getAttribute('data-min-role');
       if (minRole && !hasRole(role, minRole)) {
@@ -702,7 +730,8 @@ a{color:var(--accent);text-decoration:none}
   (function(){
     var params=new URLSearchParams(window.location.search);
     if(params.get('login')==='success'){
-      window.location.href='/';
+      window.history.replaceState({},'',window.location.pathname);
+      checkAuth();
       return;
     }
     if(params.get('login')==='error'){

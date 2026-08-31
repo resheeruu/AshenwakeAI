@@ -39,6 +39,10 @@ import {
   handleToolConfirmation,
   setDiscordClient,
 } from "./discord/interactions/confirmation-handler";
+import {
+  handleConversation,
+  classifyIntent,
+} from "./discord/conversational-agent";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
@@ -1371,37 +1375,9 @@ client.on(
         );
 
       /*
-       * Server Assistant intent detection.
-       * Detects server management requests before AI processing.
-       * Shows confirmation for dangerous actions, provides guidance for safe ones.
-       */
-      if (!isDM && message.guild) {
-        const serverAction = parseServerIntent(content);
-        if (serverAction && serverAction.requiresConfirmation) {
-          const riskEmoji = serverAction.riskLevel === "critical" ? "🚨" : serverAction.riskLevel === "high" ? "⚠️" : "ℹ️";
-          await message.reply(
-            `${riskEmoji} **Server Action Detected:** ${serverAction.intent}\n` +
-            `Target: \`${serverAction.target || "N/A"}\`\n` +
-            `Risk: **${serverAction.riskLevel}**\n\n` +
-            `To confirm this action, use the appropriate slash command or ask me to proceed with full details.`
-          );
-          logger.info(`🔧 Server assistant intent detected: ${serverAction.intent} by ${message.author.tag}`);
-          return;
-        }
-        if (serverAction && !serverAction.requiresConfirmation) {
-          await message.reply(
-            `ℹ️ I can help with that: **${serverAction.intent}**.\n` +
-            `For safe actions like this, you can ask me to proceed and I'll handle it.`
-          );
-          return;
-        }
-      }
-
-      /*
-       * Natural-language server action detection.
-       *
-       * Detection only for now.
-       * No moderation action is executed here.
+       * Unified Conversational Agent.
+       * Handles server management, inspection, repair, undo, and confirmations
+       * through natural language. Routes to existing tool framework.
        */
       const mentionedUserIds = [
         ...message.mentions.users.values(),
@@ -1409,16 +1385,36 @@ client.on(
         .filter((user) => user.id !== botId)
         .map((user) => user.id);
 
+      if (!isDM && message.guild) {
+        const agentResponse = await handleConversation(
+          client,
+          message,
+          content,
+          mentionedUserIds,
+        );
+
+        if (agentResponse.shouldReply) {
+          await message.reply(truncateForDiscord(agentResponse.reply));
+          logger.debug(
+            `🤖 Conversational agent responded: intent handled, executed=${agentResponse.executed}`,
+          );
+          return;
+        }
+
+        // Agent returned shouldReply=false, meaning this is normal chat.
+        // Fall through to AI router.
+      }
+
+      /*
+       * Natural-language moderation detection.
+       * Only triggers for warn and timeout through the existing action-confirmations system.
+       * Other moderation actions use slash commands.
+       */
       const actionIntent = detectActionIntent(
         content,
         mentionedUserIds
       );
 
-      /*
-       * Natural-language moderation confirmation.
-       *
-       * Only warn and timeout are currently executable.
-       */
       if (
         actionIntent.action !== "none" &&
         actionIntent.action !== "warn" &&

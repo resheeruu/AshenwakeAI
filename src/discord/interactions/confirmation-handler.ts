@@ -26,6 +26,7 @@ import { executeProtectChannel, executeUnprotectChannel, executeProtectCategory,
 import { executeApplyChannelPreset } from "../../ai/tools/discord/channels/permission-presets";
 import { executeCreateGuildPolicyPlan, executeUpdateGuildPolicyPlan, executeApplyPolicyTemplatePlan } from "../../ai/tools/governance";
 import { executeWarnUserPlan, executeTimeoutUserPlan, executeUntimeoutUserPlan, executeKickUserPlan, executeBanUserPlan, executePurgeMessagesPlan } from "../../ai/tools/discord/moderation";
+import { executeCreateRole, executeEditRole, executeDeleteRole, executeAssignRole, executeRemoveRole, executeConfigureRolePermissions } from "../../ai/tools/discord/roles";
 import type { ToolContext, ActionPlan } from "../../ai/tools/types";
 
 /* ================================================================
@@ -117,6 +118,18 @@ async function executePlan(plan: ActionPlan): Promise<{ status: string; message:
       return executeBanUserPlan(plan, () => client);
     case "purge_messages":
       return executePurgeMessagesPlan(plan, () => client);
+    case "create_role":
+      return executeCreateRole(plan, () => client);
+    case "edit_role":
+      return executeEditRole(plan, () => client);
+    case "delete_role":
+      return executeDeleteRole(plan, () => client);
+    case "assign_role":
+      return executeAssignRole(plan, () => client);
+    case "remove_role":
+      return executeRemoveRole(plan, () => client);
+    case "configure_role_permissions":
+      return executeConfigureRolePermissions(plan, () => client);
     default:
       return { status: "error", message: `Unknown tool: ${toolName}` };
   }

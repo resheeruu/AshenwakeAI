@@ -29,6 +29,7 @@ import {
   requireAuth,
   requireRole,
   requireCsrf,
+  requireGuildAuth,
   type AuthenticatedRequest,
 } from "../control/roles";
 import {
@@ -636,11 +637,24 @@ app.get("/api/logs/stream", requireAuth, requireRole("admin"), (req: Request, re
   req.on("close", () => { clearInterval(heartbeat); unsubscribe(); res.end(); });
 });
 
-app.get("/api/guilds", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
-  res.json({ ok: true, guilds: getGuildConfigs() });
+app.get("/api/guilds", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const allGuilds = getGuildConfigs();
+  if (authReq.role === "owner") {
+    res.json({ ok: true, guilds: allGuilds });
+    return;
+  }
+  const { getAuthorizedGuildIds } = require("../control/account-store");
+  const allowedIds = getAuthorizedGuildIds(authReq.accountId!);
+  if (allowedIds.length === 0) {
+    res.json({ ok: true, guilds: [] });
+    return;
+  }
+  const filtered = allGuilds.filter((g: any) => allowedIds.includes(g.guildId));
+  res.json({ ok: true, guilds: filtered });
 });
 
-app.get("/api/guilds/:guildId", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+app.get("/api/guilds/:guildId", requireAuth, requireRole("admin"), requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   res.json({ ok: true, config: getGuildConfig(guildId) });
 });
@@ -671,7 +685,7 @@ app.get("/api/seraph/system", requireAuth, requireRole("admin"), (_req: Request,
 
 /* ==================== OWNER ENDPOINTS (requireAuth + owner role + CSRF) ==================== */
 
-app.put("/api/guilds/:guildId", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.put("/api/guilds/:guildId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const result = updateGuildConfig(guildId, req.body);
   if (result.success) {

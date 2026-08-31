@@ -9,7 +9,7 @@ import {
   getCsrfToken,
   validateCsrfToken,
 } from "./session-store";
-import { getAccountById } from "./account-store";
+import { getAccountById, isGuildAuthorizedForAccount } from "./account-store";
 import { recordAudit } from "../security/audit";
 
 export type WebRole = "owner" | "admin" | "user";
@@ -133,5 +133,47 @@ export function requireCsrf(
     res.status(403).json({ ok: false, error: "Invalid CSRF token." });
     return;
   }
+  next();
+}
+
+export function requireGuildAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  const authReq = req as AuthenticatedRequest;
+  if (!authReq.accountId || !authReq.role) {
+    res.status(401).json({ ok: false, error: "Authentication required." });
+    return;
+  }
+
+  const guildId = req.params.guildId;
+  if (!guildId || typeof guildId !== "string") {
+    res.status(400).json({ ok: false, error: "Guild ID required." });
+    return;
+  }
+
+  if (!/^\d{17,20}$/.test(guildId)) {
+    res.status(400).json({ ok: false, error: "Invalid guild ID format." });
+    return;
+  }
+
+  if (authReq.role === "owner") {
+    next();
+    return;
+  }
+
+  if (!isGuildAuthorizedForAccount(authReq.accountId, guildId)) {
+    recordAudit({
+      who: authReq.username || "unknown",
+      what: `Unauthorized guild access attempt`,
+      where: "web-auth",
+      result: "denied",
+      details: `Guild: ${guildId}, user role: ${authReq.role}`,
+    });
+    res.status(403).json({ ok: false, error: "Not authorized for this server." });
+    return;
+  }
+
   next();
 }

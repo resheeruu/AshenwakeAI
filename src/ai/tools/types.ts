@@ -104,14 +104,17 @@ export type DenialReason =
   | "CONFIRMATION_EXPIRED"
   | "CONFIRMATION_INVALID"
   | "ALREADY_EXECUTED"
-  | "PROTECTED_RESOURCE";
+  | "PROTECTED_RESOURCE"
+  | "ROLE_HIERARCHY"
+  | "ROLE_ALREADY_EXISTS"
+  | "ROLE_NOT_FOUND";
 
 /* ================================================================
  * ACTION PLAN (for dry-run / confirmation)
  * ================================================================ */
 
 export interface ActionPlanChange {
-  type: "create" | "modify" | "delete" | "assign" | "remove";
+  type: "create" | "modify" | "delete" | "assign" | "remove" | "update";
   target: string;
   description: string;
   before?: string;

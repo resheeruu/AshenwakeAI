@@ -43,6 +43,17 @@ import { createPermissionPresetTools } from "./channels";
 // U7 — Governance
 import { createGovernanceTools } from "../governance";
 
+// U9 — Role Management
+import {
+  createCreateRoleTool,
+  createEditRoleTool,
+  createDeleteRoleTool,
+  createAssignRoleTool,
+  createRemoveRoleTool,
+  createInspectRolesTool,
+  createConfigureRolePermissionsTool,
+} from "./roles";
+
 // U8 — Moderation
 import {
   createWarnUserTool,
@@ -75,8 +86,11 @@ export { executeApplyChannelPreset } from "./channels";
 // U8 execution functions
 export { executeWarnUserPlan, executeTimeoutUserPlan, executeUntimeoutUserPlan, executeKickUserPlan, executeBanUserPlan, executePurgeMessagesPlan } from "./moderation";
 
+// U9 execution functions
+export { executeCreateRole, executeEditRole, executeDeleteRole, executeAssignRole, executeRemoveRole, executeConfigureRolePermissions } from "./roles";
+
 /**
- * Create all Discord tools (U3 + U4 + U5 + U6 + U7 + U8).
+ * Create all Discord tools (U3 + U4 + U5 + U6 + U7 + U8 + U9).
  */
 export function createDiscordTools(getClient: () => Client | null): ToolDefinition[] {
   return [
@@ -86,6 +100,7 @@ export function createDiscordTools(getClient: () => Client | null): ToolDefiniti
     ...createProtectionDiscordTools(getClient),
     ...createGovernanceTools(getClient),
     ...createModerationDiscordTools(getClient),
+    ...createRoleManagementTools(getClient),
   ];
 }
 
@@ -148,5 +163,20 @@ export function createModerationDiscordTools(getClient: () => Client | null): To
     createBanUserTool(getClient),
     createViewWarningsTool(getClient),
     createPurgeMessagesTool(getClient),
+  ];
+}
+
+/**
+ * Create U9 role management Discord tools.
+ */
+export function createRoleManagementTools(getClient: () => Client | null): ToolDefinition[] {
+  return [
+    createCreateRoleTool(getClient),
+    createEditRoleTool(getClient),
+    createDeleteRoleTool(getClient),
+    createAssignRoleTool(getClient),
+    createRemoveRoleTool(getClient),
+    createInspectRolesTool(getClient),
+    createConfigureRolePermissionsTool(getClient),
   ];
 }

@@ -25,6 +25,7 @@ export interface Account {
   mfaEnabled?: boolean;
   mfaSecret?: string;
   recoveryCodesHash?: string;
+  allowedGuildIds?: string[];
 }
 
 export interface SanitizedAccount {
@@ -38,6 +39,7 @@ export interface SanitizedAccount {
   email?: string;
   emailVerified?: boolean;
   mfaEnabled?: boolean;
+  allowedGuildIds?: string[];
 }
 
 let accounts: Account[] = [];
@@ -176,7 +178,7 @@ export function createAccount(params: {
 
 export function updateAccount(
   id: string,
-  updates: Partial<Pick<Account, "username" | "role" | "enabled" | "email" | "emailVerified" | "mfaEnabled" | "mfaSecret" | "recoveryCodesHash">>,
+  updates: Partial<Pick<Account, "username" | "role" | "enabled" | "email" | "emailVerified" | "mfaEnabled" | "mfaSecret" | "recoveryCodesHash" | "allowedGuildIds">>,
 ): { success: boolean; account?: SanitizedAccount; error?: string } {
   const account = getAccountById(id);
   if (!account) {
@@ -229,6 +231,9 @@ export function updateAccount(
   }
   if (updates.recoveryCodesHash !== undefined) {
     account.recoveryCodesHash = updates.recoveryCodesHash || undefined;
+  }
+  if (updates.allowedGuildIds !== undefined) {
+    account.allowedGuildIds = Array.isArray(updates.allowedGuildIds) ? updates.allowedGuildIds : [];
   }
 
   account.updatedAt = Date.now();
@@ -334,6 +339,23 @@ export function hasOwnerAccount(): boolean {
 
 export function isAnyMfaEnabled(): boolean {
   return accounts.some((a) => a.mfaEnabled);
+}
+
+export function isGuildAuthorizedForAccount(accountId: string, guildId: string): boolean {
+  const account = getAccountById(accountId);
+  if (!account) return false;
+  if (account.role === "owner") return true;
+  if (account.role !== "admin") return false;
+  if (!account.allowedGuildIds || account.allowedGuildIds.length === 0) return false;
+  return account.allowedGuildIds.includes(guildId);
+}
+
+export function getAuthorizedGuildIds(accountId: string): string[] {
+  const account = getAccountById(accountId);
+  if (!account) return [];
+  if (account.role === "owner") return [];
+  if (account.role !== "admin") return [];
+  return account.allowedGuildIds || [];
 }
 
 export function reloadAccounts(): void {
