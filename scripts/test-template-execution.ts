@@ -70,6 +70,11 @@ try {
 
 /* ================================================================
  * TEST 2: Intent classification — template requests
+ *
+ * These phrases are now classified as "server_template" (not
+ * "server_modify") because the improved classifier detects
+ * template/generation intent and routes to the unified template
+ * handler which inspects the server before acting.
  * ================================================================ */
 
 try {
@@ -87,10 +92,10 @@ try {
 
   for (const phrase of templatePhrases) {
     const result = classifyIntent(phrase, state, []);
-    if (result.intent === "server_modify") {
-      pass(`Intent for "${phrase}" → server_modify`);
+    if (result.intent === "server_template") {
+      pass(`Intent for "${phrase}" → server_template`);
     } else {
-      fail(`Intent for "${phrase}" → ${result.intent} (expected server_modify)`);
+      fail(`Intent for "${phrase}" → ${result.intent} (expected server_template)`);
     }
   }
 } catch (error) {
