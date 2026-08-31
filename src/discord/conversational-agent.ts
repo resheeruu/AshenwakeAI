@@ -32,6 +32,44 @@ import { createBackup } from "../core/backup-manager";
 import { isProtectedResource, isChannelProtected } from "../ai/tools/discord/protection";
 import type { ToolContext, ToolResult, ActionPlan } from "../ai/tools/types";
 import { config } from "../config/env";
+import {
+  resolveChannel,
+  resolveCategory,
+  resolveRoleByName,
+  resolveMember,
+  formatAmbiguity,
+  type ResolveResult,
+  type ResolvedChannel,
+  type ResolvedRole,
+} from "./resource-resolver";
+
+/* ================================================================
+ * STRUCTURED LOGGING HELPERS
+ * ================================================================ */
+
+function logIntent(userId: string, guildId: string, intent: string, confidence: number) {
+  logger.info(`CONVERSATIONAL INTENT user=${userId} guild=${guildId} intent=${intent} confidence=${confidence}`);
+}
+
+function logResolution(userId: string, guildId: string, resourceType: string, input: string, result: string) {
+  logger.info(`RESOURCE RESOLUTION user=${userId} guild=${guildId} type=${resourceType} input="${input}" result=${result}`);
+}
+
+function logAuth(userId: string, guildId: string, tool: string, authorized: boolean) {
+  logger.info(`AUTHORIZATION user=${userId} guild=${guildId} tool=${tool} authorized=${authorized}`);
+}
+
+function logRisk(userId: string, guildId: string, tool: string, riskLevel: string) {
+  logger.info(`RISK user=${userId} guild=${guildId} tool=${tool} risk=${riskLevel}`);
+}
+
+function logExecution(userId: string, guildId: string, tool: string, status: string, durationMs: number) {
+  logger.info(`EXECUTION user=${userId} guild=${guildId} tool=${tool} status=${status} duration=${durationMs}ms`);
+}
+
+function logVerification(userId: string, guildId: string, tool: string, verified: boolean) {
+  logger.info(`VERIFICATION user=${userId} guild=${guildId} tool=${tool} verified=${verified}`);
+}
 
 /* ================================================================
  * UNIFIED CONVERSATIONAL AGENT
@@ -122,6 +160,12 @@ function getOrCreateState(userId: string, guildId: string, channelId: string): C
  *
  * Determines what the user wants based on their message.
  * Uses keyword matching + context (conversation state, mentioned users).
+ *
+ * FIX #5: Confirmation/denial detection runs FIRST, before any other
+ * intent classification. This ensures "yes"/"do it"/"make it" always
+ * resolves to the pending plan, not to a new action.
+ *
+ * FIX #4: Template detection expanded to catch more natural phrasing.
  * ================================================================ */
 
 export function classifyIntent(
@@ -131,12 +175,15 @@ export function classifyIntent(
 ): ClassifiedIntent {
   const lower = content.toLowerCase().trim();
 
-  // Confirmation/denial of pending action
+  // ── FIX #5: Confirmation/denial runs FIRST ─────────────────────
+  // This is critical: if there's a pending confirmation, "yes"/"do it"/"make it"
+  // must resolve to that plan, not be re-classified as a new action.
   if (state.pendingConfirmation) {
-    if (/^(yes|y|confirm|proceed|go|do it|ok|okay|sure|yeah|yep)$/i.test(lower)) {
+    // Extended confirmation patterns to catch more natural phrasing
+    if (/^(yes|y|confirm|proceed|go|do it|ok|okay|sure|yeah|yep|make it|go ahead|let'?s go|execute|run it|apply it|do that|go for it|sounds good|i agree|approved|confirmed|yep|yup)$/i.test(lower)) {
       return { intent: "confirmation", confidence: 0.95 };
     }
-    if (/^(no|n|cancel|abort|stop|nah|nope|nevermind)$/i.test(lower)) {
+    if (/^(no|n|cancel|abort|stop|nah|nope|nevermind|never|don'?t|skip|reject|decline)$/i.test(lower)) {
       return { intent: "denial", confidence: 0.95 };
     }
   }
@@ -162,8 +209,21 @@ export function classifyIntent(
     return { intent: "moderation", confidence: 0.85 };
   }
 
-  // Server modification requests
-  if (/\b(create|make|add|set up|setup|configure|build|organize|rename|move|delete|remove|edit|change|modify|protect|unprotect)\b/i.test(lower)) {
+  // ── FIX #4: Expanded template detection ─────────────────────────
+  // Catches: "generate me a template", "make my server a gaming server",
+  // "set up a minecraft server", "organize my server", etc.
+  if (/\b(set up|setup|configure|build|organize|template)\b/i.test(lower)) {
+    return { intent: "server_modify", confidence: 0.85 };
+  }
+  if (/\b(generate|prepare|create)\b.*\b(template|layout|structure)\b/i.test(lower)) {
+    return { intent: "server_modify", confidence: 0.85 };
+  }
+  if (/\b(make|turn)\b.*\b(my|the|this)\b.*\b(server|guild)\b.*\b(a|into|like|a)\b.*\b(gaming|community|minecraft|support|discord)\b/i.test(lower)) {
+    return { intent: "server_modify", confidence: 0.85 };
+  }
+
+  // Server modification requests (general)
+  if (/\b(create|make|add|set up|configure|build|organize|rename|move|delete|remove|edit|change|modify|protect|unprotect)\b/i.test(lower)) {
     return { intent: "server_modify", confidence: 0.8 };
   }
   if (/\b(give|assign|remove|configure)\b.*\b(role|permission)\b/i.test(lower)) {
@@ -218,8 +278,10 @@ async function getCachedServerState(
 /* ================================================================
  * BUILD TOOL ARGUMENTS FROM NATURAL LANGUAGE
  *
- * Given a tool name and the user's message, extracts the needed
- * arguments. This uses the AI context for complex extraction.
+ * FIX #1, #2, #3: Uses the resource resolver instead of fragile regex.
+ * FIX #2: Validates channel type matches user intent (voice vs text).
+ * FIX #9: Returns candidates on ambiguity so agent can ask for
+ * clarification.
  * ================================================================ */
 
 export function buildToolArgs(
@@ -227,35 +289,18 @@ export function buildToolArgs(
   content: string,
   mentionedUserIds: string[],
   serverState: ServerState,
+  guild: Guild,
 ): Record<string, unknown> | null {
   const lower = content.toLowerCase();
   const args: Record<string, unknown> = {};
 
   switch (toolName) {
-    case "inspect_server": {
-      return {};
-    }
-
-    case "list_channels": {
-      return {};
-    }
-
-    case "check_permissions": {
-      return {};
-    }
-
-    case "inspect_roles": {
-      return {};
-    }
-
-    case "health_check": {
-      return {};
-    }
-
-    case "inspect_ai_config": {
-      return {};
-    }
-
+    case "inspect_server":
+    case "list_channels":
+    case "check_permissions":
+    case "inspect_roles":
+    case "health_check":
+    case "inspect_ai_config":
     case "list_protected_resources": {
       return {};
     }
@@ -264,23 +309,29 @@ export function buildToolArgs(
       // Extract channel name from message
       const nameMatch = content.match(/(?:channel|text|voice)\s+(?:called|named|channel)?\s*[`"']?(\S+)[`"']?/i)
         || content.match(/(?:create|make|add)\s+(?:a\s+)?(?:new\s+)?(?:text\s+|voice\s+)?[`"']?(\S+)[`"']?\s*(?:channel)?/i);
-      const name = nameMatch?.[1]?.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase() || "new-channel";
+      const rawName = nameMatch?.[1]?.replace(/[^a-zA-Z0-9-_]/g, "").toLowerCase() || "new-channel";
 
-      // Check for category
+      // Check for category using the resource resolver
       let categoryId: string | undefined;
       const catMatch = content.match(/(?:in|under|inside|within)\s+(?:the\s+)?[`"']?(\S+)[`"']?/i);
       if (catMatch) {
-        const catName = catMatch[1].toLowerCase();
-        const foundCat = serverState.categories.find(c => c.name.toLowerCase().includes(catName));
-        if (foundCat) categoryId = foundCat.id;
+        const catResult = resolveCategory(guild, catMatch[1]);
+        if (catResult.exact) {
+          categoryId = catResult.exact.id;
+        } else if (catResult.ambiguous) {
+          // Store ambiguity info for the agent to report
+          args._ambiguity = { type: "category", candidates: catResult.candidates };
+        }
       }
 
-      // Determine channel type
-      const isVoice = /\b(voice|vc|audio)\b/i.test(content);
+      // Determine channel type with validation
+      const wantsVoice = /\b(voice|vc|audio)\b/i.test(content);
+      const wantsCategory = /\b(category|group|section)\b/i.test(content);
+      const channelType = wantsCategory ? "category" : wantsVoice ? "voice" : "text";
 
-      args.name = name;
+      args.name = rawName;
       if (categoryId) args.categoryId = categoryId;
-      args.type = isVoice ? "voice" : "text";
+      args.type = channelType;
       return args;
     }
 
@@ -306,15 +357,17 @@ export function buildToolArgs(
     }
 
     case "rename_channel": {
-      // Find target channel
+      // Use resource resolver for channel identification
       const channelMatch = content.match(/(?:rename|change)\s+(?:the\s+)?(?:name\s+(?:of\s+)?)?(?:channel\s+)?[`"']?#?(\S+)[`"']?\s*(?:to|into)\s*[`"']?(\S+)[`"']?/i);
       if (channelMatch) {
-        const channelName = channelMatch[1].replace(/[^a-zA-Z0-9-_]/g, "").toLowerCase();
-        const newName = channelMatch[2].replace(/[^a-zA-Z0-9-_]/g, "").toLowerCase();
-        const found = serverState.channels.find(c => c.name === channelName || c.name.includes(channelName));
-        if (found) {
-          args.channelId = found.id;
-          args.newName = newName;
+        const channelResult = resolveChannel(guild, channelMatch[1], "text");
+        if (channelResult.exact) {
+          args.channelId = channelResult.exact.id;
+          args.newName = channelMatch[2].replace(/[^a-zA-Z0-9-_]/g, "").toLowerCase();
+          return args;
+        }
+        if (channelResult.ambiguous) {
+          args._ambiguity = { type: "channel", candidates: channelResult.candidates };
           return args;
         }
       }
@@ -323,13 +376,17 @@ export function buildToolArgs(
 
     case "delete_channel":
     case "delete_category": {
+      const wantsCategory = /\b(category|group|section)\b/i.test(lower);
       const nameMatch = content.match(/(?:delete|remove|destroy)\s+(?:the\s+)?(?:channel\s+|category\s+)?[`"']?#?(\S+)[`"']?/i);
       if (nameMatch) {
-        const name = nameMatch[1].replace(/[^a-zA-Z0-9-_]/g, "").toLowerCase();
-        const found = serverState.channels.find(c => c.name === name || c.name.includes(name))
-          || serverState.categories.find(c => c.name === name || c.name.includes(name));
-        if (found) {
-          args.channelId = found.id;
+        const channelType = wantsCategory ? "category" : "text";
+        const result = resolveChannel(guild, nameMatch[1], channelType as any);
+        if (result.exact) {
+          args.channelId = result.exact.id;
+          return args;
+        }
+        if (result.ambiguous) {
+          args._ambiguity = { type: "channel", candidates: result.candidates };
           return args;
         }
       }
@@ -337,15 +394,37 @@ export function buildToolArgs(
     }
 
     case "assign_role": {
-      if (mentionedUserIds.length === 0) return null;
+      if (mentionedUserIds.length === 0) {
+        // Try to resolve member from message
+        const memberMatch = content.match(/(?:assign|give)\s+(\S+)\s+(?:the\s+)?(?:role|permission)/i)
+          || content.match(/(\S+)\s+(?:to|for)\s+(?:the\s+)?(?:role|permission)/i);
+        if (memberMatch) {
+          const memberResult = resolveMember(guild, memberMatch[1]);
+          if (memberResult.exact) {
+            args.userId = memberResult.exact.id;
+          } else if (memberResult.ambiguous) {
+            args._ambiguity = { type: "member", candidates: memberResult.candidates };
+            return args;
+          } else {
+            return null;
+          }
+        } else {
+          return null;
+        }
+      } else {
+        args.userId = mentionedUserIds[0];
+      }
+
       const roleMatch = content.match(/(?:role)\s*[`"']?(\S+)[`"']?/i)
         || content.match(/(?:assign|give)\s+.*(?:role)\s+[`"']?(\S+)[`"']?/i);
       if (roleMatch) {
-        const roleName = roleMatch[1].toLowerCase();
-        const found = serverState.roles.find(r => r.name.toLowerCase() === roleName || r.name.toLowerCase().includes(roleName));
-        if (found) {
-          args.userId = mentionedUserIds[0];
-          args.roleId = found.id;
+        const roleResult = resolveRoleByName(guild, roleMatch[1]);
+        if (roleResult.exact) {
+          args.roleId = roleResult.exact.id;
+          return args;
+        }
+        if (roleResult.ambiguous) {
+          args._ambiguity = { type: "role", candidates: roleResult.candidates };
           return args;
         }
       }
@@ -353,15 +432,35 @@ export function buildToolArgs(
     }
 
     case "remove_role": {
-      if (mentionedUserIds.length === 0) return null;
+      if (mentionedUserIds.length === 0) {
+        const memberMatch = content.match(/(?:remove|take)\s+(\S+)\s+(?:from|'s)?\s*(?:the\s+)?(?:role|permission)/i);
+        if (memberMatch) {
+          const memberResult = resolveMember(guild, memberMatch[1]);
+          if (memberResult.exact) {
+            args.userId = memberResult.exact.id;
+          } else if (memberResult.ambiguous) {
+            args._ambiguity = { type: "member", candidates: memberResult.candidates };
+            return args;
+          } else {
+            return null;
+          }
+        } else {
+          return null;
+        }
+      } else {
+        args.userId = mentionedUserIds[0];
+      }
+
       const roleMatch = content.match(/(?:role)\s*[`"']?(\S+)[`"']?/i)
         || content.match(/(?:remove|take)\s+.*(?:role)\s+[`"']?(\S+)[`"']?/i);
       if (roleMatch) {
-        const roleName = roleMatch[1].toLowerCase();
-        const found = serverState.roles.find(r => r.name.toLowerCase() === roleName || r.name.toLowerCase().includes(roleName));
-        if (found) {
-          args.userId = mentionedUserIds[0];
-          args.roleId = found.id;
+        const roleResult = resolveRoleByName(guild, roleMatch[1]);
+        if (roleResult.exact) {
+          args.roleId = roleResult.exact.id;
+          return args;
+        }
+        if (roleResult.ambiguous) {
+          args._ambiguity = { type: "role", candidates: roleResult.candidates };
           return args;
         }
       }
@@ -372,10 +471,9 @@ export function buildToolArgs(
       const roleMatch = content.match(/(?:role)\s*[`"']?(\S+)[`"']?/i)
         || content.match(/(?:give|grant|configure)\s+.*(?:role)\s+[`"']?(\S+)[`"']?/i);
       if (roleMatch) {
-        const roleName = roleMatch[1].toLowerCase();
-        const found = serverState.roles.find(r => r.name.toLowerCase() === roleName || r.name.toLowerCase().includes(roleName));
-        if (found) {
-          args.roleId = found.id;
+        const roleResult = resolveRoleByName(guild, roleMatch[1]);
+        if (roleResult.exact) {
+          args.roleId = roleResult.exact.id;
           // Extract permissions
           const perms: string[] = [];
           if (/manage\s*messages/i.test(content)) perms.push("ManageMessages");
@@ -389,12 +487,110 @@ export function buildToolArgs(
           args.permissions = perms;
           return args;
         }
+        if (roleResult.ambiguous) {
+          args._ambiguity = { type: "role", candidates: roleResult.candidates };
+          return args;
+        }
       }
       return null;
     }
 
     default:
       return null;
+  }
+}
+
+/* ================================================================
+ * POST-ACTION VERIFICATION
+ *
+ * FIX #7: Verifies Discord state after mutations instead of just
+ * trusting the tool return value.
+ * ================================================================ */
+
+async function verifyPostAction(
+  guild: Guild,
+  toolName: string,
+  args: Record<string, unknown>,
+  result: ToolResult,
+): Promise<{ verified: boolean; details: string }> {
+  if (result.status !== "success") {
+    return { verified: false, details: "Action was not successful" };
+  }
+
+  try {
+    switch (toolName) {
+      case "create_channel": {
+        const data = result.data as Record<string, unknown> | undefined;
+        const channelId = data?.channelId as string;
+        if (!channelId) return { verified: false, details: "No channelId in result" };
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (!channel) return { verified: false, details: "Channel not found after creation" };
+        return { verified: true, details: `Channel #${channel.name} exists` };
+      }
+
+      case "delete_channel":
+      case "delete_category": {
+        const channelId = args.channelId as string;
+        if (!channelId) return { verified: true, details: "No channelId to verify" };
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (channel) return { verified: false, details: "Channel still exists after deletion" };
+        return { verified: true, details: "Channel confirmed deleted" };
+      }
+
+      case "create_role": {
+        const data = result.data as Record<string, unknown> | undefined;
+        const roleId = data?.roleId as string;
+        if (!roleId) return { verified: false, details: "No roleId in result" };
+        const role = await guild.roles.fetch(roleId).catch(() => null);
+        if (!role) return { verified: false, details: "Role not found after creation" };
+        return { verified: true, details: `Role ${role.name} exists` };
+      }
+
+      case "delete_role": {
+        const roleId = args.roleId as string;
+        if (!roleId) return { verified: true, details: "No roleId to verify" };
+        const role = await guild.roles.fetch(roleId).catch(() => null);
+        if (role) return { verified: false, details: "Role still exists after deletion" };
+        return { verified: true, details: "Role confirmed deleted" };
+      }
+
+      case "assign_role": {
+        const userId = args.userId as string;
+        const roleId = args.roleId as string;
+        if (!userId || !roleId) return { verified: true, details: "No user/role to verify" };
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) return { verified: false, details: "Member not found" };
+        const hasRole = member.roles.cache.has(roleId);
+        if (!hasRole) return { verified: false, details: "Role not assigned to member" };
+        return { verified: true, details: "Role confirmed assigned" };
+      }
+
+      case "remove_role": {
+        const userId = args.userId as string;
+        const roleId = args.roleId as string;
+        if (!userId || !roleId) return { verified: true, details: "No user/role to verify" };
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) return { verified: true, details: "Member not found (may have left)" };
+        const hasRole = member.roles.cache.has(roleId);
+        if (hasRole) return { verified: false, details: "Role still assigned to member" };
+        return { verified: true, details: "Role confirmed removed" };
+      }
+
+      case "rename_channel": {
+        const channelId = args.channelId as string;
+        const newName = args.newName as string;
+        if (!channelId || !newName) return { verified: true, details: "No channel/newName to verify" };
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (!channel) return { verified: false, details: "Channel not found after rename" };
+        if (channel.name !== newName) return { verified: false, details: `Channel name is "${channel.name}", expected "${newName}"` };
+        return { verified: true, details: `Channel renamed to #${channel.name}` };
+      }
+
+      default:
+        return { verified: true, details: "No specific verification needed" };
+    }
+  } catch (error) {
+    return { verified: false, details: `Verification error: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -480,9 +676,7 @@ export async function handleConversation(
     // 2. Classify intent
     const classification = classifyIntent(content, state, mentionedUserIds);
 
-    logger.debug(
-      `Intent classified: ${classification.intent} (confidence: ${classification.confidence}) by ${userContext.username} in ${guild.name}`,
-    );
+    logIntent(userContext.userId, guild.id, classification.intent, classification.confidence);
 
     // 3. Handle each intent type
     switch (classification.intent) {
@@ -602,8 +796,13 @@ async function handleConfirmation(
     };
   }
 
+  logAuth(userContext.userId, guild.id, toolName, true);
+  logRisk(userContext.userId, guild.id, toolName, plan.riskLevel);
+
   // Mark as executed to prevent double-execution
   markPlanExecuted(planId);
+
+  const execStartTime = Date.now();
 
   // Execute through the full pipeline
   const result = await executeWithFullPipeline(
@@ -614,6 +813,13 @@ async function handleConfirmation(
     state.channelId,
   );
 
+  const execDuration = Date.now() - execStartTime;
+  logExecution(userContext.userId, guild.id, toolName, result.status, execDuration);
+
+  // ── FIX #7: Post-action verification ──────────────────────────
+  const verification_result = await verifyPostAction(guild, toolName, args, result);
+  logVerification(userContext.userId, guild.id, toolName, verification_result.verified);
+
   state.pendingConfirmation = undefined;
   state.lastAction = {
     toolName,
@@ -621,7 +827,17 @@ async function handleConfirmation(
     timestamp: Date.now(),
   };
 
+  // ── FIX #10: Personality ordering — verify THEN respond ────────
+  // Never pre-celebrate. Only report success after verification passes.
   if (result.status === "success") {
+    if (!verification_result.verified) {
+      return {
+        shouldReply: true,
+        reply: `⚠️ Action completed but verification failed: ${verification_result.details}. Please check manually.`,
+        executed: false,
+        requiresConfirmation: false,
+      };
+    }
     return {
       shouldReply: true,
       reply: buildSuccessResponse(toolName, result),
@@ -714,6 +930,8 @@ async function handleServerInspect(
     userContext,
     "inspect_server",
   );
+
+  logAuth(userContext.userId, guild.id, "inspect_server", authResult.authorized);
 
   if (!authResult.authorized) {
     return {
@@ -964,22 +1182,22 @@ async function handleServerModify(
   // Role management
   if (/\b(create|make|add)\b.*\b(role)\b/i.test(lower)) {
     toolName = "create_role";
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(delete|remove|destroy)\b.*\b(role)\b/i.test(lower)) {
     toolName = "delete_role";
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(assign|give)\b.*\b(role)\b/i.test(lower) || /\brole\b.*\b(to|for)\b.*<@/i.test(content)) {
     toolName = "assign_role";
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(remove|take)\b.*\b(role)\b/i.test(lower) || /\bremove\b.*<@.*\bfrom\b.*\brole\b/i.test(lower)) {
     toolName = "remove_role";
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(give|grant|configure)\b.*\b(permission|manage)\b/i.test(lower)) {
     toolName = "configure_role_permissions";
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(edit|modify|change)\b.*\b(role)\b/i.test(lower)) {
     toolName = "edit_role";
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   }
   // Channel management
   else if (/\b(create|make|add)\b.*\b(channel|text|voice)\b/i.test(lower)
@@ -989,34 +1207,38 @@ async function handleServerModify(
     } else {
       toolName = "create_channel";
     }
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(delete|remove|destroy)\b.*\b(channel|category)\b/i.test(lower)) {
     if (/\b(category|group|section)\b/i.test(lower)) {
       toolName = "delete_category";
     } else {
       toolName = "delete_channel";
     }
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(rename|change\s+name)\b/i.test(lower)) {
     toolName = "rename_channel";
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(protect|lock|safeguard)\b/i.test(lower) && /\b(channel|category)\b/i.test(lower)) {
     if (/\b(category|group)\b/i.test(lower)) {
       toolName = "protect_category";
     } else {
       toolName = "protect_channel";
     }
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   } else if (/\b(unprotect|unlock|remove protection)\b/i.test(lower)) {
     if (/\b(category|group)\b/i.test(lower)) {
       toolName = "unprotect_category";
     } else {
       toolName = "unprotect_channel";
     }
-    args = buildToolArgs(toolName, content, mentionedUserIds, serverState);
+    args = buildToolArgs(toolName, content, mentionedUserIds, serverState, guild);
   }
-  // Server template
-  else if (/\b(set up|setup|configure|build|template)\b/i.test(lower)) {
+  // ── FIX #4: Expanded template detection ───────────────────────
+  // Catches: "generate me a template", "make my server a gaming server",
+  // "set up a minecraft server", "organize my server as community", etc.
+  else if (/\b(set up|setup|configure|build|organize|template)\b/i.test(lower)
+    || /\b(generate|prepare)\b.*\b(template|layout|structure)\b/i.test(lower)
+    || /\b(make|turn)\b.*\b(my|the|this)\b.*\b(server|guild)\b.*\b(a|into|like)\b.*\b(gaming|community|minecraft|support)\b/i.test(lower)) {
     // Check for template names
     if (/\b(minecraft|mc)\b/i.test(lower)) {
       return handleServerTemplate(guild, userContext, state, message, "minecraft");
@@ -1037,13 +1259,25 @@ async function handleServerModify(
   if (!toolName || !args) {
     return {
       shouldReply: true,
-      reply: "I'm not sure what you'd like me to do. Could you be more specific?\n\nExamples:\n• \"Create a gaming category\"\n• \"Make a Moderator role\"\n• \"Give Moderator permission to manage messages\"\n• \"Rename #general to #lobby\"\n• \"Protect the announcements channel\"",
+      reply: "I'm not sure what you'd like me to do. Could you be more specific?\n\nExamples:\n• \"Create a gaming category\"\n• \"Make a Moderator role\"\n• \"Give Moderator permission to manage messages\"\n• \"Rename #general to #lobby\"\n• \"Protect the announcements channel\"\n• \"Set up my server for Minecraft\"",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  // Check for ambiguity from resource resolution
+  const ambiguity = args._ambiguity as { type: string; candidates: Array<{ id: string; name: string }> } | undefined;
+  if (ambiguity) {
+    return {
+      shouldReply: true,
+      reply: formatAmbiguity(ambiguity.type as any, ambiguity.candidates),
       executed: false,
       requiresConfirmation: false,
     };
   }
 
   // Execute the tool through the full pipeline
+  const execStartTime = Date.now();
   const result = await executeWithFullPipeline(
     guild,
     userContext,
@@ -1051,8 +1285,15 @@ async function handleServerModify(
     args,
     message.channel.id,
   );
+  const execDuration = Date.now() - execStartTime;
+
+  logExecution(userContext.userId, guild.id, toolName, result.status, execDuration);
 
   if (result.status === "success") {
+    // ── FIX #7: Post-action verification ─────────────────────────
+    const postVerification = await verifyPostAction(guild, toolName, args, result);
+    logVerification(userContext.userId, guild.id, toolName, postVerification.verified);
+
     // Record undo if applicable
     const undoData = extractUndoData(toolName, args, result);
     if (undoData) {
@@ -1070,6 +1311,16 @@ async function handleServerModify(
       args,
       timestamp: Date.now(),
     };
+
+    // ── FIX #10: Personality ordering — verify THEN respond ──────
+    if (!postVerification.verified) {
+      return {
+        shouldReply: true,
+        reply: `⚠️ Action completed but verification failed: ${postVerification.details}. Please check manually.`,
+        executed: false,
+        requiresConfirmation: false,
+      };
+    }
 
     return {
       shouldReply: true,
@@ -1242,6 +1493,7 @@ async function handleHelp(
     "• \"Create a gaming category\"",
     "• \"Make a Moderator role\"",
     "• \"Set up my server for Minecraft\"",
+    "• \"Generate me a template\"",
     "",
     "👤 **Role Management:**",
     "• \"Give Bob the Moderator role\"",
