@@ -8,7 +8,7 @@ import { assessRisk } from "../../../security/risk-engine";
 import { recordAudit } from "../../../security/audit";
 import { toolRegistry } from "../registry";
 import { validateToolRequest } from "../validator";
-import { executeTool } from "../executor";
+import { executeTool, type ExecutorOptions } from "../executor";
 import type { ToolContext, ToolResult, ActionPlan } from "../types";
 import { storePendingPlan } from "../confirmation-store";
 import { createActionPlan } from "../executor";
@@ -270,6 +270,7 @@ export async function executeWithFullPipeline(
   channelId: string,
   targetId?: string,
   targetType?: "channel" | "category" | "role",
+  executorOptions?: ExecutorOptions,
 ): Promise<ToolResult> {
   // 1. Full authorization check
   const authResult = await checkFullAuthorization(guild, userContext, toolName, targetId, targetType);
@@ -304,6 +305,7 @@ export async function executeWithFullPipeline(
   // 3. Execute through the existing tool framework
   const result = await executeTool(toolName, context, {
     isBotOwner: userContext.isBotOwner,
+    ...executorOptions,
   });
 
   return result;
@@ -335,6 +337,7 @@ export async function executeMultiStep(
     targetType?: "channel" | "category" | "role";
   }>,
   channelId: string,
+  stepExecutorOptions?: ExecutorOptions,
 ): Promise<MultiStepResult> {
   const results: MultiStepResult["steps"] = [];
 
@@ -347,6 +350,7 @@ export async function executeMultiStep(
       channelId,
       step.targetId,
       step.targetType,
+      stepExecutorOptions,
     );
 
     results.push({

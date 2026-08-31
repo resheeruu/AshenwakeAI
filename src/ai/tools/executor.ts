@@ -24,6 +24,8 @@ export interface ExecutorOptions {
   isBotOwner?: boolean;
   /** If true, skip rate limit check (used for confirmed executions) */
   skipRateLimit?: boolean;
+  /** If true, skip confirmation prompt and execute immediately (used for pre-confirmed multi-step plans) */
+  skipConfirmation?: boolean;
 }
 
 /* ================================================================
@@ -184,7 +186,8 @@ export async function executeTool(
   }
 
   // 8. Confirmation required — reserve rate limit with actual plan ID
-  if (tool.confirmationRequired) {
+  // Skip if skipConfirmation is set (used for pre-confirmed multi-step template plans)
+  if (tool.confirmationRequired && !options.skipConfirmation) {
     const plan = createActionPlan(
       context,
       tool.riskLevel,
