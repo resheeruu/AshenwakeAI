@@ -22,6 +22,7 @@ import {
   type ResolvedUserContext,
   type ServerState,
 } from "../ai/tools/discord/agent-orchestrator";
+import type { ExecutorOptions } from "../ai/tools/executor";
 import {
   getLastUndoForUser,
   executeUndo,
@@ -802,9 +803,53 @@ async function handleConfirmation(
   // Mark as executed to prevent double-execution
   markPlanExecuted(planId);
 
+  // ── Template execution: decompose into registered tool steps ─────
+  // If the plan contains templateSteps, execute each step as a separate
+  // registered tool operation through the multi-step pipeline with
+  // skipConfirmation (user already confirmed the whole template).
+  const templateSteps = (args.templateSteps ?? plan.arguments.templateSteps) as Array<{
+    toolName: string;
+    args: Record<string, unknown>;
+    description: string;
+  }> | undefined;
+
+  if (templateSteps && templateSteps.length > 0) {
+    return executeTemplateSteps(
+      guild,
+      userContext,
+      state,
+      planId,
+      templateSteps,
+      message.channel.id,
+    );
+  }
+
+  // ── Safety: "apply_template" without steps is invalid ──────────
+  // "apply_template" is not a registered tool — it is a virtual name
+  // for decomposed template plans. If we reach here with no steps,
+  // the plan is corrupt and must not be dispatched to the tool pipeline.
+  if (toolName === "apply_template") {
+    state.pendingConfirmation = undefined;
+    removePendingPlan(planId);
+    recordAudit({
+      who: userContext.userId,
+      whoName: userContext.username,
+      what: "Template plan missing decomposed steps",
+      where: "conversational-agent",
+      guildId: guild.id,
+      result: "error",
+    });
+    return {
+      shouldReply: true,
+      reply: "❌ Template plan is missing its decomposed steps. Please generate the template again.",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  // ── Single-tool execution (existing path) ───────────────────────
   const execStartTime = Date.now();
 
-  // Execute through the full pipeline
   const result = await executeWithFullPipeline(
     guild,
     userContext,
@@ -828,7 +873,6 @@ async function handleConfirmation(
   };
 
   // ── FIX #10: Personality ordering — verify THEN respond ────────
-  // Never pre-celebrate. Only report success after verification passes.
   if (result.status === "success") {
     if (!verification_result.verified) {
       return {
@@ -850,6 +894,106 @@ async function handleConfirmation(
     shouldReply: true,
     reply: buildDenialResponse(result),
     executed: false,
+    requiresConfirmation: false,
+  };
+}
+
+/* ================================================================
+ * TEMPLATE STEP EXECUTION
+ *
+ * Executes decomposed template steps through the multi-step pipeline
+ * with skipConfirmation (user already confirmed the whole template).
+ * Each step is a registered tool operation. Verification runs per step.
+ * If one step fails, reports which step failed.
+ * ================================================================ */
+
+async function executeTemplateSteps(
+  guild: Guild,
+  userContext: ResolvedUserContext,
+  state: ConversationState,
+  planId: string,
+  steps: Array<{
+    toolName: string;
+    args: Record<string, unknown>;
+    description: string;
+  }>,
+  channelId: string,
+): Promise<AgentResponse> {
+  const startTime = Date.now();
+  const executedSteps: string[] = [];
+  const failedSteps: Array<{ step: string; error: string }> = [];
+
+  // Execute each step through the full pipeline with skipConfirmation
+  // All individual tools' confirmations are bypassed since user confirmed the whole template.
+  const executorOptions: ExecutorOptions = { skipConfirmation: true };
+
+  for (const step of steps) {
+    logExecution(userContext.userId, guild.id, step.toolName, "starting", 0);
+
+    const result = await executeWithFullPipeline(
+      guild,
+      userContext,
+      step.toolName,
+      step.args,
+      channelId,
+      undefined,
+      undefined,
+      executorOptions,
+    );
+
+    const stepVerified = await verifyPostAction(guild, step.toolName, step.args, result);
+    logVerification(userContext.userId, guild.id, step.toolName, stepVerified.verified);
+
+    if (result.status === "success") {
+      if (!stepVerified.verified) {
+        failedSteps.push({ step: step.description, error: `Verification failed: ${stepVerified.details}` });
+      } else {
+        executedSteps.push(step.description);
+      }
+    } else {
+      failedSteps.push({ step: step.description, error: result.message });
+      // Stop on first failure to prevent partial execution
+      break;
+    }
+  }
+
+  const duration = Date.now() - startTime;
+  logExecution(userContext.userId, guild.id, "apply_template", failedSteps.length === 0 ? "success" : "partial", duration);
+
+  state.pendingConfirmation = undefined;
+  state.lastAction = {
+    toolName: "apply_template",
+    args: { steps },
+    planId,
+    timestamp: Date.now(),
+  };
+
+  // Build the response
+  if (failedSteps.length === 0) {
+    return {
+      shouldReply: true,
+      reply: `✅ **Template applied successfully!**\n\n**Completed ${executedSteps.length} operations:**\n${executedSteps.map(s => `• ${s}`).join("\n")}`,
+      executed: true,
+      requiresConfirmation: false,
+    };
+  }
+
+  // Partial failure: report what succeeded and what failed
+  const lines = ["⚠️ **Template partially applied.**", ""];
+
+  if (executedSteps.length > 0) {
+    lines.push("**Succeeded:**");
+    for (const s of executedSteps) lines.push(`• ✅ ${s}`);
+    lines.push("");
+  }
+
+  lines.push("**Failed:**");
+  for (const f of failedSteps) lines.push(`• ❌ ${f.step}: ${f.error}`);
+
+  return {
+    shouldReply: true,
+    reply: lines.join("\n"),
+    executed: executedSteps.length > 0,
     requiresConfirmation: false,
   };
 }
@@ -1394,10 +1538,48 @@ async function handleServerTemplate(
   const existingChannels = serverState.channels.map(c => c.name.toLowerCase());
   const existingRoles = serverState.roles.map(r => r.name.toLowerCase());
 
-  const newCategories = template.categories.filter(c => !existingCategories.includes(c.name.toLowerCase()));
-  const newRoles = template.roles.filter(r => !existingRoles.includes(r.name.toLowerCase()));
+  // ── Decompose template into registered tool steps ────────────────
+  // Each step uses an already-registered Discord tool from the tool registry.
+  const templateSteps: Array<{
+    toolName: string;
+    args: Record<string, unknown>;
+    description: string;
+  }> = [];
 
-  if (newCategories.length === 0 && newRoles.length === 0) {
+  // 1. Roles first (no dependencies)
+  for (const roleData of template.roles) {
+    if (!existingRoles.includes(roleData.name.toLowerCase())) {
+      templateSteps.push({
+        toolName: "create_role",
+        args: { name: roleData.name, color: roleData.color, hoist: roleData.hoist ?? false },
+        description: `Create role "${roleData.name}"`,
+      });
+    }
+  }
+
+  // 2. Categories
+  for (const catData of template.categories) {
+    if (!existingCategories.includes(catData.name.toLowerCase())) {
+      templateSteps.push({
+        toolName: "create_category",
+        args: { name: catData.name },
+        description: `Create category "${catData.name}"`,
+      });
+
+      // 3. Channels within this category
+      for (const chData of catData.channels) {
+        if (!existingChannels.includes(chData.name.toLowerCase())) {
+          templateSteps.push({
+            toolName: "create_channel",
+            args: { name: chData.name, type: chData.type },
+            description: `Create ${chData.type} channel "#${chData.name}" in "${catData.name}"`,
+          });
+        }
+      }
+    }
+  }
+
+  if (templateSteps.length === 0) {
     return {
       shouldReply: true,
       reply: `✅ Your server already has the "${template.name}" template structure. No changes needed.`,
@@ -1406,33 +1588,31 @@ async function handleServerTemplate(
     };
   }
 
+  // Build the preview message
   const lines = [
     `**📋 Template: ${template.name}**`,
     template.description,
     "",
-    "**I'll create:**",
+    `**${templateSteps.length} operations will be performed:**`,
+    "",
   ];
 
-  if (newRoles.length > 0) {
-    lines.push(`• Roles: ${newRoles.map(r => r.name).join(", ")}`);
-  }
-  if (newCategories.length > 0) {
-    for (const cat of newCategories) {
-      const newChannels = cat.channels.filter(ch => !existingChannels.includes(ch.name.toLowerCase()));
-      if (newChannels.length > 0) {
-        lines.push(`• Category: ${cat.name} with ${newChannels.map(ch => `#${ch.name}`).join(", ")}`);
-      }
-    }
+  for (const step of templateSteps) {
+    lines.push(`• ${step.description}`);
   }
 
-  const skipped = template.categories.length - newCategories.length;
+  const skipped = template.categories.length - template.categories.filter(
+    c => !existingCategories.includes(c.name.toLowerCase()),
+  ).length;
   if (skipped > 0) {
     lines.push("", `*${skipped} category(ies) already exist and will be skipped.*`);
   }
 
   lines.push("", "This will modify your server. Proceed? (yes/no)");
 
-  // Store the template application plan
+  // ── Store the plan with decomposed steps ─────────────────────────
+  // The plan stores the pre-computed steps using ONLY registered tool names.
+  // On confirmation, these steps execute through executeMultiStep + skipConfirmation.
   const plan = createActionPlan(
     {
       guildId: guild.id,
@@ -1440,27 +1620,25 @@ async function handleServerTemplate(
       requesterId: userContext.userId,
       requesterName: userContext.username,
       requesterRole: userContext.ashenRole,
-      arguments: { _toolName: "apply_template", templateName },
+      arguments: { _toolName: "apply_template", templateName, templateSteps },
       dryRun: false,
     },
     "high",
-    [
-      {
-        type: "create",
-        target: template.name,
-        description: `Apply ${template.name} template`,
-      },
-    ],
+    templateSteps.map(s => ({
+      type: "create" as const,
+      target: s.description,
+      description: s.description,
+    })),
     true,
   );
   (plan as any).toolName = "apply_template";
-  (plan as any).arguments = { templateName, template };
+  (plan as any).arguments = { templateName, templateSteps, template };
   storePendingPlan(plan);
 
   state.pendingConfirmation = {
     planId: plan.id,
     toolName: "apply_template",
-    args: { templateName, template },
+    args: { templateName, templateSteps, template },
     timestamp: Date.now(),
   };
 

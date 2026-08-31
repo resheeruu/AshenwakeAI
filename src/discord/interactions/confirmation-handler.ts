@@ -136,6 +136,171 @@ async function executePlan(plan: ActionPlan): Promise<{ status: string; message:
 }
 
 /* ================================================================
+ * TEMPLATE PLAN CONFIRMATION
+ *
+ * Executes a decomposed template plan by running each step through
+ * the existing executePlan dispatcher with skipConfirmation.
+ * Each step is a registered tool (create_role, create_category,
+ * create_channel, etc.) executed individually.
+ * Stops on first failure to prevent partial application.
+ * ================================================================ */
+
+async function handleTemplateConfirm(
+  plan: ActionPlan,
+  steps: Array<{ toolName: string; args: Record<string, unknown>; description: string }>,
+  interaction: ButtonInteraction,
+  startTime: number,
+  planId: string,
+): Promise<void> {
+  // Basic Discord permissions check
+  const guild = await interaction.guild?.fetch();
+  if (!guild) {
+    await interaction.reply({
+      content: "❌ Could not fetch guild information.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const requesterMember = await guild.members.fetch(interaction.user.id).catch(() => null);
+  if (!requesterMember) {
+    await interaction.reply({
+      content: "❌ You are not a member of this server.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const hasManageChannels = requesterMember.permissions.has(PermissionFlagsBits.ManageChannels);
+  if (!hasManageChannels) {
+    removePendingPlan(planId);
+    recordToolAudit(
+      { ...plan, channelId: plan.channelId, requesterName: interaction.user.username } as any,
+      "denied",
+      "MISSING_DISCORD_PERMISSION",
+      startTime,
+      false,
+    );
+    await interaction.reply({
+      content: "❌ You no longer have ManageChannels permission.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Bot permissions check
+  const botMember = await guild.members.me;
+  if (!botMember || !botMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    removePendingPlan(planId);
+    recordToolAudit(
+      { ...plan, channelId: plan.channelId, requesterName: interaction.user.username } as any,
+      "denied",
+      "MISSING_DISCORD_PERMISSION",
+      startTime,
+      false,
+    );
+    await interaction.reply({
+      content: "❌ Bot no longer has ManageChannels permission.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Defer reply (execution may take time for multi-step templates)
+  await interaction.deferReply();
+
+  // Mark executed BEFORE execution (prevents double-execution)
+  markPlanExecuted(planId);
+
+  // Execute each step through the existing executePlan dispatcher
+  const executedSteps: string[] = [];
+  const failedSteps: Array<{ step: string; error: string }> = [];
+
+  for (const step of steps) {
+    // Create a mini-plan for this step using the existing plan as base
+    const stepPlan: ActionPlan = {
+      id: `${planId}_step_${executedSteps.length + failedSteps.length}`,
+      guildId: plan.guildId,
+      channelId: plan.channelId,
+      requesterId: plan.requesterId,
+      toolName: step.toolName,
+      arguments: step.args,
+      riskLevel: "medium",
+      changes: [{
+        type: "create",
+        target: step.description,
+        description: step.description,
+      }],
+      requiresConfirmation: false,
+      createdAt: plan.createdAt,
+      expiresAt: plan.expiresAt,
+    };
+
+    try {
+      const result = await executePlan(stepPlan);
+
+      if (result.status === "success") {
+        executedSteps.push(step.description);
+      } else {
+        failedSteps.push({ step: step.description, error: result.message });
+        // Stop on first failure to prevent partial template application
+        break;
+      }
+    } catch (error) {
+      failedSteps.push({
+        step: step.description,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      break;
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+
+  // Build combined response
+  if (failedSteps.length === 0) {
+    await interaction.editReply({
+      content: `✅ **Template applied successfully!**\n\n**Completed ${executedSteps.length} operations:**\n${executedSteps.map(s => `• ${s}`).join("\n")}`,
+    });
+    recordToolAudit(
+      { ...plan, channelId: plan.channelId, requesterName: interaction.user.username } as any,
+      "success",
+      undefined,
+      startTime,
+      false,
+    );
+  } else {
+    const lines = ["⚠️ **Template partially applied.**", ""];
+
+    if (executedSteps.length > 0) {
+      lines.push("**Succeeded:**");
+      for (const s of executedSteps) lines.push(`• ✅ ${s}`);
+      lines.push("");
+    }
+
+    lines.push("**Failed:**");
+    for (const f of failedSteps) lines.push(`• ❌ ${f.step}: ${f.error}`);
+
+    await interaction.editReply({ content: lines.join("\n") });
+    recordToolAudit(
+      { ...plan, channelId: plan.channelId, requesterName: interaction.user.username } as any,
+      executedSteps.length > 0 ? ("success" as any) : ("denied" as any),
+      undefined,
+      startTime,
+      false,
+    );
+  }
+
+  // Cleanup: remove plan and release rate limit reservation
+  removePendingPlan(planId);
+  toolRateLimiter.release(plan.guildId, plan.requesterId, planId);
+
+  logger.info(
+    `Template confirmation executed: ${failedSteps.length === 0 ? "success" : "partial"} guild=${plan.guildId} by=${interaction.user.id} (${durationMs}ms, ${executedSteps.length} succeeded, ${failedSteps.length} failed)`,
+  );
+}
+
+/* ================================================================
  * CONFIRM BUTTON HANDLER
  * ================================================================ */
 
@@ -189,7 +354,17 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
-  // 4. Re-check application role
+  // 4. Template plans: decompose into registered tool steps
+  const templateSteps = (plan.arguments as Record<string, unknown>)?.templateSteps as
+    | Array<{ toolName: string; args: Record<string, unknown>; description: string }>
+    | undefined;
+
+  if (Array.isArray(templateSteps) && templateSteps.length > 0) {
+    await handleTemplateConfirm(plan, templateSteps, interaction, startTime, planId);
+    return;
+  }
+
+  // 5. Re-check application role (single-tool plans only)
   const tool = toolRegistry.get(plan.toolName);
   if (!tool) {
     removePendingPlan(planId);
@@ -200,7 +375,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
-  // 5. Re-check Discord permissions
+  // 6. Re-check Discord permissions
   const guild = await interaction.guild?.fetch();
   if (!guild) {
     await interaction.reply({
@@ -234,7 +409,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
-  // 6. Re-check bot permissions
+  // 7. Re-check bot permissions
   const botMember = await guild.members.me;
   if (!botMember || !botMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
     removePendingPlan(planId);
@@ -250,7 +425,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
-  // 7. Re-check channel scope (skip rate limit — token already consumed at plan creation)
+  // 8. Re-check channel scope (skip rate limit — token already consumed at plan creation)
   const guildConfig = loadGuildAIConfig(plan.guildId);
   const validation = validateToolRequest(tool, {
     guildId: plan.guildId,
@@ -279,7 +454,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
-  // 8. Re-check protected resources for destructive tools (including category inheritance)
+  // 9. Re-check protected resources for destructive tools (including category inheritance)
   const toolsWithProtection = [
     "delete_channel", "delete_category", "rename_channel",
     "move_channel", "edit_channel", "manage_channel_permissions",
@@ -317,10 +492,10 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     }
   }
 
-  // 9. Defer reply (execution may take time)
+  // 10. Defer reply (execution may take time)
   await interaction.deferReply();
 
-  // 9.5. Verify rate limit reservation exists (token was consumed at plan creation)
+  // 10.5. Verify rate limit reservation exists (token was consumed at plan creation)
   const hasReservation = toolRateLimiter.confirmReservation(
     plan.guildId,
     plan.requesterId,
@@ -341,10 +516,10 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
-  // 10. Mark executed BEFORE execution (prevents double-execution)
+  // 11. Mark executed BEFORE execution (prevents double-execution)
   markPlanExecuted(planId);
 
-  // 10. Execute
+  // 11. Execute
   try {
     const result = await executePlan(plan);
     const durationMs = Date.now() - startTime;
@@ -373,7 +548,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
       );
     }
 
-    // 11. Remove plan from store and release rate limit reservation
+    // 12. Remove plan from store and release rate limit reservation
     removePendingPlan(planId);
     toolRateLimiter.release(plan.guildId, plan.requesterId, planId);
 
