@@ -1,26 +1,7 @@
-import fs from "fs";
-import path from "path";
-
 import { ChatMessage } from "./types";
 import { config } from "../config/env";
 import { logger } from "../logger";
-
-interface StoredConversation {
-  messages: ChatMessage[];
-  updatedAt: number;
-}
-
-type StoredMemory = Record<string, StoredConversation>;
-
-const DATA_DIR = path.join(
-  process.cwd(),
-  "data"
-);
-
-const MEMORY_FILE = path.join(
-  DATA_DIR,
-  "conversation-memory.json"
-);
+import { loadConversationsDB, saveConversationDB, deleteConversationDB, clearConversationsDB, deleteExpiredConversationsDB } from "../database";
 
 export class ConversationMemory {
   private readonly conversations =
@@ -61,121 +42,44 @@ export class ConversationMemory {
   }
 
   private cleanupExpired(): void {
-    const now = Date.now();
+    const deleted = deleteExpiredConversationsDB(this.idleTimeoutMs());
+    if (deleted > 0) {
+      logger.debug(`🧹 Expired ${deleted} inactive conversations from SQLite`);
+    }
 
+    const now = Date.now();
     for (const [key, last] of this.lastActivity) {
-      if (
-        now - last >= this.idleTimeoutMs()
-      ) {
+      if (now - last >= this.idleTimeoutMs()) {
         this.conversations.delete(key);
         this.lastActivity.delete(key);
-
-        logger.debug(
-          `🧹 Expired inactive conversation: ${key}`
-        );
       }
     }
   }
 
   private load(): void {
-    try {
-      if (!fs.existsSync(MEMORY_FILE)) {
-        return;
-      }
+    const stored = loadConversationsDB();
+    const now = Date.now();
+    const timeout = this.idleTimeoutMs();
 
-      const raw = fs.readFileSync(
-        MEMORY_FILE,
-        "utf8"
-      );
-
-      const stored =
-        JSON.parse(raw) as StoredMemory;
-
-      const now = Date.now();
-      const timeout = this.idleTimeoutMs();
-
-      for (const [key, value] of Object.entries(
-        stored
-      )) {
-        if (
-          !value ||
-          !Array.isArray(value.messages) ||
-          typeof value.updatedAt !== "number"
-        ) {
-          continue;
-        }
-
-        if (
-          now - value.updatedAt >= timeout
-        ) {
-          continue;
-        }
-
-        this.conversations.set(
-          key,
-          value.messages
-        );
-
-        this.lastActivity.set(
-          key,
-          value.updatedAt
-        );
-      }
-
-      logger.info(
-        `💾 Conversation memory loaded: ${this.conversations.size} conversation(s).`
-      );
-    } catch (error) {
-      logger.warn(
-        "⚠️ Could not load conversation memory:",
-        error instanceof Error
-          ? error.message
-          : String(error)
-      );
+    for (const [key, value] of stored) {
+      if (now - value.updatedAt >= timeout) continue;
+      this.conversations.set(key, value.messages);
+      this.lastActivity.set(key, value.updatedAt);
     }
+
+    logger.info(
+      `💾 Conversation memory loaded: ${this.conversations.size} conversation(s).`
+    );
   }
 
   private save(): void {
-    try {
-      fs.mkdirSync(DATA_DIR, {
-        recursive: true,
-      });
-
-      const stored: StoredMemory = {};
-      const now = Date.now();
-
-      for (const [
-        key,
-        messages,
-      ] of this.conversations) {
-        stored[key] = {
-          messages,
-          updatedAt:
-            this.lastActivity.get(key) ??
-            now,
-        };
-      }
-
-      const tmpPath = MEMORY_FILE + ".tmp";
-      fs.writeFileSync(
-        tmpPath,
-        JSON.stringify(
-          stored,
-          null,
-          2
-        ),
-        "utf8"
-      );
-      fs.renameSync(tmpPath, MEMORY_FILE);
-    } catch (error) {
-      logger.warn(
-        "⚠️ Could not save conversation memory:",
-        error instanceof Error
-          ? error.message
-          : String(error)
-      );
+    for (const [key, messages] of this.conversations) {
+      const updatedAt = this.lastActivity.get(key) ?? Date.now();
+      saveConversationDB(key, messages, updatedAt);
     }
   }
+
+  private pendingDeletes: Set<string> = new Set();
 
   get(
     userId: string,
@@ -189,7 +93,7 @@ export class ConversationMemory {
     if (this.isExpired(key)) {
       this.conversations.delete(key);
       this.lastActivity.delete(key);
-      this.save();
+      this.pendingDeletes.add(key);
 
       return [];
     }
@@ -293,6 +197,10 @@ export class ConversationMemory {
    * Call this once at the end of a request after all addBatch() calls.
    */
   flushBatch(): void {
+    for (const key of this.pendingDeletes) {
+      deleteConversationDB(key);
+    }
+    this.pendingDeletes.clear();
     this.save();
   }
 
@@ -308,7 +216,7 @@ export class ConversationMemory {
     this.conversations.delete(key);
     this.lastActivity.delete(key);
 
-    this.save();
+    deleteConversationDB(key);
 
     logger.debug(
       `🧹 Conversation reset: ${key}`
@@ -319,7 +227,7 @@ export class ConversationMemory {
     this.conversations.clear();
     this.lastActivity.clear();
 
-    this.save();
+    clearConversationsDB();
   }
 
   size(): number {

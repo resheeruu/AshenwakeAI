@@ -1,27 +1,49 @@
-Inspect the current AshenAI command architecture and make one final consistency pass.
 
-Focus ONLY on command acknowledgment ownership and UX consistency across "/ask", "/prompt", "/help", "/send", "/reset", "/status", "/config", "/diagnose", "/server", "/userinfo", "/roles", "/warn", "/warnings", "/timeout", "/untimeout", and other slash commands.
 
-Requirements:
+Install and fully wire `better-sqlite3` and `zod` into the existing bot.
 
-- Every interaction must have exactly ONE acknowledgment owner.
-- No command may call reply/deferReply/editReply after another layer already owns the acknowledgment unless explicitly designed for follow-up/update.
-- Prevent "application did not respond", double replies, Unknown interaction, and expired interaction errors.
-- Keep the existing centralized acknowledgment architecture; do not create another handler/system.
-- "/prompt" remains the ONLY builder mode.
-- "/ask" remains normal AI chat.
-- "/send" remains trusted-only direct bot messaging.
-- "/help" remains grey Embed + edit-in-place navigation.
-- Keep onboarding, security, memory, executor, tools, audit, undo, and permissions unchanged.
-- Keep all command UX visually consistent: clean embeds, concise errors, no internal logs/security-wrapper text.
-- Do not expose Termux, stack traces, raw tool names, or implementation details.
-- Do not rewrite unrelated code.
+Use one centralized SQLite DatabaseService with automatic initialization, WAL mode, migrations, transactions, and safe error handling. Use Zod to validate database/config data.
 
-Inspect first, modify only necessary files.
+Integrate SQLite where it actually benefits AshenAI: guild config, trusted users, /prompt sessions/history, audit records, usage statistics, persistent memory, and relevant state.
 
-Then run:
-npm run typecheck
-npm run build
-npm test
+Preserve the existing architecture and APIs. Do not create duplicate memory, router, executor, security, permission, or agent systems.
 
-Report only what was changed and test results.
+Keep /prompt as the only builder mode. Keep /ask, mentions, replies, and /send behavior unchanged.
+
+Do not block Discord response paths with synchronous database writes. Defer non-critical persistence so /ask remains fast.
+
+Do not store secrets or API keys.
+
+Inspect first, modify only what is necessary, then run typecheck, build, and all existing tests. Fix any failures.
+
+
+Now do a second-pass integration audit.
+
+Inspect the entire AshenAI codebase and verify better-sqlite3 + Zod are actually being used correctly, not just installed.
+
+Check:
+- guild config persistence
+- trusted users
+- /prompt private sessions, memory, expiry, confirmation, audit and undo
+- persistent conversation memory
+- usage/analytics
+- server state that should persist across restarts
+- startup/shutdown database handling
+- migrations and schema upgrades
+- indexes and SQLite performance
+- WAL and transaction usage
+- Zod validation at database boundaries
+- concurrent requests and duplicate writes
+- database error recovery
+
+Remove redundant JSON persistence only where SQLite fully replaces it. Do not remove existing fallback behavior unless it is proven safe.
+
+Verify that /ask, mentions and replies remain fast and have no blocking database writes before their AI response.
+
+Verify /prompt still performs deterministic server operations locally without unnecessary LLM calls.
+
+Do not create duplicate systems or rewrite unrelated architecture.
+
+Run typecheck, build, and every existing test. Add focused tests for persistence, migrations, validation, restart recovery, and concurrent operations.
+
+Report exactly what is now stored in SQLite and what remains outside SQLite.

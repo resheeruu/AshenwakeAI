@@ -1,6 +1,4 @@
-import fs from "fs";
-import path from "path";
-import { logger } from "../../logger";
+import { loadGuildAIConfigDB, saveGuildAIConfigDB, guildAIConfigExistsDB, getAllGuildAIConfigsDB, deleteGuildAIConfigDB, getTrustedUsersDB } from "../../database";
 import type { ChannelScope } from "./types";
 
 /* ================================================================
@@ -67,64 +65,20 @@ function defaultGuildAIConfig(guildId: string): GuildAIConfig {
  * PERSISTENCE
  * ================================================================ */
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const AI_CONFIGS_DIR = path.join(DATA_DIR, "ai-guilds");
-
-function getConfigPath(guildId: string): string {
-  return path.join(AI_CONFIGS_DIR, `${guildId}.json`);
-}
-
 export function loadGuildAIConfig(guildId: string): GuildAIConfig {
-  const filePath = getConfigPath(guildId);
-  try {
-    if (!fs.existsSync(filePath)) return defaultGuildAIConfig(guildId);
-    const raw = fs.readFileSync(filePath, "utf8");
-    const parsed = JSON.parse(raw) as Partial<GuildAIConfig>;
-    return { ...defaultGuildAIConfig(guildId), ...parsed, guildId };
-  } catch {
-    return defaultGuildAIConfig(guildId);
-  }
+  return loadGuildAIConfigDB(guildId);
 }
 
 export function saveGuildAIConfig(config: GuildAIConfig): void {
-  try {
-    fs.mkdirSync(AI_CONFIGS_DIR, { recursive: true });
-    config.updatedAt = Date.now();
-    const filePath = getConfigPath(config.guildId);
-    const tmpPath = filePath + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2), "utf8");
-    fs.renameSync(tmpPath, filePath);
-  } catch (error) {
-    logger.warn(
-      `Could not save AI guild config for ${config.guildId}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
+  saveGuildAIConfigDB(config);
 }
 
 export function getAllGuildAIConfigs(): GuildAIConfig[] {
-  try {
-    fs.mkdirSync(AI_CONFIGS_DIR, { recursive: true });
-    const files = fs.readdirSync(AI_CONFIGS_DIR).filter((f) => f.endsWith(".json"));
-    return files.map((f) => {
-      const guildId = f.replace(".json", "");
-      return loadGuildAIConfig(guildId);
-    });
-  } catch {
-    return [];
-  }
+  return getAllGuildAIConfigsDB();
 }
 
 export function deleteGuildAIConfig(guildId: string): boolean {
-  try {
-    const filePath = getConfigPath(guildId);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
+  return deleteGuildAIConfigDB(guildId);
 }
 
 /* ================================================================

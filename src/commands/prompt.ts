@@ -12,6 +12,7 @@ import { loadGuildAIConfig, isTrustedUser } from "../ai/tools/channel-scope";
 import { recordAudit } from "../security/audit";
 import { config } from "../config/env";
 import { logger } from "../logger";
+import { loadBuilderSessionsDB, saveBuilderSessionDB, deleteBuilderSessionDB, deleteExpiredBuilderSessionsDB } from "../database";
 
 /* ================================================================
  * BUILDER SESSION STATE
@@ -47,7 +48,7 @@ export interface BuilderSession {
   _needsExpiryWarning?: boolean;
 }
 
-const builderSessions = new Map<string, BuilderSession>();
+const builderSessions = loadBuilderSessionsDB();
 const SESSION_IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const SESSION_WARNING_MS = 8 * 60 * 1000; // Warn at 8 minutes
 
@@ -78,6 +79,7 @@ function getActiveSession(guildId: string, userId: string): BuilderSession | nul
 
 function touchSession(session: BuilderSession): void {
   session.lastActivityAt = Date.now();
+  saveBuilderSessionDB(getSessionKey(session.guildId, session.userId), session);
 }
 
 /* ================================================================
@@ -602,6 +604,7 @@ export function createPromptCommand(): AshenCommand {
             }
           } catch {}
           builderSessions.delete(getSessionKey(guild.id, userId));
+          deleteBuilderSessionDB(getSessionKey(guild.id, userId));
         }
 
         // Create a thread from the interaction channel
@@ -627,6 +630,7 @@ export function createPromptCommand(): AshenCommand {
           lastStateFetchedAt: 0,
         };
         builderSessions.set(getSessionKey(guild.id, userId), session);
+        saveBuilderSessionDB(getSessionKey(guild.id, userId), session);
 
         // Send initial message in thread as a clean Embed
         const sessionEmbed = new EmbedBuilder()
@@ -1162,9 +1166,12 @@ export function cleanupExpiredSessions(): number {
   for (const [key, session] of builderSessions) {
     if (now - session.lastActivityAt > SESSION_IDLE_TIMEOUT_MS) {
       builderSessions.delete(key);
+      deleteBuilderSessionDB(key);
       cleaned++;
     }
   }
+  // Also clean up any sessions in SQLite that aren't in memory
+  deleteExpiredBuilderSessionsDB(SESSION_IDLE_TIMEOUT_MS);
   return cleaned;
 }
 

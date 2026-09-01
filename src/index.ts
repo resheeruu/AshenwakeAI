@@ -44,6 +44,7 @@ import {
   handleConversation,
   classifyIntent,
 } from "./discord/conversational-agent";
+import { closeDatabase, getDatabaseStats } from "./database";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
@@ -1874,6 +1875,16 @@ process.on("SIGINT", async () => {
   } catch (error) {
     logger.error(
       "❌ Agent shutdown failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    closeDatabase();
+    logger.info("📦 SQLite database closed.");
+  } catch (error) {
+    logger.error(
+      "❌ Database shutdown failed:",
       error instanceof Error ? error.message : String(error)
     );
   }

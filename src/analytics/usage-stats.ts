@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { loadUsageStatsDB, saveUsageStatsDB } from "../database";
 
 export interface UsageStatsSnapshot {
   totalUsers: number;
@@ -39,9 +38,6 @@ interface UsageStatsData {
   commandUsage: Record<string, number>;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const STATS_FILE = path.join(DATA_DIR, "usage-stats.json");
-
 function dayKey(timestamp = Date.now()): string {
   return new Date(timestamp).toISOString().slice(0, 10);
 }
@@ -73,64 +69,11 @@ export class UsageStats {
   }
 
   private load(): UsageStatsData {
-    try {
-      if (fs.existsSync(STATS_FILE)) {
-        const raw = fs.readFileSync(STATS_FILE, "utf8");
-        const parsed = JSON.parse(raw) as Partial<UsageStatsData>;
-
-        return {
-          totalUsers: parsed.totalUsers ?? 0,
-          totalMessages: parsed.totalMessages ?? 0,
-          totalCommands: parsed.totalCommands ?? 0,
-
-          totalFailures: parsed.totalFailures ?? 0,
-          commandFailures: parsed.commandFailures ?? 0,
-          chatFailures: parsed.chatFailures ?? 0,
-
-          users: parsed.users ?? {},
-          dailyUsers: parsed.dailyUsers ?? {},
-          weeklyUsers: parsed.weeklyUsers ?? {},
-
-          commandUsage: parsed.commandUsage ?? {},
-        };
-      }
-    } catch {
-      // Start fresh if the stats file is damaged.
-    }
-
-    return {
-      totalUsers: 0,
-      totalMessages: 0,
-      totalCommands: 0,
-
-      totalFailures: 0,
-      commandFailures: 0,
-      chatFailures: 0,
-
-      users: {},
-      dailyUsers: {},
-      weeklyUsers: {},
-
-      commandUsage: {},
-    };
+    return loadUsageStatsDB();
   }
 
   private save(): void {
-    try {
-      fs.mkdirSync(DATA_DIR, {
-        recursive: true,
-      });
-
-      const tmpPath = STATS_FILE + ".tmp";
-      fs.writeFileSync(
-        tmpPath,
-        JSON.stringify(this.stats, null, 2),
-        "utf8",
-      );
-      fs.renameSync(tmpPath, STATS_FILE);
-    } catch {
-      // Silently ignore write failures to avoid crashing the caller.
-    }
+    saveUsageStatsDB(this.stats);
   }
 
   recordUser(userId: string): void {

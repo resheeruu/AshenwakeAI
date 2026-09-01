@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { logger } from "../logger";
 import { redact } from "./redact";
 import {
@@ -8,6 +6,7 @@ import {
   type SignedAuditEntry,
   type SignableAuditEntry,
 } from "./audit-integrity";
+import { insertAuditEntryDB, getAuditLogDB } from "../database";
 
 export interface AuditEntry {
   id: string;
@@ -26,37 +25,7 @@ export interface AuditEntry {
   prevHash?: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const AUDIT_FILE = path.join(DATA_DIR, "audit-log.json");
-const MAX_ENTRIES = 5000;
-
-let auditLog: AuditEntry[] = [];
-
-function loadAudit(): void {
-  try {
-    if (!fs.existsSync(AUDIT_FILE)) return;
-    const raw = fs.readFileSync(AUDIT_FILE, "utf8");
-    auditLog = JSON.parse(raw) as AuditEntry[];
-  } catch {
-    auditLog = [];
-  }
-}
-
-function saveAudit(): void {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (auditLog.length > MAX_ENTRIES) {
-      auditLog = auditLog.slice(-MAX_ENTRIES);
-    }
-    const tmpPath = AUDIT_FILE + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(auditLog, null, 2), "utf8");
-    fs.renameSync(tmpPath, AUDIT_FILE);
-  } catch (error) {
-    logger.warn(`⚠️ Could not save audit log: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-loadAudit();
+let lastSignature: string | null = null;
 
 export function recordAudit(entry: Omit<AuditEntry, "id" | "timestamp" | "signature" | "prevHash">): AuditEntry {
   const full: AuditEntry = {
@@ -67,14 +36,12 @@ export function recordAudit(entry: Omit<AuditEntry, "id" | "timestamp" | "signat
   };
 
   // U13: Sign the entry for integrity
-  const lastEntry = auditLog[auditLog.length - 1];
-  const lastSignature = lastEntry?.signature ?? null;
   const { signature, prevHash } = signEntry(full as SignableAuditEntry, lastSignature);
   full.signature = signature;
   full.prevHash = prevHash;
+  lastSignature = signature;
 
-  auditLog.push(full);
-  saveAudit();
+  insertAuditEntryDB(full);
 
   logger.info(`📋 AUDIT: [${full.result}] ${full.what} by ${full.who} in ${full.where}`);
 
@@ -89,27 +56,11 @@ export function getAuditLog(options: {
   /** U13: If true, verify chain integrity before returning */
   verifyIntegrity?: boolean;
 } = {}): AuditEntry[] {
-  let entries = auditLog;
-
-  if (options.guildId) {
-    entries = entries.filter((e) => e.guildId === options.guildId);
-  }
-
-  if (options.who) {
-    entries = entries.filter((e) => e.who === options.who);
-  }
-
-  if (options.since) {
-    const since = options.since;
-    entries = entries.filter((e) => e.timestamp >= since);
-  }
-
-  const limit = options.limit || 100;
-  const result = entries.slice(-limit);
+  const entries = getAuditLogDB(options);
 
   // U13: Non-blocking chain verification
-  if (options.verifyIntegrity && result.length > 0) {
-    const chainResult = verifyAuditChain(result);
+  if (options.verifyIntegrity && entries.length > 0) {
+    const chainResult = verifyAuditChain(entries);
     if (!chainResult.valid) {
       logger.warn(
         `⚠️ Audit log integrity check failed at entry index ${chainResult.brokenAt}. ` +
@@ -118,5 +69,5 @@ export function getAuditLog(options: {
     }
   }
 
-  return result;
+  return entries;
 }
