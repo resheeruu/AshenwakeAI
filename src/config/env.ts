@@ -145,6 +145,10 @@ export const config = {
 
   sessionSecret: optional("SESSION_SECRET"),
 
+  web: {
+    braveSearchApiKey: optional("BRAVE_SEARCH_API_KEY"),
+  },
+
   logLevel:
     process.env.LOG_LEVEL?.trim() ||
     "info",

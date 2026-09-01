@@ -1,4 +1,5 @@
-import { loadGuildConfigDB, saveGuildConfigDB, guildConfigExistsDB, getAllGuildConfigsDB, deleteGuildConfigDB } from "../database";
+import fastDeepEqual from "fast-deep-equal";
+import { loadGuildConfigDB, saveGuildConfigDB, guildConfigExistsDB, getAllGuildConfigsDB, deleteGuildConfigDB, invalidateGuildConfigCache } from "../database";
 
 export interface GuildConfig {
   guildId: string;
@@ -82,4 +83,8 @@ export function getAllGuildConfigs(): GuildConfig[] {
 
 export function deleteGuildConfig(guildId: string): boolean {
   return deleteGuildConfigDB(guildId);
+}
+
+export function configsEqual(a: GuildConfig, b: GuildConfig): boolean {
+  return fastDeepEqual(a, b);
 }

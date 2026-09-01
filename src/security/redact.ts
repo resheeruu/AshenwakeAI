@@ -15,10 +15,11 @@
  * U12: Redaction rules are centralized in ./patterns.ts
  */
 
+import stripAnsi from "strip-ansi";
 import { REDACTION_RULES } from "./patterns";
 
 function redactString(text: string): string {
-  let result = text;
+  let result = stripAnsi(text);
   for (const { pattern, replacement } of REDACTION_RULES) {
     if (typeof replacement === "function") {
       result = result.replace(pattern, replacement);

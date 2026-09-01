@@ -1,3 +1,4 @@
+import pino from "pino";
 import { config } from "./config/env";
 import { recordLog } from "./log-stream";
 import { redactLogMessage } from "./security/redact";
@@ -21,13 +22,37 @@ function enabled(level: LogLevel): boolean {
   return levels[currentLevel] >= levels[level];
 }
 
+const pinoLogger = pino({
+  level: currentLevel === "silent" ? "silent" : currentLevel,
+  formatters: {
+    level(label: string) {
+      return { level: label };
+    },
+  },
+  timestamp: pino.stdTimeFunctions.isoTime,
+  browser: {
+    write: (obj: unknown) => {
+      const o = obj as Record<string, unknown>;
+      const level = (o.level as string) || "info";
+      const msg = o.msg || "";
+      const safe = redactLogMessage(msg, o);
+      recordLog(level as any, ...safe);
+
+      if (enabled(level as LogLevel)) {
+        const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
+        fn(`[${level.toUpperCase()}] ${msg}`);
+      }
+    },
+  },
+});
+
 export const logger = {
   error(...args: unknown[]) {
     const safe = redactLogMessage(...args);
     recordLog("error", ...safe);
 
     if (enabled("error")) {
-      console.error(...safe);
+      pinoLogger.error(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
     }
   },
 
@@ -36,7 +61,7 @@ export const logger = {
     recordLog("warn", ...safe);
 
     if (enabled("warn")) {
-      console.warn(...safe);
+      pinoLogger.warn(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
     }
   },
 
@@ -45,7 +70,7 @@ export const logger = {
     recordLog("info", ...safe);
 
     if (enabled("info")) {
-      console.log(...safe);
+      pinoLogger.info(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
     }
   },
 
@@ -54,7 +79,7 @@ export const logger = {
     recordLog("debug", ...safe);
 
     if (enabled("debug")) {
-      console.log(...safe);
+      pinoLogger.debug(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
     }
   },
 };

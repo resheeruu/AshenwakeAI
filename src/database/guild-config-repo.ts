@@ -1,6 +1,12 @@
 import { getDatabase, safeDbOperation } from "./database";
 import { GuildConfigSchema, validateSchema } from "./schemas";
+import { LRUCache } from "lru-cache";
 import type { GuildConfig } from "../core/guild-config";
+
+const configCache = new LRUCache<string, GuildConfig>({
+  max: 500,
+  ttl: 1000 * 60 * 5,
+});
 
 /**
  * Default guild config for new guilds.
@@ -69,13 +75,18 @@ function defaultConfig(guildId: string): GuildConfig {
  * Load guild config from SQLite.
  */
 export function loadGuildConfigDB(guildId: string): GuildConfig {
+  const cached = configCache.get(guildId);
+  if (cached) return cached;
+
   return safeDbOperation(() => {
     const db = getDatabase();
     const row = db.prepare("SELECT config_json FROM guild_configs WHERE guild_id = ?").get(guildId) as any;
     if (!row) return defaultConfig(guildId);
     const parsed = JSON.parse(row.config_json);
     const validated = validateSchema(GuildConfigSchema, parsed);
-    return validated ?? { ...defaultConfig(guildId), ...parsed, guildId };
+    const result = validated ?? { ...defaultConfig(guildId), ...parsed, guildId };
+    configCache.set(guildId, result);
+    return result;
   }, defaultConfig(guildId), `loadGuildConfig(${guildId})`);
 }
 
@@ -91,6 +102,7 @@ export function saveGuildConfigDB(config: GuildConfig): void {
       VALUES (?, ?, ?)
       ON CONFLICT(guild_id) DO UPDATE SET config_json = excluded.config_json, updated_at = excluded.updated_at
     `).run(config.guildId, JSON.stringify(config), config.updatedAt);
+    configCache.set(config.guildId, config);
   }, undefined, `saveGuildConfig(${config.guildId})`);
 }
 
@@ -127,6 +139,15 @@ export function deleteGuildConfigDB(guildId: string): boolean {
   return safeDbOperation(() => {
     const db = getDatabase();
     const result = db.prepare("DELETE FROM guild_configs WHERE guild_id = ?").run(guildId);
+    configCache.delete(guildId);
     return result.changes > 0;
   }, false, `deleteGuildConfig(${guildId})`);
+}
+
+export function invalidateGuildConfigCache(guildId?: string): void {
+  if (guildId) {
+    configCache.delete(guildId);
+  } else {
+    configCache.clear();
+  }
 }

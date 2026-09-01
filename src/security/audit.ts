@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { logger } from "../logger";
 import { redact } from "./redact";
 import {
@@ -29,7 +30,7 @@ let lastSignature: string | null = null;
 
 export function recordAudit(entry: Omit<AuditEntry, "id" | "timestamp" | "signature" | "prevHash">): AuditEntry {
   const full: AuditEntry = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    id: nanoid(12),
     timestamp: Date.now(),
     ...entry,
     details: entry.details ? String(redact(entry.details)) : undefined,

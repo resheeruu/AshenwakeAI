@@ -1,5 +1,7 @@
 import fs from "fs";
 import path from "path";
+import pTimeout from "p-timeout";
+import PQueue from "p-queue";
 import { logger } from "../logger";
 
 import {
@@ -133,6 +135,8 @@ export class AIRouter {
 
   private readonly persistentHealth: boolean;
 
+  private readonly healthQueue = new PQueue({ concurrency: 1 });
+
   constructor(
     providers: AIProvider[],
     options: {
@@ -260,7 +264,6 @@ export class AIRouter {
   }
 
   private healthSavePending = false;
-  private healthSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Fire-and-forget health persistence.
@@ -271,18 +274,16 @@ export class AIRouter {
       return;
     }
 
-    this.healthSavePending = true;
-
-    if (this.healthSaveTimer) {
+    if (this.healthSavePending) {
       return;
     }
 
-    this.healthSaveTimer = setTimeout(() => {
-      this.healthSaveTimer = null;
-      if (!this.healthSavePending) return;
+    this.healthSavePending = true;
+
+    this.healthQueue.add(() => {
       this.healthSavePending = false;
       this.flushHealthSync();
-    }, 50);
+    });
   }
 
   private flushHealthSync(): void {
@@ -436,39 +437,10 @@ export class AIRouter {
     timeoutMs =
       REQUEST_TIMEOUT_MS
   ): Promise<T> {
-    let timer:
-      | ReturnType<
-          typeof setTimeout
-        >
-      | undefined;
-
-    const timeout =
-      new Promise<never>(
-        (_, reject) => {
-          timer =
-            setTimeout(
-              () => {
-                reject(
-                  new Error(
-                    `Provider request timed out after ${timeoutMs}ms`
-                  )
-                );
-              },
-              timeoutMs
-            );
-        }
-      );
-
-    try {
-      return await Promise.race([
-        promise,
-        timeout,
-      ]);
-    } finally {
-      if (timer) {
-        clearTimeout(timer);
-      }
-    }
+    return pTimeout(promise, {
+      milliseconds: timeoutMs,
+      message: `Provider request timed out after ${timeoutMs}ms`,
+    });
   }
 
   /* =========================
