@@ -274,15 +274,15 @@ export function createStatusCommand(
         content,
       });
       } catch (error) {
-        logger.error("/status failed:", error);
+        logger.error("/status failed:", error instanceof Error ? error.message : String(error));
         try {
           if (interaction.deferred || interaction.replied) {
-            await interaction.editReply({ content: "❌ Status check failed. Check the logs." });
+            await interaction.editReply({ content: "❌ Status check failed. Please try again." });
           } else {
             await interaction.reply({ content: "❌ Status check failed.", flags: MessageFlags.Ephemeral });
           }
-        } catch (replyError) {
-          logger.error("Could not send status result:", replyError);
+        } catch {
+          // Interaction may have expired
         }
       }
     },

@@ -10,6 +10,7 @@ import {
 } from "../discord/server-actions";
 
 import { AshenCommand } from "./definitions";
+import { logger } from "../logger";
 
 export function createServerCommand(): AshenCommand {
   const data = new SlashCommandBuilder()
@@ -19,18 +20,29 @@ export function createServerCommand(): AshenCommand {
   return {
     data,
     async execute(interaction: ChatInputCommandInteraction) {
-      if (!interaction.guild) {
-        await interaction.editReply(
-          "❌ This command can only be used inside a server."
-        );
-        return;
-      }
+      try {
+        if (!interaction.guild) {
+          await interaction.editReply(
+            "❌ This command can only be used inside a server."
+          );
+          return;
+        }
 
-      await interaction.editReply(
-        `🏠 **Server Information**\n${getServerSummary(
-          interaction.guild
-        )}`
-      );
+        await interaction.editReply(
+          `🏠 **Server Information**\n${getServerSummary(
+            interaction.guild
+          )}`
+        );
+      } catch (error) {
+        logger.error("❌ /serverinfo failed:", error instanceof Error ? error.message : String(error));
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: "❌ Failed to get server info. Please try again." });
+          }
+        } catch {
+          // Interaction may have expired
+        }
+      }
     },
   };
 }
@@ -49,33 +61,44 @@ export function createUserInfoCommand(): AshenCommand {
   return {
     data,
     async execute(interaction: ChatInputCommandInteraction) {
-      if (!interaction.guild) {
-        await interaction.editReply(
-          "❌ This command can only be used inside a server."
-        );
-        return;
-      }
-
-      const user = interaction.options.getUser("user", true);
-
-      let member: GuildMember | null;
-
       try {
-        member = await interaction.guild.members.fetch(user.id);
-      } catch {
-        member = null;
-      }
+        if (!interaction.guild) {
+          await interaction.editReply(
+            "❌ This command can only be used inside a server."
+          );
+          return;
+        }
 
-      if (!member) {
+        const user = interaction.options.getUser("user", true);
+
+        let member: GuildMember | null;
+
+        try {
+          member = await interaction.guild.members.fetch(user.id);
+        } catch {
+          member = null;
+        }
+
+        if (!member) {
+          await interaction.editReply(
+            "❌ I couldn't find that member in this server."
+          );
+          return;
+        }
+
         await interaction.editReply(
-          "❌ I couldn't find that member in this server."
+          `👤 **User Information**\n${getMemberSummary(member)}`
         );
-        return;
+      } catch (error) {
+        logger.error("❌ /userinfo failed:", error instanceof Error ? error.message : String(error));
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: "❌ Failed to get user info. Please try again." });
+          }
+        } catch {
+          // Interaction may have expired
+        }
       }
-
-      await interaction.editReply(
-        `👤 **User Information**\n${getMemberSummary(member)}`
-      );
     },
   };
 }
@@ -94,39 +117,50 @@ export function createRolesCommand(): AshenCommand {
   return {
     data,
     async execute(interaction: ChatInputCommandInteraction) {
-      if (!interaction.guild) {
-        await interaction.editReply(
-          "❌ This command can only be used inside a server."
-        );
-        return;
-      }
-
-      const user = interaction.options.getUser("user", true);
-
-      let member: GuildMember | null;
-
       try {
-        member = await interaction.guild.members.fetch(user.id);
-      } catch {
-        member = null;
-      }
+        if (!interaction.guild) {
+          await interaction.editReply(
+            "❌ This command can only be used inside a server."
+          );
+          return;
+        }
 
-      if (!member) {
+        const user = interaction.options.getUser("user", true);
+
+        let member: GuildMember | null;
+
+        try {
+          member = await interaction.guild.members.fetch(user.id);
+        } catch {
+          member = null;
+        }
+
+        if (!member) {
+          await interaction.editReply(
+            "❌ I couldn't find that member in this server."
+          );
+          return;
+        }
+
+        const roles = member.roles.cache
+          .filter((role) => role.id !== interaction.guild!.id)
+          .map((role) => role.name);
+
         await interaction.editReply(
-          "❌ I couldn't find that member in this server."
+          `🎭 **${member.user.tag}'s roles**\n${
+            roles.length ? roles.join(", ") : "No roles"
+          }`
         );
-        return;
+      } catch (error) {
+        logger.error("❌ /roles failed:", error instanceof Error ? error.message : String(error));
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: "❌ Failed to get roles. Please try again." });
+          }
+        } catch {
+          // Interaction may have expired
+        }
       }
-
-      const roles = member.roles.cache
-        .filter((role) => role.id !== interaction.guild!.id)
-        .map((role) => role.name);
-
-      await interaction.editReply(
-        `🎭 **${member.user.tag}'s roles**\n${
-          roles.length ? roles.join(", ") : "No roles"
-        }`
-      );
     },
   };
 }

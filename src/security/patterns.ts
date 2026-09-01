@@ -102,6 +102,11 @@ export const OUTPUT_INTERNAL_PATTERNS: RegExp[] = [
 
   // Source/config disclosure requests.
   /\b(show|give|dump|print|reveal)\b.{0,80}\b(source code|private configuration|internal configuration)\b/i,
+
+  // Security wrapper labels that should never appear in user-facing output.
+  /\[UNTRUSTED [A-Z ]+\]/i,
+  /\[END UNTRUSTED [A-Z ]+\]/i,
+  /untrusted content truncated/i,
 ];
 
 /* ================================================================

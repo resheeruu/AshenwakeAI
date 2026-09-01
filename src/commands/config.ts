@@ -14,6 +14,7 @@ import {
 
 import { AshenCommand } from "./definitions";
 import { recordAudit } from "../security/audit";
+import { logger } from "../logger";
 
 export function createConfigCommand(): AshenCommand {
   return {
@@ -197,7 +198,7 @@ export function createConfigCommand(): AshenCommand {
             "🚦 The user can make requests again."
           );
 
-          console.log(
+          logger.info(
             `🛡️ Rate limit reset by ${interaction.user.tag} for ${userId}.`
           );
 
@@ -216,9 +217,9 @@ export function createConfigCommand(): AshenCommand {
           "❌ Unknown configuration action."
         );
       } catch (error) {
-        console.error(
+        logger.error(
           "❌ /config failed:",
-          error
+          error instanceof Error ? error.message : String(error)
         );
 
         try {
@@ -227,14 +228,11 @@ export function createConfigCommand(): AshenCommand {
             interaction.replied
           ) {
             await interaction.editReply(
-              "❌ Configuration operation failed. Check the Termux logs."
+              "❌ Configuration operation failed. Please try again."
             );
           }
-        } catch (replyError) {
-          console.error(
-            "❌ Could not edit /config response:",
-            replyError
-          );
+        } catch {
+          // Interaction may have expired
         }
       }
     },

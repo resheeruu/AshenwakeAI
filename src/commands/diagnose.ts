@@ -199,7 +199,7 @@ export function createDiagnoseCommand(
           }
         }
       } catch (error) {
-        logger.error("/diagnose failed:", error);
+        logger.error("/diagnose failed:", error instanceof Error ? error.message : String(error));
 
         try {
           if (
@@ -208,17 +208,17 @@ export function createDiagnoseCommand(
           ) {
             await interaction.editReply({
               content:
-                "❌ Diagnostics failed. Check the Termux logs.",
+                "❌ Diagnostics failed. Please try again.",
             });
           } else {
             await interaction.reply({
               content:
-                "❌ Diagnostics failed. Check the Termux logs.",
+                "❌ Diagnostics failed. Please try again.",
               flags: MessageFlags.Ephemeral,
             });
           }
-        } catch (replyError) {
-          logger.error("Could not send diagnostics result:", replyError);
+        } catch {
+          // Interaction may have expired
         }
       }
     },

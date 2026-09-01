@@ -6,6 +6,7 @@ import {
 import { AshenCommand } from "./definitions";
 import { loadGuildAIConfig, saveGuildAIConfig, addTrustedUser, removeTrustedUser, getTrustedUsers } from "../ai/tools/channel-scope";
 import { recordAudit } from "../security/audit";
+import { logger } from "../logger";
 
 export function createTrustedCommand(): AshenCommand {
   return {
@@ -143,13 +144,13 @@ export function createTrustedCommand(): AshenCommand {
           await interaction.editReply(lines.join("\n"));
         }
       } catch (error) {
-        console.error("❌ /trusted failed:", error);
+        logger.error("❌ /trusted failed:", error instanceof Error ? error.message : String(error));
         try {
           if (interaction.deferred || interaction.replied) {
             await interaction.editReply("❌ Failed to manage trusted users. Please try again.");
           }
-        } catch (replyError) {
-          console.error("❌ Could not edit /trusted response:", replyError);
+        } catch {
+          // Interaction may have expired
         }
       }
     },

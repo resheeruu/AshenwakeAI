@@ -4,11 +4,14 @@ import {
   ChannelType,
   TextChannel,
   ThreadAutoArchiveDuration,
+  MessageFlags,
+  EmbedBuilder,
 } from "discord.js";
 import { AshenCommand } from "./definitions";
 import { loadGuildAIConfig, isTrustedUser } from "../ai/tools/channel-scope";
 import { recordAudit } from "../security/audit";
 import { config } from "../config/env";
+import { logger } from "../logger";
 
 /* ================================================================
  * BUILDER SESSION STATE
@@ -467,6 +470,47 @@ function buildStepsFromTemplate(
 }
 
 /* ================================================================
+ * PROGRESS EMBED HELPERS
+ * ================================================================ */
+
+const EMBED_COLOR = 0x2c2f33;
+
+function buildProgressEmbed(title: string, description: string): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(EMBED_COLOR)
+    .setTitle(title)
+    .setDescription(description);
+}
+
+function buildResultEmbed(
+  title: string,
+  description: string,
+  executed: string[],
+  failed: Array<{ step: string; error: string }>,
+): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setColor(failed.length === 0 ? 0x2ecc71 : 0xe67e22)
+    .setTitle(title)
+    .setDescription(description);
+
+  if (executed.length > 0) {
+    embed.addFields({
+      name: "Completed",
+      value: executed.map((e) => `✓ ${e}`).join("\n"),
+    });
+  }
+
+  if (failed.length > 0) {
+    embed.addFields({
+      name: "Failed",
+      value: failed.map((f) => `✗ ${f.step}: ${f.error}`).join("\n"),
+    });
+  }
+
+  return embed;
+}
+
+/* ================================================================
  * EXECUTION RESULT FORMATTING
  * ================================================================ */
 
@@ -584,26 +628,22 @@ export function createPromptCommand(): AshenCommand {
         };
         builderSessions.set(getSessionKey(guild.id, userId), session);
 
-        // Send initial message in thread
-        const welcomeMsg = [
-          "🔧 **AshenAI Builder**",
-          "",
-          "New session started.",
-          "",
-          "Tell me what you'd like to build, change, or inspect.",
-          "",
-          "Examples:",
-          '• "create a voice channel named callerss"',
-          '• "make call1 through call5"',
-          '• "inspect my server"',
-          '• "generate a community template"',
-          '• "delete all except general"',
-          '• "make my server better"',
-          "",
-          "*This session expires after 10 minutes of inactivity.*",
-        ].join("\n");
+        // Send initial message in thread as a clean Embed
+        const sessionEmbed = new EmbedBuilder()
+          .setColor(0x2c2f33)
+          .setTitle("New Session")
+          .setDescription(
+            request
+              ? `**Prompt:** ${request}`
+              : "**Prompt:** *(waiting for your request)*"
+          )
+          .addFields({
+            name: "Note",
+            value: "Keep the convo in this thread for session memory. To save something permanently, just tell the agent to remember it!",
+          })
+          .setFooter({ text: "Free • AshenAI Agent" });
 
-        await thread.send(welcomeMsg);
+        await thread.send({ embeds: [sessionEmbed] });
 
         // Acknowledge in the original channel
         await interaction.editReply(`✅ Builder session opened: ${thread}`);
@@ -622,12 +662,19 @@ export function createPromptCommand(): AshenCommand {
           await processBuilderMessage(interaction.client, thread, session, request, interaction.user);
         }
       } catch (error) {
-        console.error("❌ /prompt failed:", error);
+        logger.error("❌ /prompt failed:", error instanceof Error ? error.message : String(error));
         try {
           if (interaction.deferred || interaction.replied) {
             await interaction.editReply("❌ Failed to create builder session. Please try again.");
+          } else {
+            await interaction.reply({
+              content: "❌ Failed to create builder session. Please try again.",
+              flags: MessageFlags.Ephemeral,
+            }).catch(() => {});
           }
-        } catch {}
+        } catch {
+          // Interaction may have expired
+        }
       }
     },
   };
@@ -1015,10 +1062,15 @@ export async function processBuilderMessage(
           return;
         }
 
-        // Execute the plan
+        // Execute the plan with live progress
         const plan = session.pendingPlan;
         const executed: string[] = [];
         const failed: Array<{ step: string; error: string }> = [];
+
+        // Send initial progress message
+        const progressMsg = await thread.send({
+          embeds: [buildProgressEmbed("Executing...", `Running ${plan.steps.length} operation${plan.steps.length > 1 ? "s" : ""}`)],
+        });
 
         for (const step of plan.steps) {
           try {
@@ -1058,7 +1110,17 @@ export async function processBuilderMessage(
 
         session.pendingPlan = undefined;
 
-        await thread.send(formatExecutionResult(executed, failed));
+        // Update the progress message with the final result
+        const resultEmbed = buildResultEmbed(
+          failed.length === 0 ? "Completed" : "Partially Completed",
+          failed.length === 0
+            ? `✓ ${executed.length} operation${executed.length > 1 ? "s" : ""} completed successfully.`
+            : `Ran ${executed.length + failed.length} operation${executed.length + failed.length > 1 ? "s" : ""}.`,
+          executed,
+          failed,
+        );
+
+        await progressMsg.edit({ embeds: [resultEmbed] });
         return;
       }
 

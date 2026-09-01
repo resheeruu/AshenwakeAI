@@ -32,7 +32,7 @@ import { loadGuildConfig, guildConfigExists } from "./core/guild-config";
 import { loadGuildAIConfig } from "./ai/tools/channel-scope";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
 import { guardAIOutput } from "./security/output-guard";
-import { wrapUntrustedContent } from "./security/context";
+import { wrapUntrustedContent, stripSecurityLabels } from "./security/context";
 import { buildAdaptivePersonality } from "./ai/adaptive-personality";
 import { parseServerIntent } from "./discord/server-assistant";
 import {
@@ -110,6 +110,7 @@ import {
 } from "./commands/server";
 import { createTrustedCommand } from "./commands/trusted";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
+import { createSendCommand } from "./commands/send";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
@@ -197,6 +198,7 @@ const commands: AshenCommand[] = [
       createUntimeoutCommand(),
       createTrustedCommand(),
       createPromptCommand(),
+      createSendCommand(),
 ];
 
 commandHandler.registerMany(commands);
@@ -1238,8 +1240,6 @@ client.on(
 
       t.mark("dedup");
 
-      console.log(`📨 MESSAGE EVENT: userId=${userId} guildId=${guildId} channelId=${channelId} length=${message.content.length}`);
-
       /*
        * Never respond to bots.
        */
@@ -1284,10 +1284,6 @@ client.on(
       t.mark("fetch_ref");
 
         if (referencedMessage) {
-          console.log(
-            `🔎 Referenced author=${referencedMessage.author.tag} id=${referencedMessage.author.id} botId=${botId}`,
-          );
-
           isReplyToBot =
             referencedMessage.author.id === botId;
         }
@@ -1668,11 +1664,12 @@ client.on(
       }
 
       /*
+       * Strip internal security wrapper labels and
        * Discord message size protection.
        */
       const reply =
         truncateForDiscord(
-          guarded.text
+          stripSecurityLabels(guarded.text)
         );
 
       /*
@@ -1727,49 +1724,6 @@ client.on(
           "⚠️ Could not send interactive error reply."
         );
       }
-    }
-  }
-);
-
-/* =====================================================
-   ASH! PREFIX — TRUSTED-ONLY BOT MESSAGING
-   ===================================================== */
-
-client.on(
-  Events.MessageCreate,
-  async (message) => {
-    if (message.author.bot) return;
-    if (!message.guild) return;
-
-    const content = message.content;
-    if (!content.toLowerCase().startsWith("ash!")) return;
-
-    const text = content.slice(4).trim();
-    if (!text) return;
-
-    // Check if user is trusted
-    const aiConfig = loadGuildAIConfig(message.guild.id);
-    const isOwner = message.guild.ownerId === message.author.id;
-    const isTrusted = aiConfig.trustedUserIds?.includes(message.author.id) || false;
-    const botOwnerIds = config.admin.discordIds;
-    const isBotOwner = botOwnerIds.includes(message.author.id);
-
-    if (!isOwner && !isTrusted && !isBotOwner) {
-      // Untrusted user — do nothing, don't reveal prefix exists
-      return;
-    }
-
-    // Send the message as AshenAI
-    try {
-      if (message.channel.isSendable()) {
-        await message.channel.send(text);
-      }
-      // Delete the original command message if possible
-      try {
-        await message.delete();
-      } catch {}
-    } catch (error) {
-      logger.debug("⚠️ Could not send ash! message.");
     }
   }
 );
@@ -1835,7 +1789,7 @@ client.on(
     try {
       // Acknowledge the Discord interaction before CommandHandler executes it.
       if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply();
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       }
 
       await commandHandler.handle(
@@ -1870,7 +1824,7 @@ client.on(
           await interaction.reply({
             content:
               "❌ Something went wrong while processing that command.",
-          });
+          }).catch(() => {});
         }
       } catch {
         logger.debug(
@@ -2039,7 +1993,8 @@ client.on(Events.GuildCreate, async (guild) => {
 
     // Find the best channel to send the onboarding message
     // Prefer system channel, then first text channel the bot can send to
-    let targetChannel: { send: (args: string | { content: string }) => Promise<unknown> } | null = guild.systemChannel;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let targetChannel: { send: (args: any) => Promise<unknown> } | null = guild.systemChannel;
 
     if (!targetChannel) {
       const textChannels = guild.channels.cache.filter(
@@ -2047,7 +2002,8 @@ client.on(Events.GuildCreate, async (guild) => {
       );
       const first = textChannels.first();
       if (first) {
-        targetChannel = first as { send: (args: string | { content: string }) => Promise<unknown> };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetChannel = first as { send: (args: any) => Promise<unknown> };
       }
     }
 
@@ -2056,30 +2012,35 @@ client.on(Events.GuildCreate, async (guild) => {
       return;
     }
 
-    const onboardingMessage = [
-      "✨ **Hi! I'm AshenAI \u2014 your AI-powered server assistant.**",
-      "",
-      "I can help you:",
-      "> 🛠️ Create and customize your server",
-      "> 🤖 Manage channels, roles, and permissions",
-      "> 🛡️ Moderate and protect your community",
-      "> 📋 Generate server templates",
-      "> 💬 Chat naturally with your server",
-      "",
-      "**Get started:**",
-      "",
-      "💬 **Mention me** for quick chat",
-      "Use `/ask` for AI chat",
-      "Use `/prompt` for server building and management",
-      "Use `/help` to explore features",
-      "",
-      "🔐 **Server owner:** Use `/trusted add @user` to allow others to use server-management features.",
-      "Trusted users can use `ash! <text>` to send messages as AshenAI.",
-      "",
-      "Nothing has been changed.",
-    ].join("\n");
+    const onboardingEmbed = new EmbedBuilder()
+      .setColor(0x2c2f33)
+      .setTitle("Hi! I'm AshenAI — your AI-powered server assistant.")
+      .setDescription(
+        "I can help you:\n" +
+        "> 🛠️ Create and customize your server\n" +
+        "> 🤖 Manage channels, roles, and permissions\n" +
+        "> 🛡️ Moderate and protect your community\n" +
+        "> 📋 Generate server templates\n" +
+        "> 💬 Chat naturally with your server"
+      )
+      .addFields(
+        {
+          name: "Get Started",
+          value: [
+            "💬 **Mention me** for quick chat",
+            "Use `/ask` for AI chat",
+            "Use `/prompt` for server building and management",
+            "Use `/help` to explore features",
+          ].join("\n"),
+        },
+        {
+          name: "Trusted Users",
+          value: "🔐 **Server owner:** Use `/trusted add @user` to allow others to use server-management features.\nTrusted users can use `/send` to send messages as AshenAI.",
+        }
+      )
+      .setFooter({ text: "Nothing has been changed." });
 
-    await targetChannel.send(onboardingMessage);
+    await targetChannel.send({ embeds: [onboardingEmbed] });
 
     recordAudit({
       who: "system",

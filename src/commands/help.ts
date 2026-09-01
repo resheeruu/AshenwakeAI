@@ -7,6 +7,7 @@ import {
   StringSelectMenuInteraction,
   EmbedBuilder,
   ComponentType,
+  MessageFlags,
 } from "discord.js";
 import { AshenCommand } from "./definitions";
 import { logger } from "../logger";
@@ -101,7 +102,7 @@ const ALL_CATEGORIES: HelpCategory[] = [
       { name: "/trusted add", description: "Add a trusted user", adminOnly: true },
       { name: "/trusted list", description: "List trusted users" },
       { name: "/trusted remove", description: "Remove a trusted user", adminOnly: true },
-      { name: "ash! <text>", description: "Send a message as AshenAI (trusted only)" },
+      { name: "/send", description: "Send a message as AshenAI (trusted only)" },
     ],
   },
   {
@@ -256,7 +257,14 @@ export function createHelpCommand(): AshenCommand {
             const { embed: catEmbed, components: catComponents } = buildCategoryEmbed(category, isOwner, isMod);
             await selectInteraction.update({ embeds: [catEmbed], components: catComponents });
           } catch (err) {
-            logger.debug("⚠️ Help select interaction failed.");
+            try {
+              if (!selectInteraction.replied && !selectInteraction.deferred) {
+                await selectInteraction.reply({
+                  content: "⚠️ Something went wrong. Please try again.",
+                  flags: MessageFlags.Ephemeral,
+                }).catch(() => {});
+              }
+            } catch {}
           }
         });
 
@@ -285,6 +293,16 @@ export function createHelpCommand(): AshenCommand {
               ],
               components: [],
             });
+          } else {
+            await interaction.reply({
+              embeds: [
+                new EmbedBuilder()
+                  .setColor(EMBED_COLOR)
+                  .setDescription("\u26A0\uFE0F I couldn't open the help menu right now. Please try `/help` again."),
+              ],
+              components: [],
+              flags: MessageFlags.Ephemeral,
+            }).catch(() => {});
           }
         } catch {
           // Interaction may have expired

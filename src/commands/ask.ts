@@ -16,7 +16,7 @@ import { AshenCommand } from "./definitions";
 import { config } from "../config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
 import { guardAIOutput } from "../security/output-guard";
-import { wrapUntrustedContent } from "../security/context";
+import { wrapUntrustedContent, stripSecurityLabels } from "../security/context";
 import { StageTimer } from "../ai/timing";
 
 const MAX_DISCORD_LENGTH = 1900;
@@ -206,7 +206,7 @@ export function createAskCommand(
           );
         }
 
-        const reply = cleanResponse(guarded.text);
+        const reply = cleanResponse(stripSecurityLabels(guarded.text));
         t.mark("guard_and_format");
 
         /*
@@ -237,9 +237,9 @@ export function createAskCommand(
           `✅ /ask response sent using ${response.provider} in ${response.latencyMs}ms`
         );
       } catch (error) {
-        console.error(
+        logger.error(
           "❌ /ask failed:",
-          error
+          error instanceof Error ? error.message : String(error)
         );
 
         usageManager.record({
@@ -256,11 +256,8 @@ export function createAskCommand(
               "❌ I couldn't get a response right now. Please try again."
             );
           }
-        } catch (replyError) {
-          console.error(
-            "❌ Could not send /ask error response:",
-            replyError
-          );
+        } catch {
+          // Interaction may have expired
         }
       }
     },
