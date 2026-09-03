@@ -208,13 +208,16 @@ commandHandler.registerMany(commands);
    BROWSER AGENT STARTUP
    ===================================================== */
 
-import { getBrowserManager } from "./web/browser";
+import { getBrowserManager, registerBrowserTools } from "./web/browser";
+import { toolRegistry } from "./ai/tools/registry";
 
 async function startBrowser(): Promise<void> {
   try {
     const manager = getBrowserManager();
     const available = await manager.initialize();
     if (available) {
+      // Register browser tools in the tool registry for executeTool pipeline
+      registerBrowserTools(toolRegistry);
       logger.info("🌐 Browser agent is online.");
     } else {
       logger.info("ℹ️ Browser agent disabled (Chromium unavailable). HTTP pipeline remains active.");

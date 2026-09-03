@@ -47,5 +47,14 @@ export {
   browserBack,
   browserForward,
   browserClose,
+  validateBrowserAccess,
+  requiresBrowserConfirmation,
   type BrowserToolContext,
+  type BrowserAccessResult,
 } from "./tools";
+
+// Tool Definitions (for ToolRegistry integration)
+export {
+  browserToolDefinitions,
+  registerBrowserTools,
+} from "./tool-definitions";

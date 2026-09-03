@@ -4,10 +4,15 @@
  * Controlled browser tool API for AI agents.
  * Each tool validates arguments, enforces limits, checks permissions,
  * and emits audit/tracing information.
+ *
+ * SECURITY: Every tool call goes through validateBrowserAccess()
+ * which enforces role-based access control, channel scope, and
+ * confirmation requirements using the existing permission system.
  * ================================================================ */
 
 import { logger } from "../../logger";
 import { recordAudit } from "../../security/audit";
+import { hasPermission, type AshenRole } from "../../security/permissions";
 import { getBrowserManager } from "./manager";
 import {
   validateUrl,
@@ -30,8 +35,93 @@ import type {
 export interface BrowserToolContext {
   userId: string;
   guildId: string;
+  channelId: string;
   sessionId: string;
+  requesterRole: AshenRole;
   isBotOwner: boolean;
+}
+
+/* ================================================================
+ * ACCESS CONTROL
+ *
+ * Browser tools enforce role-based access:
+ *   - extract, screenshot, scroll, wait, back, forward: member+
+ *   - open, navigate: moderator+
+ *   - click, type: moderator+ (confirmation recommended for high-risk)
+ *   - close: member+ (session owner only)
+ *
+ * Bot owners bypass all restrictions.
+ * ================================================================ */
+
+type BrowserAction =
+  | "browser_open"
+  | "browser_navigate"
+  | "browser_click"
+  | "browser_type"
+  | "browser_scroll"
+  | "browser_wait"
+  | "browser_extract"
+  | "browser_screenshot"
+  | "browser_back"
+  | "browser_forward"
+  | "browser_close";
+
+const BROWSER_ROLE_REQUIREMENTS: Record<BrowserAction, AshenRole> = {
+  browser_extract: "member",
+  browser_screenshot: "member",
+  browser_scroll: "member",
+  browser_wait: "member",
+  browser_back: "member",
+  browser_forward: "member",
+  browser_close: "member",
+  browser_open: "moderator",
+  browser_navigate: "moderator",
+  browser_click: "moderator",
+  browser_type: "moderator",
+};
+
+/** Actions that require confirmation from the same user who initiated */
+const CONFIRMATION_REQUIRED_ACTIONS = new Set<BrowserAction>([
+  "browser_click",
+  "browser_type",
+]);
+
+export interface BrowserAccessResult {
+  allowed: boolean;
+  reason?: string;
+}
+
+/**
+ * Validate whether a requester can execute a browser action.
+ * Uses the existing permission hierarchy from src/security/permissions.ts.
+ */
+export function validateBrowserAccess(
+  action: BrowserAction,
+  ctx: BrowserToolContext,
+): BrowserAccessResult {
+  // Bot owners bypass all restrictions
+  if (ctx.isBotOwner) {
+    return { allowed: true };
+  }
+
+  const requiredRole = BROWSER_ROLE_REQUIREMENTS[action];
+  const check = hasPermission(ctx.requesterRole, requiredRole);
+
+  if (!check.allowed) {
+    return {
+      allowed: false,
+      reason: check.reason || `Insufficient role for ${action}`,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Check whether a browser action requires confirmation.
+ */
+export function requiresBrowserConfirmation(action: BrowserAction): boolean {
+  return CONFIRMATION_REQUIRED_ACTIONS.has(action);
 }
 
 /* ================================================================
@@ -47,6 +137,20 @@ export async function browserOpen(
 ): Promise<BrowserOpenResult> {
   const t0 = Date.now();
   const manager = getBrowserManager();
+
+  // Access control
+  const access = validateBrowserAccess("browser_open", ctx);
+  if (!access.allowed) {
+    recordAudit({
+      who: ctx.userId,
+      what: "browser_open",
+      where: "browser",
+      guildId: ctx.guildId,
+      result: "denied",
+      details: access.reason,
+    });
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
 
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
@@ -104,6 +208,20 @@ export async function browserNavigate(
   const t0 = Date.now();
   const manager = getBrowserManager();
 
+  // Access control
+  const access = validateBrowserAccess("browser_navigate", ctx);
+  if (!access.allowed) {
+    recordAudit({
+      who: ctx.userId,
+      what: "browser_navigate",
+      where: "browser",
+      guildId: ctx.guildId,
+      result: "denied",
+      details: access.reason,
+    });
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
+
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
   }
@@ -140,6 +258,20 @@ export async function browserClick(
 ): Promise<BrowserActionResult> {
   const t0 = Date.now();
   const manager = getBrowserManager();
+
+  // Access control
+  const access = validateBrowserAccess("browser_click", ctx);
+  if (!access.allowed) {
+    recordAudit({
+      who: ctx.userId,
+      what: "browser_click",
+      where: "browser",
+      guildId: ctx.guildId,
+      result: "denied",
+      details: access.reason,
+    });
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
 
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
@@ -178,6 +310,20 @@ export async function browserType(
 ): Promise<BrowserActionResult> {
   const t0 = Date.now();
   const manager = getBrowserManager();
+
+  // Access control
+  const access = validateBrowserAccess("browser_type", ctx);
+  if (!access.allowed) {
+    recordAudit({
+      who: ctx.userId,
+      what: "browser_type",
+      where: "browser",
+      guildId: ctx.guildId,
+      result: "denied",
+      details: access.reason,
+    });
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
 
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
@@ -221,6 +367,11 @@ export async function browserScroll(
   const t0 = Date.now();
   const manager = getBrowserManager();
 
+  const access = validateBrowserAccess("browser_scroll", ctx);
+  if (!access.allowed) {
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
+
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
   }
@@ -244,6 +395,11 @@ export async function browserWait(
 ): Promise<BrowserActionResult> {
   const t0 = Date.now();
   const manager = getBrowserManager();
+
+  const access = validateBrowserAccess("browser_wait", ctx);
+  if (!access.allowed) {
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
 
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
@@ -273,6 +429,11 @@ export async function browserExtract(
   const t0 = Date.now();
   const manager = getBrowserManager();
 
+  const access = validateBrowserAccess("browser_extract", ctx);
+  if (!access.allowed) {
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
+
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
   }
@@ -287,7 +448,6 @@ export async function browserExtract(
   const result = await manager.extractContent(ctx.sessionId, selector);
 
   if (result.success && result.text) {
-    // Redact sensitive content
     result.text = redactSensitiveContent(result.text);
   }
 
@@ -325,6 +485,11 @@ export async function browserScreenshot(
   const t0 = Date.now();
   const manager = getBrowserManager();
 
+  const access = validateBrowserAccess("browser_screenshot", ctx);
+  if (!access.allowed) {
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
+
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
   }
@@ -361,6 +526,11 @@ export async function browserBack(ctx: BrowserToolContext): Promise<BrowserActio
   const t0 = Date.now();
   const manager = getBrowserManager();
 
+  const access = validateBrowserAccess("browser_back", ctx);
+  if (!access.allowed) {
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
+
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
   }
@@ -376,6 +546,11 @@ export async function browserForward(ctx: BrowserToolContext): Promise<BrowserAc
   const t0 = Date.now();
   const manager = getBrowserManager();
 
+  const access = validateBrowserAccess("browser_forward", ctx);
+  if (!access.allowed) {
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
+
   if (!manager.isAvailable()) {
     return { success: false, error: "Browser not available", durationMs: Date.now() - t0 };
   }
@@ -390,6 +565,11 @@ export async function browserForward(ctx: BrowserToolContext): Promise<BrowserAc
 export async function browserClose(ctx: BrowserToolContext): Promise<BrowserActionResult> {
   const t0 = Date.now();
   const manager = getBrowserManager();
+
+  const access = validateBrowserAccess("browser_close", ctx);
+  if (!access.allowed) {
+    return { success: false, error: access.reason, durationMs: Date.now() - t0 };
+  }
 
   await manager.closeSession(ctx.sessionId);
 

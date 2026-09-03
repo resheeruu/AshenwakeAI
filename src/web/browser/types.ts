@@ -23,6 +23,8 @@ export interface BrowserConfig {
   maxScreenshotWidth: number;
   /** Maximum screenshot dimensions (height) */
   maxScreenshotHeight: number;
+  /** Maximum screenshot buffer size in bytes */
+  maxScreenshotBytes: number;
   /** Maximum redirects per navigation */
   maxRedirects: number;
   /** Maximum navigation count per session */
@@ -49,6 +51,7 @@ export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
   maxExtractedTextLength: 100_000,
   maxScreenshotWidth: 1920,
   maxScreenshotHeight: 1080,
+  maxScreenshotBytes: 5 * 1024 * 1024, // 5MB
   maxRedirects: 5,
   maxNavigations: 20,
   maxClicks: 50,

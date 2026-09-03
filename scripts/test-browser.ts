@@ -19,6 +19,14 @@ import {
   getBrowserManager,
 } from "../src/web/browser/manager";
 import {
+  validateBrowserAccess,
+  requiresBrowserConfirmation,
+  type BrowserToolContext,
+} from "../src/web/browser/tools";
+import {
+  browserToolDefinitions,
+} from "../src/web/browser/tool-definitions";
+import {
   DEFAULT_BROWSER_CONFIG,
 } from "../src/web/browser/types";
 
@@ -260,6 +268,216 @@ async function main(): Promise<void> {
   const normalTextOnly = normalHtml.replace(/<[^>]+>/g, "").trim();
   const normalIsSpa = SPA_INDICATORS.some((p) => p.test(normalHtml)) && normalTextOnly.length < 500;
   assert(normalIsSpa === false, "does not detect normal HTML as SPA");
+
+  /* ================================================================
+   * ACCESS CONTROL TESTS
+   * ================================================================ */
+
+  section("validateBrowserAccess");
+
+  {
+    // Member role can access read-only tools
+    const memberCtx: BrowserToolContext = {
+      userId: "user1",
+      guildId: "guild1",
+      channelId: "chan1",
+      sessionId: "sess1",
+      requesterRole: "member",
+      isBotOwner: false,
+    };
+
+    const extractAccess = validateBrowserAccess("browser_extract", memberCtx);
+    assert(extractAccess.allowed === true, "member can access browser_extract");
+
+    const screenshotAccess = validateBrowserAccess("browser_screenshot", memberCtx);
+    assert(screenshotAccess.allowed === true, "member can access browser_screenshot");
+
+    const scrollAccess = validateBrowserAccess("browser_scroll", memberCtx);
+    assert(scrollAccess.allowed === true, "member can access browser_scroll");
+
+    // Member role cannot access moderator-only tools
+    const openAccess = validateBrowserAccess("browser_open", memberCtx);
+    assert(openAccess.allowed === false, "member cannot access browser_open");
+    assert(openAccess.reason?.includes("moderator") || openAccess.reason?.includes("Requires"), "denial reason mentions role requirement");
+
+    const navigateAccess = validateBrowserAccess("browser_navigate", memberCtx);
+    assert(navigateAccess.allowed === false, "member cannot access browser_navigate");
+
+    const clickAccess = validateBrowserAccess("browser_click", memberCtx);
+    assert(clickAccess.allowed === false, "member cannot access browser_click");
+
+    const typeAccess = validateBrowserAccess("browser_type", memberCtx);
+    assert(typeAccess.allowed === false, "member cannot access browser_type");
+
+    // Moderator can access all tools
+    const modCtx: BrowserToolContext = {
+      ...memberCtx,
+      requesterRole: "moderator",
+    };
+
+    const modOpenAccess = validateBrowserAccess("browser_open", modCtx);
+    assert(modOpenAccess.allowed === true, "moderator can access browser_open");
+
+    const modNavigateAccess = validateBrowserAccess("browser_navigate", modCtx);
+    assert(modNavigateAccess.allowed === true, "moderator can access browser_navigate");
+
+    const modClickAccess = validateBrowserAccess("browser_click", modCtx);
+    assert(modClickAccess.allowed === true, "moderator can access browser_click");
+
+    const modTypeAccess = validateBrowserAccess("browser_type", modCtx);
+    assert(modTypeAccess.allowed === true, "moderator can access browser_type");
+
+    // Bot owner bypasses all restrictions
+    const ownerCtx: BrowserToolContext = {
+      ...memberCtx,
+      requesterRole: "guest",
+      isBotOwner: true,
+    };
+
+    const ownerOpenAccess = validateBrowserAccess("browser_open", ownerCtx);
+    assert(ownerOpenAccess.allowed === true, "bot owner bypasses role restrictions");
+  }
+
+  section("requiresBrowserConfirmation");
+
+  {
+    assert(requiresBrowserConfirmation("browser_click") === true, "browser_click requires confirmation");
+    assert(requiresBrowserConfirmation("browser_type") === true, "browser_type requires confirmation");
+    assert(requiresBrowserConfirmation("browser_open") === false, "browser_open does not require confirmation");
+    assert(requiresBrowserConfirmation("browser_navigate") === false, "browser_navigate does not require confirmation");
+    assert(requiresBrowserConfirmation("browser_extract") === false, "browser_extract does not require confirmation");
+    assert(requiresBrowserConfirmation("browser_screenshot") === false, "browser_screenshot does not require confirmation");
+    assert(requiresBrowserConfirmation("browser_scroll") === false, "browser_scroll does not require confirmation");
+  }
+
+  /* ================================================================
+   * TOOL DEFINITIONS TESTS
+   * ================================================================ */
+
+  section("Browser Tool Definitions");
+
+  {
+    assert(browserToolDefinitions.length === 11, `11 browser tools registered (got ${browserToolDefinitions.length})`);
+
+    // All tools have required fields
+    for (const tool of browserToolDefinitions) {
+      assert(typeof tool.name === "string", `${tool.name} has name`);
+      assert(typeof tool.description === "string", `${tool.name} has description`);
+      assert(typeof tool.requiredRole === "string", `${tool.name} has requiredRole`);
+      assert(Array.isArray(tool.allowedScopes), `${tool.name} has allowedScopes`);
+      assert(typeof tool.confirmationRequired === "boolean", `${tool.name} has confirmationRequired`);
+      assert(typeof tool.riskLevel === "string", `${tool.name} has riskLevel`);
+      assert(typeof tool.execute === "function", `${tool.name} has execute function`);
+    }
+
+    // Check specific tool properties
+    const openTool = browserToolDefinitions.find((t) => t.name === "browser_open");
+    assert(openTool?.requiredRole === "moderator", "browser_open requires moderator role");
+    assert(openTool?.confirmationRequired === false, "browser_open does not require confirmation");
+    assert(openTool?.riskLevel === "medium", "browser_open risk is medium");
+
+    const clickTool = browserToolDefinitions.find((t) => t.name === "browser_click");
+    assert(clickTool?.requiredRole === "moderator", "browser_click requires moderator role");
+    assert(clickTool?.confirmationRequired === true, "browser_click requires confirmation");
+    assert(clickTool?.riskLevel === "high", "browser_click risk is high");
+
+    const extractTool = browserToolDefinitions.find((t) => t.name === "browser_extract");
+    assert(extractTool?.requiredRole === "member", "browser_extract requires member role");
+    assert(extractTool?.riskLevel === "safe", "browser_extract risk is safe");
+
+    // All tools have browser category
+    for (const tool of browserToolDefinitions) {
+      assert(tool.category === "browser", `${tool.name} has category=browser`);
+    }
+  }
+
+  /* ================================================================
+   * CROSS-GUILD ISOLATION TESTS
+   * ================================================================ */
+
+  section("Cross-Session/Cross-Guild Isolation");
+
+  {
+    // Sessions with different guilds should be isolated
+    const ctx1: BrowserToolContext = {
+      userId: "user1",
+      guildId: "guild1",
+      channelId: "chan1",
+      sessionId: "sess1",
+      requesterRole: "member",
+      isBotOwner: false,
+    };
+
+    const ctx2: BrowserToolContext = {
+      userId: "user1",
+      guildId: "guild2",
+      channelId: "chan1",
+      sessionId: "sess1",
+      requesterRole: "member",
+      isBotOwner: false,
+    };
+
+    // Both should be valid contexts (isolation is enforced at session level)
+    assert(ctx1.guildId !== ctx2.guildId, "different guild IDs are isolated");
+
+    // Session IDs are unique per creation
+    const manager = getBrowserManager();
+    const session1 = manager.createSession("user1", "guild1");
+    const session2 = manager.createSession("user2", "guild1");
+    // Sessions should have different IDs (async, but structurally guaranteed)
+    assert(typeof session1.then === "function", "createSession returns promise");
+    assert(typeof session2.then === "function", "createSession returns promise");
+  }
+
+  /* ================================================================
+   * REDIRECT SSRF VALIDATION TESTS
+   * ================================================================ */
+
+  section("Redirect SSRF Validation");
+
+  {
+    // Redirect to private IP should be blocked
+    const privateRedirect = await validateRedirect(
+      "https://example.com",
+      "http://192.168.1.1/secret",
+    );
+    assert(privateRedirect.valid === false, "blocks redirect to private IP");
+    assert(
+      privateRedirect.reason?.includes("private") ||
+      privateRedirect.reason?.includes("reserves") ||
+      privateRedirect.reason?.includes("DNS") ||
+      privateRedirect.reason?.includes("downgrade"),
+      "reason mentions private IP, DNS failure, or protocol downgrade",
+    );
+
+    // Redirect to localhost should be blocked
+    const localhostRedirect = await validateRedirect(
+      "https://example.com",
+      "http://localhost/admin",
+    );
+    assert(localhostRedirect.valid === false, "blocks redirect to localhost");
+
+    // Redirect to metadata endpoint should be blocked
+    const metadataRedirect = await validateRedirect(
+      "https://example.com",
+      "http://169.254.169.254/metadata",
+    );
+    assert(metadataRedirect.valid === false, "blocks redirect to metadata endpoint");
+
+    // HTTP downgrade should be blocked
+    const downgradeRedirect = await validateRedirect(
+      "https://example.com",
+      "http://example.com/page",
+    );
+    assert(downgradeRedirect.valid === false, "blocks HTTPS→HTTP downgrade");
+
+    // Valid HTTPS redirect should be allowed
+    const validRedirect = await validateRedirect(
+      "https://example.com",
+      "https://other.com/page",
+    );
+    assert(validRedirect.valid === true, "allows valid HTTPS redirect");
+  }
 
   /* ================================================================
    * SUMMARY

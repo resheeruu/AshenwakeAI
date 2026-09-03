@@ -14,7 +14,7 @@ import type {
   BrowserHealthStatus,
 } from "./types";
 import { DEFAULT_BROWSER_CONFIG } from "./types";
-import { validateUrl, resolveAndValidateHost } from "./security";
+import { validateUrl, resolveAndValidateHost, validateRedirect } from "./security";
 
 /* ================================================================
  * BROWSER AVAILABILITY
@@ -274,6 +274,21 @@ export class BrowserManager {
         waitUntil: "domcontentloaded",
       });
 
+      // Redirect SSRF validation: check if the final URL after redirects
+      // differs from the original. If so, validate the redirect destination.
+      const finalUrl = page.url();
+      if (finalUrl !== url && !finalUrl.startsWith(url)) {
+        const redirectCheck = await validateRedirect(url, finalUrl);
+        if (!redirectCheck.valid) {
+          // Navigate back to about:blank to prevent staying on unsafe page
+          await page.goto("about:blank").catch(() => {});
+          return {
+            success: false,
+            error: `Redirect blocked: ${redirectCheck.reason}`,
+          };
+        }
+      }
+
       session.navigationCount++;
       session.lastActivityAt = Date.now();
       this.totalOperations++;
@@ -394,6 +409,14 @@ export class BrowserManager {
         type: "png",
         fullPage: false,
       });
+
+      // Enforce screenshot byte size limit
+      if (buffer.length > this.config.maxScreenshotBytes) {
+        return {
+          success: false,
+          error: `Screenshot too large: ${(buffer.length / 1024 / 1024).toFixed(1)}MB (max ${(this.config.maxScreenshotBytes / 1024 / 1024).toFixed(1)}MB)`,
+        };
+      }
 
       session.lastActivityAt = Date.now();
       this.totalOperations++;
