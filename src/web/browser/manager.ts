@@ -181,6 +181,10 @@ export class BrowserManager {
         navigationCount: 0,
         clickCount: 0,
         scrollCount: 0,
+        typeCount: 0,
+        waitCount: 0,
+        screenshotCount: 0,
+        extractedBytesTotal: 0,
         pageCount: 0,
         status: "active",
       };
@@ -269,34 +273,52 @@ export class BrowserManager {
     }
 
     try {
-      const response = await page.goto(url, {
-        timeout: this.config.navigationTimeoutMs,
-        waitUntil: "domcontentloaded",
-      });
+      // Navigate with redirect limit enforcement
+      let redirectCount = 0;
+      let currentUrl = url;
+      let response;
+      let finalTitle = "";
 
-      // Redirect SSRF validation: check if the final URL after redirects
-      // differs from the original. If so, validate the redirect destination.
-      const finalUrl = page.url();
-      if (finalUrl !== url && !finalUrl.startsWith(url)) {
-        const redirectCheck = await validateRedirect(url, finalUrl);
-        if (!redirectCheck.valid) {
-          // Navigate back to about:blank to prevent staying on unsafe page
-          await page.goto("about:blank").catch(() => {});
-          return {
-            success: false,
-            error: `Redirect blocked: ${redirectCheck.reason}`,
-          };
+      while (redirectCount <= this.config.maxRedirects) {
+        response = await page.goto(currentUrl, {
+          timeout: this.config.navigationTimeoutMs,
+          waitUntil: "domcontentloaded",
+        });
+
+        const finalUrl = page.url();
+
+        // Check if we were redirected
+        if (finalUrl !== currentUrl && !finalUrl.startsWith(currentUrl)) {
+          redirectCount++;
+
+          if (redirectCount > this.config.maxRedirects) {
+            await page.goto("about:blank").catch(() => {});
+            return { success: false, error: `Redirect limit exceeded (${this.config.maxRedirects})` };
+          }
+
+          // Validate redirect destination
+          const redirectCheck = await validateRedirect(currentUrl, finalUrl);
+          if (!redirectCheck.valid) {
+            await page.goto("about:blank").catch(() => {});
+            return { success: false, error: `Redirect blocked: ${redirectCheck.reason}` };
+          }
+
+          currentUrl = finalUrl;
+          continue;
         }
+
+        // No further redirects — we're at the final destination
+        finalTitle = await page.title();
+        break;
       }
 
       session.navigationCount++;
       session.lastActivityAt = Date.now();
       this.totalOperations++;
 
-      const title = await page.title();
       return {
         success: true,
-        title,
+        title: finalTitle,
         status: response?.status() || 0,
       };
     } catch (error) {
@@ -347,6 +369,12 @@ export class BrowserManager {
       // Truncate to max length
       if (text.length > this.config.maxExtractedTextLength) {
         text = text.slice(0, this.config.maxExtractedTextLength) + "...";
+      }
+
+      // Track extracted bytes against session budget
+      session.extractedBytesTotal += text.length * 2; // approximate UTF-16 bytes
+      if (session.extractedBytesTotal > this.config.maxExtractedBytes) {
+        return { success: false, error: "Total extracted text budget exceeded for this session" };
       }
 
       // Extract links
@@ -404,6 +432,16 @@ export class BrowserManager {
       return { success: false, error: "Invalid session or page" };
     }
 
+    // Enforce screenshot budget
+    if (session.screenshotCount >= this.config.maxScreenshots) {
+      return { success: false, error: "Screenshot limit reached" };
+    }
+
+    // Enforce overall session time budget
+    if (Date.now() - session.createdAt > this.config.maxResearchDurationMs) {
+      return { success: false, error: "Session time limit reached" };
+    }
+
     try {
       const buffer = await page.screenshot({
         type: "png",
@@ -418,6 +456,7 @@ export class BrowserManager {
         };
       }
 
+      session.screenshotCount++;
       session.lastActivityAt = Date.now();
       this.totalOperations++;
 
@@ -453,6 +492,11 @@ export class BrowserManager {
       return { success: false, error: "Click limit reached" };
     }
 
+    // Enforce overall session time budget
+    if (Date.now() - session.createdAt > this.config.maxResearchDurationMs) {
+      return { success: false, error: "Session time limit reached" };
+    }
+
     try {
       await page.click(selector, { timeout: this.config.actionTimeoutMs });
       session.clickCount++;
@@ -478,8 +522,19 @@ export class BrowserManager {
       return { success: false, error: "Invalid session or page" };
     }
 
+    // Enforce type budget
+    if (session.typeCount >= this.config.maxTypes) {
+      return { success: false, error: "Type limit reached" };
+    }
+
+    // Enforce overall session time budget
+    if (Date.now() - session.createdAt > this.config.maxResearchDurationMs) {
+      return { success: false, error: "Session time limit reached" };
+    }
+
     try {
       await page.fill(selector, text, { timeout: this.config.actionTimeoutMs });
+      session.typeCount++;
       session.lastActivityAt = Date.now();
       this.totalOperations++;
       return { success: true };
@@ -503,6 +558,11 @@ export class BrowserManager {
 
     if (session.scrollCount >= this.config.maxScrolls) {
       return { success: false, error: "Scroll limit reached" };
+    }
+
+    // Enforce overall session time budget
+    if (Date.now() - session.createdAt > this.config.maxResearchDurationMs) {
+      return { success: false, error: "Session time limit reached" };
     }
 
     try {
@@ -543,10 +603,21 @@ export class BrowserManager {
       return { success: false, error: "Invalid session or page" };
     }
 
+    // Enforce wait budget
+    if (session.waitCount >= this.config.maxWaits) {
+      return { success: false, error: "Wait limit reached" };
+    }
+
+    // Enforce overall session time budget
+    if (Date.now() - session.createdAt > this.config.maxResearchDurationMs) {
+      return { success: false, error: "Session time limit reached" };
+    }
+
     try {
       await page.waitForSelector(selector, {
-        timeout: timeoutMs || this.config.actionTimeoutMs,
+        timeout: Math.min(timeoutMs || this.config.actionTimeoutMs, this.config.actionTimeoutMs),
       });
+      session.waitCount++;
       session.lastActivityAt = Date.now();
       this.totalOperations++;
       return { success: true };

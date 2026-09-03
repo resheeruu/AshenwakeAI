@@ -38,11 +38,13 @@ function isPrivateIP(ip: string): boolean {
   if (/^169\.254\./.test(ip)) return true;       // Link-local
   if (/^0\./.test(ip)) return true;              // Current network
   if (/^100\.6[4-9]\./.test(ip)) return true;    // Carrier-grade NAT (100.64.0.0/10)
+  if (/^100\.(?:7\d|8\d|9\d|1[01]\d|11[0-9]|12[0-7])\./.test(ip)) return true; // Extended CGNAT
   if (/^192\.0\.0\./.test(ip)) return true;      // IETF protocol assignments
   if (/^192\.0\.2\./.test(ip)) return true;      // Documentation TEST-NET-1
   if (/^198\.51\.100\./.test(ip)) return true;   // Documentation TEST-NET-2
   if (/^203\.0\.113\./.test(ip)) return true;    // Documentation TEST-NET-3
   if (/^224\./.test(ip)) return true;            // Multicast
+  if (/^240\./.test(ip)) return true;            // Reserved
   // IPv6 private/reserved
   if (/^::1$/.test(ip)) return true;             // Loopback
   if (/^fc00:/.test(ip)) return true;            // ULA
@@ -52,34 +54,65 @@ function isPrivateIP(ip: string): boolean {
   if (/^::ffff:10\./.test(ip)) return true;      // IPv4-mapped private
   if (/^::ffff:172\./.test(ip)) return true;     // IPv4-mapped private
   if (/^::ffff:192\.168\./.test(ip)) return true; // IPv4-mapped private
+  if (/^::ffff:169\.254\./.test(ip)) return true; // IPv4-mapped link-local
+  if (/^0:0:0:0:0:ffff:/.test(ip)) return true;  // IPv4-compatible IPv6
+  if (/^fd00:ec2::/.test(ip)) return true;        // AWS EC2 metadata IPv6
   return false;
 }
 
 /**
  * Resolve hostname and verify it does not point to a private/reserved IP.
+ * Checks ALL resolved addresses to prevent DNS rebinding / multi-address SSRF.
  * Prevents SSRF against internal infrastructure.
  */
+const BLOCKED_HOSTNAMES = new Set([
+  "localhost",
+  "0.0.0.0",
+  "::1",
+  "[::1]",
+  "metadata.google.internal",
+  "169.254.169.254",
+  "instance-metadata",
+  "azure-metadata",
+  "dscloud.metadata",
+]);
+
+function isBlockedHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  if (BLOCKED_HOSTNAMES.has(lower)) return true;
+  if (lower.endsWith(".local") || lower.endsWith(".internal") || lower.endsWith(".localhost")) return true;
+  return false;
+}
+
 async function resolveAndValidateHost(url: string): Promise<void> {
   const parsed = new URL(url);
   const hostname = parsed.hostname;
 
-  // Skip DNS check for localhost variants
-  if (hostname === "localhost" || hostname === "[::1]") {
-    throw new Error(`Blocked: localhost is not a fetchable target`);
+  // Pre-block known dangerous hostnames before DNS lookup
+  if (isBlockedHostname(hostname)) {
+    throw new Error(`Blocked: ${hostname} is not a fetchable target`);
   }
 
   try {
-    const { address } = await dns.promises.lookup(hostname);
-    if (isPrivateIP(address)) {
-      logger.warn(`🌐 SSRF blocked: ${hostname} resolves to private IP ${address}`);
-      throw new Error(`Blocked: ${hostname} resolves to a private/reserved IP address`);
+    const results = await dns.promises.lookup(hostname, { all: true });
+    if (!results || results.length === 0) {
+      throw new Error(`Blocked: DNS resolution returned no addresses for ${hostname}`);
+    }
+
+    for (const result of results) {
+      if (isPrivateIP(result.address)) {
+        logger.warn(`🌐 SSRF blocked: ${hostname} has private/reserved address ${result.address}`);
+        throw new Error(`Blocked: ${hostname} resolves to a private/reserved IP address`);
+      }
     }
   } catch (error) {
     if (error instanceof Error && error.message.includes("Blocked")) {
       throw error;
     }
-    // DNS resolution failure — let the fetch attempt proceed and fail naturally
-    logger.debug(`🌐 DNS lookup failed for ${hostname}: ${error instanceof Error ? error.message : String(error)}`);
+    // DNS resolution failure — block for safety (fail-closed)
+    // Prevents TOCTOU: if DNS fails now but resolves to a private IP
+    // at the HTTP client level, the request would reach internal infrastructure.
+    throw new Error(`Blocked: DNS resolution failed for ${hostname}`);
   }
 }
 

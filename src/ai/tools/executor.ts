@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { logger } from "../../logger";
 import { recordAudit } from "../../security/audit";
 import { sanitizeToolError } from "../../security/sanitize";
@@ -41,6 +42,21 @@ export function createActionPlan(
   requiresConfirmation: boolean,
 ): ActionPlan {
   const id = `plan_${Date.now().toString(36)}_${++planCounter}`;
+
+  // Compute arguments hash for tamper detection
+  const argsForHash = { ...context.arguments };
+  delete argsForHash._toolName;
+  delete argsForHash._sessionId;
+  const argsHash = createHash("sha256")
+    .update(JSON.stringify(argsForHash))
+    .digest("hex")
+    .slice(0, 16);
+
+  // Extract session ID from arguments if present (browser tools)
+  const sessionId = typeof context.arguments._sessionId === "string"
+    ? context.arguments._sessionId
+    : undefined;
+
   return {
     id,
     guildId: context.guildId,
@@ -53,6 +69,8 @@ export function createActionPlan(
     requiresConfirmation,
     createdAt: Date.now(),
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+    sessionId,
+    argumentsHash: argsHash,
   };
 }
 

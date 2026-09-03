@@ -33,6 +33,14 @@ export interface BrowserConfig {
   maxClicks: number;
   /** Maximum scroll count per session */
   maxScrolls: number;
+  /** Maximum type/fill count per session */
+  maxTypes: number;
+  /** Maximum wait count per session */
+  maxWaits: number;
+  /** Maximum screenshot count per session */
+  maxScreenshots: number;
+  /** Maximum total extracted bytes per session */
+  maxExtractedBytes: number;
   /** Maximum retries for failed operations */
   maxRetries: number;
   /** Enable headless mode */
@@ -56,6 +64,10 @@ export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
   maxNavigations: 20,
   maxClicks: 50,
   maxScrolls: 30,
+  maxTypes: 30,
+  maxWaits: 30,
+  maxScreenshots: 10,
+  maxExtractedBytes: 10 * 1024 * 1024, // 10MB total extracted text
   maxRetries: 2,
   headless: true,
 };
@@ -69,6 +81,10 @@ export interface BrowserSession {
   navigationCount: number;
   clickCount: number;
   scrollCount: number;
+  typeCount: number;
+  waitCount: number;
+  screenshotCount: number;
+  extractedBytesTotal: number;
   pageCount: number;
   status: "active" | "closed" | "error";
 }

@@ -1,0 +1,51 @@
+name: AshenAI CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Run mandatory test suite
+        run: npm test
+
+      - name: Dependency check
+        run: npm ls --depth=0 2>&1 | head -50
+
+      - name: Audit dependencies
+        run: npm audit --omit=dev 2>&1 | head -30 || true
+
+      - name: Verify browser graceful degradation
+        run: node ./node_modules/.bin/tsx -e "
+          import { getBrowserManager } from './src/web/browser';
+          const m = getBrowserManager();
+          const available = await m.initialize();
+          console.log('Browser available:', available);
+          console.log('HTTP pipeline: always available');
+          process.exit(0);
+        "

@@ -39,11 +39,13 @@ function isPrivateIP(ip: string): boolean {
   if (/^169\.254\./.test(ip)) return true;
   if (/^0\./.test(ip)) return true;
   if (/^100\.6[4-9]\./.test(ip)) return true;
+  if (/^100\.(?:7\d|8\d|9\d|1[01]\d|11[0-9]|12[0-7])\./.test(ip)) return true;
   if (/^192\.0\.0\./.test(ip)) return true;
   if (/^192\.0\.2\./.test(ip)) return true;
   if (/^198\.51\.100\./.test(ip)) return true;
   if (/^203\.0\.113\./.test(ip)) return true;
   if (/^224\./.test(ip)) return true;
+  if (/^240\./.test(ip)) return true;
   // IPv6 private/reserved
   if (/^::1$/.test(ip)) return true;
   if (/^fc00:/.test(ip)) return true;
@@ -53,6 +55,10 @@ function isPrivateIP(ip: string): boolean {
   if (/^::ffff:10\./.test(ip)) return true;
   if (/^::ffff:172\./.test(ip)) return true;
   if (/^::ffff:192\.168\./.test(ip)) return true;
+  if (/^::ffff:169\.254\./.test(ip)) return true;
+  if (/^0:0:0:0:0:ffff:/.test(ip)) return true;
+  // Cloud metadata via IPv6
+  if (/^fd00:ec2::/.test(ip)) return true;
   return false;
 }
 
@@ -120,7 +126,8 @@ export function validateUrl(url: string): URLValidationResult {
 
 /**
  * Resolve a hostname and verify it does not point to a private/reserved IP.
- * Returns the resolved IP address or an error.
+ * Checks ALL resolved addresses to prevent DNS rebinding / multi-address SSRF.
+ * Returns the first safe resolved IP address or an error.
  */
 export async function resolveAndValidateHost(hostname: string): Promise<{
   valid: boolean;
@@ -132,12 +139,27 @@ export async function resolveAndValidateHost(hostname: string): Promise<{
   }
 
   try {
-    const { address } = await dns.promises.lookup(hostname);
-    if (isPrivateIP(address)) {
-      logger.warn(`🌐 Browser SSRF blocked: ${hostname} resolves to private IP ${address}`);
-      return { valid: false, reason: `${hostname} resolves to private/reserved IP ${address}` };
+    const results = await dns.promises.lookup(hostname, { all: true });
+    if (!results || results.length === 0) {
+      return { valid: false, reason: `DNS resolution returned no addresses for ${hostname}` };
     }
-    return { valid: true, ip: address };
+
+    let firstSafeIp: string | undefined;
+
+    for (const result of results) {
+      if (isPrivateIP(result.address)) {
+        logger.warn(`🌐 Browser SSRF blocked: ${hostname} has private/reserved address ${result.address}`);
+        return {
+          valid: false,
+          reason: `${hostname} resolves to private/reserved IP ${result.address}`,
+        };
+      }
+      if (!firstSafeIp) {
+        firstSafeIp = result.address;
+      }
+    }
+
+    return { valid: true, ip: firstSafeIp };
   } catch (error) {
     // DNS resolution failure — block for safety
     return { valid: false, reason: `DNS resolution failed for ${hostname}` };

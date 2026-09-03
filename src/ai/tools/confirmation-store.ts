@@ -65,11 +65,21 @@ export function verifyPlan(
   plan: ActionPlan,
   confirmerId: string,
   guildId: string,
+  channelId?: string,
+  sessionId?: string,
 ): { valid: boolean; reason?: string } {
   if (plan.requesterId !== confirmerId) {
     return { valid: false, reason: "CONFIRMATION_INVALID" };
   }
   if (plan.guildId !== guildId) {
+    return { valid: false, reason: "CONFIRMATION_INVALID" };
+  }
+  // Channel binding: if plan specifies a channel, the confirmation must match
+  if (channelId && plan.channelId && plan.channelId !== channelId) {
+    return { valid: false, reason: "CONFIRMATION_INVALID" };
+  }
+  // Session binding: for browser operations, session must match
+  if (sessionId && plan.sessionId && plan.sessionId !== sessionId) {
     return { valid: false, reason: "CONFIRMATION_INVALID" };
   }
   if (isPlanExpired(plan)) {

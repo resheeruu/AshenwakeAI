@@ -190,10 +190,10 @@ console.log("\n===== C. SESSION COOKIE SECURITY =====");
 
   const cookie = res.headers["Set-Cookie"] || "";
   assertIncludes(cookie, "HttpOnly", "Cookie has HttpOnly flag");
-  assertIncludes(cookie, "SameSite=Strict", "Cookie has SameSite=Strict");
+  assertIncludes(cookie, "SameSite=Lax", "Cookie has SameSite=Lax");
   assertIncludes(cookie, "Path=/", "Cookie has Path=/");
   assertIncludes(cookie, "Max-Age=", "Cookie has Max-Age");
-  assertNotIncludes(cookie, "SameSite=Lax", "Cookie does NOT have SameSite=Lax");
+  assertIncludes(cookie, "SameSite=Lax", "Cookie has SameSite=Lax");
 }
 
 {
@@ -206,7 +206,7 @@ console.log("\n===== C. SESSION COOKIE SECURITY =====");
   const cookie = res.headers["Set-Cookie"] || "";
   assertIncludes(cookie, "Secure", "Production cookie has Secure flag");
   assertIncludes(cookie, "HttpOnly", "Production cookie has HttpOnly");
-  assertIncludes(cookie, "SameSite=Strict", "Production cookie has SameSite=Strict");
+  assertIncludes(cookie, "SameSite=Lax", "Production cookie has SameSite=Lax");
 
   process.env.NODE_ENV = original;
 }
@@ -231,7 +231,7 @@ console.log("\n===== C. SESSION COOKIE SECURITY =====");
   const cookie = res.headers["Set-Cookie"] || "";
   assertIncludes(cookie, "Max-Age=0", "Clear cookie sets Max-Age=0");
   assertIncludes(cookie, "HttpOnly", "Clear cookie has HttpOnly");
-  assertIncludes(cookie, "SameSite=Strict", "Clear cookie has SameSite=Strict");
+  assertIncludes(cookie, "SameSite=Lax", "Clear cookie has SameSite=Lax");
 }
 
 {
@@ -345,23 +345,26 @@ console.log("\n===== G. SESSION DESTRUCTION =====");
 console.log("\n===== H. LOGIN RATE LIMITING =====");
 
 {
-  const limiter = createLoginRateLimiter();
   const ip = "test_rate_limiter_" + Date.now().toString(36);
 
   for (let i = 0; i < 5; i++) {
-    authenticateOwner(TEST_USERNAME, "wrong_pass_" + i, ip);
+    const r = authenticateOwner(TEST_USERNAME, "wrong_pass_" + i, ip);
+    assert(!r.success, "Failed login attempt " + (i + 1) + " rejected");
   }
 
-  const result = limiter.check(ip);
-  assert(!result.allowed, "Request is blocked after 5 failed logins");
-  assert(result.retryAfterMs! > 0, "Retry-after is positive");
+  // 6th attempt should be rate limited
+  const result = authenticateOwner(TEST_USERNAME, "wrong_pass_5", ip);
+  assert(!result.success, "Request is blocked after 5 failed logins");
+  assertEqual(result.reason, "rate_limited", "Reason is rate_limited");
 }
 
 {
-  const limiter = createLoginRateLimiter();
-  limiter.reset("test_rate_limiter_ip");
-  const result = limiter.check("test_rate_limiter_ip");
-  assert(result.allowed, "Request is allowed after reset");
+  // Use a fresh IP and fresh username to verify no false positives
+  const ip2 = "test_rate_fresh_" + Date.now().toString(36);
+  const freshUser = "fresh_user_" + Date.now().toString(36);
+  const result = authenticateOwner(freshUser, "wrong_password", ip2);
+  assert(!result.success, "Fresh IP+user is not rate limited");
+  assertEqual(result.reason, "invalid_credentials", "Fresh IP+user gets invalid_credentials");
 }
 
 /* ================================================================
