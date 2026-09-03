@@ -18,6 +18,7 @@ import { fireworksProvider } from "./fireworks";
 import { cerebrasProvider } from "./cerebras";
 import { sambanovaProvider } from "./sambanova";
 import { novitaProvider } from "./novita";
+import { LocalLLMProvider } from "./local-llm";
 
 export const providerRegistry =
   new ProviderRegistry();
@@ -38,6 +39,12 @@ providerRegistry.register(fireworksProvider, 130);
 providerRegistry.register(cerebrasProvider, 140);
 providerRegistry.register(sambanovaProvider, 150);
 providerRegistry.register(novitaProvider, 160);
+
+// Optional local LLM provider (disabled unless LOCAL_LLM_ENABLED=true)
+const localLLM = new LocalLLMProvider();
+if (localLLM.isAvailable()) {
+  providerRegistry.register(localLLM, 200);
+}
 
 export const providers: AIProvider[] =
   providerRegistry.getAll();

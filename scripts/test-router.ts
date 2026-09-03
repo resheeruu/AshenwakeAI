@@ -1,5 +1,6 @@
 import { AIRouter } from "../src/ai/router";
 import { AIProvider } from "../src/ai/types";
+import { setCacheEnabled } from "../src/ai/response-cache";
 
 let passed = 0;
 let failed = 0;
@@ -7,7 +8,9 @@ let failed = 0;
 /*
  * Offline tests must be deterministic.
  * Production exploration is disabled by setting Math.random high.
+ * Response caching is disabled to prevent test interference.
  */
+setCacheEnabled(false);
 const originalRandom = Math.random;
 Math.random = () => 0.999999;
 

@@ -205,6 +205,28 @@ const commands: AshenCommand[] = [
 commandHandler.registerMany(commands);
 
 /* =====================================================
+   BROWSER AGENT STARTUP
+   ===================================================== */
+
+import { getBrowserManager } from "./web/browser";
+
+async function startBrowser(): Promise<void> {
+  try {
+    const manager = getBrowserManager();
+    const available = await manager.initialize();
+    if (available) {
+      logger.info("🌐 Browser agent is online.");
+    } else {
+      logger.info("ℹ️ Browser agent disabled (Chromium unavailable). HTTP pipeline remains active.");
+    }
+  } catch (error) {
+    logger.warn(
+      `⚠️ Browser agent startup failed: ${error instanceof Error ? error.message : String(error)}. HTTP pipeline remains active.`
+    );
+  }
+}
+
+/* =====================================================
    AGENT STARTUP
    ===================================================== */
 
@@ -394,6 +416,11 @@ client.once(
       logger.info(
         `✅ Slash commands synchronized: ${commands.length}`
       );
+
+      /*
+       * Start the browser agent (optional — degrades gracefully if Chromium unavailable).
+       */
+      await startBrowser();
 
       /*
        * Start the interactive Discord conversation
@@ -1603,6 +1630,9 @@ client.on(
           messages,
           temperature: 0.7,
           maxTokens: 1200,
+          guildId,
+          userId,
+          channelId,
         });
       t.mark("ai_generate");
 
@@ -1854,6 +1884,9 @@ if (!token) {
 process.on("uncaughtException", (error) => {
   logger.error("❌ UNCAUGHT EXCEPTION — cleaning up:", error.message || String(error));
   try { internalSupervisor.stop(); } catch {}
+  try { agentManager.stop().catch(() => {}); } catch {}
+  try { getBrowserManager().shutdown().catch(() => {}); } catch {}
+  try { closeDatabase(); } catch {}
   try { client.destroy(); } catch {}
   process.exit(1);
 });
@@ -1861,6 +1894,9 @@ process.on("uncaughtException", (error) => {
 process.on("unhandledRejection", (reason) => {
   logger.error("❌ UNHANDLED REJECTION — cleaning up:", reason instanceof Error ? reason.message : String(reason));
   try { internalSupervisor.stop(); } catch {}
+  try { agentManager.stop().catch(() => {}); } catch {}
+  try { getBrowserManager().shutdown().catch(() => {}); } catch {}
+  try { closeDatabase(); } catch {}
   try { client.destroy(); } catch {}
   process.exit(1);
 });
@@ -1875,6 +1911,17 @@ process.on("SIGINT", async () => {
   } catch (error) {
     logger.error(
       "❌ Agent shutdown failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    const browserManager = getBrowserManager();
+    await browserManager.shutdown();
+    logger.info("🌐 Browser agent stopped.");
+  } catch (error) {
+    logger.warn(
+      "⚠️ Browser shutdown failed:",
       error instanceof Error ? error.message : String(error)
     );
   }
@@ -1908,10 +1955,41 @@ process.on("SIGTERM", async () => {
 
   try {
     await agentManager.stop();
-    client.destroy();
+    logger.info("🧠 AshenAI agent stopped cleanly.");
   } catch (error) {
     logger.error(
-      "❌ Shutdown failed:",
+      "❌ Agent shutdown failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    const browserManager = getBrowserManager();
+    await browserManager.shutdown();
+    logger.info("🌐 Browser agent stopped.");
+  } catch (error) {
+    logger.warn(
+      "⚠️ Browser shutdown failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    closeDatabase();
+    logger.info("📦 SQLite database closed.");
+  } catch (error) {
+    logger.error(
+      "❌ Database shutdown failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    client.destroy();
+    logger.info("🔌 Discord client disconnected.");
+  } catch (error) {
+    logger.error(
+      "❌ Discord shutdown failed:",
       error instanceof Error ? error.message : String(error)
     );
   }

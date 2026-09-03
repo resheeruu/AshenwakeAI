@@ -1,7 +1,8 @@
-import { getDatabase, safeDbOperation } from "./database";
+import { getDatabase, safeDbOperation, transaction } from "./database";
 import { GuildConfigSchema, validateSchema } from "./schemas";
 import { LRUCache } from "lru-cache";
 import type { GuildConfig } from "../core/guild-config";
+import { scanForSecrets } from "../security/redact";
 
 const configCache = new LRUCache<string, GuildConfig>({
   max: 500,
@@ -95,15 +96,54 @@ export function loadGuildConfigDB(guildId: string): GuildConfig {
  */
 export function saveGuildConfigDB(config: GuildConfig): void {
   safeDbOperation(() => {
+    const configJson = JSON.stringify(config);
+    const secrets = scanForSecrets(configJson);
+    if (secrets.length > 0) {
+      throw new Error(`Config contains secrets: ${secrets.join(", ")}`);
+    }
+
     const db = getDatabase();
     config.updatedAt = Date.now();
     db.prepare(`
       INSERT INTO guild_configs (guild_id, config_json, updated_at)
       VALUES (?, ?, ?)
       ON CONFLICT(guild_id) DO UPDATE SET config_json = excluded.config_json, updated_at = excluded.updated_at
-    `).run(config.guildId, JSON.stringify(config), config.updatedAt);
+    `).run(config.guildId, configJson, config.updatedAt);
     configCache.set(config.guildId, config);
   }, undefined, `saveGuildConfig(${config.guildId})`);
+}
+
+/**
+ * Save guild config with CAS (compare-and-swap) precondition.
+ * Only saves if the current updatedAt matches expectedUpdatedAt.
+ * Returns true if saved, false if precondition failed.
+ */
+export function saveGuildConfigCAS(
+  config: GuildConfig,
+  expectedUpdatedAt: number,
+): boolean {
+  return safeDbOperation(() => {
+    const configJson = JSON.stringify(config);
+    const secrets = scanForSecrets(configJson);
+    if (secrets.length > 0) {
+      throw new Error(`Config contains secrets: ${secrets.join(", ")}`);
+    }
+
+    const db = getDatabase();
+    const result = db.prepare(`
+      UPDATE guild_configs
+      SET config_json = ?, updated_at = ?
+      WHERE guild_id = ? AND updated_at = ?
+    `).run(configJson, Date.now(), config.guildId, expectedUpdatedAt);
+
+    if (result.changes === 0) {
+      return false;
+    }
+
+    config.updatedAt = Date.now();
+    configCache.set(config.guildId, config);
+    return true;
+  }, false, `saveGuildConfigCAS(${config.guildId})`);
 }
 
 /**

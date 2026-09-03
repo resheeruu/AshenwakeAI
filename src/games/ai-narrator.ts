@@ -16,8 +16,6 @@ RULES:
 - Never break character or mention being an AI
 - If you cannot generate narration, return an empty string`;
 
-const NPC_MEMORY_FILE = "data/ai-npc-memory.json";
-
 export type NarrationRequest = {
   player: GamePlayer;
   action: string;

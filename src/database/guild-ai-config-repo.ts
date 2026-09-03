@@ -1,6 +1,8 @@
 import { getDatabase, safeDbOperation, transaction } from "./database";
 import { GuildAIConfigSchema, validateSchema } from "./schemas";
 import type { GuildAIConfig } from "../ai/tools/channel-scope";
+import { scanForSecrets } from "../security/redact";
+import { logger } from "../logger";
 
 const CURRENT_VERSION = 1;
 
@@ -42,6 +44,14 @@ export function loadGuildAIConfigDB(guildId: string): GuildAIConfig {
  * Save guild AI config to SQLite (including trusted users).
  */
 export function saveGuildAIConfigDB(config: GuildAIConfig): void {
+  // Scan for secrets before saving (defense-in-depth, matching guild-config-repo)
+  const configJson = JSON.stringify(config);
+  const secrets = scanForSecrets(configJson);
+  if (secrets.length > 0) {
+    logger.warn(`⚠️ Guild AI config for ${config.guildId} contains potential secrets: ${secrets.join(", ")} — blocking save`);
+    return;
+  }
+
   safeDbOperation(() => {
     const db = getDatabase();
     config.updatedAt = Date.now();

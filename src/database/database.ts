@@ -195,6 +195,102 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
         CREATE INDEX idx_builder_sessions_activity ON builder_sessions(last_activity_at);
       `,
     },
+    {
+      version: 7,
+      description: "FTS5 conversation search",
+      sql: `
+        CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
+          conversation_key,
+          messages_text,
+          content='conversations',
+          content_rowid='rowid'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS conversations_ai AFTER INSERT ON conversations BEGIN
+          INSERT INTO conversations_fts(rowid, conversation_key, messages_text)
+          VALUES (new.rowid, new.conversation_key, new.messages_json);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS conversations_ad AFTER DELETE ON conversations BEGIN
+          INSERT INTO conversations_fts(conversations_fts, rowid, conversation_key, messages_text)
+          VALUES ('delete', old.rowid, old.conversation_key, old.messages_json);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS conversations_au AFTER UPDATE ON conversations BEGIN
+          INSERT INTO conversations_fts(conversations_fts, rowid, conversation_key, messages_text)
+          VALUES ('delete', old.rowid, old.conversation_key, old.messages_json);
+          INSERT INTO conversations_fts(rowid, conversation_key, messages_text)
+          VALUES (new.rowid, new.conversation_key, new.messages_json);
+        END;
+      `,
+    },
+    {
+      version: 8,
+      description: "AI response cache",
+      sql: `
+        CREATE TABLE IF NOT EXISTS ai_response_cache (
+          cache_key TEXT PRIMARY KEY,
+          response TEXT NOT NULL,
+          model TEXT NOT NULL,
+          token_count INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          expires_at INTEGER NOT NULL,
+          hit_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_response_cache_expires ON ai_response_cache(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_response_cache_model ON ai_response_cache(model);
+      `,
+    },
+    {
+      version: 9,
+      description: "Agent tasks (SQLite)",
+      sql: `
+        CREATE TABLE IF NOT EXISTS agent_tasks (
+          id TEXT PRIMARY KEY,
+          goal TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          task_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_tasks_status ON agent_tasks(status);
+        CREATE INDEX IF NOT EXISTS idx_agent_tasks_updated ON agent_tasks(updated_at);
+      `,
+    },
+    {
+      version: 10,
+      description: "Agent traces",
+      sql: `
+        CREATE TABLE IF NOT EXISTS agent_traces (
+          id TEXT PRIMARY KEY,
+          trace_id TEXT NOT NULL,
+          parent_id TEXT,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL,
+          start_time INTEGER NOT NULL,
+          end_time INTEGER,
+          duration_ms INTEGER,
+          status TEXT NOT NULL DEFAULT 'ok',
+          metadata_json TEXT,
+          error_message TEXT,
+          tokens_used INTEGER DEFAULT 0,
+          cost_usd REAL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_traces_trace ON agent_traces(trace_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_traces_category ON agent_traces(category);
+        CREATE INDEX IF NOT EXISTS idx_agent_traces_time ON agent_traces(start_time);
+        CREATE INDEX IF NOT EXISTS idx_agent_traces_status ON agent_traces(status);
+      `,
+    },
+    {
+      version: 11,
+      description: "Cache isolation columns + trace size index",
+      sql: `
+        -- Add guild_id and user_id to response cache for isolation
+        ALTER TABLE ai_response_cache ADD COLUMN guild_id TEXT DEFAULT '';
+        ALTER TABLE ai_response_cache ADD COLUMN user_id TEXT DEFAULT '';
+      `,
+    },
   ];
 }
 

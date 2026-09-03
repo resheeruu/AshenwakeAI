@@ -27,8 +27,31 @@ export interface AuditEntry {
 }
 
 let lastSignature: string | null = null;
+let signatureLoaded = false;
+
+/**
+ * Load the last audit signature from the database to maintain chain continuity across restarts.
+ */
+function ensureSignatureLoaded(): void {
+  if (signatureLoaded) return;
+  signatureLoaded = true;
+
+  try {
+    // Get the most recent audit entry's signature to continue the chain
+    const recentEntries = getAuditLogDB({ limit: 1 });
+    if (recentEntries.length > 0 && recentEntries[0].signature) {
+      lastSignature = recentEntries[0].signature;
+      logger.debug("🔐 Audit chain loaded from database");
+    }
+  } catch {
+    // If we can't load, start a new chain (chain will break at this point)
+    logger.warn("⚠️ Could not load audit chain from database — starting new chain");
+  }
+}
 
 export function recordAudit(entry: Omit<AuditEntry, "id" | "timestamp" | "signature" | "prevHash">): AuditEntry {
+  ensureSignatureLoaded();
+
   const full: AuditEntry = {
     id: nanoid(12),
     timestamp: Date.now(),

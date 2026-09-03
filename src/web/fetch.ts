@@ -1,8 +1,10 @@
 import { Agent, fetch as undiciFetch } from "undici";
+import dns from "node:dns";
+import { URL } from "node:url";
 import pRetry from "p-retry";
-import pTimeout from "p-timeout";
 import { LRUCache } from "lru-cache";
 import { logger } from "../logger";
+import { isUrlAllowedByRobots } from "./robots";
 
 export interface FetchedPage {
   url: string;
@@ -22,6 +24,64 @@ const MAX_PAGE_SIZE = 5 * 1024 * 1024;
 
 const USER_AGENT =
   "Mozilla/5.0 (compatible; AshenAI/1.0; +https://github.com/AshenAI)";
+
+/**
+ * Check if an IP address is in a private/reserved range.
+ * Blocks SSRF against cloud metadata, loopback, and internal networks.
+ */
+function isPrivateIP(ip: string): boolean {
+  // IPv4 private/reserved ranges
+  if (/^127\./.test(ip)) return true;           // Loopback
+  if (/^10\./.test(ip)) return true;             // Class A private
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;  // Class B private
+  if (/^192\.168\./.test(ip)) return true;       // Class C private
+  if (/^169\.254\./.test(ip)) return true;       // Link-local
+  if (/^0\./.test(ip)) return true;              // Current network
+  if (/^100\.6[4-9]\./.test(ip)) return true;    // Carrier-grade NAT (100.64.0.0/10)
+  if (/^192\.0\.0\./.test(ip)) return true;      // IETF protocol assignments
+  if (/^192\.0\.2\./.test(ip)) return true;      // Documentation TEST-NET-1
+  if (/^198\.51\.100\./.test(ip)) return true;   // Documentation TEST-NET-2
+  if (/^203\.0\.113\./.test(ip)) return true;    // Documentation TEST-NET-3
+  if (/^224\./.test(ip)) return true;            // Multicast
+  // IPv6 private/reserved
+  if (/^::1$/.test(ip)) return true;             // Loopback
+  if (/^fc00:/.test(ip)) return true;            // ULA
+  if (/^fd00:/.test(ip)) return true;            // ULA
+  if (/^fe80:/.test(ip)) return true;            // Link-local
+  if (/^::ffff:127\./.test(ip)) return true;     // IPv4-mapped loopback
+  if (/^::ffff:10\./.test(ip)) return true;      // IPv4-mapped private
+  if (/^::ffff:172\./.test(ip)) return true;     // IPv4-mapped private
+  if (/^::ffff:192\.168\./.test(ip)) return true; // IPv4-mapped private
+  return false;
+}
+
+/**
+ * Resolve hostname and verify it does not point to a private/reserved IP.
+ * Prevents SSRF against internal infrastructure.
+ */
+async function resolveAndValidateHost(url: string): Promise<void> {
+  const parsed = new URL(url);
+  const hostname = parsed.hostname;
+
+  // Skip DNS check for localhost variants
+  if (hostname === "localhost" || hostname === "[::1]") {
+    throw new Error(`Blocked: localhost is not a fetchable target`);
+  }
+
+  try {
+    const { address } = await dns.promises.lookup(hostname);
+    if (isPrivateIP(address)) {
+      logger.warn(`🌐 SSRF blocked: ${hostname} resolves to private IP ${address}`);
+      throw new Error(`Blocked: ${hostname} resolves to a private/reserved IP address`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("Blocked")) {
+      throw error;
+    }
+    // DNS resolution failure — let the fetch attempt proceed and fail naturally
+    logger.debug(`🌐 DNS lookup failed for ${hostname}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 const agent = new Agent({
   keepAliveTimeout: 30_000,
@@ -52,9 +112,10 @@ export async function fetchPage(
     timeoutMs?: number;
     maxRetries?: number;
     useCache?: boolean;
+    respectRobots?: boolean;
   } = {},
 ): Promise<FetchedPage> {
-  const { timeoutMs = 15_000, maxRetries = 2, useCache = true } = options;
+  const { timeoutMs = 15_000, maxRetries = 2, useCache = true, respectRobots = true } = options;
 
   if (useCache) {
     const cached = pageCache.get(url);
@@ -64,49 +125,54 @@ export async function fetchPage(
     }
   }
 
+  if (respectRobots) {
+    const allowed = await isUrlAllowedByRobots(url);
+    if (!allowed) {
+      throw new Error(`Blocked by robots.txt: ${url}`);
+    }
+  }
+
+  // SSRF protection: resolve hostname and block private/reserved IPs
+  await resolveAndValidateHost(url);
+
   const result = await pRetry(
     async () => {
-      return pTimeout(
-        (async () => {
-          const response = await undiciFetch(url, {
-            headers: {
-              "User-Agent": USER_AGENT,
-              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-              "Accept-Language": "en-US,en;q=0.9",
-            },
-            signal: AbortSignal.timeout(timeoutMs),
-            redirect: "follow",
-            dispatcher: agent,
-          });
+      const response = await undiciFetch(url, {
+        headers: {
+          "User-Agent": USER_AGENT,
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: "follow",
+        dispatcher: agent,
+      });
 
-          const contentType = response.headers.get("content-type") || "";
-          const contentLength = Number(response.headers.get("content-length") || "0");
+      const contentType = response.headers.get("content-type") || "";
+      const contentLength = Number(response.headers.get("content-length") || "0");
 
-          if (contentLength > MAX_PAGE_SIZE) {
-            throw new Error(`Page too large: ${contentLength} bytes`);
-          }
+      if (contentLength > MAX_PAGE_SIZE) {
+        throw new Error(`Page too large: ${contentLength} bytes`);
+      }
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status} for ${url}`);
-          }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} for ${url}`);
+      }
 
-          let html = await response.text();
+      let html = await response.text();
 
-          if (html.length > MAX_PAGE_SIZE) {
-            html = html.slice(0, MAX_PAGE_SIZE);
-          }
+      if (html.length > MAX_PAGE_SIZE) {
+        html = html.slice(0, MAX_PAGE_SIZE);
+      }
 
-          return {
-            url,
-            finalUrl: response.url || url,
-            status: response.status,
-            contentType,
-            html,
-            redirected: response.redirected,
-          };
-        })(),
-        { milliseconds: timeoutMs, message: `Fetch timeout for ${url}` },
-      );
+      return {
+        url,
+        finalUrl: response.url || url,
+        status: response.status,
+        contentType,
+        html,
+        redirected: response.redirected,
+      };
     },
     {
       retries: maxRetries,

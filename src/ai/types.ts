@@ -10,6 +10,9 @@ export interface AIRequest {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  guildId?: string;
+  userId?: string;
+  channelId?: string;
 }
 
 export interface AIResponse {

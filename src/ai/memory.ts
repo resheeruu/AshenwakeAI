@@ -2,10 +2,19 @@ import { ChatMessage } from "./types";
 import { config } from "../config/env";
 import { logger } from "../logger";
 import { loadConversationsDB, saveConversationDB, deleteConversationDB, clearConversationsDB, deleteExpiredConversationsDB } from "../database";
+import { countChatTokens, selectMessagesForTokenBudget } from "./tokens";
+import {
+  DecayAwareMessage,
+  MessageDecayMeta,
+  createDecayMeta,
+  updateOnRetrieval,
+  selectMessagesWithDecay,
+} from "./memory-decay";
+import { autoCompress, CompressionConfig } from "./context-compression";
 
 export class ConversationMemory {
   private readonly conversations =
-    new Map<string, ChatMessage[]>();
+    new Map<string, DecayAwareMessage[]>();
 
   private readonly lastActivity =
     new Map<string, number>();
@@ -44,7 +53,7 @@ export class ConversationMemory {
   private cleanupExpired(): void {
     const deleted = deleteExpiredConversationsDB(this.idleTimeoutMs());
     if (deleted > 0) {
-      logger.debug(`🧹 Expired ${deleted} inactive conversations from SQLite`);
+      logger.debug(`Expired ${deleted} inactive conversations from SQLite`);
     }
 
     const now = Date.now();
@@ -68,7 +77,7 @@ export class ConversationMemory {
     }
 
     logger.info(
-      `💾 Conversation memory loaded: ${this.conversations.size} conversation(s).`
+      `Conversation memory loaded: ${this.conversations.size} conversation(s).`
     );
   }
 
@@ -83,7 +92,8 @@ export class ConversationMemory {
 
   get(
     userId: string,
-    channelId?: string
+    channelId?: string,
+    tokenBudget?: number,
   ): ChatMessage[] {
     const key = this.makeKey(
       userId,
@@ -98,9 +108,44 @@ export class ConversationMemory {
       return [];
     }
 
-    return [
+    let history: DecayAwareMessage[] = [
       ...(this.conversations.get(key) ?? []),
     ];
+
+    // Auto-compress if conversation is too long
+    history = autoCompress(history, config.ai.maxContextMessages * 200) as DecayAwareMessage[];
+
+    // Update decay metadata for messages being retrieved into context
+    const updated = history.map(m => {
+      if (m.decay && m.role !== "system") {
+        return { ...m, decay: updateOnRetrieval(m.decay) } as DecayAwareMessage;
+      }
+      return m;
+    });
+
+    // Update in-memory store with refreshed decay metadata
+    this.conversations.set(key, updated);
+
+    if (tokenBudget && tokenBudget > 0) {
+      return selectMessagesWithDecay(
+        updated,
+        tokenBudget,
+        countChatTokens,
+      );
+    }
+
+    return updated;
+  }
+
+  getWithTokenCount(
+    userId: string,
+    channelId?: string,
+  ): { messages: ChatMessage[]; tokenCount: number } {
+    const messages = this.get(userId, channelId);
+    return {
+      messages,
+      tokenCount: countChatTokens(messages),
+    };
   }
 
   add(
@@ -116,7 +161,13 @@ export class ConversationMemory {
     const history =
       this.conversations.get(key) ?? [];
 
-    history.push(message);
+    // Add decay metadata to new message
+    const decayMessage: DecayAwareMessage = {
+      ...message,
+      decay: createDecayMeta(message),
+    };
+
+    history.push(decayMessage);
 
     const maxMessages = Math.max(
       2,
@@ -163,7 +214,13 @@ export class ConversationMemory {
     const history =
       this.conversations.get(key) ?? [];
 
-    history.push(message);
+    // Add decay metadata to new message
+    const decayMessage: DecayAwareMessage = {
+      ...message,
+      decay: createDecayMeta(message),
+    };
+
+    history.push(decayMessage);
 
     const maxMessages = Math.max(
       2,
@@ -219,7 +276,28 @@ export class ConversationMemory {
     deleteConversationDB(key);
 
     logger.debug(
-      `🧹 Conversation reset: ${key}`
+      `Conversation reset: ${key}`
+    );
+  }
+
+  /**
+   * Reset all conversations for a user across all channels.
+   * Used by memory-controls for guild-level operations.
+   */
+  resetAllForUser(userId: string): void {
+    const prefix = `${userId}:`;
+    const userIdOnly = userId;
+
+    for (const key of this.conversations.keys()) {
+      if (key === userIdOnly || key.startsWith(prefix)) {
+        this.conversations.delete(key);
+        this.lastActivity.delete(key);
+        deleteConversationDB(key);
+      }
+    }
+
+    logger.debug(
+      `All conversations reset for user ${userId}`
     );
   }
 

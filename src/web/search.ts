@@ -1,5 +1,4 @@
 import pRetry from "p-retry";
-import pTimeout from "p-timeout";
 import { LRUCache } from "lru-cache";
 import { logger } from "../logger";
 

@@ -83,3 +83,15 @@ export const logger = {
     }
   },
 };
+
+/**
+ * Pretty-print a log object for development use.
+ */
+export function prettyLog(obj: unknown): string {
+  try {
+    const pretty = require("pino-pretty");
+    return pretty.default({ colorize: false, translateTime: "SYS:standard" })(obj);
+  } catch {
+    return JSON.stringify(obj, null, 2);
+  }
+}

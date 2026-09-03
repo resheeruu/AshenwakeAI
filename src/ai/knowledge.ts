@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 import { readJSON, writeJSON } from "../core/data-store";
+import { createFuzzySearch, type SearchResult } from "./fuzzy-search";
 
 export interface KnowledgeEntry {
   id: string;
@@ -23,6 +24,7 @@ const KNOWLEDGE_FILE = "knowledge-data.json";
 
 export class GuildKnowledge {
   private store: KnowledgeStore;
+  private searchIndex = new Map<string, ReturnType<typeof createFuzzySearch<KnowledgeEntry>>>();
 
   constructor() {
     this.store = readJSON<KnowledgeStore>(KNOWLEDGE_FILE, { entries: {} });
@@ -30,6 +32,19 @@ export class GuildKnowledge {
 
   private save(): void {
     writeJSON(KNOWLEDGE_FILE, this.store);
+    this.searchIndex.clear();
+  }
+
+  private getSearchIndex(guildId: string): ReturnType<typeof createFuzzySearch<KnowledgeEntry>> {
+    const existing = this.searchIndex.get(guildId);
+    if (existing) return existing;
+
+    const entries = this.getGuildEntries(guildId);
+    const index = createFuzzySearch(entries, ["title", "content", "tags"], {
+      threshold: 0.4,
+    });
+    this.searchIndex.set(guildId, index);
+    return index;
   }
 
   add(entry: Omit<KnowledgeEntry, "id" | "createdAt" | "updatedAt">): KnowledgeEntry {
@@ -71,18 +86,18 @@ export class GuildKnowledge {
   }
 
   search(guildId: string, query: string): KnowledgeEntry[] {
-    const lower = query.toLowerCase();
-    return this.getGuildEntries(guildId).filter(
-      (e) =>
-        e.title.toLowerCase().includes(lower) ||
-        e.content.toLowerCase().includes(lower) ||
-        e.tags.some((t) => t.toLowerCase().includes(lower))
-    );
+    const index = this.getSearchIndex(guildId);
+    const results = index(query);
+    return results.slice(0, 10).map((r) => r.item);
   }
 
   getContext(guildId: string, query: string, maxEntries = 5): string {
     const matches = this.search(guildId, query).slice(0, maxEntries);
     if (matches.length === 0) return "";
     return matches.map((e) => `[${e.category.toUpperCase()}] ${e.title}: ${e.content}`).join("\n\n");
+  }
+
+  rebuildIndex(guildId: string): void {
+    this.searchIndex.delete(guildId);
   }
 }

@@ -94,7 +94,7 @@ console.log("===== A. PATTERN COVERAGE EQUIVALENCE =====");
 }
 
 {
-  assertEqual(OUTPUT_INTERNAL_PATTERNS.length, 3, "OUTPUT_INTERNAL_PATTERNS has exactly 3 patterns");
+  assertEqual(OUTPUT_INTERNAL_PATTERNS.length, 6, "OUTPUT_INTERNAL_PATTERNS has exactly 6 patterns");
 }
 
 {

@@ -63,3 +63,23 @@ export function redact(value: unknown): unknown {
 export function redactLogMessage(...args: unknown[]): unknown[] {
   return args.map(redact);
 }
+
+const SECRET_PATTERNS = [
+  { pattern: /(?:api[_-]?key|apikey)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{20,}['"]?/gi, name: "API key" },
+  { pattern: /(?:token|secret|password|passwd|pwd)\s*[:=]\s*['"]?[^\s'"]{8,}['"]?/gi, name: "Token/secret" },
+  { pattern: /(?:bearer|authorization)\s*[:=]\s*['"]?[A-Za-z0-9_\-\.]{20,}['"]?/gi, name: "Authorization" },
+  { pattern: /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/g, name: "GitHub token" },
+  { pattern: /sk-[A-Za-z0-9]{20,}/g, name: "OpenAI key" },
+  { pattern: /AIza[A-Za-z0-9_\-]{35}/g, name: "Google API key" },
+];
+
+export function scanForSecrets(text: string): string[] {
+  const found: string[] = [];
+  for (const { pattern, name } of SECRET_PATTERNS) {
+    const regex = new RegExp(pattern.source, pattern.flags);
+    if (regex.test(text)) {
+      found.push(name);
+    }
+  }
+  return found;
+}

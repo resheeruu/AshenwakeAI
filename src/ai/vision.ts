@@ -1,6 +1,5 @@
 import { logger } from "../logger";
 import { UsageManager, AIFeature } from "./usage-manager";
-import { readJSON, writeJSON } from "../core/data-store";
 
 export interface VisionRequest {
   userId: string;

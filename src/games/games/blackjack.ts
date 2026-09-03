@@ -50,6 +50,18 @@ const RANKS = [
 
 const sessions = new Map<string, BlackjackGame>();
 
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const SESSION_MAX_AGE_MS = 10 * 60 * 1000;
+
+const cleanupTimer = setInterval(() => {
+  for (const [id, game] of sessions) {
+    if (game.finished) {
+      sessions.delete(id);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);
+cleanupTimer.unref();
+
 function createDeck(): Card[] {
   const deck: Card[] = [];
 

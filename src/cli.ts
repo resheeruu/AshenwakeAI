@@ -3,6 +3,7 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import { loadConversationsDB } from "./database";
 
 const VERSION = (() => {
   try {
@@ -240,17 +241,16 @@ function memory(): void {
   console.log("  MEMORY STATS");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-  const memFile = path.join(process.cwd(), "data", "conversation-memory.json");
-  if (fs.existsSync(memFile)) {
-    const data = JSON.parse(fs.readFileSync(memFile, "utf8"));
-    const conversations = Object.keys(data).length;
+  try {
+    const conversations = loadConversationsDB();
+    const count = conversations.size;
     let totalMessages = 0;
-    for (const conv of Object.values(data) as any[]) {
-      totalMessages += (conv.messages || []).length;
+    for (const conv of conversations.values()) {
+      totalMessages += conv.messages.length;
     }
-    console.log(`  Conversations:   ${conversations}`);
+    console.log(`  Conversations:   ${count}`);
     console.log(`  Total Messages:  ${totalMessages}`);
-  } else {
+  } catch {
     console.log("  No conversation data yet.");
   }
 

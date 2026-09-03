@@ -23,7 +23,7 @@ export function createMemoryControls(
   return {
     disableMemory(userId, guildId) {
       disabled.set(key(userId, guildId), true);
-      memory.reset(userId, guildId);
+      memory.resetAllForUser(userId);
       logger.debug(`🔇 Memory disabled for user ${userId} in guild ${guildId}`);
     },
     enableMemory(userId, guildId) {
@@ -34,7 +34,7 @@ export function createMemoryControls(
       return disabled.get(key(userId, guildId)) === true;
     },
     deleteUserData(userId, guildId) {
-      memory.reset(userId, guildId);
+      memory.resetAllForUser(userId);
       logger.debug(`🗑️ Deleted memory data for user ${userId} in guild ${guildId}`);
     },
     getRetentionInfo(guildId) {

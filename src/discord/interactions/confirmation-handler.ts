@@ -1,6 +1,8 @@
 import type { ButtonInteraction, Client } from "discord.js";
 import { PermissionFlagsBits, ChannelType } from "discord.js";
 import { logger } from "../../logger";
+import { resolveRole } from "../../security/permissions";
+import { config } from "../../config/env";
 import {
   getPendingPlan,
   removePendingPlan,
@@ -427,12 +429,21 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
 
   // 8. Re-check channel scope (skip rate limit — token already consumed at plan creation)
   const guildConfig = loadGuildAIConfig(plan.guildId);
+  const requesterAshenRole = resolveRole({
+    userId: interaction.user.id,
+    guildId: plan.guildId,
+    guildOwnerId: guild.ownerId,
+    ownerIds: config.admin.discordIds,
+    managementRoleIds: guildConfig.managementRoleIds,
+    userRoleIds: [...requesterMember.roles.cache.keys()],
+    trustedUserIds: guildConfig.trustedUserIds,
+  });
   const validation = validateToolRequest(tool, {
     guildId: plan.guildId,
     channelId: plan.channelId,
     requesterId: interaction.user.id,
     requesterName: interaction.user.username,
-    requesterRole: "moderator",
+    requesterRole: requesterAshenRole,
     arguments: plan.arguments,
     dryRun: false,
   }, guildConfig, false, true);

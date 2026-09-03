@@ -25,6 +25,19 @@ const MAX_REACTION_MS = 3000;
 
 const sessions = new Map<string, QuickDrawGame>();
 
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const SESSION_MAX_AGE_MS = 10 * 60 * 1000;
+
+const cleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [id, game] of sessions) {
+    if (game.finished || (now - game.startedAt) > SESSION_MAX_AGE_MS) {
+      sessions.delete(id);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);
+cleanupTimer.unref();
+
 export function getQuickDraw(
   playerId: string,
 ): QuickDrawGame | undefined {

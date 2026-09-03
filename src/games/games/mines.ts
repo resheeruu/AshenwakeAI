@@ -30,6 +30,17 @@ const MAX_BET = 1000;
 
 const sessions = new Map<string, MinesGame>();
 
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
+const cleanupTimer = setInterval(() => {
+  for (const [id, game] of sessions) {
+    if (game.finished) {
+      sessions.delete(id);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);
+cleanupTimer.unref();
+
 function createMines(): Set<number> {
   const mines = new Set<number>();
 

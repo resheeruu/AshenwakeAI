@@ -137,13 +137,19 @@ export function validateTaskPlan(
       }
 
       const filePath = match[1].trim();
-      const errorOutput = match[2].trim();
+      let errorOutput = match[2].trim();
 
       if (!filePath || !errorOutput) {
         throw new Error(
           "Unsafe repair step: file path and verification error cannot be empty.",
         );
       }
+
+      // Sanitize error output: strip instruction injection patterns and limit length
+      errorOutput = errorOutput
+        .replace(/(?:ignore|disregard|override|bypass)\s+(?:all\s+)?(?:previous|prior|above|system)\s+instructions?/gi, "[REDACTED]")
+        .replace(/\[SYSTEM\]|\[INST\]|<<\|im_start\|>>/gi, "[REDACTED]")
+        .slice(0, 2000); // Bound error output length
 
       if (filePath.startsWith("/") || filePath.includes("..")) {
         throw new Error(

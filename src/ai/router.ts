@@ -3,12 +3,18 @@ import path from "path";
 import pTimeout from "p-timeout";
 import PQueue from "p-queue";
 import { logger } from "../logger";
+import { redact } from "../security/redact";
+import { startTrace, endSpan, endSpanError } from "./traces";
 
 import {
   AIProvider,
   AIRequest,
   AIResponse,
 } from "./types";
+import {
+  getCachedResponse,
+  setCachedResponse,
+} from "./response-cache";
 
 interface ProviderHealth {
   failures: number;
@@ -561,7 +567,7 @@ export class AIRouter {
 
   private sanitizeError(error: unknown): string {
     const raw = error instanceof Error ? error.message : String(error);
-    return raw.slice(0, 200);
+    return String(redact(raw)).slice(0, 200);
   }
 
   private recordFailure(
@@ -914,6 +920,30 @@ export class AIRouter {
   ): Promise<AIResponse> {
     const t0 = Date.now();
 
+    const traceCtx = startTrace("ai-generate", "ai", {
+      model: request.model,
+      guildId: request.guildId,
+      userId: request.userId,
+      messageCount: request.messages.length,
+    });
+
+    // Check response cache first
+    const systemPrompt = request.messages.find(m => m.role === "system")?.content || "";
+    const chatMessages = request.messages.filter(m => m.role !== "system");
+    const modelName = request.model || "default";
+
+    const cached = getCachedResponse(systemPrompt, chatMessages, modelName, request.guildId, request.userId);
+    if (cached) {
+      logger.debug(`🧠 Cache hit — returning cached response for model=${modelName}`);
+      endSpan(traceCtx.spanId);
+      return {
+        text: cached,
+        model: modelName,
+        provider: "cache",
+        latencyMs: Date.now() - t0,
+      };
+    }
+
     const providers =
       this.orderedProviders();
     const orderedMs = Date.now() - t0;
@@ -921,6 +951,7 @@ export class AIRouter {
     if (
       providers.length === 0
     ) {
+      endSpanError(traceCtx.spanId, "No configured AI providers are available");
       throw new Error(
         "No configured AI providers are available."
       );
@@ -998,6 +1029,19 @@ export class AIRouter {
           `✅ ${provider.name} responded in ${latency}ms (saveHealth ${saveMs}ms, ordered ${orderedMs}ms)`
         );
 
+        // Cache successful response for identical future requests
+        setCachedResponse(
+          systemPrompt,
+          chatMessages,
+          response.model || modelName,
+          response.text,
+          0,
+          undefined,
+          request.guildId,
+          request.userId,
+        );
+
+        endSpan(traceCtx.spanId);
         return response;
       } catch (error) {
         lastError =
@@ -1038,6 +1082,7 @@ export class AIRouter {
       }
     }
 
+    endSpanError(traceCtx.spanId, lastError instanceof Error ? lastError.message : String(lastError));
     throw new Error(
       `All AI providers failed. Last error: ${
         lastError instanceof Error

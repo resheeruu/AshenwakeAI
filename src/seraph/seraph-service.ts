@@ -6,6 +6,7 @@ import { redact } from "../security/redact";
 import { runHealthCheck } from "../core/health-checker";
 import { scanAshenAI } from "../diagnostics/health-scanner";
 import { generateOptimizations } from "../diagnostics/optimizer";
+import { getAuditLogDB } from "../database";
 import {
   SeraphStatus,
   SeraphDoctorResult,
@@ -67,9 +68,10 @@ function checkComponents(): SeraphStatus["components"] {
   }));
 
   components.push(checkComponent("audit_log", () => {
-    const auditFile = path.join(DATA_DIR, "audit-log.json");
-    if (!fs.existsSync(auditFile)) return { status: "degraded", message: "No audit log yet" };
-    return { status: "operational" };
+    const entries = getAuditLogDB({ limit: 1 });
+    return entries.length > 0
+      ? { status: "operational", message: `${entries.length}+ audit entries in SQLite` }
+      : { status: "degraded", message: "No audit entries yet" };
   }));
 
   components.push(checkComponent("memory", () => {
@@ -286,14 +288,12 @@ export function generateReport(type: SeraphReport["type"]): SeraphReport {
   }
 
   if (type === "security") {
-    const auditFile = path.join(DATA_DIR, "audit-log.json");
-    if (fs.existsSync(auditFile)) {
-      const audit = JSON.parse(fs.readFileSync(auditFile, "utf8"));
-      const recent = audit.slice(-100);
-      const failures = recent.filter((e: any) => e.result === "failure" || e.result === "denied");
+    const entries = getAuditLogDB({ limit: 100 });
+    if (entries.length > 0) {
+      const failures = entries.filter((e) => e.result === "failure" || e.result === "denied");
       sections.push({
         title: "Recent Audit",
-        content: `Last 100 entries: ${failures.length} failures/denials`,
+        content: `Last ${entries.length} entries: ${failures.length} failures/denials`,
         severity: failures.length > 10 ? "warning" : "info",
       });
     }

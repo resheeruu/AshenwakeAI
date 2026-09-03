@@ -33,7 +33,7 @@ export function createBackup(description: string, type: "manual" | "auto" = "man
   fs.mkdirSync(backupDir, { recursive: true });
 
   const dataDir = path.join(process.cwd(), "data");
-  const filesToBackup = ["guilds", "conversation-memory.json", "provider-health.json", "usage-stats.json", "mod-cases.json", "tickets.json", "xp-data.json", "knowledge-data.json", "audit-log.json"];
+  const filesToBackup = ["ashenai.db", "provider-health.json", "mod-cases.json", "tickets.json", "xp-data.json", "knowledge-data.json", "game-players.json", "warnings.json"];
 
   const backedUp: string[] = [];
   for (const file of filesToBackup) {
