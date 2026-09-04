@@ -71,7 +71,6 @@ import { createAskCommand } from "./commands/ask";
 import { createResetCommand } from "./commands/reset";
 import { createHelpCommand } from "./commands/help";
 import { createStatusCommand } from "./commands/status";
-import { createDiagnoseCommand } from "./commands/diagnose";
 import { createGameCommand } from "./commands/game";
 import { getBlackjackGame, hitBlackjack, standBlackjack, handText, calculateTotal,
 } from "./games/games/blackjack";
@@ -182,12 +181,6 @@ const commands: AshenCommand[] = [
   createResetCommand(memory),
   createHelpCommand(),
   createStatusCommand(router, memory, agentManager),
-  createDiagnoseCommand(
-    client,
-    router,
-    memory,
-    () => commandHandler.getCommands().size
-  ),
       createServerCommand(),
       createUserInfoCommand(),
       createRolesCommand(),

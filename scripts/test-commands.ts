@@ -101,6 +101,18 @@ try {
     fail("/config NOT in static commandBuilders");
   }
 
+  if (!staticCommandNames.includes("usage")) {
+    pass("/usage NOT in static commandBuilders");
+  } else {
+    fail("/usage NOT in static commandBuilders");
+  }
+
+  if (!staticCommandNames.includes("diagnose")) {
+    pass("/diagnose NOT in static commandBuilders");
+  } else {
+    fail("/diagnose NOT in static commandBuilders");
+  }
+
   // ─────────────────────────────────────
   // COMMAND NAMES
   // ─────────────────────────────────────
@@ -138,6 +150,18 @@ try {
     pass("/config NOT in runtime command list");
   } else {
     fail("/config NOT in runtime command list");
+  }
+
+  if (!commandNames.includes("usage")) {
+    pass("/usage NOT in runtime command list");
+  } else {
+    fail("/usage NOT in runtime command list");
+  }
+
+  if (!commandNames.includes("diagnose")) {
+    pass("/diagnose NOT in runtime command list");
+  } else {
+    fail("/diagnose NOT in runtime command list");
   }
 
   if (new Set(commandNames).size === commandNames.length) {
