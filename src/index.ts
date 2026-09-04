@@ -71,7 +71,6 @@ import { createAskCommand } from "./commands/ask";
 import { createResetCommand } from "./commands/reset";
 import { createHelpCommand } from "./commands/help";
 import { createStatusCommand } from "./commands/status";
-import { createConfigCommand } from "./commands/config";
 import { createDiagnoseCommand } from "./commands/diagnose";
 import { createGameCommand } from "./commands/game";
 import { getBlackjackGame, hitBlackjack, standBlackjack, handText, calculateTotal,
@@ -183,7 +182,6 @@ const commands: AshenCommand[] = [
   createResetCommand(memory),
   createHelpCommand(),
   createStatusCommand(router, memory, agentManager),
-  createConfigCommand(),
   createDiagnoseCommand(
     client,
     router,
@@ -1636,6 +1634,7 @@ client.on(
           guildId,
           userId,
           channelId,
+          source: "chat",
         });
       t.mark("ai_generate");
 
@@ -1778,7 +1777,6 @@ client.on(
     if (!session) {
       // Session may have expired — notify the user
       if (message.channel.isThread()) {
-        const key = `${message.guild.id}:${message.author.id}`;
         // If the thread looks like a builder thread, send expiry notice
         if (message.channel.name.startsWith("builder-")) {
           await message.channel.send("\u231B This builder session expired. Start a new \"/prompt\" session when you're ready.").catch(() => {});
@@ -1788,19 +1786,31 @@ client.on(
     }
     if (session.threadId !== message.channel.id) return;
 
+    // Serialize message processing per session to prevent race conditions
+    // on session.pendingPlan, session.serverState, and DB writes
+    const { withLock } = await import("./games/lock");
+    const sessionLockKey = `builder-process:${session.guildId}:${session.userId}`;
+
     try {
-      await processBuilderMessage(
-        client,
-        message.channel,
-        session,
-        message.content,
-        message.author,
-      );
+      await withLock(sessionLockKey, async () => {
+        await processBuilderMessage(
+          client,
+          message.channel,
+          session,
+          message.content,
+          message.author,
+        );
+      }, 30000); // 30s timeout for message processing
     } catch (error) {
-      logger.error("❌ Builder thread handler error:", error instanceof Error ? error.message : String(error));
-      try {
-        await message.channel.send("❌ Something went wrong processing your request.");
-      } catch {}
+      if (error instanceof Error && error.message.includes("LOCK_TIMEOUT")) {
+        logger.warn("⚠️ Builder session processing lock timeout for user:", message.author.id);
+        await message.channel.send("⏳ Please wait — your previous request is still being processed.").catch(() => {});
+      } else {
+        logger.error("❌ Builder thread handler error:", error instanceof Error ? error.message : String(error));
+        try {
+          await message.channel.send("❌ Something went wrong processing your request.");
+        } catch {}
+      }
     }
   }
 );

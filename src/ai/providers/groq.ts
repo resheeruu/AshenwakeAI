@@ -66,7 +66,12 @@ export class GroqProvider implements AIProvider {
       text,
       this.name,
       model,
-      started
+      started,
+      data?.usage ? {
+        inputTokens: data.usage.prompt_tokens,
+        outputTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens,
+      } : undefined
     );
   }
 }

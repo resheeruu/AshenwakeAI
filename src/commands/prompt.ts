@@ -57,16 +57,17 @@ function getSessionKey(guildId: string, userId: string): string {
   return `${guildId}:${userId}`;
 }
 
-function getActiveSession(guildId: string, userId: string): BuilderSession | null {
+/**
+ * Pure getter — does NOT mutate state or delete expired sessions.
+ */
+function getSession(guildId: string, userId: string): BuilderSession | null {
   const key = getSessionKey(guildId, userId);
   const session = builderSessions.get(key);
   if (!session) return null;
 
   const idle = Date.now() - session.lastActivityAt;
-
   if (idle > SESSION_IDLE_TIMEOUT_MS) {
-    builderSessions.delete(key);
-    return null;
+    return null; // expired — caller decides whether to clean up
   }
 
   // Warn shortly before expiration
@@ -78,9 +79,72 @@ function getActiveSession(guildId: string, userId: string): BuilderSession | nul
   return session;
 }
 
+/**
+ * Get an active session, cleaning up expired ones as a side effect.
+ */
+function getActiveSession(guildId: string, userId: string): BuilderSession | null {
+  const session = getSession(guildId, userId);
+  if (!session) {
+    // If a stale entry exists in the map, clean it up
+    const key = getSessionKey(guildId, userId);
+    if (builderSessions.has(key)) {
+      builderSessions.delete(key);
+      deleteBuilderSessionDB(key);
+    }
+    return null;
+  }
+  return session;
+}
+
 function touchSession(session: BuilderSession): void {
   session.lastActivityAt = Date.now();
   saveBuilderSessionDB(getSessionKey(session.guildId, session.userId), session);
+}
+
+/**
+ * Safely resolve a thread by ID. Tries cache first, then fetches from Discord API.
+ * Returns null if the thread doesn't exist or can't be fetched.
+ */
+async function resolveThread(guild: any, threadId: string): Promise<any | null> {
+  // Try cache first
+  const cached = guild.channels.cache.get(threadId);
+  if (cached && cached.isThread()) {
+    return cached;
+  }
+  // Fetch from Discord API (handles cold cache after restart)
+  try {
+    const fetched = await guild.channels.fetch(threadId);
+    if (fetched && fetched.isThread()) {
+      return fetched;
+    }
+  } catch {
+    // Thread was deleted or is inaccessible
+  }
+  return null;
+}
+
+/**
+ * Check if a thread is healthy (exists and not archived).
+ */
+function isThreadHealthy(thread: any): boolean {
+  return thread && thread.isThread() && !thread.archived;
+}
+
+/**
+ * Destroy a stale session: remove from memory map and DB, archive thread if possible.
+ */
+function destroySession(guild: any, session: BuilderSession, reason: string): void {
+  const key = getSessionKey(session.guildId, session.userId);
+  builderSessions.delete(key);
+  deleteBuilderSessionDB(key);
+  // Best-effort archive of orphaned thread — use resolveThread for cache-miss safety
+  if (guild) {
+    resolveThread(guild, session.threadId).then((thread) => {
+      if (isThreadHealthy(thread)) {
+        thread.setArchived(true, reason).catch(() => {});
+      }
+    }).catch(() => {});
+  }
 }
 
 /* ================================================================
@@ -562,7 +626,7 @@ export function createPromptCommand(): AshenCommand {
       // ── 1. VALIDATION ──────────────────────────────────────────
       const guild = interaction.guild;
       if (!guild) {
-        await interaction.editReply("❌ This command can only be used in a server.");
+        await interaction.editReply("❌ This command can only be used in a server.").catch(() => {});
         return;
       }
 
@@ -572,7 +636,7 @@ export function createPromptCommand(): AshenCommand {
       // ── 2. PERMISSION CHECK ────────────────────────────────────
       const authorized = await isUserTrustedOrAdmin(guild.id, userId, guildOwnerId);
       if (!authorized) {
-        await interaction.editReply("❌ You don't have permission to use `/prompt`.");
+        await interaction.editReply("❌ You don't have permission to use `/prompt`.").catch(() => {});
         return;
       }
 
@@ -580,7 +644,7 @@ export function createPromptCommand(): AshenCommand {
 
       // ── 3. PROMPT VALIDATION ───────────────────────────────────
       if (prompt.trim().length < 2) {
-        await interaction.editReply("❌ Please provide a meaningful prompt (at least 2 characters).");
+        await interaction.editReply("❌ Please provide a meaningful prompt (at least 2 characters).").catch(() => {});
         return;
       }
 
@@ -588,11 +652,11 @@ export function createPromptCommand(): AshenCommand {
       // If user already has an active session, route prompt there
       const existingSession = getActiveSession(guild.id, userId);
       if (existingSession) {
-        const existingThread = guild.channels.cache.get(existingSession.threadId);
-        if (existingThread && existingThread.isThread() && !existingThread.archived) {
+        const existingThread = await resolveThread(guild, existingSession.threadId);
+        if (isThreadHealthy(existingThread)) {
           // Reuse existing session — send prompt into the existing thread
           touchSession(existingSession);
-          await interaction.editReply(`♻️ Routed to your existing builder session: <#${existingThread.id}>`);
+          await interaction.editReply(`♻️ Routed to your existing builder session: <#${existingThread.id}>`).catch(() => {});
           recordAudit({
             who: userId,
             whoName: interaction.user.tag,
@@ -611,9 +675,8 @@ export function createPromptCommand(): AshenCommand {
           }
           return;
         }
-        // Session exists but thread is gone/expired — clean up and create new
-        builderSessions.delete(getSessionKey(guild.id, userId));
-        deleteBuilderSessionDB(getSessionKey(guild.id, userId));
+        // Session exists but thread is gone/deleted — clean up
+        destroySession(guild, existingSession, "Thread deleted or inaccessible");
       }
 
       // ── 5. CONCURRENCY LOCK ────────────────────────────────────
@@ -626,10 +689,10 @@ export function createPromptCommand(): AshenCommand {
           // Double-check after acquiring lock (another request may have created it)
           const recheck = getActiveSession(guild.id, userId);
           if (recheck) {
-            const recheckThread = guild.channels.cache.get(recheck.threadId);
-            if (recheckThread && recheckThread.isThread() && !recheckThread.archived) {
+            const recheckThread = await resolveThread(guild, recheck.threadId);
+            if (isThreadHealthy(recheckThread)) {
               touchSession(recheck);
-              await interaction.editReply(`♻️ Routed to your existing builder session: <#${recheckThread.id}>`);
+              await interaction.editReply(`♻️ Routed to your existing builder session: <#${recheckThread.id}>`).catch(() => {});
               try {
                 await processBuilderMessage(interaction.client, recheckThread, recheck, prompt, interaction.user);
               } catch (processError) {
@@ -641,14 +704,13 @@ export function createPromptCommand(): AshenCommand {
               return;
             }
             // Stale session — clean up
-            builderSessions.delete(getSessionKey(guild.id, userId));
-            deleteBuilderSessionDB(getSessionKey(guild.id, userId));
+            destroySession(guild, recheck, "Stale session under lock");
           }
 
           // ── 6. CREATE SESSION ──────────────────────────────────────
           const interactionChannel = interaction.channel;
           if (!interactionChannel || !('threads' in interactionChannel)) {
-            await interaction.editReply("❌ Cannot create a thread in this channel.");
+            await interaction.editReply("❌ Cannot create a thread in this channel.").catch(() => {});
             return;
           }
 
@@ -683,7 +745,7 @@ export function createPromptCommand(): AshenCommand {
           await thread.send({ embeds: [sessionEmbed] });
 
           // Acknowledge in the original channel
-          await interaction.editReply(`✅ Builder session opened: <#${thread.id}>`);
+          await interaction.editReply(`✅ Builder session opened: <#${thread.id}>`).catch(() => {});
 
           recordAudit({
             who: userId,
@@ -713,7 +775,7 @@ export function createPromptCommand(): AshenCommand {
 
         if (errMsg.includes("LOCK_TIMEOUT")) {
           logger.warn("⚠️ /prompt session creation lock timeout:", errMsg);
-          await interaction.editReply("⏳ Session creation is taking longer than expected. Please try again in a moment.");
+          await interaction.editReply("⏳ Session creation is taking longer than expected. Please try again in a moment.").catch(() => {});
           return;
         }
 
@@ -721,11 +783,11 @@ export function createPromptCommand(): AshenCommand {
 
         // Classify and send appropriate error message
         if (errMsg.includes("permission") || errMsg.includes("Permission")) {
-          await interaction.editReply("❌ You don't have permission to use `/prompt`.");
+          await interaction.editReply("❌ You don't have permission to use `/prompt`.").catch(() => {});
         } else if (errMsg.includes("thread") || errMsg.includes("channel")) {
-          await interaction.editReply("❌ Failed to create builder session. Cannot create a thread in this channel.");
+          await interaction.editReply("❌ Failed to create builder session. Cannot create a thread in this channel.").catch(() => {});
         } else {
-          await interaction.editReply("❌ Failed to create builder session. Please try again.");
+          await interaction.editReply("❌ Failed to create builder session. Please try again.").catch(() => {});
         }
       }
     },

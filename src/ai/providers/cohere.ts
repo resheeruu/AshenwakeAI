@@ -67,7 +67,12 @@ export class CohereProvider implements AIProvider {
       text,
       this.name,
       model,
-      started
+      started,
+      data?.usage?.tokens ? {
+        inputTokens: data.usage.tokens.input_tokens,
+        outputTokens: data.usage.tokens.output_tokens,
+        totalTokens: (data.usage.tokens.input_tokens ?? 0) + (data.usage.tokens.output_tokens ?? 0),
+      } : undefined
     );
   }
 }

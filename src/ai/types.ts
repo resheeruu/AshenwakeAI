@@ -13,6 +13,7 @@ export interface AIRequest {
   guildId?: string;
   userId?: string;
   channelId?: string;
+  source?: string;
 }
 
 export interface AIResponse {
@@ -20,6 +21,9 @@ export interface AIResponse {
   provider: string;
   model: string;
   latencyMs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
 }
 
 export interface AIProvider {

@@ -147,7 +147,12 @@ export class GeminiProvider implements AIProvider {
       text,
       this.name,
       model,
-      started
+      started,
+      data?.usageMetadata ? {
+        inputTokens: data.usageMetadata.promptTokenCount,
+        outputTokens: data.usageMetadata.candidatesTokenCount,
+        totalTokens: data.usageMetadata.totalTokenCount,
+      } : undefined
     );
   }
 }

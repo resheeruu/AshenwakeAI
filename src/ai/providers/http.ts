@@ -8,13 +8,15 @@ export function buildResponse(
   text: string,
   provider: string,
   model: string,
-  startedAt: number
+  startedAt: number,
+  tokenUsage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
 ): AIResponse {
   return {
     text,
     provider,
     model,
     latencyMs: Date.now() - startedAt,
+    ...tokenUsage,
   };
 }
 

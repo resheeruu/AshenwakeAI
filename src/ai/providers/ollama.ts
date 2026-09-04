@@ -80,6 +80,11 @@ export class OllamaProvider implements AIProvider {
       this.name,
       model,
       started,
+      (data.prompt_eval_count != null || data.eval_count != null) ? {
+        inputTokens: data.prompt_eval_count ?? undefined,
+        outputTokens: data.eval_count ?? undefined,
+        totalTokens: (data.prompt_eval_count ?? 0) + (data.eval_count ?? 0) || undefined,
+      } : undefined
     );
   }
 }

@@ -87,7 +87,12 @@ export class AnthropicProvider implements AIProvider {
       text,
       this.name,
       model,
-      started
+      started,
+      data?.usage ? {
+        inputTokens: data.usage.input_tokens,
+        outputTokens: data.usage.output_tokens,
+        totalTokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0),
+      } : undefined
     );
   }
 }

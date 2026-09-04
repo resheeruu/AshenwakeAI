@@ -112,7 +112,6 @@ const ALL_CATEGORIES: HelpCategory[] = [
     description: "Status, diagnostics, configuration.",
     commands: [
       { name: "/status", description: "Show system status" },
-      { name: "/config", description: "Show server configuration" },
       { name: "/diagnose", description: "Run system diagnostics" },
     ],
   },

@@ -173,6 +173,7 @@ export function createAskCommand(
           guildId,
           userId,
           channelId: interaction.channelId || "",
+          source: "ask",
         });
         t.mark("ai_generate");
 

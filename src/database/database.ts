@@ -291,6 +291,31 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
         ALTER TABLE ai_response_cache ADD COLUMN user_id TEXT DEFAULT '';
       `,
     },
+    {
+      version: 12,
+      description: "AI usage tracking per user request",
+      sql: `
+        CREATE TABLE IF NOT EXISTS ai_usage (
+          request_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          guild_id TEXT DEFAULT '',
+          channel_id TEXT DEFAULT '',
+          source TEXT NOT NULL DEFAULT 'unknown',
+          provider TEXT DEFAULT '',
+          model TEXT DEFAULT '',
+          input_tokens INTEGER,
+          output_tokens INTEGER,
+          total_tokens INTEGER,
+          success INTEGER NOT NULL DEFAULT 1,
+          latency_ms INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        );
+        CREATE INDEX IF NOT EXISTS idx_ai_usage_user ON ai_usage(user_id);
+        CREATE INDEX IF NOT EXISTS idx_ai_usage_guild ON ai_usage(guild_id);
+        CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at);
+        CREATE INDEX IF NOT EXISTS idx_ai_usage_source ON ai_usage(source);
+      `,
+    },
   ];
 }
 

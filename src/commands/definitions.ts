@@ -40,7 +40,7 @@ export const commandBuilders: CommandBuilder[] = [
 
   new SlashCommandBuilder()
     .setName("status")
-    .setDescription("Show AshenAI system status"),
+    .setDescription("Show AshenAI health and your AI usage"),
 
   new SlashCommandBuilder()
     .setName("task")
@@ -53,30 +53,4 @@ export const commandBuilders: CommandBuilder[] = [
         .setMaxLength(1000)
     ),
 
-  new SlashCommandBuilder()
-    .setName("config")
-    .setDescription("Manage safe AshenAI runtime configuration")
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("status")
-        .setDescription("Show safe runtime configuration")
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("reload")
-        .setDescription("Reload safe runtime configuration")
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("ratelimit")
-        .setDescription("Show rate limit status for a user")
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("resetuser")
-        .setDescription("Reset rate limits for a user")
-        .addStringOption((option) =>
-          option.setName("user_id").setDescription("Target user ID").setRequired(true)
-        )
-    ),
 ];

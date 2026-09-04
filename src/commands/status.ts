@@ -1,8 +1,6 @@
 import {
   ChatInputCommandInteraction,
-  GuildMember,
   MessageFlags,
-  PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
 
@@ -10,10 +8,26 @@ import { AIRouter } from "../ai/router";
 import { ConversationMemory } from "../ai/memory";
 import { AshenCommand } from "./definitions";
 import { AgentManager } from "../agent/manager";
+import { getAIUsageSummaryDB } from "../database/ai-usage-repo";
 import { logger } from "../logger";
 
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 export function createStatusCommand(
-  router: AIRouter,
+  _router: AIRouter,
   memory: ConversationMemory,
   agentManager?: AgentManager,
 ): AshenCommand {
@@ -21,265 +35,80 @@ export function createStatusCommand(
     data: new SlashCommandBuilder()
       .setName("status")
       .setDescription(
-        "Show AshenAI system status and provider performance"
+        "Show AshenAI health and your AI usage"
       ),
 
     async execute(
       interaction: ChatInputCommandInteraction
     ): Promise<void> {
       try {
-      const providers = router.getAvailableProviders();
-      const health = router.getHealth();
-      const stats = memory.stats();
-      const agentStatus = agentManager?.getStatus() ?? { status: "offline" };
+        const agentStatus =
+          agentManager?.getStatus() ?? { status: "offline" };
+        const stats = memory.stats();
+        const uptimeSec = Math.floor(process.uptime());
 
-      const member = interaction.member;
-      const isAuthorized = !member || typeof member.permissions === "string"
-        ? false
-        : member && "permissions" in member
-          ? ((member.permissions as any).has?.(PermissionFlagsBits.Administrator) ||
-            (member.permissions as any).has?.(PermissionFlagsBits.ModerateMembers)) ?? false
-          : false;
+        const userId = interaction.user.id;
+        const now = Math.floor(Date.now() / 1000);
+        const DAY = 86400;
 
-      const tested = health
-        .filter(
-          (provider) =>
-            provider.successes > 0
-        )
-        .sort(
-          (a, b) =>
-            (a.score ?? 999999) -
-            (b.score ?? 999999)
-        );
+        const today = getAIUsageSummaryDB(userId, now - DAY);
+        const week = getAIUsageSummaryDB(userId, now - 7 * DAY);
+        const month = getAIUsageSummaryDB(userId, now - 30 * DAY);
+        const lifetime = getAIUsageSummaryDB(userId, 0);
 
-      const untested = health.filter(
-        (provider) =>
-          provider.successes === 0
-      );
+        const agentLabel =
+          agentStatus.status === "online"
+            ? "Online"
+            : agentStatus.status === "starting"
+              ? "Starting"
+              : agentStatus.status === "degraded"
+                ? "Degraded"
+                : "Offline";
 
-      const totalSuccesses = health.reduce(
-        (total, provider) =>
-          total + provider.successes,
-        0
-      );
+        const agentEmoji =
+          agentStatus.status === "online"
+            ? "🟢"
+            : agentStatus.status === "degraded"
+              ? "🟡"
+              : "🔴";
 
-      const totalFailures = health.reduce(
-        (total, provider) =>
-          total + provider.failures,
-        0
-      );
-
-      const totalRequests =
-        totalSuccesses + totalFailures;
-
-      const overallSuccessRate =
-        totalRequests > 0
-          ? Math.round(
-              (totalSuccesses /
-                totalRequests) *
-                100
-            )
-          : null;
-
-      const cooldownProviders = health.filter(
-        (provider) =>
-          provider.cooldownUntil > Date.now()
-      );
-
-      const disabledProviders = health.filter(
-        (provider) =>
-          provider.disabledUntil > Date.now()
-      );
-
-      const ranking =
-        tested.length > 0
-          ? tested
-              .slice(0, 5)
-              .map((provider, index) => {
-                const medal =
-                  index === 0
-                    ? "🥇"
-                    : index === 1
-                    ? "🥈"
-                    : index === 2
-                    ? "🥉"
-                    : "▫️";
-
-                const latency =
-                  provider.averageLatencyMs !== null
-                    ? `${provider.averageLatencyMs}ms`
-                    : "N/A";
-
-                const successRate =
-                  provider.successRate !== null
-                    ? `${provider.successRate}%`
-                    : "N/A";
-
-                const lastLatency =
-                  provider.lastLatencyMs !== null
-                    ? `${provider.lastLatencyMs}ms`
-                    : "N/A";
-
-                return (
-                  `${medal} **${provider.provider}** — ` +
-                  `${latency} avg · ` +
-                  `${successRate} success · ` +
-                  `${provider.successes} success · ` +
-                  `${provider.failures} failed · ` +
-                  `last ${lastLatency}`
-                );
-              })
-              .join("\n")
-          : "No providers have successful requests yet.";
-
-      const untestedText =
-        untested.length > 0
-          ? untested
-              .map(
-                (provider) =>
-                  `• ${provider.provider}`
-              )
-              .join("\n")
-          : "None";
-
-      const unavailable =
-        health
-          .filter(
-            (provider) =>
-              !provider.available
-          )
-          .map(
-            (provider) =>
-              `• ${provider.provider}`
-          )
-          .join("\n");
-
-      const unavailableText =
-        unavailable || "None";
-
-      const cooldownText =
-        cooldownProviders.length > 0
-          ? cooldownProviders
-              .map(
-                (provider) => {
-                  const seconds = Math.max(
-                    1,
-                    Math.ceil(
-                      (provider.cooldownUntil -
-                        Date.now()) /
-                        1000
-                    )
-                  );
-
-                  return (
-                    `• ${provider.provider} — ` +
-                    `${seconds}s remaining`
-                  );
-                }
-              )
-              .join("\n")
-          : "None";
-
-      const disabledText =
-        disabledProviders.length > 0
-          ? disabledProviders
-              .map(
-                (provider) => {
-                  const seconds = Math.max(
-                    1,
-                    Math.ceil(
-                      (provider.disabledUntil -
-                        Date.now()) /
-                        1000
-                    )
-                  );
-
-                  const reason =
-                    provider.disabledReason ||
-                    "temporary disable";
-
-                  return (
-                    `• ${provider.provider} — ` +
-                    `${seconds}s · ${reason}`
-                  );
-                }
-              )
-              .join("\n")
-          : "None";
-
-      if (!isAuthorized) {
-        const safeContent = [
+        const lines = [
           "🟢 **AshenAI Status**",
           "",
-          "🤖 **Bot:** Online",
-          `🧠 **AI Agent:** ${agentStatus.status === "online" ? "Online" : agentStatus.status}`,
+          `🤖 **Bot:** Online`,
+          `${agentEmoji} **Agent:** ${agentLabel}`,
           "⚡ **System:** Operational",
-          `🧠 **AI Providers:** ${providers.length} available`,
-          `💬 **Conversations:** ${stats.conversations}`,
-          `📝 **Messages:** ${stats.messages}`,
-        ].join("\n");
+          `⏱️ **Uptime:** ${formatUptime(uptimeSec)}`,
+          "",
+          "🧠 **Memory**",
+          `Conversations: ${stats.conversations}`,
+          `Messages: ${stats.messages}`,
+          "",
+          "📊 **Your AI Usage**",
+          `Today — ${today.requests} requests · ${formatTokens(today.totalTokens)} tokens`,
+          `This week — ${week.requests} requests · ${formatTokens(week.totalTokens)} tokens`,
+          `This month — ${month.requests} requests · ${formatTokens(month.totalTokens)} tokens`,
+          `All time — ${lifetime.requests} requests · ${formatTokens(lifetime.totalTokens)} tokens`,
+        ];
 
         await interaction.editReply({
-          content: safeContent,
+          content: lines.join("\n"),
         });
-        return;
-      }
-
-      const content = [
-        "🟢 **AshenAI Status**",
-        "",
-        "🤖 **Bot:** Online",
-        `🧠 **AI Agent:** ${agentStatus.status === "online" ? "Online" : agentStatus.status}`,
-        "⚡ **System:** Operational",
-        "💬 **Reply System:** Online",
-        `🧠 **Available Providers:** ${providers.length}/${health.length}`,
-        `🧠 **Conversations:** ${stats.conversations}`,
-        `📝 **Messages:** ${stats.messages}`,
-        "",
-        "📊 **Router Statistics**",
-        `✅ Successful requests: ${totalSuccesses}`,
-        `❌ Failed requests: ${totalFailures}`,
-        `📈 Overall success rate: ${
-          overallSuccessRate !== null
-            ? `${overallSuccessRate}%`
-            : "N/A"
-        }`,
-        "",
-        "🏆 **Provider Ranking**",
-        ranking,
-        "",
-        "🆕 **Untested Providers**",
-        untestedText,
-        "",
-        "⏳ **Providers On Cooldown**",
-        cooldownText,
-        "",
-        "🚫 **Disabled Providers**",
-        disabledText,
-        "",
-        "⚠️ **Unavailable Providers**",
-        unavailableText,
-        "",
-        "💾 **Provider Memory:** Persistent",
-        "🔄 **Fallback:** Automatic",
-        "⚡ **Smart Routing:** Enabled",
-        "🛡️ **Provider Attempt Limit:** 6",
-      ].join("\n");
-
-      /*
-       * CommandHandler already acknowledged this interaction
-       * with deferReply(), so edit the deferred reply.
-       */
-      await interaction.editReply({
-        content,
-      });
       } catch (error) {
-        logger.error("/status failed:", error instanceof Error ? error.message : String(error));
+        logger.error(
+          "/status failed:",
+          error instanceof Error ? error.message : String(error)
+        );
         try {
           if (interaction.deferred || interaction.replied) {
-            await interaction.editReply({ content: "❌ Status check failed. Please try again." });
+            await interaction.editReply({
+              content: "❌ Status check failed. Please try again.",
+            });
           } else {
-            await interaction.reply({ content: "❌ Status check failed.", flags: MessageFlags.Ephemeral });
+            await interaction.reply({
+              content: "❌ Status check failed.",
+              flags: MessageFlags.Ephemeral,
+            });
           }
         } catch {
           // Interaction may have expired

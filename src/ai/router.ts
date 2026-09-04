@@ -1,10 +1,12 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import pTimeout from "p-timeout";
 import PQueue from "p-queue";
 import { logger } from "../logger";
 import { redact } from "../security/redact";
 import { startTrace, endSpan, endSpanError } from "./traces";
+import { insertAIUsageDB } from "../database/ai-usage-repo";
 
 import {
   AIProvider,
@@ -919,6 +921,7 @@ export class AIRouter {
     request: AIRequest
   ): Promise<AIResponse> {
     const t0 = Date.now();
+    const requestId = request.userId ? crypto.randomUUID() : undefined;
 
     const traceCtx = startTrace("ai-generate", "ai", {
       model: request.model,
@@ -935,6 +938,23 @@ export class AIRouter {
     const cached = getCachedResponse(systemPrompt, chatMessages, modelName, request.guildId, request.userId);
     if (cached) {
       logger.debug(`🧠 Cache hit — returning cached response for model=${modelName}`);
+      if (requestId && request.userId) {
+        insertAIUsageDB({
+          requestId,
+          userId: request.userId,
+          guildId: request.guildId || "",
+          channelId: request.channelId || "",
+          source: "cache",
+          provider: "cache",
+          model: modelName,
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+          success: true,
+          latencyMs: Date.now() - t0,
+          createdAt: Math.floor(Date.now() / 1000),
+        });
+      }
       endSpan(traceCtx.spanId);
       return {
         text: cached,
@@ -1040,6 +1060,25 @@ export class AIRouter {
           request.guildId,
           request.userId,
         );
+
+        // Record user-facing AI usage
+        if (requestId && request.userId) {
+          insertAIUsageDB({
+            requestId,
+            userId: request.userId,
+            guildId: request.guildId || "",
+            channelId: request.channelId || "",
+            source: request.source || "ai",
+            provider: response.provider || provider.name,
+            model: response.model || modelName,
+            inputTokens: response.inputTokens ?? null,
+            outputTokens: response.outputTokens ?? null,
+            totalTokens: response.totalTokens ?? null,
+            success: true,
+            latencyMs: latency,
+            createdAt: Math.floor(Date.now() / 1000),
+          });
+        }
 
         endSpan(traceCtx.spanId);
         return response;

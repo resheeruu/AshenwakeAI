@@ -6,6 +6,7 @@ export * from "./audit-repo";
 export * from "./usage-stats-repo";
 export * from "./memory-repo";
 export * from "./builder-session-repo";
+export * from "./ai-usage-repo";
 export { searchConversations, rebuildConversationFts } from "./conversation-search";
 export {
   getCachedResponse,
