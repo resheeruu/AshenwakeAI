@@ -40,9 +40,9 @@ try {
 
   const ask = createAskCommand(router, memory, usageManager);
   const reset = createResetCommand(memory);
-  const help = createHelpCommand();
   const status = createStatusCommand(router, memory);
   const prompt = createPromptCommand();
+  const help = createHelpCommand([ask, reset, status, prompt]);
   if (ask && ask.data.name === "ask" && typeof ask.execute === "function") {
     pass("/ask command factory");
   } else {

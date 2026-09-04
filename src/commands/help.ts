@@ -22,98 +22,52 @@ interface HelpCategory {
 
 const EMBED_COLOR = 0x2c2f33;
 
-const ALL_CATEGORIES: HelpCategory[] = [
-  {
-    id: "ai",
-    name: "AI Chat",
-    emoji: "\u{1F916}",
-    description: "Chat naturally with AshenAI.",
-    commands: [
-      { name: "/ask", description: "Ask AshenAI anything" },
-      { name: "/reset", description: "Reset your conversation memory" },
-      { name: "@AshenAI", description: "Mention me in any channel for quick chat" },
-    ],
-  },
-  {
-    id: "server",
-    name: "Server Management",
-    emoji: "\u{1F6E0}\uFE0F",
-    description: "Manage your Discord server using natural language.",
-    commands: [
-      { name: "/prompt", description: "Open a private Builder session for server management" },
+/**
+ * Metadata for commands that appear in /help.
+ * Categories and descriptions are defined here as the single
+ * source of truth for help text. The actual visibility of each
+ * command is determined by whether it appears in the registered
+ * commands array passed to createHelpCommand().
+ */
+const COMMAND_METADATA: Record<string, { description: string; category: string; ownerOnly?: boolean; modOnly?: boolean; adminOnly?: boolean }> = {
+  ask:    { description: "Ask AshenAI anything", category: "ai" },
+  reset:  { description: "Reset your conversation memory", category: "ai" },
+  game:   { description: "Play games, earn coins, level up", category: "ai" },
+  prompt: { description: "Open a private Builder session for server management", category: "server" },
+  serverinfo: { description: "View server structure and stats", category: "server" },
+  userinfo:   { description: "View info about a member", category: "server" },
+  roles:       { description: "List a member's roles", category: "server" },
+  warn:     { description: "Warn a member", category: "moderation", modOnly: true },
+  warnings: { description: "Check warnings for a member", category: "moderation", modOnly: true },
+  timeout:  { description: "Timeout a member", category: "moderation", modOnly: true },
+  untimeout: { description: "Remove timeout from a member", category: "moderation", modOnly: true },
+  trusted: { description: "Manage trusted users", category: "access", adminOnly: true },
+  send:    { description: "Send a message as AshenAI (trusted only)", category: "access" },
+  status:  { description: "Show system status and your AI usage", category: "system" },
+};
+
+interface CategoryDef {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  /** Static non-command features to always show */
+  features?: Array<{ name: string; description: string }>;
+}
+
+const CATEGORY_DEFS: CategoryDef[] = [
+  { id: "ai", name: "AI Chat", emoji: "\u{1F916}", description: "Chat naturally with AshenAI." },
+  { id: "server", name: "Server Management", emoji: "\u{1F6E0}\uFE0F", description: "Manage your Discord server using natural language.",
+    features: [
       { name: "Templates", description: "Set up your server with a template (gaming, community, etc.)" },
       { name: "Server improvements", description: "Fix and organize your server" },
       { name: "Channel management", description: "Create, delete, rename, organize channels" },
       { name: "Role management", description: "Create roles, manage permissions" },
     ],
   },
-  {
-    id: "templates",
-    name: "Templates",
-    emoji: "\u{1F4CB}",
-    description: "Generate server templates instantly.",
-    commands: [
-      { name: "Gaming", description: "Voice channels, game roles, LFG areas" },
-      { name: "Community", description: "Discussion channels, events, welcome areas" },
-      { name: "Study", description: "Study groups, resources, schedules" },
-      { name: "Creator", description: "Portfolio, showcase, collaboration" },
-      { name: "Clan", description: "Recruitment, ranks, war rooms" },
-    ],
-  },
-  {
-    id: "moderation",
-    name: "Moderation",
-    emoji: "\u{1F6E1}\uFE0F",
-    description: "Keep the server safe and manage members.",
-    commands: [
-      { name: "/warn", description: "Warn a member", modOnly: true },
-      { name: "/warnings", description: "Check warnings for a member", modOnly: true },
-      { name: "/timeout", description: "Timeout a member", modOnly: true },
-      { name: "/untimeout", description: "Remove timeout from a member", modOnly: true },
-    ],
-  },
-  {
-    id: "welcome",
-    name: "Welcome & Leave",
-    emoji: "\u{1F44B}",
-    description: "Greet new members and track departures.",
-    commands: [
-      { name: "Welcome messages", description: "Custom greet messages for new members" },
-      { name: "Leave messages", description: "Farewell messages when members leave" },
-      { name: "Auto-roles", description: "Assign roles automatically on join" },
-    ],
-  },
-  {
-    id: "tickets",
-    name: "Tickets",
-    emoji: "\u{1F3AB}",
-    description: "Support ticket system for your community.",
-    commands: [
-      { name: "Ticket creation", description: "Members can open support tickets" },
-      { name: "Ticket management", description: "Close, transcript, and review tickets" },
-    ],
-  },
-  {
-    id: "access",
-    name: "Access Control",
-    emoji: "\u{1F510}",
-    description: "Trusted users and permission management.",
-    commands: [
-      { name: "/trusted add", description: "Add a trusted user", adminOnly: true },
-      { name: "/trusted list", description: "List trusted users" },
-      { name: "/trusted remove", description: "Remove a trusted user", adminOnly: true },
-      { name: "/send", description: "Send a message as AshenAI (trusted only)" },
-    ],
-  },
-  {
-    id: "system",
-    name: "System",
-    emoji: "\u2699\uFE0F",
-    description: "Status, diagnostics, configuration.",
-    commands: [
-      { name: "/status", description: "Show system status" },
-    ],
-  },
+  { id: "moderation", name: "Moderation", emoji: "\u{1F6E1}\uFE0F", description: "Keep the server safe and manage members." },
+  { id: "access", name: "Access Control", emoji: "\u{1F510}", description: "Trusted users and permission management." },
+  { id: "system", name: "System", emoji: "\u2699\uFE0F", description: "Status and diagnostics." },
 ];
 
 const TRY_ASKING = [
@@ -123,7 +77,38 @@ const TRY_ASKING = [
   "Delete all channels except general",
 ];
 
-function buildMainEmbed(isOwner: boolean, isMod: boolean): { embed: EmbedBuilder; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
+function buildCategories(registeredNames: Set<string>): HelpCategory[] {
+  const categories: HelpCategory[] = [];
+
+  for (const def of CATEGORY_DEFS) {
+    const commands: HelpCategory["commands"] = [];
+
+    for (const [name, meta] of Object.entries(COMMAND_METADATA)) {
+      if (meta.category !== def.id) continue;
+      if (!registeredNames.has(name)) continue;
+      commands.push({ name: `/${name}`, description: meta.description, ownerOnly: meta.ownerOnly, modOnly: meta.modOnly, adminOnly: meta.adminOnly });
+    }
+
+    if (def.features) {
+      for (const f of def.features) {
+        commands.push({ name: f.name, description: f.description });
+      }
+    }
+
+    // @AshenAI mention hint in AI Chat category
+    if (def.id === "ai") {
+      commands.push({ name: "@AshenAI", description: "Mention me in any channel for quick chat" });
+    }
+
+    categories.push({ id: def.id, name: def.name, emoji: def.emoji, description: def.description, commands });
+  }
+
+  return categories.filter(c => c.commands.length > 0);
+}
+
+function buildMainEmbed(registeredNames: Set<string>, isOwner: boolean, isMod: boolean): { embed: EmbedBuilder; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
+  const categories = buildCategories(registeredNames);
+
   const embed = new EmbedBuilder()
     .setColor(EMBED_COLOR)
     .setTitle("AshenAI \u2014 Help")
@@ -136,7 +121,7 @@ function buildMainEmbed(isOwner: boolean, isMod: boolean): { embed: EmbedBuilder
   const examples = shuffled.slice(0, 3).map(e => `\u2022 "${e}"`).join("\n");
   embed.addFields({ name: "Try asking me...", value: examples, inline: false });
 
-  const options = ALL_CATEGORIES
+  const options = categories
     .filter(cat => {
       if (cat.commands.some(c => c.ownerOnly) && !isOwner) return false;
       return true;
@@ -159,7 +144,9 @@ function buildMainEmbed(isOwner: boolean, isMod: boolean): { embed: EmbedBuilder
   return { embed, components: [row] };
 }
 
-function buildCategoryEmbed(category: HelpCategory, isOwner: boolean, isMod: boolean): { embed: EmbedBuilder; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
+function buildCategoryEmbed(category: HelpCategory, registeredNames: Set<string>, isOwner: boolean, isMod: boolean): { embed: EmbedBuilder; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
+  const categories = buildCategories(registeredNames);
+
   const embed = new EmbedBuilder()
     .setColor(EMBED_COLOR)
     .setTitle(`${category.emoji} ${category.name}`)
@@ -180,7 +167,7 @@ function buildCategoryEmbed(category: HelpCategory, isOwner: boolean, isMod: boo
   }
 
   const backOption = { label: "\u2190 Back to categories", value: "__back__", description: "Return to the main help menu" };
-  const categoryOptions = ALL_CATEGORIES
+  const categoryOptions = categories
     .filter(cat => {
       if (cat.commands.some(c => c.ownerOnly) && !isOwner) return false;
       return true;
@@ -203,7 +190,11 @@ function buildCategoryEmbed(category: HelpCategory, isOwner: boolean, isMod: boo
   return { embed, components: [row] };
 }
 
-export function createHelpCommand(): AshenCommand {
+export function createHelpCommand(registeredCommands?: AshenCommand[]): AshenCommand {
+  const registeredNames = new Set(
+    registeredCommands?.map(c => c.data.name) ?? []
+  );
+
   return {
     data: new SlashCommandBuilder()
       .setName("help")
@@ -223,7 +214,7 @@ export function createHelpCommand(): AshenCommand {
             ? (member.permissions as any).has?.(PermissionFlagsBits.ModerateMembers) ?? false
             : false);
 
-        const { embed, components } = buildMainEmbed(isOwner, isMod);
+        const { embed, components } = buildMainEmbed(registeredNames, isOwner, isMod);
 
         const reply = await interaction.editReply({
           embeds: [embed],
@@ -241,18 +232,19 @@ export function createHelpCommand(): AshenCommand {
             const categoryId = selectInteraction.values[0];
 
             if (categoryId === "__back__") {
-              const { embed: mainEmbed, components: mainComponents } = buildMainEmbed(isOwner, isMod);
+              const { embed: mainEmbed, components: mainComponents } = buildMainEmbed(registeredNames, isOwner, isMod);
               await selectInteraction.update({ embeds: [mainEmbed], components: mainComponents });
               return;
             }
 
-            const category = ALL_CATEGORIES.find(c => c.id === categoryId);
+            const categories = buildCategories(registeredNames);
+            const category = categories.find(c => c.id === categoryId);
             if (!category) {
               await selectInteraction.update({ content: "Category not found.", embeds: [], components: [] });
               return;
             }
 
-            const { embed: catEmbed, components: catComponents } = buildCategoryEmbed(category, isOwner, isMod);
+            const { embed: catEmbed, components: catComponents } = buildCategoryEmbed(category, registeredNames, isOwner, isMod);
             await selectInteraction.update({ embeds: [catEmbed], components: catComponents });
           } catch (err) {
             try {

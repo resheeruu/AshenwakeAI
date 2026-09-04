@@ -179,7 +179,6 @@ const commands: AshenCommand[] = [
   createAskCommand(router, memory, usageManager),
   createGameCommand(),
   createResetCommand(memory),
-  createHelpCommand(),
   createStatusCommand(router, memory, agentManager),
       createServerCommand(),
       createUserInfoCommand(),
@@ -192,6 +191,9 @@ const commands: AshenCommand[] = [
       createPromptCommand(),
       createSendCommand(),
 ];
+
+// Help command derives its display from the registered public commands.
+commands.push(createHelpCommand(commands));
 
 commandHandler.registerMany(commands);
 
