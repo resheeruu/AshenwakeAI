@@ -12,6 +12,8 @@ import {
   AIProvider,
   AIRequest,
   AIResponse,
+  HealthState,
+  ModelHealthState,
 } from "./types";
 import {
   getCachedResponse,
@@ -46,6 +48,23 @@ interface ProviderHealth {
   lastRecoveryProbeAt: number;
 
   lastError?: string;
+
+  /*
+   * Structured health state for accurate provider selection.
+   */
+  healthState: HealthState;
+
+  /*
+   * Per-model failure tracking.
+   * Keyed by model name (e.g. "gpt-4", "claude-3-sonnet").
+   */
+  modelHealth: Map<string, ModelHealthState>;
+
+  /*
+   * Last HTTP status code received from this provider.
+   * Useful for diagnosing transient vs permanent failures.
+   */
+  lastHttpStatus?: number;
 }
 
 interface SavedProviderHealth {
@@ -62,6 +81,10 @@ interface SavedProviderHealth {
   lastRecoveryProbeAt?: number;
   lastFailureAt?: number;
   lastError?: string;
+
+  healthState?: HealthState;
+  lastHttpStatus?: number;
+  modelHealth?: Record<string, ModelHealthState>;
 }
 
 const DATA_DIR = path.join(
@@ -181,6 +204,10 @@ export class AIRouter {
           consecutiveFailures: 0,
           lastRecoveryProbeAt: 0,
           lastError: undefined,
+          healthState: provider.isAvailable()
+            ? HealthState.CONFIGURED
+            : HealthState.NOT_CONFIGURED,
+          modelHealth: new Map(),
         });
       }
     }
@@ -219,6 +246,20 @@ export class AIRouter {
         const [name, data]
         of Object.entries(saved)
       ) {
+        const modelHealth = new Map<string, ModelHealthState>();
+        if (data.modelHealth) {
+          for (const [modelName, mh] of Object.entries(data.modelHealth)) {
+            modelHealth.set(modelName, {
+              successes: mh.successes ?? 0,
+              failures: mh.failures ?? 0,
+              consecutiveFailures: mh.consecutiveFailures ?? 0,
+              lastError: mh.lastError,
+              lastFailureAt: mh.lastFailureAt ?? 0,
+              lastSuccessAt: mh.lastSuccessAt ?? 0,
+            });
+          }
+        }
+
         this.health.set(
           name,
           {
@@ -254,6 +295,12 @@ export class AIRouter {
               data.lastRecoveryProbeAt ?? 0,
             lastError:
               data.lastError,
+
+            healthState:
+              data.healthState ?? HealthState.CONFIGURED,
+            modelHealth,
+            lastHttpStatus:
+              data.lastHttpStatus,
           }
         );
       }
@@ -317,6 +364,18 @@ export class AIRouter {
         const [name, state]
         of this.health
       ) {
+        const modelHealthObj: Record<string, ModelHealthState> = {};
+        for (const [modelName, mh] of state.modelHealth) {
+          modelHealthObj[modelName] = {
+            successes: mh.successes,
+            failures: mh.failures,
+            consecutiveFailures: mh.consecutiveFailures,
+            lastError: mh.lastError,
+            lastFailureAt: mh.lastFailureAt,
+            lastSuccessAt: mh.lastSuccessAt,
+          };
+        }
+
         saved[name] = {
           successes:
             state.successes,
@@ -346,6 +405,13 @@ export class AIRouter {
             state.lastRecoveryProbeAt,
           lastError:
             state.lastError,
+
+          healthState:
+            state.healthState,
+          lastHttpStatus:
+            state.lastHttpStatus,
+          modelHealth:
+            Object.keys(modelHealthObj).length > 0 ? modelHealthObj : undefined,
         };
       }
 
@@ -519,13 +585,73 @@ export class AIRouter {
     );
   }
 
+  private isTimeoutError(
+    error: unknown
+  ): boolean {
+    const value =
+      this.errorText(error);
+
+    return (
+      value.includes("timeout") ||
+      value.includes("timed out") ||
+      value.includes("deadline exceeded") ||
+      value.includes("aborterror") ||
+      value.includes("econnreset") ||
+      value.includes("etimedout")
+    );
+  }
+
+  private isNetworkError(
+    error: unknown
+  ): boolean {
+    const value =
+      this.errorText(error);
+
+    return (
+      value.includes("econnrefused") ||
+      value.includes("enotfound") ||
+      value.includes("enetunreach") ||
+      value.includes("econnreset") ||
+      value.includes("epipe") ||
+      value.includes("socket hang up") ||
+      value.includes("network") ||
+      value.includes("fetch failed") ||
+      value.includes("request failed")
+    );
+  }
+
+  private extractHttpStatus(
+    error: unknown
+  ): number | undefined {
+    const text =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    // Match common HTTP status patterns
+    const match =
+      text.match(/[:\s](\d{3})\b/) ||
+      text.match(/\bstatus[:\s]*(\d{3})\b/i) ||
+      text.match(/\bhttp[:\s]*(\d{3})\b/i);
+
+    if (match) {
+      const code = parseInt(match[1], 10);
+      if (code >= 100 && code < 600) {
+        return code;
+      }
+    }
+
+    return undefined;
+  }
+
   /* =========================
      HEALTH
   ========================= */
 
   private recordSuccess(
     provider: AIProvider,
-    latencyMs: number
+    latencyMs: number,
+    modelName?: string
   ): void {
     const state = this.health.get(provider.name);
 
@@ -547,6 +673,33 @@ export class AIRouter {
     state.lastRecoveryProbeAt = 0;
     state.disabledReason = undefined;
     state.lastError = undefined;
+
+    // Upgrade health state on success.
+    if (
+      state.healthState === HealthState.CONFIGURED ||
+      state.healthState === HealthState.RECOVERING ||
+      state.healthState === HealthState.DEGRADED
+    ) {
+      state.healthState = HealthState.HEALTHY;
+    }
+
+    // Track model-level success if model is known.
+    if (modelName) {
+      let mh = state.modelHealth.get(modelName);
+      if (!mh) {
+        mh = {
+          successes: 0,
+          failures: 0,
+          consecutiveFailures: 0,
+          lastFailureAt: 0,
+          lastSuccessAt: 0,
+        };
+        state.modelHealth.set(modelName, mh);
+      }
+      mh.successes++;
+      mh.consecutiveFailures = 0;
+      mh.lastSuccessAt = Date.now();
+    }
 
     this.saveHealth();
   }
@@ -574,7 +727,8 @@ export class AIRouter {
 
   private recordFailure(
     provider: AIProvider,
-    error: unknown
+    error: unknown,
+    modelName?: string
   ): void {
     const state = this.health.get(provider.name);
 
@@ -590,6 +744,31 @@ export class AIRouter {
 
     state.lastError = this.sanitizeError(error);
 
+    // Track model-level failure if model is known.
+    if (modelName) {
+      let mh = state.modelHealth.get(modelName);
+      if (!mh) {
+        mh = {
+          successes: 0,
+          failures: 0,
+          consecutiveFailures: 0,
+          lastFailureAt: 0,
+          lastSuccessAt: 0,
+        };
+        state.modelHealth.set(modelName, mh);
+      }
+      mh.failures++;
+      mh.consecutiveFailures++;
+      mh.lastFailureAt = now;
+      mh.lastError = this.sanitizeError(error);
+    }
+
+    // Extract HTTP status for structured classification.
+    const httpStatus = this.extractHttpStatus(error);
+    if (httpStatus) {
+      state.lastHttpStatus = httpStatus;
+    }
+
     /*
      * Credit/billing failures are unlikely to recover by themselves
      * during the current request cycle. Quarantine them for 6 hours
@@ -604,6 +783,8 @@ export class AIRouter {
 
       state.disabledReason =
         "credits/billing";
+
+      state.healthState = HealthState.NO_CREDITS;
 
       this.saveHealth();
 
@@ -628,6 +809,8 @@ export class AIRouter {
       state.disabledReason =
         "authentication/permission";
 
+      state.healthState = HealthState.AUTH_FAILED;
+
       this.saveHealth();
 
       logger.warn(
@@ -645,10 +828,60 @@ export class AIRouter {
       state.cooldownUntil =
         now + RATE_LIMIT_COOLDOWN_MS;
 
+      state.healthState = HealthState.RATE_LIMITED;
+
       this.saveHealth();
 
       logger.warn(
         `⏳ ${provider.name} rate-limited for 60 seconds.`
+      );
+
+      return;
+    }
+
+    /*
+     * Timeout errors indicate the provider is slow or unreachable.
+     * Use a moderate cooldown.
+     */
+    if (this.isTimeoutError(error)) {
+      state.cooldownUntil =
+        now +
+        Math.min(
+          state.consecutiveFailures *
+            FAILURE_COOLDOWN_MS,
+          MAX_COOLDOWN_MS
+        );
+
+      state.healthState = HealthState.TIMEOUT;
+
+      this.saveHealth();
+
+      logger.warn(
+        `⏱️ ${provider.name} timed out.`
+      );
+
+      return;
+    }
+
+    /*
+     * Network errors indicate connectivity issues.
+     * Use the same cooldown as normal failures.
+     */
+    if (this.isNetworkError(error)) {
+      state.cooldownUntil =
+        now +
+        Math.min(
+          state.consecutiveFailures *
+            FAILURE_COOLDOWN_MS,
+          MAX_COOLDOWN_MS
+        );
+
+      state.healthState = HealthState.NETWORK_ERROR;
+
+      this.saveHealth();
+
+      logger.warn(
+        `🌐 ${provider.name} network error.`
       );
 
       return;
@@ -672,17 +905,19 @@ export class AIRouter {
       state.disabledReason =
         `persistent failures (${state.consecutiveFailures})`;
 
+      state.healthState = HealthState.QUARANTINED;
+
       this.saveHealth();
 
       logger.warn(
-        `🚫 ${provider.name} quarantined for 6 hours after ${state.consecutiveFailures} consecutive failures.`
+        `🚫 ${provider.name} quarantined for 5 minutes after ${state.consecutiveFailures} consecutive failures.`
       );
 
       return;
     }
 
     /*
-     * Normal temporary failure.
+     * Normal temporary failure — downgrade to DEGRADED.
      */
     state.cooldownUntil =
       now +
@@ -691,6 +926,13 @@ export class AIRouter {
           FAILURE_COOLDOWN_MS,
         MAX_COOLDOWN_MS
       );
+
+    if (
+      state.healthState === HealthState.HEALTHY ||
+      state.healthState === HealthState.CONFIGURED
+    ) {
+      state.healthState = HealthState.DEGRADED;
+    }
 
     this.saveHealth();
   }
@@ -723,7 +965,7 @@ export class AIRouter {
         : 1;
 
     /*
-     * V4 ADAPTIVE SCORING
+     * V5 ADAPTIVE SCORING WITH HEALTH STATE
      *
      * Lower score = better provider.
      *
@@ -733,6 +975,7 @@ export class AIRouter {
      * 3. Reliability
      * 4. Repeated failures
      * 5. Experience bonus
+     * 6. Health state penalty
      */
 
     let score = 0;
@@ -771,6 +1014,29 @@ export class AIRouter {
       score -= 500;
     } else if (successRate >= 0.90 && successes >= 2) {
       score -= 250;
+    }
+
+    /*
+     * Health state penalty.
+     * DEGRADED providers are penalized but still usable.
+     * TIMEOUT/NETWORK_ERROR providers are penalized more.
+     */
+    switch (state.healthState) {
+      case HealthState.DEGRADED:
+        score += 1000;
+        break;
+      case HealthState.TIMEOUT:
+        score += 2000;
+        break;
+      case HealthState.NETWORK_ERROR:
+        score += 2500;
+        break;
+      case HealthState.RATE_LIMITED:
+        score += 1500;
+        break;
+      case HealthState.HEALTHY:
+        score -= 200;
+        break;
     }
 
     return Math.max(
@@ -1041,7 +1307,8 @@ export class AIRouter {
         const saveStart = Date.now();
         this.recordSuccess(
           provider,
-          latency
+          latency,
+          response.model || modelName
         );
         const saveMs = Date.now() - saveStart;
 
@@ -1089,7 +1356,8 @@ export class AIRouter {
         const saveStart = Date.now();
         this.recordFailure(
           provider,
-          error
+          error,
+          modelName
         );
         const saveMs = Date.now() - saveStart;
 
@@ -1159,12 +1427,30 @@ export class AIRouter {
               )
             : null;
 
+        const modelHealthObj: Record<string, ModelHealthState> = {};
+        if (state?.modelHealth) {
+          for (const [modelName, mh] of state.modelHealth) {
+            modelHealthObj[modelName] = {
+              successes: mh.successes,
+              failures: mh.failures,
+              consecutiveFailures: mh.consecutiveFailures,
+              lastError: mh.lastError,
+              lastFailureAt: mh.lastFailureAt,
+              lastSuccessAt: mh.lastSuccessAt,
+            };
+          }
+        }
+
         return {
           provider:
             provider.name,
 
           available:
             provider.isAvailable(),
+
+          healthState:
+            state?.healthState ??
+            HealthState.NOT_CONFIGURED,
 
           successes:
             state?.successes ?? 0,
@@ -1207,8 +1493,302 @@ export class AIRouter {
           lastError:
             state?.lastError ??
             null,
+
+          lastHttpStatus:
+            state?.lastHttpStatus ??
+            null,
+
+          modelHealth:
+            Object.keys(modelHealthObj).length > 0
+              ? modelHealthObj
+              : undefined,
         };
       }
     );
+  }
+
+  /* =========================
+     HEALTH PROBING
+  ========================= */
+
+  /**
+   * Lightweight active health probe for a single provider.
+   * Uses minimal tokens, short timeout, no Discord interaction.
+   * Respects quarantine/cooldown — will not probe disabled providers.
+   */
+  async probeProvider(
+    providerName: string,
+    options: {
+      timeoutMs?: number;
+      force?: boolean;
+    } = {}
+  ): Promise<{
+    provider: string;
+    healthy: boolean;
+    latencyMs: number;
+    error?: string;
+    healthState: HealthState;
+  }> {
+    const provider = this.providers.find(
+      (p) => p.name === providerName
+    );
+
+    if (!provider) {
+      return {
+        provider: providerName,
+        healthy: false,
+        latencyMs: 0,
+        error: "Provider not registered",
+        healthState: HealthState.NOT_CONFIGURED,
+      };
+    }
+
+    if (!provider.isAvailable()) {
+      return {
+        provider: providerName,
+        healthy: false,
+        latencyMs: 0,
+        error: "Provider not configured (missing API key)",
+        healthState: HealthState.NOT_CONFIGURED,
+      };
+    }
+
+    const state = this.health.get(providerName);
+    const now = Date.now();
+
+    // Respect quarantine unless forced.
+    if (!options.force) {
+      if (state && state.disabledUntil > now) {
+        return {
+          provider: providerName,
+          healthy: false,
+          latencyMs: 0,
+          error: `Quarantined until ${new Date(state.disabledUntil).toISOString()}`,
+          healthState: state.healthState,
+        };
+      }
+
+      if (state && state.cooldownUntil > now) {
+        return {
+          provider: providerName,
+          healthy: false,
+          latencyMs: 0,
+          error: `Cooldown until ${new Date(state.cooldownUntil).toISOString()}`,
+          healthState: state.healthState,
+        };
+      }
+    }
+
+    const probeRequest: AIRequest = {
+      messages: [
+        {
+          role: "user",
+          content: "Hello",
+        },
+      ],
+      maxTokens: 5,
+      source: "health-probe",
+    };
+
+    const timeoutMs = options.timeoutMs ?? 10_000;
+    const t0 = Date.now();
+
+    try {
+      const response = await this.withTimeout(
+        provider.generate(probeRequest),
+        timeoutMs
+      );
+
+      const latencyMs = Date.now() - t0;
+
+      // Record success to update health state.
+      this.recordSuccess(provider, latencyMs, response.model);
+
+      return {
+        provider: providerName,
+        healthy: true,
+        latencyMs,
+        healthState: HealthState.HEALTHY,
+      };
+    } catch (error) {
+      const latencyMs = Date.now() - t0;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Record failure to update health state.
+      this.recordFailure(provider, error);
+
+      return {
+        provider: providerName,
+        healthy: false,
+        latencyMs,
+        error: errorMsg.slice(0, 200),
+        healthState: state?.healthState ?? HealthState.DEGRADED,
+      };
+    }
+  }
+
+  /**
+   * Probe all available providers in parallel.
+   * Returns a summary report useful for diagnostics and startup verification.
+   */
+  async probeAllProviders(
+    options: {
+      timeoutMs?: number;
+      force?: boolean;
+    } = {}
+  ): Promise<{
+    healthy: number;
+    unhealthy: number;
+    total: number;
+    results: Array<{
+      provider: string;
+      healthy: boolean;
+      latencyMs: number;
+      error?: string;
+      healthState: HealthState;
+    }>;
+  }> {
+    const available = this.providers.filter(
+      (p) => p.isAvailable()
+    );
+
+    const results = await Promise.all(
+      available.map((p) =>
+        this.probeProvider(p.name, options)
+      )
+    );
+
+    const healthy = results.filter((r) => r.healthy).length;
+    const unhealthy = results.length - healthy;
+
+    return {
+      healthy,
+      unhealthy,
+      total: results.length,
+      results,
+    };
+  }
+
+  /* =========================
+     HEALTH REPORT
+  ========================= */
+
+  /**
+   * Structured health report for diagnostics, self-healer, and tests.
+   * Does not expose secrets or raw error messages.
+   */
+  getHealthReport(): {
+    totalProviders: number;
+    configuredProviders: number;
+    healthyProviders: number;
+    degradedProviders: number;
+    quarantinedProviders: number;
+    untestedProviders: number;
+    providers: Array<{
+      name: string;
+      configured: boolean;
+      healthState: HealthState;
+      successes: number;
+      failures: number;
+      successRate: number | null;
+      averageLatencyMs: number | null;
+      score: number;
+      quarantined: boolean;
+      lastError: string | null;
+      modelCount: number;
+      worstModelState: HealthState | null;
+    }>;
+  } {
+    const providers = this.providers.map((provider) => {
+      const state = this.health.get(provider.name);
+      const configured = provider.isAvailable();
+      const total = (state?.successes ?? 0) + (state?.failures ?? 0);
+      const successRate = total > 0
+        ? Math.round(((state?.successes ?? 0) / total) * 100)
+        : null;
+      const averageLatencyMs = state && state.successes > 0
+        ? Math.round(state.totalLatencyMs / state.successes)
+        : null;
+
+      // Determine worst model state.
+      let worstModelState: HealthState | null = null;
+      if (state?.modelHealth) {
+        for (const [, mh] of state.modelHealth) {
+          if (mh.consecutiveFailures >= PERSISTENT_FAILURE_THRESHOLD) {
+            worstModelState = HealthState.QUARANTINED;
+            break;
+          } else if (mh.failures > 0 && worstModelState === null) {
+            worstModelState = HealthState.DEGRADED;
+          }
+        }
+      }
+
+      return {
+        name: provider.name,
+        configured,
+        healthState: state?.healthState ?? HealthState.NOT_CONFIGURED,
+        successes: state?.successes ?? 0,
+        failures: state?.failures ?? 0,
+        successRate,
+        averageLatencyMs,
+        score: this.providerScore(provider),
+        quarantined: (state?.disabledUntil ?? 0) > Date.now(),
+        lastError: state?.lastError ?? null,
+        modelCount: state?.modelHealth?.size ?? 0,
+        worstModelState,
+      };
+    });
+
+    const healthyProviders = providers.filter(
+      (p) => p.healthState === HealthState.HEALTHY
+    ).length;
+    const degradedProviders = providers.filter(
+      (p) => p.healthState === HealthState.DEGRADED
+    ).length;
+    const quarantinedProviders = providers.filter(
+      (p) => p.quarantined
+    ).length;
+    const untestedProviders = providers.filter(
+      (p) => p.configured && p.successes === 0 && p.failures === 0
+    ).length;
+
+    return {
+      totalProviders: this.providers.length,
+      configuredProviders: providers.filter((p) => p.configured).length,
+      healthyProviders,
+      degradedProviders,
+      quarantinedProviders,
+      untestedProviders,
+      providers,
+    };
+  }
+
+  /**
+   * Startup verification — logs summary without probing.
+   * Safe to call during initialization.
+   */
+  logStartupSummary(): void {
+    const report = this.getHealthReport();
+
+    logger.info(
+      `🏥 Provider health summary: ${report.healthyProviders} healthy, ` +
+      `${report.degradedProviders} degraded, ${report.quarantinedProviders} quarantined, ` +
+      `${report.untestedProviders} untested out of ${report.configuredProviders} configured`
+    );
+
+    for (const p of report.providers) {
+      if (!p.configured) continue;
+
+      const icon =
+        p.healthState === HealthState.HEALTHY ? "✅" :
+        p.healthState === HealthState.DEGRADED ? "⚠️" :
+        p.quarantined ? "🚫" :
+        p.successes === 0 ? "🆕" : "❓";
+
+      logger.info(
+        `  ${icon} ${p.name}: ${p.healthState} ` +
+        `(${p.successes} ok, ${p.failures} fail, score=${p.score})`
+      );
+    }
   }
 }
