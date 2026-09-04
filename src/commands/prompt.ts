@@ -13,6 +13,7 @@ import { recordAudit } from "../security/audit";
 import { config } from "../config/env";
 import { logger } from "../logger";
 import { loadBuilderSessionsDB, saveBuilderSessionDB, deleteBuilderSessionDB, deleteExpiredBuilderSessionsDB } from "../database";
+import { withLock } from "../games/lock";
 
 /* ================================================================
  * BUILDER SESSION STATE
@@ -551,133 +552,180 @@ export function createPromptCommand(): AshenCommand {
       .setDescription("Open a private Builder session to design, inspect, and manage your server")
       .addStringOption((option) =>
         option
-          .setName("request")
+          .setName("prompt")
           .setDescription("What you'd like to build, inspect, or change")
-          .setRequired(false)
+          .setRequired(true)
           .setMaxLength(2000)
       ),
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      try {
-        const guild = interaction.guild;
-        if (!guild) {
-          await interaction.editReply("❌ This command can only be used in a server.");
-          return;
-        }
+      // ── 1. VALIDATION ──────────────────────────────────────────
+      const guild = interaction.guild;
+      if (!guild) {
+        await interaction.editReply("❌ This command can only be used in a server.");
+        return;
+      }
 
-        const userId = interaction.user.id;
-        const guildOwnerId = guild.ownerId;
+      const userId = interaction.user.id;
+      const guildOwnerId = guild.ownerId;
 
-        // Check authorization: trusted user, admin, or guild owner
-        const authorized = await isUserTrustedOrAdmin(guild.id, userId, guildOwnerId);
-        if (!authorized) {
-          await interaction.editReply("❌ You don't have permission to use `/prompt`.");
-          return;
-        }
+      // ── 2. PERMISSION CHECK ────────────────────────────────────
+      const authorized = await isUserTrustedOrAdmin(guild.id, userId, guildOwnerId);
+      if (!authorized) {
+        await interaction.editReply("❌ You don't have permission to use `/prompt`.");
+        return;
+      }
 
-        const request = interaction.options.getString("request");
+      const prompt = interaction.options.getString("prompt", true);
 
-        // Check for existing active session
-        const existingSession = getActiveSession(guild.id, userId);
+      // ── 3. PROMPT VALIDATION ───────────────────────────────────
+      if (prompt.trim().length < 2) {
+        await interaction.editReply("❌ Please provide a meaningful prompt (at least 2 characters).");
+        return;
+      }
 
-        if (existingSession && !request) {
-          // Resume existing session
-          await interaction.editReply(
-            "🔧 **AshenAI Builder**\n\n" +
-            "Session resumed. What would you like to build or change?\n\n" +
-            "Examples:\n" +
-            '• "create a voice channel named callerss"\n' +
-            '• "inspect my server"\n' +
-            '• "generate a gaming template"\n' +
-            '• "delete all except general"\n' +
-            '• "make my server better"'
-          );
-          return;
-        }
-
-        // Archive old session thread if one exists
-        if (existingSession) {
+      // ── 4. SESSION REUSE ───────────────────────────────────────
+      // If user already has an active session, route prompt there
+      const existingSession = getActiveSession(guild.id, userId);
+      if (existingSession) {
+        const existingThread = guild.channels.cache.get(existingSession.threadId);
+        if (existingThread && existingThread.isThread() && !existingThread.archived) {
+          // Reuse existing session — send prompt into the existing thread
+          touchSession(existingSession);
+          await interaction.editReply(`♻️ Routed to your existing builder session: <#${existingThread.id}>`);
+          recordAudit({
+            who: userId,
+            whoName: interaction.user.tag,
+            what: `Reused builder session in thread ${existingThread.id}`,
+            where: "prompt-command",
+            guildId: guild.id,
+            result: "success",
+          });
+          // Process the prompt in the existing thread
           try {
-            const oldThread = guild.channels.cache.get(existingSession.threadId);
-            if (oldThread && oldThread.isThread()) {
-              await oldThread.setArchived(true, "New builder session started").catch(() => {});
-            }
-          } catch {}
-          builderSessions.delete(getSessionKey(guild.id, userId));
-          deleteBuilderSessionDB(getSessionKey(guild.id, userId));
+            await processBuilderMessage(interaction.client, existingThread, existingSession, prompt, interaction.user);
+          } catch (processError) {
+            logger.error("⚠️ Prompt processing failed in reused session:",
+              processError instanceof Error ? processError.message : String(processError));
+            await existingThread.send("⚠️ There was an issue processing your prompt. You can try again in this thread.").catch(() => {});
+          }
+          return;
         }
+        // Session exists but thread is gone/expired — clean up and create new
+        builderSessions.delete(getSessionKey(guild.id, userId));
+        deleteBuilderSessionDB(getSessionKey(guild.id, userId));
+      }
 
-        // Create a thread from the interaction channel
-        const interactionChannel = interaction.channel;
-        if (!interactionChannel || !('threads' in interactionChannel)) {
-          await interaction.editReply("❌ Cannot create a thread in this channel.");
+      // ── 5. CONCURRENCY LOCK ────────────────────────────────────
+      // Prevent duplicate session creation from rapid /prompt invocations
+      const lockKey = `builder-create:${guild.id}:${userId}`;
+      let sessionCreated = false;
+
+      try {
+        await withLock(lockKey, async () => {
+          // Double-check after acquiring lock (another request may have created it)
+          const recheck = getActiveSession(guild.id, userId);
+          if (recheck) {
+            const recheckThread = guild.channels.cache.get(recheck.threadId);
+            if (recheckThread && recheckThread.isThread() && !recheckThread.archived) {
+              touchSession(recheck);
+              await interaction.editReply(`♻️ Routed to your existing builder session: <#${recheckThread.id}>`);
+              try {
+                await processBuilderMessage(interaction.client, recheckThread, recheck, prompt, interaction.user);
+              } catch (processError) {
+                logger.error("⚠️ Prompt processing failed in reused session:",
+                  processError instanceof Error ? processError.message : String(processError));
+                await recheckThread.send("⚠️ There was an issue processing your prompt. You can try again in this thread.").catch(() => {});
+              }
+              sessionCreated = true; // Prevent outer catch from sending failure
+              return;
+            }
+            // Stale session — clean up
+            builderSessions.delete(getSessionKey(guild.id, userId));
+            deleteBuilderSessionDB(getSessionKey(guild.id, userId));
+          }
+
+          // ── 6. CREATE SESSION ──────────────────────────────────────
+          const interactionChannel = interaction.channel;
+          if (!interactionChannel || !('threads' in interactionChannel)) {
+            await interaction.editReply("❌ Cannot create a thread in this channel.");
+            return;
+          }
+
+          const thread = await interactionChannel.threads.create({
+            name: `builder-${interaction.user.username}`,
+            autoArchiveDuration: ThreadAutoArchiveDuration.OneHour,
+          });
+
+          const session: BuilderSession = {
+            guildId: guild.id,
+            channelId: interaction.channel?.id || "",
+            threadId: thread.id,
+            userId,
+            startedAt: Date.now(),
+            lastActivityAt: Date.now(),
+            lastStateFetchedAt: 0,
+          };
+          builderSessions.set(getSessionKey(guild.id, userId), session);
+          saveBuilderSessionDB(getSessionKey(guild.id, userId), session);
+
+          // Send initial message in thread
+          const sessionEmbed = new EmbedBuilder()
+            .setColor(0x2c2f33)
+            .setTitle("New Session")
+            .setDescription(`**Prompt:** ${prompt}`)
+            .addFields({
+              name: "Note",
+              value: "Keep the convo in this thread for session memory. To save something permanently, just tell the agent to remember it!",
+            })
+            .setFooter({ text: "Free • AshenAI Agent" });
+
+          await thread.send({ embeds: [sessionEmbed] });
+
+          // Acknowledge in the original channel
+          await interaction.editReply(`✅ Builder session opened: <#${thread.id}>`);
+
+          recordAudit({
+            who: userId,
+            whoName: interaction.user.tag,
+            what: `Opened builder session in thread ${thread.id}`,
+            where: "prompt-command",
+            guildId: guild.id,
+            result: "success",
+          });
+
+          sessionCreated = true;
+
+          // Process initial prompt — separate error handling
+          try {
+            await processBuilderMessage(interaction.client, thread, session, prompt, interaction.user);
+          } catch (processError) {
+            logger.error("⚠️ Initial prompt processing failed (session still open):",
+              processError instanceof Error ? processError.message : String(processError));
+            await thread.send("⚠️ Builder session opened, but I couldn't process the prompt. You can try again in this thread.").catch(() => {});
+          }
+        }, 20000); // 20s timeout for session creation
+      } catch (error) {
+        // ── 7. ERROR CLASSIFICATION ──────────────────────────────
+        if (sessionCreated) return; // Already handled above
+
+        const errMsg = error instanceof Error ? error.message : String(error);
+
+        if (errMsg.includes("LOCK_TIMEOUT")) {
+          logger.warn("⚠️ /prompt session creation lock timeout:", errMsg);
+          await interaction.editReply("⏳ Session creation is taking longer than expected. Please try again in a moment.");
           return;
         }
 
-        const thread = await interactionChannel.threads.create({
-          name: `builder-${interaction.user.username}`,
-          autoArchiveDuration: ThreadAutoArchiveDuration.OneHour,
-        });
+        logger.error("❌ /prompt failed:", errMsg);
 
-        // Create session
-        const session: BuilderSession = {
-          guildId: guild.id,
-          channelId: interaction.channel?.id || "",
-          threadId: thread.id,
-          userId,
-          startedAt: Date.now(),
-          lastActivityAt: Date.now(),
-          lastStateFetchedAt: 0,
-        };
-        builderSessions.set(getSessionKey(guild.id, userId), session);
-        saveBuilderSessionDB(getSessionKey(guild.id, userId), session);
-
-        // Send initial message in thread as a clean Embed
-        const sessionEmbed = new EmbedBuilder()
-          .setColor(0x2c2f33)
-          .setTitle("New Session")
-          .setDescription(
-            request
-              ? `**Prompt:** ${request}`
-              : "**Prompt:** *(waiting for your request)*"
-          )
-          .addFields({
-            name: "Note",
-            value: "Keep the convo in this thread for session memory. To save something permanently, just tell the agent to remember it!",
-          })
-          .setFooter({ text: "Free • AshenAI Agent" });
-
-        await thread.send({ embeds: [sessionEmbed] });
-
-        // Acknowledge in the original channel
-        await interaction.editReply(`✅ Builder session opened: ${thread}`);
-
-        recordAudit({
-          who: userId,
-          whoName: interaction.user.tag,
-          what: `Opened builder session in thread ${thread.id}`,
-          where: "prompt-command",
-          guildId: guild.id,
-          result: "success",
-        });
-
-        // If there's an initial request, process it
-        if (request) {
-          await processBuilderMessage(interaction.client, thread, session, request, interaction.user);
-        }
-      } catch (error) {
-        logger.error("❌ /prompt failed:", error instanceof Error ? error.message : String(error));
-        try {
-          if (interaction.deferred || interaction.replied) {
-            await interaction.editReply("❌ Failed to create builder session. Please try again.");
-          } else {
-            await interaction.reply({
-              content: "❌ Failed to create builder session. Please try again.",
-              flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
-          }
-        } catch {
-          // Interaction may have expired
+        // Classify and send appropriate error message
+        if (errMsg.includes("permission") || errMsg.includes("Permission")) {
+          await interaction.editReply("❌ You don't have permission to use `/prompt`.");
+        } else if (errMsg.includes("thread") || errMsg.includes("channel")) {
+          await interaction.editReply("❌ Failed to create builder session. Cannot create a thread in this channel.");
+        } else {
+          await interaction.editReply("❌ Failed to create builder session. Please try again.");
         }
       }
     },

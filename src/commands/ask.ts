@@ -47,7 +47,7 @@ export function createAskCommand(
       .setDescription("Ask AshenAI a question")
       .addStringOption((option) =>
         option
-          .setName("prompt")
+          .setName("question")
           .setDescription("Your question")
           .setRequired(true)
           .setMaxLength(4000)
@@ -60,7 +60,7 @@ export function createAskCommand(
       const t = new StageTimer("/ask");
       const userId = interaction.user.id;
       const guildId = interaction.guildId || "";
-      const prompt = interaction.options.getString("prompt", true).trim();
+      const prompt = interaction.options.getString("question", true).trim();
 
       t.mark("extract_args");
 

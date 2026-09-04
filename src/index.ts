@@ -1822,8 +1822,15 @@ client.on(
 
     try {
       // Acknowledge the Discord interaction before CommandHandler executes it.
+      // /ask uses public (non-ephemeral) responses so others can see the answer.
+      // All other commands use ephemeral to keep responses private.
       if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const isPublicCommand = interaction.commandName === "ask";
+        if (isPublicCommand) {
+          await interaction.deferReply();
+        } else {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        }
       }
 
       await commandHandler.handle(

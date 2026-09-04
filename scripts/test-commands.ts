@@ -6,6 +6,8 @@ import { createResetCommand } from "../src/commands/reset";
 import { createHelpCommand } from "../src/commands/help";
 import { createStatusCommand } from "../src/commands/status";
 import { createConfigCommand } from "../src/commands/config";
+import { createPromptCommand } from "../src/commands/prompt";
+import { UsageManager } from "../src/ai/usage-manager";
 
 let passed = 0;
 let failed = 0;
@@ -29,12 +31,14 @@ console.log("\n🧪 AshenAI Offline Command Tests\n");
 try {
   const memory = new ConversationMemory();
   const router = new AIRouter(providers);
+  const usageManager = new UsageManager();
 
-  const ask = createAskCommand(router, memory);
+  const ask = createAskCommand(router, memory, usageManager);
   const reset = createResetCommand(memory);
   const help = createHelpCommand();
   const status = createStatusCommand(router, memory);
   const config = createConfigCommand();
+  const prompt = createPromptCommand();
 
   if (ask && ask.data.name === "ask" && typeof ask.execute === "function") {
     pass("/ask command factory");
@@ -82,6 +86,16 @@ try {
     fail("/config command factory");
   }
 
+  if (
+    prompt &&
+    prompt.data.name === "prompt" &&
+    typeof prompt.execute === "function"
+  ) {
+    pass("/prompt command factory");
+  } else {
+    fail("/prompt command factory");
+  }
+
   // ─────────────────────────────────────
   // COMMAND DEFINITIONS
   // ─────────────────────────────────────
@@ -92,6 +106,7 @@ try {
     help.data.name,
     status.data.name,
     config.data.name,
+    prompt.data.name,
   ];
 
   const expectedNames = [
@@ -100,6 +115,7 @@ try {
     "help",
     "status",
     "config",
+    "prompt",
   ];
 
   if (
@@ -127,18 +143,18 @@ try {
 
   const askJson = ask.data.toJSON();
 
-  const promptOption = askJson.options?.find(
-    (option: any) => option.name === "prompt"
+  const questionOption = askJson.options?.find(
+    (option: any) => option.name === "question"
   );
 
   if (
-    promptOption &&
-    promptOption.type === 3 &&
-    promptOption.required === true
+    questionOption &&
+    questionOption.type === 3 &&
+    questionOption.required === true
   ) {
-    pass("/ask prompt option");
+    pass("/ask question option");
   } else {
-    fail("/ask prompt option");
+    fail("/ask question option");
   }
 
   // ─────────────────────────────────────
@@ -169,6 +185,41 @@ try {
     pass("/config reload subcommand");
   } else {
     fail("/config reload subcommand");
+  }
+
+  // ─────────────────────────────────────
+  // PROMPT COMMAND OPTIONS
+  // ─────────────────────────────────────
+
+  const promptJson = prompt.data.toJSON();
+
+  const promptOption = promptJson.options?.find(
+    (option: any) => option.name === "prompt"
+  );
+
+  if (
+    promptOption &&
+    promptOption.type === 3 &&
+    promptOption.required === true
+  ) {
+    pass("/prompt prompt option (required string)");
+  } else {
+    fail("/prompt prompt option (required string)");
+  }
+
+  const promptMaxLength = promptOption?.max_length;
+  if (promptMaxLength && promptMaxLength <= 2000) {
+    pass("/prompt prompt max_length within Discord limits");
+  } else {
+    fail("/prompt prompt max_length within Discord limits");
+  }
+
+  // /prompt description should mention builder/server
+  const promptDesc = promptJson.description?.toLowerCase() || "";
+  if (promptDesc.includes("builder") || promptDesc.includes("server")) {
+    pass("/prompt description mentions builder/server");
+  } else {
+    fail("/prompt description mentions builder/server");
   }
 
   // ─────────────────────────────────────

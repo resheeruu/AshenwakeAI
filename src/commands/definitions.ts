@@ -24,7 +24,7 @@ export const commandBuilders: CommandBuilder[] = [
     .setDescription("Ask AshenAI a question")
     .addStringOption((option) =>
       option
-        .setName("prompt")
+        .setName("question")
         .setDescription("Your question")
         .setRequired(true)
         .setMaxLength(4000)
