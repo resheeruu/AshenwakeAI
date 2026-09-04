@@ -67,7 +67,7 @@ const CATEGORY_DEFS: CategoryDef[] = [
   },
   { id: "moderation", name: "Moderation", emoji: "\u{1F6E1}\uFE0F", description: "Keep the server safe and manage members." },
   { id: "access", name: "Access Control", emoji: "\u{1F510}", description: "Trusted users and permission management." },
-  { id: "system", name: "System", emoji: "\u2699\uFE0F", description: "Status and diagnostics." },
+  { id: "system", name: "System", emoji: "\u2699\uFE0F", description: "System status and AI usage." },
 ];
 
 const TRY_ASKING = [
