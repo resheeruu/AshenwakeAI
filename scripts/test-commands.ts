@@ -12,7 +12,6 @@ import {
   getAIUsageSummaryDB,
   getAIUsageBySourceDB,
 } from "../src/database/ai-usage-repo";
-import { commandBuilders } from "../src/commands/definitions";
 
 let passed = 0;
 let failed = 0;
@@ -90,31 +89,7 @@ try {
   }
 
   // ─────────────────────────────────────
-  // /config MUST NOT BE REGISTERED
-  // ─────────────────────────────────────
-
-  // Verify /config is NOT in the static commandBuilders array
-  const staticCommandNames = commandBuilders.map((b) => b.name);
-  if (!staticCommandNames.includes("config")) {
-    pass("/config NOT in static commandBuilders");
-  } else {
-    fail("/config NOT in static commandBuilders");
-  }
-
-  if (!staticCommandNames.includes("usage")) {
-    pass("/usage NOT in static commandBuilders");
-  } else {
-    fail("/usage NOT in static commandBuilders");
-  }
-
-  if (!staticCommandNames.includes("diagnose")) {
-    pass("/diagnose NOT in static commandBuilders");
-  } else {
-    fail("/diagnose NOT in static commandBuilders");
-  }
-
-  // ─────────────────────────────────────
-  // COMMAND NAMES
+  // HIDDEN COMMANDS MUST NOT BE REGISTERED
   // ─────────────────────────────────────
 
   const commandNames = [
@@ -162,6 +137,12 @@ try {
     pass("/diagnose NOT in runtime command list");
   } else {
     fail("/diagnose NOT in runtime command list");
+  }
+
+  if (!commandNames.includes("task")) {
+    pass("/task NOT in runtime command list");
+  } else {
+    fail("/task NOT in runtime command list");
   }
 
   if (new Set(commandNames).size === commandNames.length) {
