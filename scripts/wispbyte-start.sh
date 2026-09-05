@@ -54,15 +54,23 @@ fi
 
 echo "[Wispbyte] Syncing repository..."
 
-# Detect dirty working tree BEFORE pulling
-DIRTY_FILES="$(git status --porcelain 2>/dev/null || true)"
+# Detect tracked-file changes ONLY (ignores untracked files/directories).
+# Untracked runtime artifacts (.npm/, backups/, core.*, etc.) are expected
+# and must NOT block deployment.
+# Uses git diff (unstaged) and git diff --cached (staged) which only
+# report modifications, deletions, and renames of TRACKED files.
+TRACKED_UNSTAGED="$(git diff --name-only 2>/dev/null || true)"
+TRACKED_STAGED="$(git diff --cached --name-only 2>/dev/null || true)"
 
-if [ -n "$DIRTY_FILES" ]; then
-  # Only allow package-lock.json modification (hosting platform artifact)
-  NON_LOCK_DIRTY="$(echo "$DIRTY_FILES" | grep -v 'package-lock\.json' || true)"
+if [ -n "$TRACKED_UNSTAGED" ] || [ -n "$TRACKED_STAGED" ]; then
+  # Combine both lists
+  ALL_TRACKED_DIRTY="$(printf '%s\n%s\n' "$TRACKED_UNSTAGED" "$TRACKED_STAGED" | grep -v '^$' || true)"
+
+  # Check if ONLY package-lock.json is modified (hosting platform artifact)
+  NON_LOCK_DIRTY="$(echo "$ALL_TRACKED_DIRTY" | grep -v '^package-lock\.json$' || true)"
 
   if [ -n "$NON_LOCK_DIRTY" ]; then
-    echo "[Wispbyte] ERROR: Unexpected local modifications detected:"
+    echo "[Wispbyte] ERROR: Unexpected tracked file modifications detected:"
     echo "$NON_LOCK_DIRTY" | head -10
     echo "[Wispbyte] Refusing to start with dirty source tree."
     exit 1
