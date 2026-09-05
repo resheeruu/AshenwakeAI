@@ -161,6 +161,27 @@ fi
 # We only install Chromium when it's missing to save resources.
 
 CHROMIUM_READY=false
+# Minimum free space in MiB required before attempting Chromium download.
+# Chromium archive is ~184 MiB; extraction and runtime need additional space.
+CHROMIUM_MIN_FREE_MB=500
+
+check_disk_space() {
+  local path="${1:-.}"
+  df -P "$path" 2>/dev/null | awk 'NR==2 {print $4}'
+}
+
+remove_playwright_partial_cache() {
+  local cache_dir="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache}/ms-playwright"
+  if [ -d "$cache_dir" ]; then
+    local cache_size_mb
+    cache_size_mb=$(du -sm "$cache_dir" 2>/dev/null | awk '{print $1}')
+    # Only remove if cache is reasonably small (partial downloads, not a full install)
+    if [ "${cache_size_mb:-0}" -lt 500 ]; then
+      rm -rf "$cache_dir"
+      echo "[Wispbyte] Removed partial Playwright cache (${cache_size_mb:-0} MiB)."
+    fi
+  fi
+}
 
 if node -e "require('playwright')" 2>/dev/null; then
   # Check if Chromium is already installed by asking Playwright to resolve it
@@ -174,13 +195,28 @@ if node -e "require('playwright')" 2>/dev/null; then
     echo "[Wispbyte] Playwright Chromium already installed."
     CHROMIUM_READY=true
   else
-    echo "[Wispbyte] Playwright Chromium missing; installing..."
-    if npx playwright install chromium 2>&1; then
-      echo "[Wispbyte] Playwright Chromium installed."
-      CHROMIUM_READY=true
+    # Precheck: disk space before attempting ~184 MiB download
+    FREE_KB=$(check_disk_space "$APP_DIR")
+    FREE_MB=$(( ${FREE_KB:-0} / 1024 ))
+    echo "[Wispbyte] Available disk space: ${FREE_MB} MiB"
+
+    if [ "$FREE_MB" -ge "$CHROMIUM_MIN_FREE_MB" ]; then
+      echo "[Wispbyte] Playwright Chromium missing; installing..."
+      INSTALL_OUTPUT=$(npx playwright install chromium 2>&1) && INSTALL_RC=0 || INSTALL_RC=$?
+      echo "$INSTALL_OUTPUT"
+
+      if [ "$INSTALL_RC" -eq 0 ]; then
+        echo "[Wispbyte] Playwright Chromium installed."
+        CHROMIUM_READY=true
+      elif echo "$INSTALL_OUTPUT" | grep -qi "ENOSPC\|no space left on device"; then
+        echo "[Wispbyte] Insufficient disk space for Playwright Chromium; browser features degraded."
+        remove_playwright_partial_cache
+      else
+        echo "[Wispbyte] WARNING: Playwright Chromium installation failed."
+        echo "[Wispbyte] Browser features will be disabled. HTTP pipeline remains active."
+      fi
     else
-      echo "[Wispbyte] WARNING: Playwright Chromium installation failed."
-      echo "[Wispbyte] Browser features will be disabled. HTTP pipeline remains active."
+      echo "[Wispbyte] Insufficient disk space for Playwright Chromium; browser features degraded."
     fi
   fi
 else
