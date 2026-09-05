@@ -5,6 +5,7 @@ import {
 
 import { config } from "../config/env";
 import { CommandBuilder } from "./definitions";
+import { logger } from "../logger";
 
 /*
  * Synchronize AshenAI slash commands globally.
@@ -29,8 +30,8 @@ export async function syncCommands(
     (command) => command.toJSON(),
   );
 
-  console.log(
-    `⚡ Synchronizing ${commandData.length} global slash commands...`,
+  logger.info(
+    `Synchronizing ${commandData.length} global slash commands...`,
   );
 
   try {
@@ -43,11 +44,11 @@ export async function syncCommands(
       },
     );
 
-    console.log(
-      `✅ Global commands synchronized: ${commandData.length}`,
+    logger.info(
+      `Global commands synchronized: ${commandData.length}`,
     );
   } catch (error) {
-    console.error("❌ Failed to synchronize global commands:", error);
-    console.error("⚠️ Bot will continue with existing commands.");
+    logger.error("Failed to synchronize global commands:", error instanceof Error ? error.message : String(error));
+    logger.warn("Bot will continue with existing commands.");
   }
 }

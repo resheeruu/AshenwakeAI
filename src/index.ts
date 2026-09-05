@@ -394,8 +394,7 @@ async function buildInteractiveContext(
 client.once(
   Events.ClientReady,
   async (readyClient) => {
-    console.log("🚨 DIRECT CLIENT READY:", readyClient.user.tag);
-    logger.info("🔥 Starting AshenAI...");
+    logger.info("Starting AshenAI...");
     logger.info(
       `✅ Logged in as ${readyClient.user.tag}`
     );
@@ -460,7 +459,7 @@ client.once(Events.ClientReady, () => {
   if (discordWatchdogStarted) return;
   discordWatchdogStarted = true;
 
-  console.log("🩺 DISCORD GATEWAY WATCHDOG STARTED");
+  logger.info("Discord gateway watchdog started");
 
   const watchdog = setInterval(() => {
     const now = Date.now();
@@ -475,13 +474,13 @@ client.once(Events.ClientReady, () => {
     if (!client.isReady()) {
       if (detectHostProvider() === "render") {
         logger.error(
-          "🚨 DISCORD WATCHDOG: client is no longer ready. Exiting for Render restart."
+          "DISCORD WATCHDOG: client is no longer ready. Exiting for Render restart."
         );
         clearInterval(watchdog);
         process.exit(1);
       } else {
         logger.warn(
-          "⚠️ DISCORD WATCHDOG: client is no longer ready. Recovery loop will handle reconnection."
+          "DISCORD WATCHDOG: client is no longer ready. Recovery loop will handle reconnection."
         );
       }
       return;
@@ -492,13 +491,13 @@ client.once(Events.ClientReady, () => {
     if (!ws || ws.shards.size === 0) {
       if (detectHostProvider() === "render") {
         logger.error(
-          "🚨 DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Exiting."
+          "DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Exiting."
         );
         clearInterval(watchdog);
         process.exit(1);
       } else {
         logger.warn(
-          "⚠️ DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Recovery loop will handle reconnection."
+          "DISCORD WATCHDOG: Discord WebSocket shard manager unavailable. Recovery loop will handle reconnection."
         );
       }
       return;
@@ -516,15 +515,15 @@ client.once(Events.ClientReady, () => {
        */
       if (!Number.isFinite(lastPing) || lastPing <= 0) {
         logger.warn(
-          `⚠️ DISCORD WATCHDOG: shard=${shardId} has no heartbeat timestamp; status=${shardStatus}`
+          `DISCORD WATCHDOG: shard=${shardId} has no heartbeat timestamp; status=${shardStatus}`
         );
         continue;
       }
 
       const heartbeatAge = now - lastPing;
 
-      console.log(
-        `🩺 Discord gateway check: shard=${shardId} status=${shardStatus} ping=${ping}ms heartbeatAge=${heartbeatAge}ms`
+      logger.debug(
+        `Discord gateway check: shard=${shardId} status=${shardStatus} ping=${ping}ms heartbeatAge=${heartbeatAge}ms`
       );
 
       /*
@@ -534,69 +533,39 @@ client.once(Events.ClientReady, () => {
       if (heartbeatAge > 300_000) {
         if (detectHostProvider() === "render") {
           logger.error(
-            `🚨 DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Exiting for Render restart.`
+            `DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Exiting for Render restart.`
           );
           clearInterval(watchdog);
           process.exit(1);
         } else {
           logger.warn(
-            `⚠️ DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Recovery loop will handle reconnection.`
+            `DISCORD WATCHDOG: shard=${shardId} heartbeat is stale (${heartbeatAge}ms). Recovery loop will handle reconnection.`
           );
         }
       }
     }
   }, 30_000);
 
-  console.log(
-    "🩺 DISCORD GATEWAY WATCHDOG ACTIVE: checking every 30s, stale threshold 5m"
+  logger.info(
+    "Discord gateway watchdog active: checking every 30s, stale threshold 5m"
   );
 });
 
 /*
  * Useful gateway lifecycle logging.
  */
-client.on(Events.ShardReady, (id) => {
-  console.log(`🟢 DISCORD SHARD ${id} READY`);
-});
-
-client.on(Events.ShardReconnecting, (id) => {
-  console.log(`🔄 DISCORD SHARD ${id} RECONNECTING`);
-});
-
 client.on(Events.ShardResume, (id, replayedEvents) => {
-  console.log(
-    `♻️ DISCORD SHARD ${id} RESUMED | replayed=${replayedEvents}`
-  );
-});
-
-client.on(Events.ShardDisconnect, (event, id) => {
-  console.error(
-    `🔴 DISCORD SHARD ${id} DISCONNECTED | code=${event.code} | reason=${event.reason || "none"}`
-  );
-});
-
-client.on(Events.ShardError, (error, id) => {
-  console.error(
-    `❌ DISCORD SHARD ${id} ERROR:`,
-    error
+  logger.info(
+    `Discord shard ${id} resumed (replayed=${replayedEvents})`
   );
 });
 
 client.on(Events.Invalidated, () => {
-  console.error(
-    "💀 DISCORD SESSION INVALIDATED"
-  );
-});
-
-client.on(Events.Error, (error) => {
-  console.error(
-    "❌ DISCORD CLIENT ERROR:",
-    error
-  );
+  logger.error("Discord session invalidated");
 });
 
 client.on(Events.Warn, (warning) => {
-  logger.warn(`⚠️ Discord warning: ${warning}`);
+  logger.warn(`Discord warning: ${warning}`);
 });
 
 /* =====================================================
@@ -2613,9 +2582,9 @@ async function startDiscord(): Promise<void> {
   }
 }
 
-console.log("🚨 ENTRY MARKER: about to call startDiscord()");
+logger.info("Starting AshenAI...");
 startDiscord().catch((error) => {
-  console.error("❌ FATAL: startDiscord failed:", error);
+  logger.error("FATAL: startDiscord failed:", error instanceof Error ? error.message : String(error));
   process.exit(1);
 });
 
