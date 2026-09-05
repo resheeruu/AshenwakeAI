@@ -61,6 +61,7 @@ import { SuggestionManager } from "./community/suggestions";
 import { EventManager } from "./community/events";
 import { ReactionRoleManager } from "./community/reaction-roles";
 import { runHealthCheck } from "./core/health-checker";
+import { runPreflight, createSupervisorChecks } from "./core/preflight";
 import { autoBackup } from "./core/backup-manager";
 import { checkLoad, recordRequest } from "./core/load-manager";
 import { detectHostProvider } from "./core/resource-profile";
@@ -141,6 +142,12 @@ const client = new Client({
 
 
 const router = new AIRouter(providers);
+
+// Unified preflight — run once at startup, then feed into InternalSupervisor
+void runPreflight(router, { logLevel: "compact" }).catch((error) => {
+  logger.warn("Preflight failed:", error instanceof Error ? error.message : String(error));
+});
+
 const memory = new ConversationMemory();
 const userProfiles = new UserProfileMemory();
 const usageStats = new UsageStats();
@@ -1995,18 +2002,7 @@ const internalSupervisor = new InternalSupervisor({
   intervalMs: 30_000,
   failureThreshold: 3,
 
-  checks: () => {
-    const reasons: string[] = [];
-
-    if (!client.isReady() && !discordRecoveryActive) {
-      reasons.push("Discord client is not ready");
-    }
-
-    return {
-      healthy: reasons.length === 0,
-      reasons,
-    };
-  },
+  checks: createSupervisorChecks(router),
 
   onUnhealthy: (reason) => {
     logger.error(
