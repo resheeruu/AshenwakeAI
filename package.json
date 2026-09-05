@@ -65,5 +65,9 @@
     "@types/turndown": "^5.0.6",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "esbuild@0.28.2": true
   }
 }
