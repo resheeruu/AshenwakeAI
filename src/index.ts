@@ -210,6 +210,12 @@ commandHandler.registerMany(commands);
 
 import { getBrowserManager, registerBrowserTools } from "./web/browser";
 import { toolRegistry } from "./ai/tools/registry";
+import { createDiscordTools } from "./ai/tools/discord";
+
+// Register all Discord tools in the global ToolRegistry.
+// This enables executeTool(), checkFullAuthorization(), and the confirmation handler
+// to look up tools by name. Without this, every Discord tool lookup returns undefined.
+toolRegistry.registerAll(createDiscordTools(() => client));
 
 async function startBrowser(): Promise<void> {
   try {
