@@ -1,0 +1,67 @@
+name: Deploy to Wispbyte
+
+on:
+  push:
+    branches: [main]
+
+# Prevent concurrent deployments
+concurrency:
+  group: wispbyte-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.WISP_PANEL_URL }}" ] || \
+             [ -z "${{ secrets.WISP_SERVER_UUID }}" ] || \
+             [ -z "${{ secrets.WISP_API_TOKEN }}" ]; then
+            echo "::error::Missing required secrets: WISP_PANEL_URL, WISP_SERVER_UUID, WISP_API_TOKEN"
+            echo "Configure these in GitHub repo Settings → Secrets → Actions"
+            exit 1
+          fi
+
+      - name: Restart Wispbyte server
+        env:
+          WISP_PANEL_URL: ${{ secrets.WISP_PANEL_URL }}
+          WISP_SERVER_UUID: ${{ secrets.WISP_SERVER_UUID }}
+          WISP_API_TOKEN: ${{ secrets.WISP_API_TOKEN }}
+        run: |
+          echo "Triggering Wispbyte server restart..."
+
+          HTTP_CODE=$(curl -s -o /tmp/wisp-response.txt -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $WISP_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d '{"signal": "restart"}' \
+            "$WISP_PANEL_URL/api/client/servers/$WISP_SERVER_UUID/power" \
+            --connect-timeout 10 \
+            --max-time 30)
+
+          RESPONSE=$(cat /tmp/wisp-response.txt 2>/dev/null || echo "No response body")
+          rm -f /tmp/wisp-response.txt
+
+          # Never log the full response — it may contain sensitive panel details
+          echo "HTTP status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Wispbyte restart signal sent successfully."
+            echo "Server will run: git pull → npm ci → AshenAI start"
+          elif [ "$HTTP_CODE" -eq 401 ] || [ "$HTTP_CODE" -eq 403 ]; then
+            echo "::error::Wispbyte API authentication failed. Check WISP_API_TOKEN."
+            echo "Generate a new token at: $WISP_PANEL_URL/account/security"
+            exit 1
+          elif [ "$HTTP_CODE" -eq 404 ]; then
+            echo "::error::Wispbyte server not found. Check WISP_SERVER_UUID and WISP_PANEL_URL."
+            exit 1
+          else
+            echo "::error::Wispbyte API returned HTTP $HTTP_CODE"
+            echo "The Wispbyte panel may not support API restarts."
+            echo "Manual restart required: restart the server in the Wispbyte panel."
+            exit 1
+          fi
