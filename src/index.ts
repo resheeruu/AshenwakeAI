@@ -1725,8 +1725,10 @@ client.on(
        */
       try {
         if (!replySent && message.channel.isSendable()) {
+          const cid = `ASH-${Date.now().toString(36)}`;
+          logger.error(`[ASH][${cid}][INTERACTIVE] error: ${error instanceof Error ? error.message : String(error)}`);
           await message.reply(
-            "❌ I couldn't process that message right now. Please try again."
+            `❌ I couldn't process that message right now. Error ID: "${cid}". Please try again.`
           );
         }
       } catch {
@@ -1783,9 +1785,11 @@ client.on(
         logger.warn("⚠️ Builder session processing lock timeout for user:", message.author.id);
         await message.channel.send("⏳ Please wait — your previous request is still being processed.").catch(() => {});
       } else {
-        logger.error("❌ Builder thread handler error:", error instanceof Error ? error.message : String(error));
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const cid = `ASH-${Date.now().toString(36)}`;
+        logger.error(`[ASH][${cid}][BUILDER] thread handler error: ${errMsg}`);
         try {
-          await message.channel.send("❌ Something went wrong processing your request.");
+          await message.channel.send(`❌ Something went wrong processing your request. Error ID: "${cid}".`);
         } catch {}
       }
     }
@@ -1840,18 +1844,20 @@ client.on(
       );
 
       try {
+        const cid = `ASH-${Date.now().toString(36)}`;
+        logger.error(`[ASH][${cid}][COMMAND] /${interaction.commandName} error: ${error instanceof Error ? error.message : String(error)}`);
         if (
           interaction.replied ||
           interaction.deferred
         ) {
           await interaction.followUp({
             content:
-              "❌ Something went wrong while processing that command.",
+              `❌ Something went wrong while processing that command. Error ID: "${cid}".`,
           });
         } else {
           await interaction.reply({
             content:
-              "❌ Something went wrong while processing that command.",
+              `❌ Something went wrong while processing that command. Error ID: "${cid}".`,
           }).catch(() => {});
         }
       } catch {

@@ -14,6 +14,32 @@ import { config } from "../config/env";
 import { logger } from "../logger";
 import { loadBuilderSessionsDB, saveBuilderSessionDB, deleteBuilderSessionDB, deleteExpiredBuilderSessionsDB } from "../database";
 import { withLock } from "../games/lock";
+import { webPipeline, type WebPipelineResult } from "../web";
+import { nanoid } from "nanoid";
+
+/* ================================================================
+ * CORRELATION ID HELPER
+ * ================================================================ */
+
+function generateCorrelationId(): string {
+  return `ASH-${nanoid(8)}`;
+}
+
+function logBuilder(
+  correlationId: string,
+  stage: string,
+  message: string,
+  level: "info" | "warn" | "error" = "info",
+): void {
+  const prefix = `[ASH][${correlationId}][BUILDER]`;
+  if (level === "error") {
+    logger.error(`${prefix}[${stage}] ${message}`);
+  } else if (level === "warn") {
+    logger.warn(`${prefix}[${stage}] ${message}`);
+  } else {
+    logger.info(`${prefix}[${stage}] ${message}`);
+  }
+}
 
 /* ================================================================
  * BUILDER SESSION STATE
@@ -426,6 +452,245 @@ function detectTemplateType(content: string): string {
   if (/\b(social|hangout|chill|casual)\b/i.test(lower)) return "social";
   if (/\b(friends|friend|private)\b/i.test(lower)) return "friends";
   return "community";
+}
+
+/* ================================================================
+ * WEB RESEARCH FOR UNFAMILIAR BUILDS
+ *
+ * When the user asks to build/create/set up something that doesn't
+ * match any known template, use the existing web pipeline to research
+ * the subject and synthesize a custom template.
+ * ================================================================ */
+
+/**
+ * Extract the subject from a user's build request.
+ * E.g. "make a Discord server for Valorant" → "valorant"
+ * E.g. "make a cozy server" → "" (no meaningful subject)
+ * Returns empty string if the subject is generic or meaningless.
+ */
+function extractBuildSubject(content: string): string {
+  let subject = content.toLowerCase().trim();
+
+  // Step 1: Strip leading verb phrases: "make a", "create a", "build a", "set up a", etc.
+  subject = subject.replace(
+    /\b(?:make|create|build|set\s*up|design|configure|prepare|organize)\b\s*(?:a\s+|an\s+|the\s+)?/i,
+    "",
+  );
+
+  // Step 2: Strip leading articles
+  subject = subject.replace(/^(?:the|a|an)\s+/i, "").trim();
+
+  // Step 3: Strip prepositions followed by template vocabulary or articles
+  // e.g. "for my server" → "", "about the art" → ""
+  // but "for valorant" → strip "for ", leaving "valorant"
+  subject = subject.replace(
+    /\b(?:for|about|around|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?(?:discord|server|guild|community|group|hub|space|channel|category|role)\b/gi,
+    "",
+  );
+
+  // Step 4: Strip remaining prepositions (they may be stranded after template vocab removal)
+  // e.g. "discord for valorant" → "valorant", "about painting hobby" → "painting hobby"
+  subject = subject.replace(/\b(?:for|about|around|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?/gi, "").trim();
+
+  // Step 5: Strip template vocabulary that is not a meaningful subject
+  const TEMPLATE_VOCAB = /\b(?:discord|server|guild|community|group|hub|space|channel|category|role|template|channels|categories|roles|gaming|minecraft|support|study|creator|clan|social|friends)\b/gi;
+  subject = subject.replace(TEMPLATE_VOCAB, " ").replace(/\s+/g, " ").trim();
+
+  // Step 6: Strip generic descriptors that are not meaningful research subjects
+  const GENERIC = /\b(?:cozy|nice|cool|good|great|best|new|old|big|small|simple|basic|clean|fun|chill|random|default|generic|standard|normal|regular|custom|private|public|free|my)\b/gi;
+  subject = subject.replace(GENERIC, " ").replace(/\s+/g, " ").trim();
+
+  // Reject empty or too short
+  if (!subject || subject.length < 2) return "";
+
+  return subject;
+}
+
+/** Stop words excluded from category synthesis. */
+const STOP_WORDS = new Set([
+  "the","a","an","and","or","but","in","on","at","to","for","of","with","by",
+  "from","is","it","its","this","that","are","was","were","be","been","being",
+  "have","has","had","do","does","did","will","would","could","should","may",
+  "might","can","shall","not","no","nor","so","if","then","than","too","very",
+  "just","about","above","after","again","all","also","any","because","before",
+  "between","both","each","few","more","most","other","some","such","into",
+  "only","own","same","them","these","those","through","under","until",
+  "up","what","when","where","which","while","who","whom","why","how","their",
+  "there","they","we","he","she","her","him","his","our","your","my","me",
+  "i","you","us","myself","yourself","itself",
+  "discord","server","guild","community","make","create","build","setup",
+  "channel","category","role","channels","categories","roles",
+]);
+
+/**
+ * Build subject-specific enhancements from web research content.
+ * Returns additional categories, channels, and roles to merge into an existing template.
+ * Purely heuristic — no AI interpretation. All web content is treated as untrusted data.
+ */
+function buildSubjectEnhancements(
+  subject: string,
+  researchContent: string,
+): {
+  categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }>;
+  roles: Array<{ name: string; color?: string }>;
+} {
+  // Extract meaningful terms from research (all content treated as untrusted data)
+  const words = researchContent
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3 && !STOP_WORDS.has(w));
+
+  // Count word frequency
+  const freq = new Map<string, number>();
+  for (const w of words) {
+    freq.set(w, (freq.get(w) || 0) + 1);
+  }
+
+  // Get top meaningful terms (sort by frequency, take top 3)
+  const topTerms = [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([word]) => word);
+
+  // Build subject-specific categories from top terms
+  const categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }> = [];
+
+  for (const term of topTerms) {
+    const name = term.charAt(0).toUpperCase() + term.slice(1).replace(/-/g, " ");
+    categories.push({
+      name,
+      channels: [
+        { name: "discussion", type: "text" },
+        { name: "resources", type: "text" },
+      ],
+    });
+  }
+
+  return {
+    categories,
+    roles: [],
+  };
+}
+
+/**
+ * Merge subject-specific enhancements into a base template.
+ * The base template provides the core structure; enhancements add subject-specific content.
+ */
+function mergeTemplateEnhancements(
+  baseTemplate: {
+    name: string;
+    description: string;
+    roles: Array<{ name: string; color?: string }>;
+    categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }>;
+  },
+  enhancements: {
+    categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }>;
+    roles: Array<{ name: string; color?: string }>;
+  },
+  subject: string,
+): {
+  name: string;
+  description: string;
+  roles: Array<{ name: string; color?: string }>;
+  categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }>;
+} {
+  // Clone the base template
+  const merged = {
+    name: baseTemplate.name,
+    description: baseTemplate.description,
+    roles: [...baseTemplate.roles],
+    categories: baseTemplate.categories.map((c) => ({
+      name: c.name,
+      channels: [...c.channels],
+    })),
+  };
+
+  // Add subject-specific categories (skip if name already exists)
+  const existingNames = new Set(merged.categories.map((c) => c.name.toLowerCase()));
+  for (const cat of enhancements.categories) {
+    if (!existingNames.has(cat.name.toLowerCase())) {
+      merged.categories.splice(merged.categories.length - 1, 0, cat); // Insert before VOICE
+      existingNames.add(cat.name.toLowerCase());
+    }
+  }
+
+  // Add subject-specific roles (skip if name already exists)
+  const existingRoles = new Set(merged.roles.map((r) => r.name.toLowerCase()));
+  for (const role of enhancements.roles) {
+    if (!existingRoles.has(role.name.toLowerCase())) {
+      merged.roles.push(role);
+      existingRoles.add(role.name.toLowerCase());
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Research a build subject using the existing web pipeline and enhance the base template.
+ * Returns null if research fails, yields no subject, or has insufficient results.
+ * All web content is treated as untrusted data.
+ */
+async function researchAndBuildTemplate(
+  content: string,
+  baseTemplate: {
+    name: string;
+    description: string;
+    roles: Array<{ name: string; color?: string }>;
+    categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }>;
+  },
+): Promise<{
+  template: {
+    name: string;
+    description: string;
+    roles: Array<{ name: string; color?: string }>;
+    categories: Array<{ name: string; channels: Array<{ name: string; type: string }> }>;
+  };
+  researchSummary: string;
+} | null> {
+  const subject = extractBuildSubject(content);
+  if (!subject || subject.length < 2) return null;
+
+  try {
+    const query = `${subject} community Discord server`;
+    const result: WebPipelineResult = await webPipeline(query, {
+      searchCount: 3,
+      maxSources: 3,
+      maxContentLength: 4000,
+      timeoutMs: 10_000,
+    });
+
+    // Require at least one source with content
+    const hasContent = result.sources.some(
+      (s) => s.extractedContent && s.extractedContent.length > 100,
+    );
+    if (!hasContent || result.sources.length === 0) return null;
+
+    // Combine all source content for synthesis (treated as untrusted data)
+    const combinedContent = result.sources
+      .map((s) => `${s.title}\n${s.snippet}\n${s.extractedContent || ""}`)
+      .join("\n");
+
+    const enhancements = buildSubjectEnhancements(subject, combinedContent);
+
+    // Only enhance if research found meaningful subject-specific content
+    if (enhancements.categories.length === 0) return null;
+
+    const template = mergeTemplateEnhancements(baseTemplate, enhancements, subject);
+
+    // Build a brief summary of what was learned
+    const sourceCount = result.sources.length;
+    const newCats = enhancements.categories.map((c) => `**${c.name}**`).join(", ");
+    const researchSummary =
+      `I researched **${subject}** from ${sourceCount} source${sourceCount > 1 ? "s" : ""}. ` +
+      `It mainly involves ${newCats}, so I added those to the ${baseTemplate.name}.`;
+
+    return { template, researchSummary };
+  } catch (error) {
+    logger.debug(`Web research failed for "${subject}": ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
 }
 
 /* ================================================================
@@ -909,60 +1174,96 @@ export async function processBuilderMessage(
     }
 
     case "template": {
-      const templateType = detectTemplateType(content);
-      const template = TEMPLATES[templateType];
+      const correlationId = generateCorrelationId();
+      logBuilder(correlationId, "START", `template request: "${content}"`);
 
-      if (!template) {
-        await thread.send(`❌ Unknown template type. Available: ${Object.keys(TEMPLATES).join(", ")}`);
+      try {
+        const templateType = detectTemplateType(content);
+        let template = TEMPLATES[templateType];
+        let researchSummary: string | undefined;
+
+        if (!template) {
+          await thread.send(`❌ Unknown template type. Available: ${Object.keys(TEMPLATES).join(", ")}`);
+          return;
+        }
+
+        // Attempt web research when a meaningful subject is present.
+        // Research enhances the existing template with subject-specific knowledge.
+        const subject = extractBuildSubject(content);
+        if (subject && subject.length >= 2) {
+          logBuilder(correlationId, "RESEARCH", `subject="${subject}"`);
+          const research = await researchAndBuildTemplate(content, template);
+          if (research) {
+            template = research.template;
+            researchSummary = research.researchSummary;
+          }
+        } else {
+          logBuilder(correlationId, "RESEARCH", "no meaningful subject — skipping web research");
+        }
+
+        logBuilder(correlationId, "INSPECT", "fetching server state");
+        const serverState = await inspectServer(thread.guild);
+        session.serverState = serverState;
+        session.lastStateFetchedAt = Date.now();
+
+        const classification = classifyResources(serverState, template);
+
+        if (classification.missing.length === 0) {
+          await thread.send(`✅ Your server already matches the "${template.name}" template. No changes needed.`);
+          logBuilder(correlationId, "DONE", "server already matches template");
+          return;
+        }
+
+        // Build steps
+        const steps = buildStepsFromTemplate(template, serverState);
+
+        // Store as pending plan
+        session.pendingPlan = {
+          id: `template-${Date.now()}`,
+          goal: template.name,
+          steps,
+          templateName: templateType,
+        };
+
+        // Show compact preview (with research summary if available)
+        const preview: string[] = [];
+
+        if (researchSummary) {
+          preview.push(researchSummary, "");
+        }
+
+        preview.push(
+          `📋 **${template.name}**`,
+          template.description,
+          "",
+          "**Create:**",
+        );
+
+        const roles = steps.filter(s => s.description.includes("role")).length;
+        const cats = steps.filter(s => s.description.includes("category")).length;
+        const chs = steps.filter(s => s.description.includes("channel")).length;
+
+        if (roles > 0) preview.push(`• ${roles} role${roles > 1 ? "s" : ""}`);
+        if (cats > 0) preview.push(`• ${cats} categor${cats > 1 ? "ies" : "y"}`);
+        if (chs > 0) preview.push(`• ${chs} channel${chs > 1 ? "s" : ""}`);
+
+        if (classification.exists.length > 0) {
+          preview.push("", `**Preserve:** ${classification.exists.length} existing resource${classification.exists.length > 1 ? "s" : ""}`);
+        }
+
+        preview.push("", "Nothing has been changed.", "", "Apply this template? (yes/no)");
+
+        await thread.send(preview.join("\n"));
+        logBuilder(correlationId, "PREVIEW", `sent plan with ${steps.length} steps`);
+        return;
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logBuilder(correlationId, "ERROR", `template processing failed: ${errMsg}`, "error");
+        await thread.send(
+          `❌ I couldn't process that template request. Error ID: "${correlationId}". Check the bot logs for details.`
+        ).catch(() => {});
         return;
       }
-
-      const serverState = await inspectServer(thread.guild);
-      session.serverState = serverState;
-      session.lastStateFetchedAt = Date.now();
-
-      const classification = classifyResources(serverState, template);
-
-      if (classification.missing.length === 0) {
-        await thread.send(`✅ Your server already matches the "${template.name}" template. No changes needed.`);
-        return;
-      }
-
-      // Build steps
-      const steps = buildStepsFromTemplate(template, serverState);
-
-      // Store as pending plan
-      session.pendingPlan = {
-        id: `template-${Date.now()}`,
-        goal: template.name,
-        steps,
-        templateName: templateType,
-      };
-
-      // Show compact preview
-      const preview = [
-        `📋 **${template.name}**`,
-        template.description,
-        "",
-        "**Create:**",
-      ];
-
-      const roles = steps.filter(s => s.description.includes("role")).length;
-      const cats = steps.filter(s => s.description.includes("category")).length;
-      const chs = steps.filter(s => s.description.includes("channel")).length;
-
-      if (roles > 0) preview.push(`• ${roles} role${roles > 1 ? "s" : ""}`);
-      if (cats > 0) preview.push(`• ${cats} categor${cats > 1 ? "ies" : "y"}`);
-      if (chs > 0) preview.push(`• ${chs} channel${chs > 1 ? "s" : ""}`);
-
-      if (classification.exists.length > 0) {
-        preview.push("", `**Preserve:** ${classification.exists.length} existing resource${classification.exists.length > 1 ? "s" : ""}`);
-      }
-
-      preview.push("", "Nothing has been changed.", "", "Apply this template? (yes/no)");
-
-      await thread.send(preview.join("\n"));
-      return;
     }
 
     case "delete_all_except": {
@@ -1176,6 +1477,9 @@ export async function processBuilderMessage(
           return;
         }
 
+        const correlationId = generateCorrelationId();
+        logBuilder(correlationId, "EXEC_START", `executing plan: ${session.pendingPlan.goal} (${session.pendingPlan.steps.length} steps)`);
+
         // Execute the plan with live progress
         const plan = session.pendingPlan;
         const executed: string[] = [];
@@ -1186,7 +1490,8 @@ export async function processBuilderMessage(
           embeds: [buildProgressEmbed("Executing...", `Running ${plan.steps.length} operation${plan.steps.length > 1 ? "s" : ""}`)],
         });
 
-        for (const step of plan.steps) {
+        for (let i = 0; i < plan.steps.length; i++) {
+          const step = plan.steps[i];
           try {
             // Use the existing tool pipeline
             const { executeWithFullPipeline, resolveUserContext } = await import("../ai/tools/discord/agent-orchestrator");
@@ -1195,10 +1500,13 @@ export async function processBuilderMessage(
             const userContext = await resolveUserContext(thread.guild, user.id, botOwnerIds);
 
             if (!userContext) {
-              failed.push({ step: step.description, error: "Could not resolve user context" });
+              const err = "Could not resolve user context";
+              logBuilder(correlationId, "EXEC_FAIL", `step ${i + 1}/${plan.steps.length} "${step.description}": ${err}`, "error");
+              failed.push({ step: step.description, error: err });
               break;
             }
 
+            logBuilder(correlationId, "EXEC_STEP", `step ${i + 1}/${plan.steps.length}: ${step.toolName}`);
             const result = await executeWithFullPipeline(
               thread.guild,
               userContext,
@@ -1212,12 +1520,17 @@ export async function processBuilderMessage(
 
             if (result.status === "success") {
               executed.push(step.description);
+              logBuilder(correlationId, "EXEC_OK", `${step.toolName} succeeded`);
             } else {
-              failed.push({ step: step.description, error: result.message });
+              const err = result.message || "Tool execution returned non-success status";
+              logBuilder(correlationId, "EXEC_FAIL", `step ${i + 1}/${plan.steps.length} "${step.description}": ${err}`, "error");
+              failed.push({ step: step.description, error: err });
               break;
             }
           } catch (err) {
-            failed.push({ step: step.description, error: err instanceof Error ? err.message : String(err) });
+            const errMsg = err instanceof Error ? err.message : String(err);
+            logBuilder(correlationId, "EXEC_ERROR", `step ${i + 1}/${plan.steps.length} "${step.description}" threw: ${errMsg}`, "error");
+            failed.push({ step: step.description, error: errMsg });
             break;
           }
         }
@@ -1235,6 +1548,7 @@ export async function processBuilderMessage(
         );
 
         await progressMsg.edit({ embeds: [resultEmbed] });
+        logBuilder(correlationId, "EXEC_DONE", `completed: ${executed.length} succeeded, ${failed.length} failed`);
         return;
       }
 
@@ -1290,3 +1604,9 @@ const cleanupInterval = setInterval(() => {
   cleanupExpiredSessions();
 }, 5 * 60 * 1000);
 if (cleanupInterval.unref) cleanupInterval.unref();
+
+/* ================================================================
+ * EXPORTS (for testing)
+ * ================================================================ */
+
+export { extractBuildSubject, buildSubjectEnhancements, mergeTemplateEnhancements };

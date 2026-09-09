@@ -322,7 +322,17 @@ export function classifyIntent(
     return { intent: "delete_except", confidence: 0.9 };
   }
 
-  // ── General server modification requests ─────────────────────────
+  // ── "make/create/build a <something> server" → template intent ───
+  // Must come BEFORE the generic server_modify catch-all.
+  // Excludes "better/good/great/nice/clean/organized" (those are server_better intents)
+  // and "delete/remove" (those are direct actions).
+  if (/\b(make|create|build|set\s*up|prepare)\b.*\b(server|guild)\b/i.test(lower)
+    && !/\b(better|good|great|nice|clean|organized|professional)\b/i.test(lower)
+    && !/\b(delete|remove|destroy)\b/i.test(lower)) {
+    return buildTemplateIntent(lower, false, 0.85);
+  }
+
+  // ── General server modification requests (single-tool direct actions) ──
   if (/\b(create|make|add|set up|configure|build|organize|rename|move|delete|remove|edit|change|modify|protect|unprotect)\b/i.test(lower)) {
     return { intent: "server_modify", confidence: 0.8 };
   }
@@ -1026,9 +1036,12 @@ export async function handleConversation(
 
     logIntent(userContext.userId, guild.id, classification.intent, classification.confidence);
 
-    // 3. Builder intents are ONLY allowed through /prompt — redirect mentions/replies
+    // 3. Builder intents are ONLY allowed through /prompt — redirect mentions/replies.
+    // server_modify is NOT included because single-tool operations (delete channel,
+    // create role, etc.) should be handled directly via handleServerModify().
+    // Only multi-step / template / inspection intents require the /prompt builder.
     const BUILDER_INTENTS: ConversationIntent[] = [
-      "server_template", "server_modify", "server_inspect",
+      "server_template", "server_inspect",
       "server_repair", "server_better", "delete_except",
     ];
 
@@ -1118,14 +1131,15 @@ export async function handleConversation(
       }
     }
   } catch (error) {
+    const cid = `ASH-${Date.now().toString(36)}`;
     logger.error(
-      `Conversational agent error: ${error instanceof Error ? error.message : String(error)}`,
+      `[ASH][${cid}][CONV-AGENT] error: ${error instanceof Error ? error.message : String(error)}`,
     );
 
     recordAudit({
       who: message.author.id,
       whoName: message.author.tag,
-      what: `Agent error: ${error instanceof Error ? error.message : String(error)}`,
+      what: `[${cid}] Agent error: ${error instanceof Error ? error.message : String(error)}`,
       where: "conversational-agent",
       guildId: message.guild?.id || "",
       result: "error",
@@ -1133,7 +1147,7 @@ export async function handleConversation(
 
     return {
       shouldReply: true,
-      reply: "❌ Something went wrong while processing your request. Please try again.",
+      reply: `❌ Something went wrong while processing your request. Error ID: "${cid}". Please try again.`,
       executed: false,
       requiresConfirmation: false,
     };
