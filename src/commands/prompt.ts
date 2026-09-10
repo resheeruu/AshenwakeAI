@@ -488,7 +488,15 @@ function extractBuildSubject(content: string): string {
     "",
   );
 
-  // Step 4: Strip remaining prepositions (they may be stranded after template vocab removal)
+  // Step 4: Strip prepositions followed by non-meaningful words (template vocab or articles)
+  // e.g. "for my server" → "", "about the art" → ""
+  // But preserve prepositions followed by meaningful subjects: "for valorant" → strip "for "
+  subject = subject.replace(
+    /\b(?:for|about|around|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?(?:discord|server|guild|community|group|hub|space|channel)\b/gi,
+    "",
+  );
+
+  // Step 4b: Strip remaining prepositions that are now followed by a meaningful subject
   // e.g. "discord for valorant" → "valorant", "about painting hobby" → "painting hobby"
   subject = subject.replace(/\b(?:for|about|around|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?/gi, "").trim();
 
@@ -1082,6 +1090,7 @@ export async function processBuilderMessage(
 
   // Parse the request
   const parsed = parseBuilderInput(content);
+  const correlationId = generateCorrelationId();
 
   switch (parsed.intent) {
     case "help": {
@@ -1103,73 +1112,83 @@ export async function processBuilderMessage(
     }
 
     case "inspect": {
-      const serverState = await inspectServer(thread.guild);
-      session.serverState = serverState;
-      session.lastStateFetchedAt = Date.now();
+      try {
+        const serverState = await inspectServer(thread.guild);
+        session.serverState = serverState;
+        session.lastStateFetchedAt = Date.now();
 
-      const lines = [
-        "🔎 **Server Review**",
-        "",
-        `**Categories:** ${serverState.categories.length}`,
-        ...serverState.categories.map((c: any) => `  • ${c.name}`),
-        "",
-        `**Channels:** ${serverState.channels.length}`,
-        ...serverState.channels.slice(0, 20).map((c: any) => `  • #${c.name} (${c.type})`),
-        serverState.channels.length > 20 ? `  • ... and ${serverState.channels.length - 20} more` : "",
-        "",
-        `**Roles:** ${serverState.roles.length}`,
-        ...serverState.roles.slice(0, 10).map((r: any) => `  • ${r.name}`),
-        serverState.roles.length > 10 ? `  • ... and ${serverState.roles.length - 10} more` : "",
-      ];
+        const lines = [
+          "🔎 **Server Review**",
+          "",
+          `**Categories:** ${serverState.categories.length}`,
+          ...serverState.categories.map((c: any) => `  • ${c.name}`),
+          "",
+          `**Channels:** ${serverState.channels.length}`,
+          ...serverState.channels.slice(0, 20).map((c: any) => `  • #${c.name} (${c.type})`),
+          serverState.channels.length > 20 ? `  • ... and ${serverState.channels.length - 20} more` : "",
+          "",
+          `**Roles:** ${serverState.roles.length}`,
+          ...serverState.roles.slice(0, 10).map((r: any) => `  • ${r.name}`),
+          serverState.roles.length > 10 ? `  • ... and ${serverState.roles.length - 10} more` : "",
+        ];
 
-      await thread.send(lines.join("\n"));
+        await thread.send(lines.join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "INSPECT", `server inspection failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't inspect the server. Error ID: "${correlationId}".`).catch(() => {});
+      }
       return;
     }
 
     case "improve": {
-      const serverState = await inspectServer(thread.guild);
-      session.serverState = serverState;
-      session.lastStateFetchedAt = Date.now();
+      try {
+        const serverState = await inspectServer(thread.guild);
+        session.serverState = serverState;
+        session.lastStateFetchedAt = Date.now();
 
-      const recommendations: string[] = [];
+        const recommendations: string[] = [];
 
-      if (serverState.categories.length === 0 && serverState.channels.length < 5) {
-        recommendations.push("• Your server has very little structure — I can set up a template for you");
+        if (serverState.categories.length === 0 && serverState.channels.length < 5) {
+          recommendations.push("• Your server has very little structure — I can set up a template for you");
+        }
+
+        const uncategorized = serverState.channels.filter((c: any) => !c.categoryId);
+        if (uncategorized.length > 2) {
+          recommendations.push(`• ${uncategorized.length} channels are not organized into categories`);
+        }
+
+        const channelCounts = new Map<string, number>();
+        for (const ch of serverState.channels) {
+          const key = ch.name.toLowerCase();
+          channelCounts.set(key, (channelCounts.get(key) || 0) + 1);
+        }
+        const dupCount = [...channelCounts.values()].filter(c => c > 1).length;
+        if (dupCount > 0) {
+          recommendations.push(`• Found ${dupCount} duplicate channel name(s)`);
+        }
+
+        const hasRules = serverState.channels.some((c: any) => c.name.toLowerCase() === "rules");
+        const hasAnnouncements = serverState.channels.some((c: any) => c.name.toLowerCase() === "announcements");
+        if (!hasRules || !hasAnnouncements) {
+          recommendations.push("• Missing basic channels (rules, announcements)");
+        }
+
+        if (recommendations.length === 0) {
+          await thread.send("✅ Your server looks well-organized! No issues detected.");
+          return;
+        }
+
+        await thread.send([
+          "**Server Improvement**",
+          "",
+          ...recommendations,
+          "",
+          "Want me to set up a template to organize things better?",
+        ].join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "IMPROVE", `server analysis failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't analyze the server. Error ID: "${correlationId}".`).catch(() => {});
       }
-
-      const uncategorized = serverState.channels.filter((c: any) => !c.categoryId);
-      if (uncategorized.length > 2) {
-        recommendations.push(`• ${uncategorized.length} channels are not organized into categories`);
-      }
-
-      const channelCounts = new Map<string, number>();
-      for (const ch of serverState.channels) {
-        const key = ch.name.toLowerCase();
-        channelCounts.set(key, (channelCounts.get(key) || 0) + 1);
-      }
-      const dupCount = [...channelCounts.values()].filter(c => c > 1).length;
-      if (dupCount > 0) {
-        recommendations.push(`• Found ${dupCount} duplicate channel name(s)`);
-      }
-
-      const hasRules = serverState.channels.some((c: any) => c.name.toLowerCase() === "rules");
-      const hasAnnouncements = serverState.channels.some((c: any) => c.name.toLowerCase() === "announcements");
-      if (!hasRules || !hasAnnouncements) {
-        recommendations.push("• Missing basic channels (rules, announcements)");
-      }
-
-      if (recommendations.length === 0) {
-        await thread.send("✅ Your server looks well-organized! No issues detected.");
-        return;
-      }
-
-      await thread.send([
-        "**Server Improvement**",
-        "",
-        ...recommendations,
-        "",
-        "Want me to set up a template to organize things better?",
-      ].join("\n"));
       return;
     }
 
@@ -1267,203 +1286,233 @@ export async function processBuilderMessage(
     }
 
     case "delete_all_except": {
-      const keepName = parsed.args.keepName;
-      if (!keepName) {
-        await thread.send('I\'m not sure which channels to keep. Try: "delete all except general"');
-        return;
+      try {
+        const keepName = parsed.args.keepName;
+        if (!keepName) {
+          await thread.send('I\'m not sure which channels to keep. Try: "delete all except general"');
+          return;
+        }
+
+        const serverState = session.serverState || await inspectServer(thread.guild);
+        session.serverState = serverState;
+
+        const keepChannels = serverState.channels.filter((ch: any) =>
+          ch.name.toLowerCase().includes(keepName)
+        );
+
+        if (keepChannels.length === 0) {
+          await thread.send(`❌ No channel found matching "${keepName}".`);
+          return;
+        }
+
+        const keepIds = new Set(keepChannels.map((ch: any) => ch.id));
+        const deleteChannels = serverState.channels.filter((ch: any) =>
+          !keepIds.has(ch.id) && !serverState.protectedChannels.includes(ch.id)
+        );
+
+        if (deleteChannels.length === 0) {
+          await thread.send(`✅ Nothing to delete — all channels either match "${keepName}" or are protected.`);
+          return;
+        }
+
+        const steps = deleteChannels.map((ch: any) => ({
+          toolName: "delete_channel",
+          args: { channelId: ch.id },
+          description: `Delete #${ch.name}`,
+          category: "delete",
+        }));
+
+        session.pendingPlan = {
+          id: `delete-except-${Date.now()}`,
+          goal: `Delete ${deleteChannels.length} channels except ${keepChannels.map((c: any) => `#${c.name}`).join(", ")}`,
+          steps,
+        };
+
+        const lines = [
+          `🧹 **${deleteChannels.length} channel${deleteChannels.length > 1 ? "s" : ""} to remove.**`,
+          "",
+          "**Keep:**",
+          ...keepChannels.map((ch: any) => `• #${ch.name}`),
+          "",
+          "**Delete:**",
+          ...deleteChannels.slice(0, 10).map((ch: any) => `• #${ch.name}`),
+        ];
+
+        if (deleteChannels.length > 10) {
+          lines.push(`• ... and ${deleteChannels.length - 10} more`);
+        }
+
+        if (serverState.protectedChannels.length > 0) {
+          lines.push("", `• ${serverState.protectedChannels.length} protected channel(s) will be preserved`);
+        }
+
+        lines.push("", "This is destructive. Continue? (yes/no)");
+
+        await thread.send(lines.join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "DELETE_EXCEPT", `delete planning failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't plan the deletion. Error ID: "${correlationId}".`).catch(() => {});
       }
-
-      const serverState = session.serverState || await inspectServer(thread.guild);
-      session.serverState = serverState;
-
-      const keepChannels = serverState.channels.filter((ch: any) =>
-        ch.name.toLowerCase().includes(keepName)
-      );
-
-      if (keepChannels.length === 0) {
-        await thread.send(`❌ No channel found matching "${keepName}".`);
-        return;
-      }
-
-      const keepIds = new Set(keepChannels.map((ch: any) => ch.id));
-      const deleteChannels = serverState.channels.filter((ch: any) =>
-        !keepIds.has(ch.id) && !serverState.protectedChannels.includes(ch.id)
-      );
-
-      if (deleteChannels.length === 0) {
-        await thread.send(`✅ Nothing to delete — all channels either match "${keepName}" or are protected.`);
-        return;
-      }
-
-      const steps = deleteChannels.map((ch: any) => ({
-        toolName: "delete_channel",
-        args: { channelId: ch.id },
-        description: `Delete #${ch.name}`,
-        category: "delete",
-      }));
-
-      session.pendingPlan = {
-        id: `delete-except-${Date.now()}`,
-        goal: `Delete ${deleteChannels.length} channels except ${keepChannels.map((c: any) => `#${c.name}`).join(", ")}`,
-        steps,
-      };
-
-      const lines = [
-        `🧹 **${deleteChannels.length} channel${deleteChannels.length > 1 ? "s" : ""} to remove.**`,
-        "",
-        "**Keep:**",
-        ...keepChannels.map((ch: any) => `• #${ch.name}`),
-        "",
-        "**Delete:**",
-        ...deleteChannels.slice(0, 10).map((ch: any) => `• #${ch.name}`),
-      ];
-
-      if (deleteChannels.length > 10) {
-        lines.push(`• ... and ${deleteChannels.length - 10} more`);
-      }
-
-      if (serverState.protectedChannels.length > 0) {
-        lines.push("", `• ${serverState.protectedChannels.length} protected channel(s) will be preserved`);
-      }
-
-      lines.push("", "This is destructive. Continue? (yes/no)");
-
-      await thread.send(lines.join("\n"));
       return;
     }
 
     case "create_channel": {
-      const name = parsed.args.name as string;
-      const type = parsed.args.type as string;
-      const categoryName = parsed.args.categoryName as string | undefined;
+      try {
+        const name = parsed.args.name as string;
+        const type = parsed.args.type as string;
+        const categoryName = parsed.args.categoryName as string | undefined;
 
-      session.pendingPlan = {
-        id: `create-channel-${Date.now()}`,
-        goal: `Create ${type} channel "#${name}"`,
-        steps: [{
-          toolName: "create_channel",
-          args: { name, type, categoryName },
-          description: `Create ${type} channel "#${name}"${categoryName ? ` in "${categoryName}"` : ""}`,
-          category: "create",
-        }],
-      };
+        session.pendingPlan = {
+          id: `create-channel-${Date.now()}`,
+          goal: `Create ${type} channel "#${name}"`,
+          steps: [{
+            toolName: "create_channel",
+            args: { name, type, categoryName },
+            description: `Create ${type} channel "#${name}"${categoryName ? ` in "${categoryName}"` : ""}`,
+            category: "create",
+          }],
+        };
 
-      await thread.send([
-        `📋 **Create ${type} channel "#${name}"**${categoryName ? ` in "${categoryName}"` : ""}`,
-        "",
-        "Nothing has been changed.",
-        "",
-        "Apply? (yes/no)",
-      ].join("\n"));
+        await thread.send([
+          `📋 **Create ${type} channel "#${name}"**${categoryName ? ` in "${categoryName}"` : ""}`,
+          "",
+          "Nothing has been changed.",
+          "",
+          "Apply? (yes/no)",
+        ].join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "CREATE_CHANNEL", `channel planning failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't plan the channel creation. Error ID: "${correlationId}".`).catch(() => {});
+      }
       return;
     }
 
     case "create_category": {
-      const name = parsed.args.name as string;
+      try {
+        const name = parsed.args.name as string;
 
-      session.pendingPlan = {
-        id: `create-category-${Date.now()}`,
-        goal: `Create category "${name}"`,
-        steps: [{
-          toolName: "create_category",
-          args: { name },
-          description: `Create category "${name}"`,
-          category: "create",
-        }],
-      };
+        session.pendingPlan = {
+          id: `create-category-${Date.now()}`,
+          goal: `Create category "${name}"`,
+          steps: [{
+            toolName: "create_category",
+            args: { name },
+            description: `Create category "${name}"`,
+            category: "create",
+          }],
+        };
 
-      await thread.send([
-        `📋 **Create category "${name}"**`,
-        "",
-        "Nothing has been changed.",
-        "",
-        "Apply? (yes/no)",
-      ].join("\n"));
+        await thread.send([
+          `📋 **Create category "${name}"**`,
+          "",
+          "Nothing has been changed.",
+          "",
+          "Apply? (yes/no)",
+        ].join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "CREATE_CATEGORY", `category planning failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't plan the category creation. Error ID: "${correlationId}".`).catch(() => {});
+      }
       return;
     }
 
     case "create_role": {
-      const name = parsed.args.name as string;
+      try {
+        const name = parsed.args.name as string;
 
-      session.pendingPlan = {
-        id: `create-role-${Date.now()}`,
-        goal: `Create role "${name}"`,
-        steps: [{
-          toolName: "create_role",
-          args: { name },
-          description: `Create role "${name}"`,
-          category: "create",
-        }],
-      };
+        session.pendingPlan = {
+          id: `create-role-${Date.now()}`,
+          goal: `Create role "${name}"`,
+          steps: [{
+            toolName: "create_role",
+            args: { name },
+            description: `Create role "${name}"`,
+            category: "create",
+          }],
+        };
 
-      await thread.send([
-        `📋 **Create role "${name}"**`,
-        "",
-        "Nothing has been changed.",
-        "",
-        "Apply? (yes/no)",
-      ].join("\n"));
+        await thread.send([
+          `📋 **Create role "${name}"**`,
+          "",
+          "Nothing has been changed.",
+          "",
+          "Apply? (yes/no)",
+        ].join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "CREATE_ROLE", `role planning failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't plan the role creation. Error ID: "${correlationId}".`).catch(() => {});
+      }
       return;
     }
 
     case "delete_channel": {
-      const name = parsed.args.name as string;
-      const serverState = session.serverState || await inspectServer(thread.guild);
+      try {
+        const name = parsed.args.name as string;
+        const serverState = session.serverState || await inspectServer(thread.guild);
 
-      const match = serverState.channels.find((ch: any) => ch.name.toLowerCase() === name);
-      if (!match) {
-        await thread.send(`❌ No channel found matching "${name}".`);
-        return;
+        const match = serverState.channels.find((ch: any) => ch.name.toLowerCase() === name);
+        if (!match) {
+          await thread.send(`❌ No channel found matching "${name}".`);
+          return;
+        }
+
+        session.pendingPlan = {
+          id: `delete-channel-${Date.now()}`,
+          goal: `Delete #${match.name}`,
+          steps: [{
+            toolName: "delete_channel",
+            args: { channelId: match.id },
+            description: `Delete #${match.name}`,
+            category: "delete",
+          }],
+        };
+
+        await thread.send([
+          `⚠️ **Delete #${match.name}?**`,
+          "",
+          "This is destructive. Continue? (yes/no)",
+        ].join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "DELETE_CHANNEL", `channel deletion planning failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't plan the channel deletion. Error ID: "${correlationId}".`).catch(() => {});
       }
-
-      session.pendingPlan = {
-        id: `delete-channel-${Date.now()}`,
-        goal: `Delete #${match.name}`,
-        steps: [{
-          toolName: "delete_channel",
-          args: { channelId: match.id },
-          description: `Delete #${match.name}`,
-          category: "delete",
-        }],
-      };
-
-      await thread.send([
-        `⚠️ **Delete #${match.name}?**`,
-        "",
-        "This is destructive. Continue? (yes/no)",
-      ].join("\n"));
       return;
     }
 
     case "rename_channel": {
-      const oldName = parsed.args.oldName as string;
-      const newName = parsed.args.newName as string;
-      const serverState = session.serverState || await inspectServer(thread.guild);
+      try {
+        const oldName = parsed.args.oldName as string;
+        const newName = parsed.args.newName as string;
+        const serverState = session.serverState || await inspectServer(thread.guild);
 
-      const match = serverState.channels.find((ch: any) => ch.name.toLowerCase() === oldName);
-      if (!match) {
-        await thread.send(`❌ No channel found matching "${oldName}".`);
-        return;
+        const match = serverState.channels.find((ch: any) => ch.name.toLowerCase() === oldName);
+        if (!match) {
+          await thread.send(`❌ No channel found matching "${oldName}".`);
+          return;
+        }
+
+        session.pendingPlan = {
+          id: `rename-channel-${Date.now()}`,
+          goal: `Rename #${match.name} to #${newName}`,
+          steps: [{
+            toolName: "rename_channel",
+            args: { channelId: match.id, newName },
+            description: `Rename #${match.name} to #${newName}`,
+            category: "modify",
+          }],
+        };
+
+        await thread.send([
+          `📋 **Rename #${match.name} → #${newName}**`,
+          "",
+          "Nothing has been changed.",
+          "",
+          "Apply? (yes/no)",
+        ].join("\n"));
+      } catch (error) {
+        logBuilder(correlationId, "RENAME_CHANNEL", `channel rename planning failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+        await thread.send(`❌ I couldn't plan the channel rename. Error ID: "${correlationId}".`).catch(() => {});
       }
-
-      session.pendingPlan = {
-        id: `rename-channel-${Date.now()}`,
-        goal: `Rename #${match.name} to #${newName}`,
-        steps: [{
-          toolName: "rename_channel",
-          args: { channelId: match.id, newName },
-          description: `Rename #${match.name} to #${newName}`,
-          category: "modify",
-        }],
-      };
-
-      await thread.send([
-        `📋 **Rename #${match.name} → #${newName}**`,
-        "",
-        "Nothing has been changed.",
-        "",
-        "Apply? (yes/no)",
-      ].join("\n"));
       return;
     }
 
@@ -1477,7 +1526,6 @@ export async function processBuilderMessage(
           return;
         }
 
-        const correlationId = generateCorrelationId();
         logBuilder(correlationId, "EXEC_START", `executing plan: ${session.pendingPlan.goal} (${session.pendingPlan.steps.length} steps)`);
 
         // Execute the plan with live progress

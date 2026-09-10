@@ -1787,9 +1787,12 @@ client.on(
       } else {
         const errMsg = error instanceof Error ? error.message : String(error);
         const cid = `ASH-${Date.now().toString(36)}`;
-        logger.error(`[ASH][${cid}][BUILDER] thread handler error: ${errMsg}`);
+        // Determine the stage from the error message if available
+        const stageMatch = errMsg.match(/\[([A-Z_]+)\]/);
+        const stage = stageMatch ? stageMatch[1] : "BUILDER";
+        logger.error(`[ASH][${cid}][${stage}] thread handler error: ${errMsg}`);
         try {
-          await message.channel.send(`❌ Something went wrong processing your request. Error ID: "${cid}".`);
+          await message.channel.send(`❌ I couldn't complete that builder request. Error ID: "${cid}". Check the bot logs for details.`);
         } catch {}
       }
     }

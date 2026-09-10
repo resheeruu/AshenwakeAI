@@ -1147,7 +1147,7 @@ export async function handleConversation(
 
     return {
       shouldReply: true,
-      reply: `❌ Something went wrong while processing your request. Error ID: "${cid}". Please try again.`,
+      reply: `❌ I couldn't process that request. Error ID: "${cid}". Please try again or rephrase.`,
       executed: false,
       requiresConfirmation: false,
     };
