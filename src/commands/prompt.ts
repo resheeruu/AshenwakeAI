@@ -473,7 +473,7 @@ function extractBuildSubject(content: string): string {
 
   // Step 1: Strip leading verb phrases: "make a", "create a", "build a", "set up a", etc.
   subject = subject.replace(
-    /\b(?:make|create|build|set\s*up|design|configure|prepare|organize)\b\s*(?:a\s+|an\s+|the\s+)?/i,
+    /\b(?:make|create|build|set\s*up|design|configure|prepare|organize|turn|generate)\b\s*(?:a\s+|an\s+|the\s+)?/i,
     "",
   );
 
@@ -484,7 +484,7 @@ function extractBuildSubject(content: string): string {
   // e.g. "for my server" → "", "about the art" → ""
   // but "for valorant" → strip "for ", leaving "valorant"
   subject = subject.replace(
-    /\b(?:for|about|around|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?(?:discord|server|guild|community|group|hub|space|channel|category|role)\b/gi,
+    /\b(?:for|about|around|like|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?(?:discord|server|guild|community|group|hub|space|channel|category|role)\b/gi,
     "",
   );
 
@@ -492,20 +492,20 @@ function extractBuildSubject(content: string): string {
   // e.g. "for my server" → "", "about the art" → ""
   // But preserve prepositions followed by meaningful subjects: "for valorant" → strip "for "
   subject = subject.replace(
-    /\b(?:for|about|around|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?(?:discord|server|guild|community|group|hub|space|channel)\b/gi,
+    /\b(?:for|about|around|like|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?(?:discord|server|guild|community|group|hub|space|channel)\b/gi,
     "",
   );
 
   // Step 4b: Strip remaining prepositions that are now followed by a meaningful subject
   // e.g. "discord for valorant" → "valorant", "about painting hobby" → "painting hobby"
-  subject = subject.replace(/\b(?:for|about|around|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?/gi, "").trim();
+  subject = subject.replace(/\b(?:for|about|around|like|based\s+on|on|of|in)\s+(?:(?:my|the|a|an)\s+)?/gi, "").trim();
 
   // Step 5: Strip template vocabulary that is not a meaningful subject
   const TEMPLATE_VOCAB = /\b(?:discord|server|guild|community|group|hub|space|channel|category|role|template|channels|categories|roles|gaming|minecraft|support|study|creator|clan|social|friends)\b/gi;
   subject = subject.replace(TEMPLATE_VOCAB, " ").replace(/\s+/g, " ").trim();
 
   // Step 6: Strip generic descriptors that are not meaningful research subjects
-  const GENERIC = /\b(?:cozy|nice|cool|good|great|best|new|old|big|small|simple|basic|clean|fun|chill|random|default|generic|standard|normal|regular|custom|private|public|free|my)\b/gi;
+  const GENERIC = /\b(?:cozy|nice|cool|good|great|best|new|old|big|small|simple|basic|clean|fun|chill|random|default|generic|standard|normal|regular|custom|private|public|free|my|and|into|a)\b/gi;
   subject = subject.replace(GENERIC, " ").replace(/\s+/g, " ").trim();
 
   // Reject empty or too short

@@ -76,6 +76,25 @@ async function main(): Promise<void> {
     { input: "fix my server", expectedIntent: "server_repair", desc: "fix server → repair" },
     { input: "make my server better", expectedIntent: "server_template", desc: "better → server_template (with wantsFix=true)" },
     { input: "delete all except general", expectedIntent: "delete_except", desc: "delete all except → delete_except" },
+    // Additional template types
+    { input: "create a minecraft server", expectedIntent: "server_template", desc: "minecraft → template" },
+    { input: "build a support server", expectedIntent: "server_template", desc: "support → template" },
+    { input: "set up a study server", expectedIntent: "server_template", desc: "study → template" },
+    { input: "make a creator server", expectedIntent: "server_template", desc: "creator → template" },
+    { input: "make a clan server", expectedIntent: "server_template", desc: "clan → template" },
+    { input: "make a social server", expectedIntent: "server_template", desc: "social → template" },
+    { input: "generate a gaming template", expectedIntent: "server_template", desc: "generate template → template" },
+    { input: "prepare a community server", expectedIntent: "server_template", desc: "community → template" },
+    // Server transformation
+    { input: "make my server a gaming server", expectedIntent: "server_template", desc: "transform to gaming → template" },
+    { input: "turn my server into a study server", expectedIntent: "server_template", desc: "transform to study → template" },
+    // Combined template + fix
+    { input: "generate a template and fix my server", expectedIntent: "server_template", desc: "template + fix → template" },
+    // Delete except variants
+    { input: "delete everything except general", expectedIntent: "delete_except", desc: "delete everything except → delete_except" },
+    // Server better variants
+    { input: "organize my server", expectedIntent: "server_template", desc: "organize → server_template (combined template+fix)" },
+    { input: "clean up the server", expectedIntent: "server_better", desc: "clean up → server_better" },
   ];
 
   const BUILDER_INTENTS = ["server_template", "server_inspect", "server_repair", "server_better", "delete_except"];
@@ -126,6 +145,13 @@ async function main(): Promise<void> {
     { input: "make a study server for nursing students", expected: "nursing students", desc: "nursing students → nursing students" },
     { input: "make a server about my art hobby", expected: "art hobby", desc: "art hobby → art hobby" },
     { input: "create a server for 3D printing", expected: "3d printing", desc: "3D printing → 3d printing" },
+    { input: "make a Minecraft server for Hypixel players", expected: "hypixel players", desc: "Hypixel players → hypixel players" },
+    { input: "make a server like Dream", expected: "dream", desc: "like Dream → dream" },
+    { input: "build a discord server for cooking", expected: "cooking", desc: "cooking → cooking" },
+    { input: "create a server about photography", expected: "photography", desc: "photography → photography" },
+    { input: "set up a server for my book club", expected: "book club", desc: "book club → book club" },
+    { input: "make my server a gaming server", expected: "", desc: "gaming server → empty (template vocab)" },
+    { input: "turn my server into a study server", expected: "", desc: "study server → empty (template vocab)" },
   ];
 
   for (const test of subjectTests) {
