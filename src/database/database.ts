@@ -373,6 +373,47 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
         CREATE INDEX IF NOT EXISTS idx_support_case_evidence_case ON support_case_evidence(case_id);
       `,
     },
+    {
+      version: 14,
+      description: "Support case conversation state for AI orchestrator",
+      sql: `
+        CREATE TABLE IF NOT EXISTS support_case_conversations (
+          case_id TEXT PRIMARY KEY,
+          state_json TEXT NOT NULL,
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          FOREIGN KEY (case_id) REFERENCES support_cases(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_support_case_conversations_updated ON support_case_conversations(updated_at);
+      `,
+    },
+    {
+      version: 15,
+      description: "Support idempotency, concurrency control, and message dedup",
+      sql: `
+        -- Version column for optimistic concurrency on support_cases
+        ALTER TABLE support_cases ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+
+        -- Idempotency key for case creation dedup (e.g. Discord interaction ID)
+        ALTER TABLE support_cases ADD COLUMN idempotency_key TEXT;
+
+        -- Unique index on idempotency_key (partial: only non-null keys)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_support_cases_idempotency
+          ON support_cases(idempotency_key)
+          WHERE idempotency_key IS NOT NULL;
+
+        -- Discord message ID for message-level idempotency
+        ALTER TABLE support_case_messages ADD COLUMN discord_message_id TEXT;
+
+        -- Unique index on discord_message_id (partial: only non-null)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_support_case_messages_discord
+          ON support_case_messages(discord_message_id)
+          WHERE discord_message_id IS NOT NULL;
+
+        -- Unique evidence per case+message to prevent duplicate evidence items
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_support_case_evidence_unique
+          ON support_case_evidence(case_id, message_id);
+      `,
+    },
   ];
 }
 

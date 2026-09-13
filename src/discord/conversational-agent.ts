@@ -43,6 +43,8 @@ import {
   type ResolvedChannel,
   type ResolvedRole,
 } from "./resource-resolver";
+import { getSupportCaseManager } from "../support/case-manager";
+import { orchestrateCaseConversation, getConversationState } from "../support/ai-orchestrator";
 
 /* ================================================================
  * STRUCTURED LOGGING HELPERS
@@ -1058,6 +1060,52 @@ export async function handleConversation(
 
     const { guild, userContext } = resolved;
     const state = getOrCreateState(userContext.userId, guild.id, message.channel.id);
+
+    // 1b. Case channel routing — if this channel is associated with a support case,
+    //     route to the AI orchestrator instead of normal intent classification.
+    if (message.channel && "id" in message.channel) {
+      const caseManager = getSupportCaseManager();
+      const channelCases = caseManager.getChannelCases(message.channel.id);
+      const activeCase = channelCases.find(c => c.status !== "closed") ?? channelCases[0];
+
+      if (activeCase && activeCase.guildId === guild.id) {
+        try {
+          const userName = message.author.tag;
+          const result = await orchestrateCaseConversation(
+            activeCase.id,
+            message.channel.id,
+            userContext.userId,
+            userName,
+            content,
+            guild.id,
+            mentionedUserIds,
+          );
+
+          if (result.newStatus) {
+            caseManager.transitionCase(activeCase.id, result.newStatus, "system");
+          }
+
+          if (result.shouldReply) {
+            return {
+              shouldReply: true,
+              reply: result.reply,
+              executed: true,
+              requiresConfirmation: false,
+            };
+          }
+
+          return {
+            shouldReply: false,
+            reply: "",
+            executed: false,
+            requiresConfirmation: false,
+          };
+        } catch (orchestratorError) {
+          logger.warn(`AI orchestrator error for case ${activeCase.id}: ${orchestratorError instanceof Error ? orchestratorError.message : String(orchestratorError)}`);
+          // Fall through to normal conversation handling
+        }
+      }
+    }
 
     // 2. Classify intent
     const classification = classifyIntent(content, state, mentionedUserIds);

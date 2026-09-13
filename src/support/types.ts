@@ -34,6 +34,7 @@ export interface AiCase {
   createdAt: number;
   updatedAt: number;
   closedAt?: number;
+  version: number;
 }
 
 export interface CaseAnalysis {

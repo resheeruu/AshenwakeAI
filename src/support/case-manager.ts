@@ -1,4 +1,4 @@
-import { getDatabase, safeDbOperation } from "../database/database";
+import { getDatabase, safeDbOperation, transaction } from "../database/database";
 import { logger } from "../logger";
 import { recordAudit } from "../security/audit";
 import type {
@@ -31,15 +31,29 @@ export class SupportCaseManager {
     subjectUserId?: string;
     summary?: string;
     metadata?: Record<string, unknown>;
+    idempotencyKey?: string;
   }): AiCase | null {
-    const id = this.generateCaseId(params.guildId, params.type);
     const now = Date.now();
 
     return safeDbOperation(() => {
       const db = getDatabase();
+
+      // Idempotency: if a case with this key already exists, return it
+      if (params.idempotencyKey) {
+        const existing = db.prepare(
+          "SELECT * FROM support_cases WHERE idempotency_key = ?"
+        ).get(params.idempotencyKey) as any;
+        if (existing) {
+          logger.info(`🎫 Idempotent case creation: returning existing case ${existing.id} for key ${params.idempotencyKey}`);
+          return this.rowToCase(existing);
+        }
+      }
+
+      const id = this.generateCaseId(params.guildId, params.type);
+
       db.prepare(`
-        INSERT INTO support_cases (id, guild_id, channel_id, type, status, creator_id, subject_user_id, summary, metadata_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)
+        INSERT INTO support_cases (id, guild_id, channel_id, type, status, creator_id, subject_user_id, summary, metadata_json, idempotency_key, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         params.guildId,
@@ -49,6 +63,7 @@ export class SupportCaseManager {
         params.subjectUserId ?? null,
         params.summary ?? null,
         params.metadata ? JSON.stringify(params.metadata) : null,
+        params.idempotencyKey ?? null,
         now,
         now
       );
@@ -122,10 +137,14 @@ export class SupportCaseManager {
   transitionCase(id: string, newStatus: CaseStatus, actorId: string): AiCase | null {
     return safeDbOperation(() => {
       const db = getDatabase();
+
+      // Read current state WITH version for optimistic concurrency
       const row = db.prepare("SELECT * FROM support_cases WHERE id = ?").get(id) as any;
       if (!row) return null;
 
       const current = row.status as CaseStatus;
+      const currentVersion = row.version ?? 1;
+
       if (!canTransition(current, newStatus)) {
         logger.warn(`⚠️ Invalid case transition: ${current} → ${newStatus} for case ${id}`);
         return null;
@@ -134,10 +153,18 @@ export class SupportCaseManager {
       const now = Date.now();
       const closedAt = newStatus === "closed" ? now : null;
 
-      db.prepare(`
-        UPDATE support_cases SET status = ?, updated_at = ?, closed_at = COALESCE(?, closed_at)
-        WHERE id = ?
-      `).run(newStatus, now, closedAt, id);
+      // Atomic update with version check — only succeeds if version hasn't changed
+      const result = db.prepare(`
+        UPDATE support_cases
+        SET status = ?, updated_at = ?, closed_at = COALESCE(?, closed_at), version = version + 1
+        WHERE id = ? AND version = ?
+      `).run(newStatus, now, closedAt, id, currentVersion);
+
+      if (result.changes === 0) {
+        // Version mismatch — another process modified the case concurrently
+        logger.warn(`⚠️ Stale transition rejected for case ${id}: expected version ${currentVersion}`);
+        return null;
+      }
 
       recordAudit({
         who: actorId,
@@ -204,16 +231,34 @@ export class SupportCaseManager {
     }, null, `updateAnalysis(${id})`);
   }
 
-  addMessage(caseId: string, authorId: string, content: string, isAi = false): CaseMessage | null {
+  addMessage(caseId: string, authorId: string, content: string, isAi = false, discordMessageId?: string): CaseMessage | null {
     return safeDbOperation(() => {
       const db = getDatabase();
+
+      // Idempotency: if this Discord message was already recorded, return existing
+      if (discordMessageId) {
+        const existing = db.prepare(
+          "SELECT * FROM support_case_messages WHERE discord_message_id = ?"
+        ).get(discordMessageId) as any;
+        if (existing) {
+          return {
+            id: existing.id,
+            caseId: existing.case_id,
+            authorId: existing.author_id,
+            content: existing.content,
+            isAi: existing.is_ai === 1,
+            createdAt: existing.created_at,
+          };
+        }
+      }
+
       const id = `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const now = Date.now();
 
       db.prepare(`
-        INSERT INTO support_case_messages (id, case_id, author_id, content, is_ai, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, caseId, authorId, content, isAi ? 1 : 0, now);
+        INSERT INTO support_case_messages (id, case_id, author_id, content, is_ai, discord_message_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, caseId, authorId, content, isAi ? 1 : 0, discordMessageId ?? null, now);
 
       db.prepare("UPDATE support_cases SET updated_at = ? WHERE id = ?").run(now, caseId);
 
@@ -252,6 +297,28 @@ export class SupportCaseManager {
   }): CaseEvidence | null {
     return safeDbOperation(() => {
       const db = getDatabase();
+
+      // Idempotency: evidence for same case+message already exists
+      const existing = db.prepare(
+        "SELECT * FROM support_case_evidence WHERE case_id = ? AND message_id = ?"
+      ).get(params.caseId, params.messageId) as any;
+      if (existing) {
+        return {
+          id: existing.id,
+          caseId: existing.case_id,
+          messageId: existing.message_id,
+          authorId: existing.author_id,
+          authorName: existing.author_name,
+          content: existing.content,
+          channelId: existing.channel_id,
+          channelName: existing.channel_name,
+          messageUrl: existing.message_url,
+          attachmentUrls: existing.attachment_urls_json ? JSON.parse(existing.attachment_urls_json) : [],
+          collectedBy: existing.collected_by,
+          createdAt: existing.created_at,
+        };
+      }
+
       const id = `ev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const now = Date.now();
 
@@ -299,6 +366,40 @@ export class SupportCaseManager {
         createdAt: r.created_at,
       }));
     }, [], `getEvidence(${caseId})`);
+  }
+
+  /**
+   * Compound operation: create a case and add the initial user message atomically.
+   * If the message insert fails, the case is still created (partial failure is recorded).
+   * Returns both the case and the message (message may be null if insert failed).
+   */
+  createCaseWithMessage(params: {
+    guildId: string;
+    channelId: string;
+    type: CaseType;
+    creatorId: string;
+    subjectUserId?: string;
+    summary?: string;
+    metadata?: Record<string, unknown>;
+    idempotencyKey?: string;
+    messageContent?: string;
+    discordMessageId?: string;
+  }): { case: AiCase | null; message: CaseMessage | null } {
+    const aiCase = this.createCase(params);
+    if (!aiCase) return { case: null, message: null };
+
+    let message: CaseMessage | null = null;
+    if (params.messageContent) {
+      message = this.addMessage(
+        aiCase.id,
+        params.creatorId,
+        params.messageContent,
+        false,
+        params.discordMessageId,
+      );
+    }
+
+    return { case: aiCase, message };
   }
 
   getStats(guildId: string): {
@@ -349,6 +450,7 @@ export class SupportCaseManager {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       closedAt: row.closed_at ?? undefined,
+      version: row.version ?? 1,
     };
   }
 }

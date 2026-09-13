@@ -113,6 +113,12 @@ import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupE
 import { createSendCommand } from "./commands/send";
 import { createSettingsCommand, createSettingsUpdateCommand } from "./commands/settings";
 import { createTicketCommand, createReportCommand, createAppealCommand, createCaseCommand } from "./commands/support";
+import {
+  startSupportAutomation,
+  stopSupportAutomation,
+  startConversationCleanup,
+  stopConversationCleanup,
+} from "./support";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
@@ -447,6 +453,10 @@ client.once(
       logger.info(
         "🧠 Interactive mention/reply system ready."
       );
+
+      // Start support system automation (stale detection, reminders, auto-close)
+      startSupportAutomation(client);
+      startConversationCleanup();
 
       logger.info(
         "🟢 AshenAI Discord bot + AI agent are ONLINE."
@@ -1941,6 +1951,17 @@ process.on("SIGINT", async () => {
   }
 
   try {
+    stopSupportAutomation();
+    stopConversationCleanup();
+    logger.info("🎫 Support automation stopped.");
+  } catch (error) {
+    logger.warn(
+      "⚠️ Support shutdown failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
     closeDatabase();
     logger.info("📦 SQLite database closed.");
   } catch (error) {
@@ -1984,6 +2005,17 @@ process.on("SIGTERM", async () => {
   } catch (error) {
     logger.warn(
       "⚠️ Browser shutdown failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    stopSupportAutomation();
+    stopConversationCleanup();
+    logger.info("🎫 Support automation stopped.");
+  } catch (error) {
+    logger.warn(
+      "⚠️ Support shutdown failed:",
       error instanceof Error ? error.message : String(error)
     );
   }

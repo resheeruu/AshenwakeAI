@@ -57,6 +57,8 @@ const MANDATORY_SUITES: TestSuite[] = [
 
   // Support
   { name: "Support", file: "scripts/test-support.ts", category: "core" },
+  { name: "Support AI", file: "scripts/test-support-ai.ts", category: "core" },
+  { name: "Support Hardening", file: "scripts/test-support-hardening.ts", category: "security" },
 
   // Integration
   { name: "Coding Agents", file: "scripts/test-coding-agents.ts", category: "integration" },

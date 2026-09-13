@@ -454,6 +454,22 @@ export function createCaseCommand(): AshenCommand {
       )
       .addSubcommand((sub) =>
         sub.setName("stats").setDescription("View case statistics")
+      )
+      .addSubcommand((sub) =>
+        sub.setName("summarize").setDescription("AI-generated case summary")
+          .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
+      )
+      .addSubcommand((sub) =>
+        sub.setName("evidence").setDescription("View collected evidence")
+          .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
+      )
+      .addSubcommand((sub) =>
+        sub.setName("timeline").setDescription("View case message timeline")
+          .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
+      )
+      .addSubcommand((sub) =>
+        sub.setName("recommend").setDescription("Get AI recommendation for a case")
+          .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
       ),
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
