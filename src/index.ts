@@ -111,6 +111,8 @@ import {
 import { createTrustedCommand } from "./commands/trusted";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
 import { createSendCommand } from "./commands/send";
+import { createSettingsCommand, createSettingsUpdateCommand } from "./commands/settings";
+import { createTicketCommand, createReportCommand, createAppealCommand, createCaseCommand } from "./commands/support";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
@@ -197,6 +199,12 @@ const commands: AshenCommand[] = [
       createTrustedCommand(),
       createPromptCommand(),
       createSendCommand(),
+      createSettingsCommand(),
+      createSettingsUpdateCommand(),
+      createTicketCommand(),
+      createReportCommand(),
+      createAppealCommand(),
+      createCaseCommand(),
 ];
 
 // Help command derives its display from the registered public commands.

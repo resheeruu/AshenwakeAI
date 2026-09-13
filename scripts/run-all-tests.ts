@@ -55,6 +55,9 @@ const MANDATORY_SUITES: TestSuite[] = [
   // Error coverage
   { name: "Error Coverage", file: "scripts/test-error-coverage.ts", category: "integration" },
 
+  // Support
+  { name: "Support", file: "scripts/test-support.ts", category: "core" },
+
   // Integration
   { name: "Coding Agents", file: "scripts/test-coding-agents.ts", category: "integration" },
 ];

@@ -102,7 +102,10 @@ export type ConversationIntent =
   | "preview"
   | "details"
   | "delete_except"
-  | "help";
+  | "help"
+  | "support_ticket"
+  | "support_report"
+  | "support_appeal";
 
 export interface ClassifiedIntent {
   intent: ConversationIntent;
@@ -293,6 +296,31 @@ export function classifyIntent(
   // ── Moderation requests ──────────────────────────────────────────
   if (/\b(warn|warning|timeout|mute|kick|ban|purge|remove messages)\b/i.test(lower)) {
     return { intent: "moderation", confidence: 0.85 };
+  }
+
+  // ── Support ticket requests ──────────────────────────────────────
+  if (/\b(open|create|start|make|new|file)\b.*\b(ticket|support|help request)\b/i.test(lower)) {
+    return { intent: "support_ticket", confidence: 0.85 };
+  }
+  if (/\b(i need|need help|can someone|help me|assist|support)\b/i.test(lower) &&
+      !/\b(ban|kick|timeout|warn|mute|delete|remove|purge)\b/i.test(lower)) {
+    return { intent: "support_ticket", confidence: 0.75 };
+  }
+
+  // ── Report requests ──────────────────────────────────────────────
+  if (/\b(report|flag|alert|mod)\b.*\b(user|member|someone|this person)\b/i.test(lower)) {
+    return { intent: "support_report", confidence: 0.85 };
+  }
+  if (/\b(report|flag|alert)\b.*\b(harassment|spam|scam|abuse|toxic|nsfw)\b/i.test(lower)) {
+    return { intent: "support_report", confidence: 0.85 };
+  }
+
+  // ── Appeal requests ──────────────────────────────────────────────
+  if (/\b(appeal|appealing|unban|reverse|overturn)\b.*\b(ban| punishment|action|timeout|warn)\b/i.test(lower)) {
+    return { intent: "support_appeal", confidence: 0.85 };
+  }
+  if (/\b(appeal|unban request|pardon|forgive)\b/i.test(lower)) {
+    return { intent: "support_appeal", confidence: 0.80 };
   }
 
   // ── Server transformation: "make my server a gaming server" ──────
@@ -1109,12 +1137,19 @@ export async function handleConversation(
       }
 
       case "moderation": {
-        return {
-          shouldReply: false,
-          reply: "",
-          executed: false,
-          requiresConfirmation: false,
-        };
+        return handleNaturalModeration(guild, userContext, state, message, content, mentionedUserIds, client);
+      }
+
+      case "support_ticket": {
+        return handleSupportTicket(guild, userContext, message);
+      }
+
+      case "support_report": {
+        return handleSupportReport(guild, userContext, message, content, mentionedUserIds);
+      }
+
+      case "support_appeal": {
+        return handleSupportAppeal(guild, userContext, message, content);
       }
 
       case "help": {
@@ -2672,6 +2707,249 @@ async function handleServerModify(
 }
 
 /* ================================================================
+ * NATURAL LANGUAGE MODERATION
+ *
+ * Resolves target from: explicit mention > replied-to author > context.
+ * Executes through existing tool pipeline with full authorization.
+ * ================================================================ */
+
+async function handleNaturalModeration(
+  guild: Guild,
+  userContext: ResolvedUserContext,
+  state: ConversationState,
+  message: Message,
+  content: string,
+  mentionedUserIds: string[],
+  client: Client,
+): Promise<AgentResponse> {
+  const lower = content.toLowerCase();
+
+  // Resolve target user from: 1) explicit mention, 2) reply context
+  let targetUserId: string | undefined;
+  let targetUserName: string | undefined;
+
+  // 1. Explicit mention (non-bot)
+  const mentioned = mentionedUserIds.find((id) => id !== client.user?.id);
+  if (mentioned) {
+    targetUserId = mentioned;
+    try {
+      const member = await guild.members.fetch(mentioned);
+      targetUserName = member.user.tag;
+    } catch {
+      targetUserName = mentioned;
+    }
+  }
+
+  // 2. Reply context — use the replied-to message author
+  if (!targetUserId && message.reference?.messageId) {
+    try {
+      const refMsg = await message.fetchReference();
+      if (refMsg && !refMsg.author.bot && refMsg.author.id !== client.user?.id) {
+        targetUserId = refMsg.author.id;
+        targetUserName = refMsg.author.tag;
+      }
+    } catch {
+      // Could not fetch reference
+    }
+  }
+
+  if (!targetUserId) {
+    return {
+      shouldReply: true,
+      reply: "Who would you like me to moderate? Please mention a user or reply to their message.",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  // Determine moderation action from content
+  let toolName = "";
+  if (/\b(ban)\b/i.test(lower)) toolName = "ban_user";
+  else if (/\b(kick)\b/i.test(lower)) toolName = "kick_user";
+  else if (/\b(timeout|mute)\b/i.test(lower)) toolName = "timeout_user";
+  else if (/\b(warn|warning)\b/i.test(lower)) toolName = "warn_user";
+  else if (/\b(untimeout|unmute)\b/i.test(lower)) toolName = "untimeout_user";
+  else if (/\b(purge|delete messages|remove messages)\b/i.test(lower)) toolName = "purge_messages";
+
+  if (!toolName) {
+    return {
+      shouldReply: true,
+      reply: "What moderation action would you like to take? You can say:\n• \"ban @user\"\n• \"timeout @user for 10 minutes\"\n• \"warn @user for spam\"\n• \"kick @user\"",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  // Build tool arguments
+  const args: Record<string, unknown> = { user_id: targetUserId };
+
+  // Extract duration for timeout
+  if (toolName === "timeout_user") {
+    const durationMatch = lower.match(/(\d+)\s*(minute|min|hour|hr|day)/i);
+    if (durationMatch) {
+      const value = parseInt(durationMatch[1], 10);
+      const unit = durationMatch[2].toLowerCase();
+      if (unit.startsWith("hour") || unit.startsWith("hr")) args.duration = value * 60;
+      else if (unit.startsWith("day")) args.duration = value * 60 * 24;
+      else args.duration = value;
+    } else {
+      args.duration = 5; // default 5 minutes
+    }
+  }
+
+  // Extract reason
+  const reasonMatch = content.match(/(?:for|reason:?)\s+(.+)/i);
+  if (reasonMatch) args.reason = reasonMatch[1].trim();
+  else args.reason = `Moderation action by ${userContext.username}`;
+
+  // Execute through full pipeline (authorization, risk, confirmation, etc.)
+  const result = await executeWithFullPipeline(
+    guild,
+    userContext,
+    toolName,
+    args,
+    message.channel.id,
+  );
+
+  if (result.status === "success") {
+    return {
+      shouldReply: true,
+      reply: `✅ ${toolName.replace(/_/g, " ")} applied to ${targetUserName || targetUserId}.${result.message ? `\n${result.message}` : ""}`,
+      executed: true,
+      requiresConfirmation: false,
+    };
+  }
+
+  if (result.status === "confirmation_required") {
+    return {
+      shouldReply: true,
+      reply: result.message,
+      executed: false,
+      requiresConfirmation: true,
+      planId: result.plan?.id,
+    };
+  }
+
+  return {
+    shouldReply: true,
+    reply: buildDenialResponse(result),
+    executed: false,
+    requiresConfirmation: false,
+  };
+}
+
+/* ================================================================
+ * SUPPORT TICKET CREATION
+ * ================================================================ */
+
+async function handleSupportTicket(
+  guild: Guild,
+  userContext: ResolvedUserContext,
+  message: Message,
+): Promise<AgentResponse> {
+  const { loadGuildConfig } = await import("../core/guild-config");
+  const config = loadGuildConfig(guild.id);
+  const supportConfig = config.support ?? { enabled: false, allowGeneralHelp: true, allowReports: true, allowAppeals: true };
+
+  if (!supportConfig.enabled) {
+    return {
+      shouldReply: true,
+      reply: "Support tickets are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  return {
+    shouldReply: true,
+    reply: "🎫 **Support Tickets**\n\nYou can create a ticket using:\n• `/ticket support` — General help\n• `/ticket report` — Report a user\n• `/ticket appeal` — Ban appeal\n\nOr describe your issue and I'll help you directly!",
+    executed: false,
+    requiresConfirmation: false,
+  };
+}
+
+/* ================================================================
+ * SUPPORT REPORT
+ * ================================================================ */
+
+async function handleSupportReport(
+  guild: Guild,
+  userContext: ResolvedUserContext,
+  message: Message,
+  content: string,
+  mentionedUserIds: string[],
+): Promise<AgentResponse> {
+  const { loadGuildConfig } = await import("../core/guild-config");
+  const config = loadGuildConfig(guild.id);
+  const reportsConfig = config.reports ?? { enabled: false, requireEvidence: false, aiAnalysisEnabled: true, autoEscalateHighRisk: true };
+
+  if (!reportsConfig.enabled) {
+    return {
+      shouldReply: true,
+      reply: "Reports are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  // Try to extract reported user from mentions or reply
+  let reportedUserId: string | undefined;
+  const mentioned = mentionedUserIds.find((id) => id !== message.client.user?.id);
+  if (mentioned) {
+    reportedUserId = mentioned;
+  } else if (message.reference?.messageId) {
+    try {
+      const refMsg = await message.fetchReference();
+      if (refMsg && !refMsg.author.bot) {
+        reportedUserId = refMsg.author.id;
+      }
+    } catch {
+      // Could not fetch reference
+    }
+  }
+
+  const reportedTag = reportedUserId ? `<@${reportedUserId}>` : "unknown user";
+
+  return {
+    shouldReply: true,
+    reply: `🚨 **Report a User**\n\nUse \`/report\` for a structured report:\n• \`/report user:@${reportedTag} reason:...\`\n\nOr tell me:\n• Who are you reporting?\n• What did they do?\n• Any evidence (message IDs, screenshots)?`,
+    executed: false,
+    requiresConfirmation: false,
+  };
+}
+
+/* ================================================================
+ * SUPPORT APPEAL
+ * ================================================================ */
+
+async function handleSupportAppeal(
+  guild: Guild,
+  userContext: ResolvedUserContext,
+  message: Message,
+  content: string,
+): Promise<AgentResponse> {
+  const { loadGuildConfig } = await import("../core/guild-config");
+  const config = loadGuildConfig(guild.id);
+  const appealsConfig = config.appeals ?? { enabled: false, aiAnalysisEnabled: true };
+
+  if (!appealsConfig.enabled) {
+    return {
+      shouldReply: true,
+      reply: "Appeals are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
+      executed: false,
+      requiresConfirmation: false,
+    };
+  }
+
+  return {
+    shouldReply: true,
+    reply: "🔨 **Ban Appeal**\n\nUse \`/appeal\` to submit a formal appeal:\n• \`/appeal reason:Why your action should be reversed\`\n\nPlease include:\n• What action you're appealing\n• Why you believe it should be reversed\n• Any additional context for staff",
+    executed: false,
+    requiresConfirmation: false,
+  };
+}
+
+/* ================================================================
  * HELP
  * ================================================================ */
 
@@ -2717,6 +2995,19 @@ async function handleHelp(
     "",
     "🔍 **Preview:**",
     "• \"Show me what you'll change\" (preview pending plan)",
+    "",
+    "🎫 **Support & Reports:**",
+    "• `/ticket` — Create a support ticket",
+    "• `/report` — Report a user",
+    "• `/appeal` — Submit a ban appeal",
+    "• `/case` — View and manage cases",
+    "• `/settings` — Configure support systems",
+    "",
+    "🛡️ **Moderation (Natural Language):**",
+    "• \"ban @user\" or reply to a message and say \"ban\"",
+    "• \"timeout @user for 10 minutes\"",
+    "• \"warn @user for spam\"",
+    "• \"kick @user\"",
     "",
     "**Your role:** " + userContext.ashenRole,
   ];

@@ -67,6 +67,39 @@ function defaultConfig(guildId: string): GuildConfig {
       rateLimitPerMinute: 10,
       burstLimit: 3,
     },
+    support: {
+      enabled: false,
+      allowGeneralHelp: true,
+      allowReports: true,
+      allowAppeals: true,
+    },
+    reports: {
+      enabled: false,
+      requireEvidence: false,
+      aiAnalysisEnabled: true,
+      autoEscalateHighRisk: true,
+    },
+    appeals: {
+      enabled: false,
+      aiAnalysisEnabled: true,
+    },
+    supportAi: {
+      enabled: true,
+      allowModerationActions: false,
+      requireConfirmation: true,
+      allowWebResearch: false,
+    },
+    supportLogging: {
+      enabled: false,
+      includeModeration: true,
+      includeTickets: true,
+      includeReports: true,
+      includeAppeals: true,
+      includeAiActions: true,
+    },
+    staff: {
+      roleIds: [],
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
