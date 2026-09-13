@@ -1,49 +1,58 @@
+# ============================================================
+# AshenAI .gitignore
+# ============================================================
+
+# --- Environment & secrets (NEVER commit) ---
 .env
+.env.*
+!.env.example
+
+# --- Dependencies & build ---
 node_modules/
 dist/
-*.log
+
+# --- Data & runtime state ---
 data/
+*.log
+
+# --- Backup directories & files ---
 .agent-backups/
 src.backup*/
-*.backup
-*.bak
-data.v4-backup/
 src.v4-backup/
-=
+data.v4-backup/
+*.backup
+*.backup*
+*.bak
 *.before-*
 *.working
 *.working-backup
 *.broken
 *.corrupted-backup
 *.final-backup*
-*.backup*
 
-src/index.working.ts
+# --- Scratch / agent working dirs ---
+.agent/
+.aistart/
+.claudin/
+.coding-agent-test/
+.game-backup/
+.ashenai/
+.openclaude/
+.npm/
 
-# AshenAI runtime files
-# AshenAI runtime PID/state files
+# --- PID & state files ---
+*.pid
 .ashennai-mode
-.ashennai-supervisor.pid
-.anomaly-monitor.pid
-.failover-monitor.pid
-.termux-backup.pid
-termux-backup.log
-failover-boot.log
-boot-test.log
+.ashennai-anomaly
 
-# Auth runtime data (never commit)
-data/accounts.json
-data/sessions.json
-
-# Runtime logs
-*.log
-
-# Legacy root-level scripts (superseded by scripts/)
+# --- Legacy root-level scripts (superseded by scripts/) ---
 check-commands.ts
 cleanup-commands.ts
 clear-guild-commands.ts
 
-# Miscellaneous runtime artifacts
-= 
-🔍
+# --- Specific stray artifacts ---
+🔎
 Thats*
+
+# --- Legacy working file ---
+src/index.working.ts
