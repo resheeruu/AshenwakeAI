@@ -22,11 +22,15 @@
     "auth:owner-recover": "tsx scripts/owner-recover.ts",
     "deploy:advisor": "tsx scripts/deployment-advisor.ts"
   },
+  "license": "MIT",
   "keywords": [
     "discord",
     "ai",
     "bot"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "type": "commonjs",
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

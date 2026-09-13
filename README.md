@@ -38,6 +38,12 @@ Web Research
 - Web pipeline: Brave Search → HTTP fetch → Readability/Cheerio → SPA detection → browser escalation
 - Web dashboard: Express server with auth, MFA, OAuth, CSRF protection
 
+## AI Providers
+
+16+ provider adapters with automatic fallback and circuit breaker:
+
+Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, OpenAI-compatible (any provider)
+
 ## Commands
 
 | Command | Description |
@@ -108,3 +114,10 @@ See `docs/DEVELOPMENT.md` for development setup.
 - `docs/DEVELOPMENT.md` — Development guide
 - `docs/ADMIN-MODERATOR-MANUAL.md` — Admin/moderator usage
 - `docs/AGENT_RULES.md` — Agent behavior rules
+- `AGENTS.md` — AI agent finalization loop instructions
+
+## Known Limitations
+
+- **Browser automation**: Requires Chromium installed; degrades to HTTP-only mode when unavailable (e.g., Termux ARM64)
+- **Native modules**: `better-sqlite3` requires native compilation; may need build tools on some platforms
+- **Music system**: Removed — no audio playback functionality
