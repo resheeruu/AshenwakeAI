@@ -219,7 +219,7 @@ async function inspectServer(guild: any) {
       type: c.type === ChannelType.GuildVoice ? "voice" : "text",
       categoryId: c.parentId || undefined,
     })),
-    roles: [...roles.cache.values()]
+    roles: [...roles.values()]
       .filter((r: any) => r.name !== "@everyone")
       .map((r: any) => ({ id: r.id, name: r.name })),
     protectedChannels: aiConfig.protectedChannels || [],
@@ -1657,4 +1657,4 @@ if (cleanupInterval.unref) cleanupInterval.unref();
  * EXPORTS (for testing)
  * ================================================================ */
 
-export { extractBuildSubject, buildSubjectEnhancements, mergeTemplateEnhancements };
+export { extractBuildSubject, buildSubjectEnhancements, mergeTemplateEnhancements, inspectServer };

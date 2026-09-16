@@ -47,6 +47,7 @@ const MANDATORY_SUITES: TestSuite[] = [
   // Tool Registry
   { name: "Tool Registry", file: "scripts/test-tool-registry.ts", category: "tool" },
   { name: "Template Execution", file: "scripts/test-template-execution.ts", category: "tool" },
+  { name: "Builder inspectServer", file: "scripts/test-builder-inspect-server.ts", category: "tool" },
 
   // Web
   { name: "Web Security", file: "scripts/test-web-security.ts", category: "web" },
