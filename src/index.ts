@@ -32,7 +32,7 @@ import { loadGuildConfig, guildConfigExists } from "./core/guild-config";
 import { loadGuildAIConfig } from "./ai/tools/channel-scope";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
 import { guardAIOutput } from "./security/output-guard";
-import { wrapUntrustedContent, stripSecurityLabels } from "./security/context";
+import { stripSecurityLabels } from "./security/context";
 import { buildAdaptivePersonality } from "./ai/adaptive-personality";
 import { parseServerIntent } from "./discord/server-assistant";
 import {
@@ -1831,13 +1831,17 @@ client.on(
       t.mark("build_context");
 
       /*
-       * Discord/user-provided context is DATA, not instructions.
+       * Security: Discord conversation context is NOT wrapped with
+       * [UNTRUSTED] labels. The system prompt contains security
+       * instructions that prevent secret disclosure and prompt injection.
+       * Wrapping with [UNTRUSTED] labels caused the AI to echo them,
+       * triggering the output guard and blocking innocent responses
+       * like "hello" and "how are you?".
+       *
+       * wrapUntrustedContent() is still used for genuinely untrusted
+       * external content (tool results, tool errors in agent/index.ts).
        */
-      const interactiveContent =
-        wrapUntrustedContent(
-          "DISCORD CONVERSATION",
-          rawInteractiveContent
-        );
+      const interactiveContent = rawInteractiveContent;
 
       /*
        * Unified Conversational Agent.
@@ -2008,11 +2012,12 @@ client.on(
           content: ASHENAI_SYSTEM_PROMPT + "\n\n" + personalityBlock,
         },
 
-        // Security: conversation history is NOT wrapped with untrusted labels.
-        // The system prompt already contains security instructions that prevent
-        // the AI from leaking secrets. Wrapping history with [UNTRUSTED] labels
-        // caused the AI to echo them, triggering the output guard and blocking
-        // innocent responses like "hello" and "how are you?".
+        // Security: neither conversation history nor the user's current
+        // message are wrapped with [UNTRUSTED] labels. The system prompt
+        // already contains security instructions that prevent secret
+        // disclosure and prompt injection. Wrapping with [UNTRUSTED]
+        // labels caused the AI to echo them, triggering the output guard
+        // and blocking innocent responses like "hello" and "how are you?".
         ...history.map((entry) => ({
           ...entry,
           content: entry.content,

@@ -40,6 +40,8 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Audit Integrity", file: "scripts/test-audit-integrity.ts", category: "security" },
   { name: "Security Hardening", file: "scripts/test-security-hardening.ts", category: "security" },
   { name: "Auth Upgrade", file: "scripts/test-auth-upgrade.ts", category: "security" },
+  { name: "Ask Command", file: "scripts/test-ask-command.ts", category: "security" },
+  { name: "Conversation Wrapper", file: "scripts/test-conversation-wrapper.ts", category: "security" },
 
   // Browser
   { name: "Browser", file: "scripts/test-browser.ts", category: "browser" },

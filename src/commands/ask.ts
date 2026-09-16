@@ -16,7 +16,7 @@ import { AshenCommand } from "./definitions";
 import { config } from "../config/env";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
 import { guardAIOutput } from "../security/output-guard";
-import { wrapUntrustedContent, stripSecurityLabels } from "../security/context";
+import { stripSecurityLabels } from "../security/context";
 import { StageTimer } from "../ai/timing";
 
 const MAX_DISCORD_LENGTH = 1900;
@@ -147,18 +147,12 @@ export function createAskCommand(
 
           ...history.map((entry) => ({
             ...entry,
-            content: wrapUntrustedContent(
-              "CONVERSATION HISTORY",
-              entry.content
-            ),
+            content: entry.content,
           })),
 
           {
             role: "user" as const,
-            content: wrapUntrustedContent(
-              "USER PROMPT",
-              prompt
-            ),
+            content: prompt,
           },
         ];
         t.mark("build_messages");
