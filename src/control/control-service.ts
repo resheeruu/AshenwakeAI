@@ -9,6 +9,8 @@ import { redact } from "../security/redact";
 import { runHealthCheck } from "../core/health-checker";
 import { detectHostProvider } from "../core/resource-profile";
 import { isAnyMfaEnabled } from "./account-store";
+import { getDiscordHealth } from "../core/discord-health";
+import { getUpdateStatus } from "../core/update-manager";
 import { scanAshenAI } from "../diagnostics/health-scanner";
 import { generateOptimizations } from "../diagnostics/optimizer";
 import { getRecentLogs } from "../log-stream";
@@ -61,6 +63,9 @@ function isDataDirectoryAccessible(): boolean {
 }
 
 export function getStatus(): SystemStatus {
+  const discordHealth = getDiscordHealth();
+  const updateStatus = getUpdateStatus();
+
   return {
     running: isRunning,
     uptime: Math.floor(process.uptime()),
@@ -69,6 +74,32 @@ export function getStatus(): SystemStatus {
     platform: process.platform,
     pid: process.pid,
     environment: detectHostProvider(),
+    discord: {
+      ready: discordHealth.ready,
+      shardCount: discordHealth.shardCount,
+      reconnectCount: discordHealth.reconnectCount,
+      gatewayLatency: discordHealth.gatewayLatency,
+    },
+    update: {
+      currentCommit: updateStatus.currentCommit,
+      knownGoodCommit: updateStatus.knownGoodCommit,
+      targetCommit: updateStatus.targetCommit,
+      latestAvailable: updateStatus.latestAvailable,
+      updateAvailable: updateStatus.updateAvailable,
+      updateState: updateStatus.updateState,
+      lastFailedUpdate: updateStatus.lastFailedUpdate ? {
+        targetCommit: updateStatus.lastFailedUpdate.targetCommit,
+        error: updateStatus.lastFailedUpdate.error,
+        state: updateStatus.lastFailedUpdate.state,
+      } : null,
+      lastRollback: updateStatus.lastRollback ? {
+        targetCommit: updateStatus.lastRollback.targetCommit,
+        rollbackResult: updateStatus.lastRollback.rollbackResult,
+        rollbackAttempt: updateStatus.lastRollback.rollbackAttempt,
+        state: updateStatus.lastRollback.state,
+      } : null,
+      branch: updateStatus.branch,
+    },
   };
 }
 

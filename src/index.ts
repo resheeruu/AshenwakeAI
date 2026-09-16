@@ -123,6 +123,8 @@ import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
 import { UsageStats } from "./analytics/usage-stats";
+import { initDiscordHealth, getDiscordHealth } from "./core/discord-health";
+import { startUpdateManager, stopUpdateManager, getUpdateStatus, postStartValidation } from "./core/update-manager";
 
 import { recordWorldEvent, checkLevelMilestone, announceWorldEvent } from "./games/world-events";
 import { updateQuestProgress } from "./games/quests";
@@ -1905,8 +1907,66 @@ if (!token) {
   process.exit(1);
 }
 
+const SHUTDOWN_TIMEOUT_MS = 15_000;
+
+async function gracefulShutdown(signal: string): Promise<void> {
+  logger.info(`🛑 ${signal} received — starting graceful shutdown...`);
+
+  const forceExit = setTimeout(() => {
+    logger.error("⏱️ Shutdown timed out — forcing exit");
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+
+  forceExit.unref();
+
+  try { stopUpdateManager(); } catch {}
+
+  try { internalSupervisor.stop(); } catch {}
+
+  try {
+    await agentManager.stop();
+    logger.info("🧠 Agent stopped.");
+  } catch (error) {
+    logger.warn("⚠️ Agent stop failed:", error instanceof Error ? error.message : String(error));
+  }
+
+  try {
+    const bm = getBrowserManager();
+    await bm.shutdown();
+    logger.info("🌐 Browser stopped.");
+  } catch {
+    // Browser is optional
+  }
+
+  try {
+    stopSupportAutomation();
+    stopConversationCleanup();
+    logger.info("🎫 Support automation stopped.");
+  } catch {
+    // Best effort
+  }
+
+  try {
+    closeDatabase();
+    logger.info("📦 Database closed.");
+  } catch {
+    // Best effort
+  }
+
+  try {
+    client.destroy();
+    logger.info("🔌 Discord disconnected.");
+  } catch {
+    // Best effort
+  }
+
+  clearTimeout(forceExit);
+  logger.info("✅ Graceful shutdown complete.");
+  process.exit(0);
+}
+
 process.on("uncaughtException", (error) => {
-  logger.error("❌ UNCAUGHT EXCEPTION — cleaning up:", error.message || String(error));
+  logger.error("❌ UNCAUGHT EXCEPTION:", error.stack || error.message || String(error));
   try { internalSupervisor.stop(); } catch {}
   try { agentManager.stop().catch(() => {}); } catch {}
   try { getBrowserManager().shutdown().catch(() => {}); } catch {}
@@ -1916,7 +1976,7 @@ process.on("uncaughtException", (error) => {
 });
 
 process.on("unhandledRejection", (reason) => {
-  logger.error("❌ UNHANDLED REJECTION — cleaning up:", reason instanceof Error ? reason.message : String(reason));
+  logger.error("❌ UNHANDLED REJECTION:", reason instanceof Error ? (reason.stack || reason.message) : String(reason));
   try { internalSupervisor.stop(); } catch {}
   try { agentManager.stop().catch(() => {}); } catch {}
   try { getBrowserManager().shutdown().catch(() => {}); } catch {}
@@ -1925,123 +1985,9 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 
-process.on("SIGINT", async () => {
-  internalSupervisor.stop();
-  logger.info("🛑 Shutdown signal received.");
-
-  try {
-    await agentManager.stop();
-    logger.info("🧠 AshenAI agent stopped cleanly.");
-  } catch (error) {
-    logger.error(
-      "❌ Agent shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    const browserManager = getBrowserManager();
-    await browserManager.shutdown();
-    logger.info("🌐 Browser agent stopped.");
-  } catch (error) {
-    logger.warn(
-      "⚠️ Browser shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    stopSupportAutomation();
-    stopConversationCleanup();
-    logger.info("🎫 Support automation stopped.");
-  } catch (error) {
-    logger.warn(
-      "⚠️ Support shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    closeDatabase();
-    logger.info("📦 SQLite database closed.");
-  } catch (error) {
-    logger.error(
-      "❌ Database shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    client.destroy();
-    logger.info("🔌 Discord client disconnected.");
-  } catch (error) {
-    logger.error(
-      "❌ Discord shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  internalSupervisor.stop();
-  logger.info("🛑 Termination signal received.");
-
-  try {
-    await agentManager.stop();
-    logger.info("🧠 AshenAI agent stopped cleanly.");
-  } catch (error) {
-    logger.error(
-      "❌ Agent shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    const browserManager = getBrowserManager();
-    await browserManager.shutdown();
-    logger.info("🌐 Browser agent stopped.");
-  } catch (error) {
-    logger.warn(
-      "⚠️ Browser shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    stopSupportAutomation();
-    stopConversationCleanup();
-    logger.info("🎫 Support automation stopped.");
-  } catch (error) {
-    logger.warn(
-      "⚠️ Support shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    closeDatabase();
-    logger.info("📦 SQLite database closed.");
-  } catch (error) {
-    logger.error(
-      "❌ Database shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    client.destroy();
-    logger.info("🔌 Discord client disconnected.");
-  } catch (error) {
-    logger.error(
-      "❌ Discord shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  process.exit(0);
-});
+process.on("SIGINT", () => { gracefulShutdown("SIGINT"); });
+process.on("SIGTERM", () => { gracefulShutdown("SIGTERM"); });
+process.on("SIGUSR2", () => { gracefulShutdown("SIGUSR2 (restart)"); });
 
 /* =====================================================
    INTERNAL SUPERVISOR STATE
@@ -2081,10 +2027,6 @@ client.on("debug", (message) => {
   }
 
   logger.debug(`🔧 DISCORD DEBUG: ${text}`);
-});
-
-client.on("warn", (message) => {
-  logger.warn(`⚠️ DISCORD WARN: ${message}`);
 });
 
 client.on("shardDisconnect", (event, shardId) => {
@@ -2615,6 +2557,18 @@ async function startDiscord(): Promise<void> {
     await initializeTaskEngine();
 
     logger.info("⚙️ Task engine initialized.");
+
+    initDiscordHealth(client);
+    logger.info("📡 Discord shard observability active.");
+
+    if (process.env.ASHENAI_AUTO_UPDATE !== "off") {
+      startUpdateManager();
+      logger.info("🔄 Update manager active.");
+    }
+
+    postStartValidation().catch((err) => {
+      logger.warn("[UpdateManager] post-start validation error:", err instanceof Error ? err.message : String(err));
+    });
   } catch (error) {
     logger.error(
       "❌ Discord startup manager failed:",

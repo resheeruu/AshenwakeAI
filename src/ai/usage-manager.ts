@@ -14,7 +14,11 @@ export type AIFeature =
   | "moderation_ai"
   | "knowledge_query"
   | "automod_ai"
-  | "incident_investigate";
+  | "incident_investigate"
+  | "tts"
+  | "passive_awareness"
+  | "browser_use"
+  | "ai_to_ai";
 
 export interface CreditCosts {
   simple: number;

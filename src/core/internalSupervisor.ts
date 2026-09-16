@@ -111,6 +111,15 @@ export class InternalSupervisor {
           ? error.message
           : String(error),
       );
+
+      if (
+        this.status.consecutiveFailures >=
+        this.failureThreshold
+      ) {
+        this.onUnhealthy?.(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
     }
   }
 }

@@ -6,6 +6,32 @@ export interface SystemStatus {
   platform: string;
   pid: number;
   environment: string;
+  discord?: {
+    ready: boolean;
+    shardCount: number;
+    reconnectCount: number;
+    gatewayLatency: number;
+  };
+  update?: {
+    currentCommit: string;
+    knownGoodCommit: string | null;
+    targetCommit: string | null;
+    latestAvailable: string | null;
+    updateAvailable: boolean;
+    updateState: string;
+    lastFailedUpdate: {
+      targetCommit: string;
+      error: string | undefined;
+      state: string;
+    } | null;
+    lastRollback: {
+      targetCommit: string;
+      rollbackResult: string;
+      rollbackAttempt: number;
+      state: string;
+    } | null;
+    branch: string;
+  };
 }
 
 export interface ProviderInfo {

@@ -6,6 +6,8 @@ import { AIRouter } from "../ai/router";
 import { UsageManager } from "../ai/usage-manager";
 import { logger } from "../logger";
 import { recordAudit } from "../security/audit";
+import { getDiscordHealth } from "../core/discord-health";
+import { getUpdateStatus } from "../core/update-manager";
 import {
   getRecentLogs,
   subscribeLogs,
@@ -203,11 +205,28 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/api/health", (_req: Request, res: Response) => {
   const health = getHealthStatus ? getHealthStatus() : { discordReady: false };
   const available = router.getAvailableProviders();
+  const discordHealth = getDiscordHealth();
+  const updateStatus = getUpdateStatus();
   const ok = health.discordReady && available.length > 0;
   res.status(ok ? 200 : 503).json({
     ok, name: "AshenAI", version: VERSION, uptime: Math.floor(process.uptime()),
-    discord: { ready: health.discordReady },
+    discord: {
+      ready: health.discordReady,
+      shardCount: discordHealth.shardCount,
+      reconnectCount: discordHealth.reconnectCount,
+      gatewayLatency: discordHealth.gatewayLatency,
+      lastDisconnectReason: discordHealth.lastDisconnectReason || undefined,
+    },
     providers: { available: available.length, names: available.map((p) => p.name) },
+    update: {
+      currentCommit: updateStatus.currentCommit,
+      knownGoodCommit: updateStatus.knownGoodCommit,
+      targetCommit: updateStatus.targetCommit,
+      latestAvailable: updateStatus.latestAvailable,
+      updateAvailable: updateStatus.updateAvailable,
+      updateState: updateStatus.updateState,
+      branch: updateStatus.branch,
+    },
   });
 });
 
