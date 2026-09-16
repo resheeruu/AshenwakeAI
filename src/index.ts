@@ -126,6 +126,34 @@ import { UsageStats } from "./analytics/usage-stats";
 import { initDiscordHealth, getDiscordHealth } from "./core/discord-health";
 import { startUpdateManager, stopUpdateManager, getUpdateStatus, postStartValidation } from "./core/update-manager";
 
+import {
+  classifyParticipant,
+  reclassifyFromResponse,
+  detectRivalryIntent,
+  isAshenAIMentioned,
+  extractMentionedIds,
+  isRefusal,
+  isEndRivalryIntent,
+  createSession,
+  getActiveSession,
+  isOpponent,
+  recordAshenAITurn,
+  recordOpponentTurn,
+  endSession,
+  isOpponentTimedOut,
+  startSessionCleanup,
+  stopSessionCleanup,
+  generateOpeningChallenge,
+  generateChallenge,
+  generateRoast,
+  generateAcknowledgment,
+  generateRefusalResponse,
+  generateSessionEnd,
+  classifyOpponentResponse,
+  buildRivalrySystemPrompt,
+} from "./ai/rivalry";
+import type { RivalrySession } from "./ai/rivalry";
+
 import { recordWorldEvent, checkLevelMilestone, announceWorldEvent } from "./games/world-events";
 import { updateQuestProgress } from "./games/quests";
 import { recordAudit } from "./security/audit";
@@ -1235,6 +1263,168 @@ client.on(
 );
 
 /* =====================================================
+   RIVALRY OPPONENT RESPONSE HANDLER
+   ===================================================== */
+
+/**
+ * Handle a response from a rivalry opponent (a real Discord bot).
+ * Classifies the opponent, records their turn, generates AshenAI's next move.
+ */
+async function handleRivalryOpponentResponse(
+  message: Message,
+  session: RivalrySession,
+  client: Client
+): Promise<void> {
+  try {
+    const content = message.content;
+
+    // Check for refusal
+    if (isRefusal(content)) {
+      const refusalText = generateRefusalResponse(session);
+      await message.reply(truncateForDiscord(refusalText));
+      endSession(
+        session.guildId,
+        session.channelId,
+        "ended_refusal",
+        "opponent_refused"
+      );
+      return;
+    }
+
+    // Record opponent turn
+    const opponentTurn = recordOpponentTurn(
+      session,
+      content
+    );
+
+    if (!opponentTurn) {
+      // Session ended or duplicate — nothing to do
+      return;
+    }
+
+    // Classify opponent response quality
+    const quality = classifyOpponentResponse(content);
+
+    // Generate AshenAI's response
+    let responseText: string;
+
+    if (quality === "strong") {
+      responseText = generateAcknowledgment(
+        session,
+        content
+      );
+    } else if (quality === "weak") {
+      responseText = generateRoast(session, content);
+    } else {
+      responseText = "";
+    }
+
+    // Generate next challenge via AI
+    const challenge = generateChallenge(session, content);
+
+    const messages = [
+      {
+        role: "system" as const,
+        content: buildRivalrySystemPrompt(session),
+      },
+      {
+        role: "user" as const,
+        content:
+          `The opponent (${session.opponentDisplayName}) just said:\n\n"${content}"\n\n` +
+          `Respond with your next challenge. Be competitive. Target their arguments or capabilities. ` +
+          `Do not use @everyone. Keep it under 1500 characters.`,
+      },
+    ];
+
+    const aiResponse = await router.generate({
+      messages,
+      temperature: 0.8,
+      maxTokens: 600,
+      guildId: session.guildId,
+      userId: session.initiatorUserId,
+      channelId: session.channelId,
+      source: "ai_to_ai",
+    });
+
+    if (aiResponse?.text?.trim()) {
+      const reply = truncateForDiscord(
+        stripSecurityLabels(
+          guardAIOutput(aiResponse.text).text
+        )
+      );
+
+      // Prepend quality-based reaction if applicable
+      const fullResponse = responseText
+        ? `${responseText}\n\n${reply}`
+        : reply;
+
+      recordAshenAITurn(
+        session,
+        fullResponse,
+        challenge.challengeDomain
+      );
+
+      await message.reply(fullResponse);
+
+      usageManager.recordDeferred({
+        userId: session.initiatorUserId,
+        guildId: session.guildId,
+        feature: "ai_to_ai",
+        credits: 1,
+        provider: aiResponse.provider,
+        latencyMs: aiResponse.latencyMs,
+        success: true,
+      });
+    } else {
+      // Fallback: send the challenge text directly
+      const fallback = responseText
+        ? `${responseText}\n\n${challenge.text}`
+        : challenge.text;
+
+      recordAshenAITurn(
+        session,
+        fallback,
+        challenge.challengeDomain
+      );
+
+      await message.reply(
+        truncateForDiscord(fallback)
+      );
+    }
+
+    // Check if turn limit reached after this exchange
+    if (session.turn >= session.maxTurns) {
+      const endText = generateSessionEnd(session);
+      if ("send" in message.channel) {
+        await message.channel.send(endText);
+      }
+      endSession(
+        session.guildId,
+        session.channelId,
+        "ended_limit",
+        "max_turns_reached"
+      );
+    }
+  } catch (error) {
+    logger.error(
+      "❌ Rivalry opponent response failed:",
+      error instanceof Error
+        ? error.message
+        : String(error)
+    );
+
+    endSession(
+      session.guildId,
+      session.channelId,
+      "ended_error",
+      error instanceof Error
+        ? error.message
+        : "unknown_error"
+    );
+  }
+}
+
+/* =====================================================
    INTERACTIVE MESSAGE HANDLER
    ===================================================== */
 
@@ -1267,9 +1457,28 @@ client.on(
       t.mark("dedup");
 
       /*
-       * Never respond to bots.
+       * Never respond to bots — unless this bot is an opponent
+       * in an active rivalry session in this channel.
        */
       if (message.author.bot) {
+        // Check for active rivalry with this bot as opponent
+        const rivalrySession = getActiveSession(
+          guildId,
+          channelId
+        );
+
+        if (
+          rivalrySession &&
+          rivalrySession.opponentId === userId
+        ) {
+          // Handle opponent response through rivalry system
+          await handleRivalryOpponentResponse(
+            message,
+            rivalrySession,
+            client
+          );
+        }
+
         return;
       }
 
@@ -1380,6 +1589,203 @@ client.on(
         );
 
         return;
+      }
+
+      /*
+       * Rivalry detection.
+       * Check if this message triggers or continues a rivalry session.
+       */
+      if (!isDM && message.guild) {
+        // Check for end-rivalry intent from the initiator
+        const existingSession = getActiveSession(
+          guildId,
+          channelId
+        );
+
+        if (
+          existingSession &&
+          existingSession.initiatorUserId === userId
+        ) {
+          if (isEndRivalryIntent(content)) {
+            const ended = endSession(
+              guildId,
+              channelId,
+              "ended_human",
+              "user_ended"
+            );
+
+            if (ended) {
+              await message.reply(
+                generateSessionEnd(ended)
+              );
+              replySent = true;
+              return;
+            }
+          }
+        }
+
+        // Check for rivalry trigger: human mentions AshenAI + other bot(s) + rivalry keywords
+        if (isMention) {
+          const mentionedIds = extractMentionedIds(
+            message.content,
+            botId
+          );
+
+          // Get only bot mentions (non-human)
+          const mentionedBotIds: string[] = [];
+          for (const id of mentionedIds) {
+            try {
+              const member =
+                await message.guild.members.fetch(id);
+              if (member?.user.bot) {
+                mentionedBotIds.push(id);
+              }
+            } catch {
+              // If we can't fetch the member, skip
+            }
+          }
+
+          const trigger = detectRivalryIntent(
+            content,
+            mentionedBotIds,
+            botId
+          );
+
+          if (
+            trigger.isRivalry &&
+            mentionedBotIds.length > 0
+          ) {
+            // Create rivalry session
+            const opponentUser =
+              await message.guild.members.fetch(
+                mentionedBotIds[0]
+              );
+
+            const opponent = classifyParticipant({
+              userId: mentionedBotIds[0],
+              displayName:
+                opponentUser?.displayName ??
+                opponentUser?.user.username ??
+                "Unknown Bot",
+              botFlag: true,
+              contextMessage: content,
+            });
+
+            const session = createSession({
+              guildId,
+              channelId,
+              initiatorUserId: userId,
+              ashenAIId: botId,
+              opponent,
+            });
+
+            // Generate opening challenge
+            const opening =
+              generateOpeningChallenge(session);
+            recordAshenAITurn(
+              session,
+              opening.text,
+              opening.challengeDomain
+            );
+
+            // Check usage before sending
+            const usage =
+              usageManager.check(
+                userId,
+                guildId,
+                "ai_to_ai",
+                content.length
+              );
+
+            if (!usage.allowed) {
+              await endSession(
+                guildId,
+                channelId,
+                "ended_error",
+                "usage_limit"
+              );
+              await message.reply(
+                "⏳ You've reached your interaction limit. Rivalry cannot start right now."
+              );
+              replySent = true;
+              return;
+            }
+
+            // Send opening challenge via AI for natural phrasing
+            const messages = [
+              {
+                role: "system" as const,
+                content: buildRivalrySystemPrompt(session),
+              },
+              {
+                role: "user" as const,
+                content: `Generate your opening challenge to ${opponent.displayName}. Be competitive and direct. Do not use @everyone. Keep it under 1500 characters.`,
+              },
+            ];
+
+            const response = await router.generate({
+              messages,
+              temperature: 0.8,
+              maxTokens: 600,
+              guildId,
+              userId,
+              channelId,
+              source: "ai_to_ai",
+            });
+
+            if (response?.text?.trim()) {
+              const reply = truncateForDiscord(
+                stripSecurityLabels(
+                  guardAIOutput(response.text).text
+                )
+              );
+
+              await message.reply(reply);
+              replySent = true;
+
+              usageManager.recordDeferred({
+                userId,
+                guildId,
+                feature: "ai_to_ai",
+                credits: usage.credits,
+                provider: response.provider,
+                latencyMs: response.latencyMs,
+                success: true,
+              });
+
+              memory.addBatch(
+                userId,
+                { role: "user", content },
+                channelId
+              );
+              memory.addBatch(
+                userId,
+                { role: "assistant", content: reply },
+                channelId
+              );
+            } else {
+              // Fallback: send the generated opening directly
+              await message.reply(
+                truncateForDiscord(opening.text)
+              );
+              replySent = true;
+            }
+
+            memory.flushBatch();
+            usageManager.flush();
+            return;
+          }
+        }
+
+        // Check for opponent response in active rivalry
+        if (
+          existingSession &&
+          existingSession.opponentId === userId
+        ) {
+          // This shouldn't happen (bot messages are filtered above),
+          // but handle it defensively
+          return;
+        }
       }
 
       /*
@@ -1920,6 +2326,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   forceExit.unref();
 
   try { stopUpdateManager(); } catch {}
+  try { stopSessionCleanup(); } catch {}
 
   try { internalSupervisor.stop(); } catch {}
 
@@ -2565,6 +2972,9 @@ async function startDiscord(): Promise<void> {
       startUpdateManager();
       logger.info("🔄 Update manager active.");
     }
+
+    startSessionCleanup();
+    logger.info("⚔️ Rivalry session cleanup active.");
 
     postStartValidation().catch((err) => {
       logger.warn("[UpdateManager] post-start validation error:", err instanceof Error ? err.message : String(err));

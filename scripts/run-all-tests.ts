@@ -50,6 +50,7 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Builder inspectServer", file: "scripts/test-builder-inspect-server.ts", category: "tool" },
   { name: "Production Upgrade", file: "scripts/test-production-upgrade.ts", category: "integration" },
   { name: "Update Rollback", file: "scripts/test-update-rollback.ts", category: "integration" },
+  { name: "Rivalry", file: "scripts/test-rivalry.ts", category: "integration" },
 
   // Web
   { name: "Web Security", file: "scripts/test-web-security.ts", category: "web" },
