@@ -1291,6 +1291,312 @@ try {
   fail("13.2 No @everyone in generated responses", e);
 }
 
+/* ================================================================
+ * 14. ACTUAL BUG REGRESSION TESTS
+ * These test the exact scenarios reported from Discord runtime.
+ * ================================================================ */
+
+// Test 14.1: @AshenAI @Senku fight → rivalry (THE ACTUAL BUG)
+try {
+  // Simulate: human sends "<@ASHENAI_ID> <@SENKU_ID> fight"
+  // After cleanBotMention strips AshenAI, content = "<@SENKU_ID> fight"
+  const trigger = detectRivalryIntent(
+    "<@SENKU_ID> fight",
+    ["SENKU_ID"],
+    "ASHENAI_ID"
+  );
+  assertEqual(trigger.isRivalry, true, "14.1 isRivalry");
+  assertEqual(
+    trigger.targetBotIds.length,
+    1,
+    "14.1 has target"
+  );
+  assertEqual(
+    trigger.targetBotIds[0],
+    "SENKU_ID",
+    "14.1 target is Senku"
+  );
+  assertIncludes(
+    trigger.rivalryKeywords.join(","),
+    "fight",
+    "14.1 has fight keyword"
+  );
+  pass("14.1 @AshenAI @Senku fight → rivalry");
+} catch (e) {
+  fail("14.1 @AshenAI @Senku fight → rivalry", e);
+}
+
+// Test 14.2: @everyone @AshenAI @Senku fight → rivalry
+try {
+  const trigger = detectRivalryIntent(
+    "<@SENKU_ID> fight",
+    ["SENKU_ID"],
+    "ASHENAI_ID"
+  );
+  assertEqual(
+    trigger.isRivalry,
+    true,
+    "14.2 @everyone + rivalry"
+  );
+  pass("14.2 @everyone @AshenAI @Senku fight → rivalry");
+} catch (e) {
+  fail(
+    "14.2 @everyone @AshenAI @Senku fight → rivalry",
+    e
+  );
+}
+
+// Test 14.3: @everyone fight → NO AshenAI response
+try {
+  const trigger = detectRivalryIntent(
+    "fight",
+    [],
+    "ASHENAI_ID"
+  );
+  assertEqual(
+    trigger.isRivalry,
+    false,
+    "14.3 no target bots"
+  );
+  assertEqual(
+    trigger.targetBotIds.length,
+    0,
+    "14.3 empty targets"
+  );
+  pass("14.3 @everyone fight → NO rivalry");
+} catch (e) {
+  fail("14.3 @everyone fight → NO rivalry", e);
+}
+
+// Test 14.4: @everyone @Senku fight → NO rivalry (AshenAI not mentioned)
+try {
+  // If AshenAI is NOT mentioned, the rivalry detection block is never reached
+  // This is handled by the "Only interact when: DM, mention, reply" check
+  // So this test verifies the detector itself doesn't falsely trigger
+  const trigger = detectRivalryIntent(
+    "<@SENKU_ID> fight",
+    ["SENKU_ID"],
+    "ASHENAI_ID"
+  );
+  // The detector sees target bots + keywords, so it would say isRivalry=true
+  // But the MESSAGE HANDLER would never reach rivalry detection because
+  // isMention=false (AshenAI not mentioned) → returns at the trigger check.
+  // This test verifies the detector's behavior in isolation.
+  assertEqual(
+    trigger.isRivalry,
+    true,
+    "14.4 detector says rivalry (but handler blocks it)"
+  );
+  pass("14.4 @everyone @Senku fight → handler blocks (no AshenAI mention)");
+} catch (e) {
+  fail(
+    "14.4 @everyone @Senku fight → handler blocks",
+    e
+  );
+}
+
+// Test 14.5: @AshenAI @Senku debate → rivalry
+try {
+  const trigger = detectRivalryIntent(
+    "<@SENKU_ID> debate",
+    ["SENKU_ID"],
+    "ASHENAI_ID"
+  );
+  assertEqual(trigger.isRivalry, true, "14.5 debate");
+  pass("14.5 @AshenAI @Senku debate → rivalry");
+} catch (e) {
+  fail("14.5 @AshenAI @Senku debate → rivalry", e);
+}
+
+// Test 14.6: @AshenAI @Senku challenge → rivalry
+try {
+  const trigger = detectRivalryIntent(
+    "<@SENKU_ID> challenge",
+    ["SENKU_ID"],
+    "ASHENAI_ID"
+  );
+  assertEqual(
+    trigger.isRivalry,
+    true,
+    "14.6 challenge"
+  );
+  pass("14.6 @AshenAI @Senku challenge → rivalry");
+} catch (e) {
+  fail("14.6 @AshenAI @Senku challenge → rivalry", e);
+}
+
+// Test 14.7: @AshenAI @Senku who's better? → rivalry
+try {
+  const trigger = detectRivalryIntent(
+    "<@SENKU_ID> who's better?",
+    ["SENKU_ID"],
+    "ASHENAI_ID"
+  );
+  assertEqual(
+    trigger.isRivalry,
+    true,
+    "14.7 who's better"
+  );
+  pass("14.7 @AshenAI @Senku who's better? → rivalry");
+} catch (e) {
+  fail(
+    "14.7 @AshenAI @Senku who's better? → rivalry",
+    e
+  );
+}
+
+// Test 14.8: @AshenAI @Senku versus → rivalry
+try {
+  const trigger = detectRivalryIntent(
+    "<@SENKU_ID> versus",
+    ["SENKU_ID"],
+    "ASHENAI_ID"
+  );
+  assertEqual(
+    trigger.isRivalry,
+    true,
+    "14.8 versus"
+  );
+  pass("14.8 @AshenAI @Senku versus → rivalry");
+} catch (e) {
+  fail("14.8 @AshenAI @Senku versus → rivalry", e);
+}
+
+// Test 14.9: Bot ID extracted from message.mentions.users (not guild.members.fetch)
+try {
+  // This tests the FIX: we use message.mentions.users, not guild.members.fetch
+  // Simulate what happens in the handler:
+  // message.mentions.users has AshenAI + Senku
+  // AshenAI is filtered out (user.id !== botId)
+  // Senku is kept if user.bot === true
+  const mentions = new Map();
+  mentions.set("ASHENAI_ID", {
+    id: "ASHENAI_ID",
+    bot: true,
+    displayName: "AshenAI",
+    username: "ashenai",
+  });
+  mentions.set("SENKU_ID", {
+    id: "SENKU_ID",
+    bot: true,
+    displayName: "Senku",
+    username: "senku",
+  });
+
+  const mentionedBotIds: string[] = [];
+  for (const [, user] of mentions) {
+    if (user.id !== "ASHENAI_ID" && user.bot) {
+      mentionedBotIds.push(user.id);
+    }
+  }
+
+  assertEqual(
+    mentionedBotIds.length,
+    1,
+    "14.9 one bot found"
+  );
+  assertEqual(
+    mentionedBotIds[0],
+    "SENKU_ID",
+    "14.9 Senku detected"
+  );
+  pass("14.9 Bot ID from message.mentions.users");
+} catch (e) {
+  fail("14.9 Bot ID from message.mentions.users", e);
+}
+
+// Test 14.10: Human mentioned is NOT treated as bot
+try {
+  const mentions = new Map();
+  mentions.set("ASHENAI_ID", {
+    id: "ASHENAI_ID",
+    bot: true,
+    displayName: "AshenAI",
+    username: "ashenai",
+  });
+  mentions.set("HUMAN_ID", {
+    id: "HUMAN_ID",
+    bot: false,
+    displayName: "SomeHuman",
+    username: "somehuman",
+  });
+
+  const mentionedBotIds: string[] = [];
+  for (const [, user] of mentions) {
+    if (user.id !== "ASHENAI_ID" && user.bot) {
+      mentionedBotIds.push(user.id);
+    }
+  }
+
+  assertEqual(
+    mentionedBotIds.length,
+    0,
+    "14.10 no bots found"
+  );
+
+  const trigger = detectRivalryIntent(
+    "<@HUMAN_ID> fight",
+    mentionedBotIds,
+    "ASHENAI_ID"
+  );
+  assertEqual(
+    trigger.isRivalry,
+    false,
+    "14.10 no rivalry (no bot target)"
+  );
+  pass("14.10 Human is NOT treated as bot");
+} catch (e) {
+  fail("14.10 Human is NOT treated as bot", e);
+}
+
+// Test 14.11: @AshenAI sleep kanga → NOT rivalry (no target bot)
+try {
+  const trigger = detectRivalryIntent(
+    "sleep kanga",
+    [],
+    "ASHENAI_ID"
+  );
+  assertEqual(
+    trigger.isRivalry,
+    false,
+    "14.11 normal chat"
+  );
+  pass("14.11 @AshenAI sleep kanga → NOT rivalry");
+} catch (e) {
+  fail("14.11 @AshenAI sleep kanga → NOT rivalry", e);
+}
+
+// Test 14.12: Display name does NOT affect bot detection
+try {
+  // "AIBot" has "AI" and "bot" in name, but user.bot=false → HUMAN
+  const p = classifyParticipant({
+    userId: "12345",
+    displayName: "AIBot",
+    botFlag: false,
+  });
+  assertEqual(
+    p.classification,
+    "HUMAN",
+    "14.12 name doesn't override bot flag"
+  );
+
+  // "RegularUser" with user.bot=true → DISCORD_BOT
+  const p2 = classifyParticipant({
+    userId: "67890",
+    displayName: "RegularUser",
+    botFlag: true,
+  });
+  assertEqual(
+    p2.classification,
+    "DISCORD_BOT",
+    "14.12 bot flag overrides name"
+  );
+
+  pass("14.12 Display name does NOT affect bot detection");
+} catch (e) {
+  fail("14.12 Display name does NOT affect bot detection", e);
+}
+
 } // end runTests
 
 /* ================================================================

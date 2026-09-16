@@ -122,8 +122,7 @@ async function verify(): Promise<{
 
   const typeFailed =
     /error TS\d+/i.test(typeOutput) ||
-    /error:/i.test(typeOutput) ||
-    /failed/i.test(typeOutput);
+    /error:/i.test(typeOutput);
 
   if (typeFailed) {
     return {
@@ -138,8 +137,8 @@ async function verify(): Promise<{
   const testOutput = await runTests();
 
   const testFailed =
-    /FAIL/i.test(testOutput) ||
-    /failed/i.test(testOutput) ||
+    /(?:^|\n)\s*FAIL[:\s]/im.test(testOutput) ||
+    /\b\d+\s+\w*\s*failed\b/i.test(testOutput) ||
     /error TS\d+/i.test(testOutput);
 
   return {

@@ -26,6 +26,7 @@ import { DEFAULT_RIVALRY_CONFIG } from "./types";
 
 const activeSessions = new Map<string, RivalrySession>();
 const SESSION_CLEANUP_INTERVAL_MS = 60_000;
+const MAX_SESSIONS_PER_USER = 2;
 
 /**
  * Create a new rivalry session.
@@ -39,6 +40,35 @@ export function createSession(params: {
   opponent: Participant;
   config?: Partial<RivalryConfig>;
 }): RivalrySession {
+  // Per-user session limit: prevent a user from creating too many concurrent sessions
+  const userSessionCount = [...activeSessions.values()].filter(
+    (s) => s.initiatorUserId === params.initiatorUserId && s.status === "active"
+  ).length;
+  if (userSessionCount >= MAX_SESSIONS_PER_USER) {
+    logger.warn(
+      `⚔️ Rivalry session limit reached for user ${params.initiatorUserId} (${userSessionCount}/${MAX_SESSIONS_PER_USER})`
+    );
+    // Return a dummy session that signals rejection — caller checks .status
+    return {
+      id: "rejected",
+      guildId: params.guildId,
+      channelId: params.channelId,
+      initiatorUserId: params.initiatorUserId,
+      ashenAIId: params.ashenAIId,
+      opponentId: params.opponent.discordUserId,
+      opponentDisplayName: params.opponent.displayName,
+      opponentClassification: params.opponent.classification,
+      turn: 0,
+      maxTurns: 0,
+      startedAt: Date.now(),
+      expiresAt: Date.now(),
+      status: "ended_error",
+      turns: [],
+      usedChallenges: [],
+      lastOpponentResponse: Date.now(),
+    };
+  }
+
   const cfg = {
     ...DEFAULT_RIVALRY_CONFIG,
     ...params.config,

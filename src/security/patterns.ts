@@ -180,16 +180,18 @@ export const INPUT_BLOCK_PATTERNS: RegExp[] = [
 
 export const OUTPUT_SECRET_PATTERNS: RegExp[] = [
   // Common API key/token shapes (from gateway.ts)
-  /\bsk-[A-Za-z0-9_-]{16,}\b/g,
-  /\bAIza[A-Za-z0-9_-]{20,}\b/g,
-  /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g,
-  /\bAKIA[0-9A-Z]{16}\b/g,
+  // NOTE: No 'g' flag — RegExp.test() with 'g' is stateful (retains lastIndex).
+  // Stateless patterns ensure each call tests independently.
+  /\bsk-[A-Za-z0-9_-]{16,}\b/i,
+  /\bAIza[A-Za-z0-9_-]{20,}\b/i,
+  /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/i,
+  /\bAKIA[0-9A-Z]{16}\b/,
 
   // Generic credential assignments (from gateway.ts)
-  /\b[A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)\s*=\s*[^\s"'`]{8,}\b/gi,
+  /\b[A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)\s*=\s*[^\s"'`]{8,}\b/i,
 
   // Discord-like bot token shape (from gateway.ts)
-  /\b[\w-]{20,}\.[\w-]{5,}\.[\w-]{20,}\b/g,
+  /\b[\w-]{20,}\.[\w-]{5,}\.[\w-]{20,}\b/,
 
   // API-key style assignments with colon/equals (from output-guard.ts)
   /\b(api[_-]?key|access[_-]?token|auth[_-]?token|secret[_-]?key)\s*[:=]\s*[^\s"'`]+/i,
@@ -217,19 +219,22 @@ export const OUTPUT_SECRET_PATTERNS: RegExp[] = [
  * ================================================================ */
 
 export const OUTPUT_INTERNAL_PATTERNS: RegExp[] = [
-  // Explicit requests/attempts to expose hidden instructions.
-  /\b(system prompt|developer prompt|hidden prompt|internal prompt)\b/i,
-
-  // Attempts to obtain private configuration.
-  /\b(show|give|print|dump|reveal|display|output)\b.{0,80}\b(\.env|environment variables|api keys|tokens|credentials)\b/i,
-
-  // Source/config disclosure requests.
-  /\b(show|give|dump|print|reveal)\b.{0,80}\b(source code|private configuration|internal configuration)\b/i,
-
   // Security wrapper labels that should never appear in user-facing output.
+  // These are the [UNTRUSTED ...] labels from wrapUntrustedContent().
   /\[UNTRUSTED [A-Z ]+\]/i,
   /\[END UNTRUSTED [A-Z ]+\]/i,
   /untrusted content truncated/i,
+
+  // Attempts to obtain private configuration via extraction verbs.
+  /\b(show|give|print|dump|reveal|display|output)\b.{0,80}\b(\.env|environment variables|api keys?|tokens?|credentials?)\b/i,
+
+  // Source/config disclosure requests.
+  /\b(show|give|dump|print|reveal)\b.{0,80}\b(source code|private configuration|internal configuration|system prompt|developer prompt|hidden prompt)\b/i,
+
+  // AI appearing to reveal its own internal configuration.
+  // Only matches clear disclosure patterns, NOT educational text.
+  /\b(here is|here are)\b.{0,30}\b(system prompt|developer prompt|hidden prompt|internal prompt)\b/i,
+  /\bmy\b.{0,30}\b(system prompt|developer prompt|hidden prompt|internal prompt)\b.{0,20}\b(is|are|follows|below|as follows)\b/i,
 ];
 
 /* ================================================================

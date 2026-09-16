@@ -131,7 +131,6 @@ import {
   reclassifyFromResponse,
   detectRivalryIntent,
   isAshenAIMentioned,
-  extractMentionedIds,
   isRefusal,
   isEndRivalryIntent,
   createSession,
@@ -1461,22 +1460,24 @@ client.on(
        * in an active rivalry session in this channel.
        */
       if (message.author.bot) {
-        // Check for active rivalry with this bot as opponent
-        const rivalrySession = getActiveSession(
-          guildId,
-          channelId
-        );
-
-        if (
-          rivalrySession &&
-          rivalrySession.opponentId === userId
-        ) {
-          // Handle opponent response through rivalry system
-          await handleRivalryOpponentResponse(
-            message,
-            rivalrySession,
-            client
+        // Need botId for rivalry session lookup
+        const selfBotId = client.user?.id;
+        if (selfBotId) {
+          const rivalrySession = getActiveSession(
+            guildId,
+            channelId
           );
+
+          if (
+            rivalrySession &&
+            rivalrySession.opponentId === userId
+          ) {
+            await handleRivalryOpponentResponse(
+              message,
+              rivalrySession,
+              client
+            );
+          }
         }
 
         return;
@@ -1626,24 +1627,20 @@ client.on(
 
         // Check for rivalry trigger: human mentions AshenAI + other bot(s) + rivalry keywords
         if (isMention) {
-          const mentionedIds = extractMentionedIds(
-            message.content,
-            botId
-          );
-
-          // Get only bot mentions (non-human)
+          // Use message.mentions.users — always populated from Discord gateway.
+          // Do NOT use guild.members.fetch() which requires GuildMembers intent and silently fails.
           const mentionedBotIds: string[] = [];
-          for (const id of mentionedIds) {
-            try {
-              const member =
-                await message.guild.members.fetch(id);
-              if (member?.user.bot) {
-                mentionedBotIds.push(id);
-              }
-            } catch {
-              // If we can't fetch the member, skip
+          for (const [, user] of message.mentions.users) {
+            if (user.id !== botId && user.bot) {
+              mentionedBotIds.push(user.id);
             }
           }
+
+          logger.debug(
+            `[RIVALRY] ashenAIId=${botId} isMention=${isMention} ` +
+            `cleanedContent="${content}" mentionedBotIds=[${mentionedBotIds}] ` +
+            `mentionedUserCount=${message.mentions.users.size}`
+          );
 
           const trigger = detectRivalryIntent(
             content,
@@ -1655,21 +1652,23 @@ client.on(
             trigger.isRivalry &&
             mentionedBotIds.length > 0
           ) {
-            // Create rivalry session
-            const opponentUser =
-              await message.guild.members.fetch(
-                mentionedBotIds[0]
-              );
+            // Get opponent info from message.mentions.users (always available)
+            const opponentDiscordUser = message.mentions.users.get(mentionedBotIds[0]);
 
             const opponent = classifyParticipant({
               userId: mentionedBotIds[0],
               displayName:
-                opponentUser?.displayName ??
-                opponentUser?.user.username ??
+                opponentDiscordUser?.displayName ??
+                opponentDiscordUser?.username ??
                 "Unknown Bot",
               botFlag: true,
               contextMessage: content,
             });
+
+            logger.info(
+              `[RIVALRY] Session creating: opponent=${opponent.displayName} (${mentionedBotIds[0]}) ` +
+              `classification=${opponent.classification} keywords=[${trigger.rivalryKeywords}]`
+            );
 
             const session = createSession({
               guildId,
@@ -1678,6 +1677,11 @@ client.on(
               ashenAIId: botId,
               opponent,
             });
+
+            logger.info(
+              `[RIVALRY] Session created: id=${session.id} opponent=${session.opponentDisplayName} ` +
+              `guild=${guildId} channel=${channelId} initiator=${userId}`
+            );
 
             // Generate opening challenge
             const opening =
@@ -2004,12 +2008,14 @@ client.on(
           content: ASHENAI_SYSTEM_PROMPT + "\n\n" + personalityBlock,
         },
 
+        // Security: conversation history is NOT wrapped with untrusted labels.
+        // The system prompt already contains security instructions that prevent
+        // the AI from leaking secrets. Wrapping history with [UNTRUSTED] labels
+        // caused the AI to echo them, triggering the output guard and blocking
+        // innocent responses like "hello" and "how are you?".
         ...history.map((entry) => ({
           ...entry,
-          content: wrapUntrustedContent(
-            "CONVERSATION HISTORY",
-            entry.content
-          ),
+          content: entry.content,
         })),
 
         {
@@ -2052,7 +2058,7 @@ client.on(
       }
 
       /*
-       * Store conversation.
+       * Store conversation — user message first.
        */
       memory.addBatch(
         userId,
@@ -2062,16 +2068,6 @@ client.on(
         },
         channelId
       );
-
-      memory.addBatch(
-        userId,
-        {
-          role: "assistant",
-          content: response.text,
-        },
-        channelId
-      );
-      t.mark("memory_save");
 
       /*
        * Record usage after successful AI response.
@@ -2098,6 +2094,21 @@ client.on(
           `🛡️ Interactive output blocked: ${guarded.reason ?? "security_policy"}`
         );
       }
+
+      /*
+       * Store the GUARDED assistant response in memory.
+       * This prevents blocked outputs from contaminating future
+       * conversation history and causing repeated false positives.
+       */
+      memory.addBatch(
+        userId,
+        {
+          role: "assistant",
+          content: guarded.text,
+        },
+        channelId
+      );
+      t.mark("memory_save");
 
       /*
        * Strip internal security wrapper labels and

@@ -31,10 +31,9 @@ const RIVALRY_KEYWORDS = [
   /\bwhich\s+ai\s+is\s+better\b/i,
   /\bwho\s+wins\b/i,
   /\brun\s+this\s+command\b/i,
-  /\bdelete\s+this\b/i,
-  /\bgive\s+me\s+your\s+token\b/i,
-  /\bdisable\s+security\b/i,
-  /\bchange\s+permissions\b/i,
+  // SECURITY NOTE: "disable security", "give me your token", "change permissions",
+  // "delete this" are NOT rivalry triggers — they are security violations
+  // handled by the security inspection layer (gateway.ts / input block patterns).
 ];
 
 /**
