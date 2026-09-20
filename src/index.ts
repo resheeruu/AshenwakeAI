@@ -45,6 +45,7 @@ import {
   classifyIntent,
 } from "./discord/conversational-agent";
 import { closeDatabase, getDatabaseStats } from "./database";
+import { isAnimeActionPrefix, handleAnimeAction } from "./games/anime-actions";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
@@ -1505,6 +1506,19 @@ client.on(
           isReplyToBot =
             referencedMessage.author.id === botId;
         }
+
+      /*
+       * ANIME ACTION PREFIX: "ash <action> @user"
+       * Intercept before the normal trigger check.
+       */
+      if (isAnimeActionPrefix(message.content)) {
+        try {
+          await handleAnimeAction(message, client);
+        } catch (error) {
+          logger.warn("Anime action error:", error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
 
       /*
        * Only interact when:

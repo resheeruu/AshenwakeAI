@@ -72,6 +72,9 @@ const MANDATORY_SUITES: TestSuite[] = [
   // AI Social & Personality
   { name: "AI Social", file: "scripts/test-ai-social.ts", category: "core" },
   { name: "Personality", file: "scripts/test-personality.ts", category: "core" },
+
+  // Anime Actions
+  { name: "Anime Actions", file: "scripts/test-anime-actions.ts", category: "core" },
 ];
 
 const OPTIONAL_SUITES: TestSuite[] = [

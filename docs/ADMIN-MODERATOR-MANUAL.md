@@ -16,7 +16,7 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 | Role | Who | What They Can Do |
 |------|-----|-----------------|
 | **Owner** | The bot owner (set via env vars) | Full control. Bypasses all rate limits and risk checks. Web dashboard access. |
-| **Admin** | Discord members with Administrator permission or listed in `ADMIN_DISCORD_USER_IDS` | Channel management, moderation, governance, protection tools |
+| **Admin** | Discord members with Administrator permission or listed in `ADMIN_DISCORD_IDS` | Channel management, moderation, governance, protection tools |
 | **Moderator** | Discord members with ModerateMembers permission | Warn, timeout, untimeout, view warnings, purge messages. Read-only governance tools. |
 | **Member** | Any Discord server member | Ask AI questions, play games |
 | **Guest** | Discord members without any role | Limited AI chat only |
@@ -24,37 +24,42 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 ## 3. Slash Commands
 
 ### AI Commands
-- `/ask <prompt>` - Ask AshenAI anything. Rate-limited per user.
+- `/ask <question>` - Ask AshenAI anything. Rate-limited per user.
 - `/reset` - Clear your conversation history with AshenAI.
+- `/prompt <text>` - Set your custom AI personality prompt for this server (Admin+).
+
+### Server Management Commands
+- `/server info` - View server information and stats.
+- `/server user <user>` - View info about a server member.
+- `/server roles <user>` - List a member's roles.
+- `/build <prompt>` - Open a private Builder session to design, inspect, and manage your server.
 
 ### Moderation Commands (Moderator+)
-- `/warn <user> <reason>` - Issue a formal warning to a member.
-- `/warnings <user>` - View warnings for a member.
-- `/timeout <user> <minutes> [reason]` - Timeout a member (1-40320 minutes).
-- `/untimeout <user> [reason]` - Remove timeout from a member.
+- `/moderation warn <user> <reason>` - Issue a formal warning to a member.
+- `/moderation warnings <user>` - View warnings for a member.
+- `/moderation timeout <user> <minutes> <reason>` - Timeout a member (1-40320 minutes).
+- `/moderation untimeout <user> <reason>` - Remove timeout from a member.
 
-### Server Commands (Any member)
-- `/server` - View server information.
-- `/userinfo <user>` - View user information.
-- `/roles` - List server roles.
-- `/diagnose` - Run system diagnostics.
+### Support Commands
+- `/support ticket` - Create a support ticket.
+- `/support report` - Report a user for rule violations.
+- `/support appeal` - Appeal a ban or moderation action.
+- `/support case view/list/assign/status/stats` - Manage support cases.
 
-### Utility Commands
-- `/status` - Show system status and AI provider health (Admin/Moderator only; limited info for other roles)
+### Access Control Commands (Admin+)
+- `/access add <user>` - Add a trusted user.
+- `/access remove <user>` - Remove a trusted user.
+- `/access list` - List all trusted users.
+- `/access send <message>` - Send a message as AshenAI (trusted only).
+
+### System Commands
+- `/status` - Show system status and AI usage.
+- `/settings` - Interactive server settings panel (Admin+).
+- `/settings update <category> <setting> <value>` - Update a specific setting (Admin+).
 - `/help` - Show all available commands.
-- `/config status` - Show runtime configuration (Owner only).
-- `/config reload` - Reload configuration (Owner only).
-- `/config ratelimit` - Show rate limit status (Owner only).
-- `/config resetuser <user_id>` - Reset rate limits for a user (Owner only).
-- `/task <goal>` - Create and run a safe autonomous task.
 
 ### Games (Any member)
-- `/game dice`, `/game coinflip`, `/game rps`, `/game duel` - Play games.
-- `/game slots`, `/game jackpot`, `/game crystal`, `/game chest` - Casino games.
-- `/casino` - Casino game menu.
-- `/hunt` - Hunt for items and creatures.
-- `/adventure` - Go on an adventure.
-- `/profile` - View your game profile.
+- `/game` - Play AshenAI games (includes dice, coinflip, rps, duel, slots, casino, and more).
 
 ## 4. Confirmation-Required Actions
 
@@ -275,7 +280,7 @@ Run these to verify AshenAI is healthy:
 
 ### Optional Environment Variables
 - `DISCORD_GUILD_ID` - Test guild for development
-- `ADMIN_DISCORD_USER_IDS` - Comma-separated admin user IDs
+- `ADMIN_DISCORD_IDS` - Comma-separated admin user IDs
 - `SESSION_SECRET` - Web session secret (required in production; must be >= 16 characters)
 - `ASHENAI_CORS_ORIGINS` - Allowed CORS origins
 - Various `*_API_KEY` variables for AI providers
