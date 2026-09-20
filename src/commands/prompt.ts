@@ -196,17 +196,36 @@ async function isUserTrustedOrAdmin(
  * SERVER STATE INSPECTION
  * ================================================================ */
 
-async function inspectServer(guild: any) {
-  const [channels, roles] = await Promise.all([
-    guild.channels.fetch(),
-    guild.roles.fetch(),
+function toValueCollection(source: any): any[] {
+  if (!source) return [];
+  if (Array.isArray(source)) return source;
+  if (typeof source.values === "function") return [...source.values()];
+  if (typeof source === "object") return Object.values(source);
+  return [];
+}
+
+async function inspectServer(guild: any, correlationId?: string) {
+  const logPrefix = correlationId ? `[BUILDER][${correlationId}]` : "[BUILDER]";
+
+  const [channelsRaw, rolesRaw] = await Promise.all([
+    guild.channels.fetch().catch((error: unknown) => {
+      logger.warn(`${logPrefix} channels.fetch() failed: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }),
+    guild.roles.fetch().catch((error: unknown) => {
+      logger.warn(`${logPrefix} roles.fetch() failed: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }),
   ]);
 
-  const categories = channels.filter((ch: any) => ch.type === ChannelType.GuildCategory);
-  const textChannels = channels.filter((ch: any) => ch.type === ChannelType.GuildText);
-  const voiceChannels = channels.filter((ch: any) => ch.type === ChannelType.GuildVoice);
+  const channels = toValueCollection(channelsRaw);
+  const roles = toValueCollection(rolesRaw);
 
-  const allChannels = [...textChannels.values(), ...voiceChannels.values()];
+  const categories = channels.filter((ch: any) => ch?.type === ChannelType.GuildCategory);
+  const textChannels = channels.filter((ch: any) => ch?.type === ChannelType.GuildText);
+  const voiceChannels = channels.filter((ch: any) => ch?.type === ChannelType.GuildVoice);
+
+  const allChannels = [...textChannels, ...voiceChannels];
 
   // Get protected resources from config
   const aiConfig = loadGuildAIConfig(guild.id);
@@ -219,8 +238,8 @@ async function inspectServer(guild: any) {
       type: c.type === ChannelType.GuildVoice ? "voice" : "text",
       categoryId: c.parentId || undefined,
     })),
-    roles: [...roles.values()]
-      .filter((r: any) => r.name !== "@everyone")
+    roles: roles
+      .filter((r: any) => r?.name !== "@everyone")
       .map((r: any) => ({ id: r.id, name: r.name })),
     protectedChannels: aiConfig.protectedChannels || [],
     protectedCategories: aiConfig.protectedCategories || [],
@@ -1113,7 +1132,7 @@ export async function processBuilderMessage(
 
     case "inspect": {
       try {
-        const serverState = await inspectServer(thread.guild);
+        const serverState = await inspectServer(thread.guild, correlationId);
         session.serverState = serverState;
         session.lastStateFetchedAt = Date.now();
 
@@ -1142,7 +1161,7 @@ export async function processBuilderMessage(
 
     case "improve": {
       try {
-        const serverState = await inspectServer(thread.guild);
+        const serverState = await inspectServer(thread.guild, correlationId);
         session.serverState = serverState;
         session.lastStateFetchedAt = Date.now();
 
@@ -1221,7 +1240,7 @@ export async function processBuilderMessage(
         }
 
         logBuilder(correlationId, "INSPECT", "fetching server state");
-        const serverState = await inspectServer(thread.guild);
+        const serverState = await inspectServer(thread.guild, correlationId);
         session.serverState = serverState;
         session.lastStateFetchedAt = Date.now();
 
@@ -1293,7 +1312,7 @@ export async function processBuilderMessage(
           return;
         }
 
-        const serverState = session.serverState || await inspectServer(thread.guild);
+        const serverState = session.serverState || await inspectServer(thread.guild, correlationId);
         session.serverState = serverState;
 
         const keepChannels = serverState.channels.filter((ch: any) =>
@@ -1448,7 +1467,7 @@ export async function processBuilderMessage(
     case "delete_channel": {
       try {
         const name = parsed.args.name as string;
-        const serverState = session.serverState || await inspectServer(thread.guild);
+        const serverState = session.serverState || await inspectServer(thread.guild, correlationId);
 
         const match = serverState.channels.find((ch: any) => ch.name.toLowerCase() === name);
         if (!match) {
@@ -1483,7 +1502,7 @@ export async function processBuilderMessage(
       try {
         const oldName = parsed.args.oldName as string;
         const newName = parsed.args.newName as string;
-        const serverState = session.serverState || await inspectServer(thread.guild);
+        const serverState = session.serverState || await inspectServer(thread.guild, correlationId);
 
         const match = serverState.channels.find((ch: any) => ch.name.toLowerCase() === oldName);
         if (!match) {

@@ -330,6 +330,148 @@ async function runTests() {
   }
 
   /* ================================================================
+   * TEST 9: inspectServer — channel fetch failure returns empty
+   *
+   * When guild.channels.fetch() rejects, inspectServer should
+   * return a valid result with empty channels/categories instead
+   * of throwing "Cannot read properties of undefined (reading 'values')".
+   * ================================================================ */
+
+  try {
+    const guild = makeMockGuild();
+    guild.channels.fetch = () => Promise.reject(new Error("Discord API error"));
+
+    const result = await inspectServer(guild);
+
+    if (!result || typeof result !== "object") {
+      throw new Error("inspectServer should return an object even on channel fetch failure");
+    }
+
+    assertEqual(result.channels.length, 0, "channels empty after fetch failure");
+    assertEqual(result.categories.length, 0, "categories empty after fetch failure");
+
+    // Roles should still work
+    if (!Array.isArray(result.roles)) {
+      throw new Error("roles should still be an array after channel fetch failure");
+    }
+    assertEqual(result.roles.length, 2, "roles still present after channel fetch failure");
+
+    pass("inspectServer: channel fetch failure returns empty channels, roles intact");
+  } catch (e) {
+    fail("inspectServer: channel fetch failure returns empty channels, roles intact", e);
+  }
+
+  /* ================================================================
+   * TEST 10: inspectServer — role fetch failure returns empty
+   *
+   * When guild.roles.fetch() rejects, inspectServer should
+   * return a valid result with empty roles instead of throwing.
+   * ================================================================ */
+
+  try {
+    const guild = makeMockGuild();
+    guild.roles.fetch = () => Promise.reject(new Error("Discord API rate limit"));
+
+    const result = await inspectServer(guild);
+
+    if (!result || typeof result !== "object") {
+      throw new Error("inspectServer should return an object even on role fetch failure");
+    }
+
+    assertEqual(result.roles.length, 0, "roles empty after fetch failure");
+
+    // Channels should still work
+    if (!Array.isArray(result.channels)) {
+      throw new Error("channels should still be an array after role fetch failure");
+    }
+    assertEqual(result.channels.length, 2, "channels still present after role fetch failure");
+
+    pass("inspectServer: role fetch failure returns empty roles, channels intact");
+  } catch (e) {
+    fail("inspectServer: role fetch failure returns empty roles, channels intact", e);
+  }
+
+  /* ================================================================
+   * TEST 11: inspectServer — both fetches failing returns empty
+   *
+   * When both guild.channels.fetch() and guild.roles.fetch() reject,
+   * inspectServer should return a valid empty result instead of throwing.
+   * ================================================================ */
+
+  try {
+    const guild = makeMockGuild();
+    guild.channels.fetch = () => Promise.reject(new Error("Network error"));
+    guild.roles.fetch = () => Promise.reject(new Error("Network error"));
+
+    const result = await inspectServer(guild);
+
+    if (!result || typeof result !== "object") {
+      throw new Error("inspectServer should return an object even when both fetches fail");
+    }
+
+    assertEqual(result.channels.length, 0, "channels empty after both failures");
+    assertEqual(result.categories.length, 0, "categories empty after both failures");
+    assertEqual(result.roles.length, 0, "roles empty after both failures");
+
+    // Protected resources should still be present
+    if (!Array.isArray(result.protectedChannels)) {
+      throw new Error("protectedChannels should still be an array");
+    }
+    if (!Array.isArray(result.protectedCategories)) {
+      throw new Error("protectedCategories should still be an array");
+    }
+
+    pass("inspectServer: both fetches failing returns valid empty result");
+  } catch (e) {
+    fail("inspectServer: both fetches failing returns valid empty result", e);
+  }
+
+  /* ================================================================
+   * TEST 12: inspectServer — returns undefined/null fetch as empty
+   *
+   * When guild.channels.fetch() resolves to undefined (edge case),
+   * inspectServer should treat it as an empty collection.
+   * ================================================================ */
+
+  try {
+    const guild = makeMockGuild();
+    guild.channels.fetch = () => Promise.resolve(undefined as any);
+
+    const result = await inspectServer(guild);
+
+    if (!result || typeof result !== "object") {
+      throw new Error("inspectServer should return an object even with undefined fetch result");
+    }
+
+    assertEqual(result.channels.length, 0, "channels empty with undefined fetch");
+    assertEqual(result.categories.length, 0, "categories empty with undefined fetch");
+
+    pass("inspectServer: undefined fetch result treated as empty");
+  } catch (e) {
+    fail("inspectServer: undefined fetch result treated as empty", e);
+  }
+
+  /* ================================================================
+   * TEST 13: inspectServer — correlationId parameter accepted
+   *
+   * Verify that the optional correlationId parameter is accepted
+   * without error (used for logging fetch failures).
+   * ================================================================ */
+
+  try {
+    const guild = makeMockGuild();
+    const result = await inspectServer(guild, "ASH-TEST-123");
+
+    if (!result || typeof result !== "object") {
+      throw new Error("inspectServer should return an object with correlationId");
+    }
+
+    pass("inspectServer: accepts correlationId parameter");
+  } catch (e) {
+    fail("inspectServer: accepts correlationId parameter", e);
+  }
+
+  /* ================================================================
    * SUMMARY
    * ================================================================ */
 
