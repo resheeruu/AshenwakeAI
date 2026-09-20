@@ -61,6 +61,44 @@ export interface GuildConfig {
     rateLimitPerMinute: number;
     burstLimit: number;
   };
+  support?: {
+    enabled: boolean;
+    channelId?: string;
+    categoryId?: string;
+    allowGeneralHelp: boolean;
+    allowReports: boolean;
+    allowAppeals: boolean;
+  };
+  reports?: {
+    enabled: boolean;
+    categoryId?: string;
+    requireEvidence: boolean;
+    aiAnalysisEnabled: boolean;
+    autoEscalateHighRisk: boolean;
+  };
+  appeals?: {
+    enabled: boolean;
+    categoryId?: string;
+    aiAnalysisEnabled: boolean;
+  };
+  supportAi?: {
+    enabled: boolean;
+    allowModerationActions: boolean;
+    requireConfirmation: boolean;
+    allowWebResearch: boolean;
+  };
+  supportLogging?: {
+    enabled: boolean;
+    channelId?: string;
+    includeModeration: boolean;
+    includeTickets: boolean;
+    includeReports: boolean;
+    includeAppeals: boolean;
+    includeAiActions: boolean;
+  };
+  staff?: {
+    roleIds: string[];
+  };
   createdAt: number;
   updatedAt: number;
 }

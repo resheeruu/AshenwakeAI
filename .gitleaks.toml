@@ -1,0 +1,39 @@
+# ============================================================
+# Gitleaks allowlist for AshenAI
+# Used by .github/workflows/ci.yml gitleaks-action step
+# ============================================================
+
+title = "AshenAI gitleaks config"
+
+[allowlist]
+  description = "Allow known test fixture patterns used to verify the security/redaction system"
+
+  paths = [
+    # Test scripts that intentionally contain fake secrets to verify redaction
+    '''scripts/test-.*\.ts$''',
+    '''scripts/test_.*\.ts$''',
+    '''scripts/.*adversarial.*\.ts$''',
+    '''scripts/.*hardening.*\.ts$''',
+    # Test fixtures and examples
+    '''\.env\.example$''',
+    '''\.example$''',
+    # Documentation
+    '''docs/.*\.md$''',
+    '''README\.md$''',
+  ]
+
+  regexTarget = "match"
+  regexes = [
+    # Known fake/test patterns used in test fixtures
+    '''mysecret123456''',
+    '''sk-abc123def456ghi789''',
+    '''xoxb-1234567890-1234567890-abcdef''',
+    '''test[_-]?token''',
+    '''fake[_-]?key''',
+    '''example[_-]?secret''',
+    '''placeholder''',
+    '''YOUR_.*_HERE''',
+    '''<.*_TOKEN>''',
+    '''<.*_KEY>''',
+    '''<.*_SECRET>''',
+  ]

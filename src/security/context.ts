@@ -37,15 +37,6 @@ export function wrapUntrustedContent(
   ].join("\n");
 }
 
-export function sanitizeConversationContent(
-  content: string
-): string {
-  return wrapUntrustedContent(
-    "CONVERSATION CONTENT",
-    content
-  );
-}
-
 /**
  * Strip internal security wrapper labels from AI output before
  * delivering to users. These labels are only for the AI's context

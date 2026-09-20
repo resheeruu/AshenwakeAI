@@ -316,6 +316,104 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
         CREATE INDEX IF NOT EXISTS idx_ai_usage_source ON ai_usage(source);
       `,
     },
+    {
+      version: 13,
+      description: "Support cases with lifecycle, AI analysis, and evidence",
+      sql: `
+        CREATE TABLE IF NOT EXISTS support_cases (
+          id TEXT PRIMARY KEY,
+          guild_id TEXT NOT NULL,
+          channel_id TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('support', 'report', 'appeal')),
+          status TEXT NOT NULL CHECK(status IN ('open', 'investigating', 'waiting_user', 'waiting_staff', 'escalated', 'resolved', 'closed')),
+          creator_id TEXT NOT NULL,
+          subject_user_id TEXT,
+          assigned_staff_id TEXT,
+          summary TEXT,
+          ai_analysis_json TEXT,
+          metadata_json TEXT,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          closed_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_support_cases_guild ON support_cases(guild_id);
+        CREATE INDEX IF NOT EXISTS idx_support_cases_status ON support_cases(status);
+        CREATE INDEX IF NOT EXISTS idx_support_cases_type ON support_cases(type);
+        CREATE INDEX IF NOT EXISTS idx_support_cases_creator ON support_cases(creator_id);
+        CREATE INDEX IF NOT EXISTS idx_support_cases_assigned ON support_cases(assigned_staff_id);
+        CREATE INDEX IF NOT EXISTS idx_support_cases_channel ON support_cases(channel_id);
+        CREATE INDEX IF NOT EXISTS idx_support_cases_updated ON support_cases(updated_at);
+
+        CREATE TABLE IF NOT EXISTS support_case_messages (
+          id TEXT PRIMARY KEY,
+          case_id TEXT NOT NULL,
+          author_id TEXT NOT NULL,
+          content TEXT NOT NULL,
+          is_ai INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          FOREIGN KEY (case_id) REFERENCES support_cases(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_support_case_messages_case ON support_case_messages(case_id);
+
+        CREATE TABLE IF NOT EXISTS support_case_evidence (
+          id TEXT PRIMARY KEY,
+          case_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          author_id TEXT NOT NULL,
+          author_name TEXT,
+          content TEXT,
+          channel_id TEXT,
+          channel_name TEXT,
+          message_url TEXT,
+          attachment_urls_json TEXT,
+          collected_by TEXT NOT NULL,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          FOREIGN KEY (case_id) REFERENCES support_cases(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_support_case_evidence_case ON support_case_evidence(case_id);
+      `,
+    },
+    {
+      version: 14,
+      description: "Support case conversation state for AI orchestrator",
+      sql: `
+        CREATE TABLE IF NOT EXISTS support_case_conversations (
+          case_id TEXT PRIMARY KEY,
+          state_json TEXT NOT NULL,
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          FOREIGN KEY (case_id) REFERENCES support_cases(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_support_case_conversations_updated ON support_case_conversations(updated_at);
+      `,
+    },
+    {
+      version: 15,
+      description: "Support idempotency, concurrency control, and message dedup",
+      sql: `
+        -- Version column for optimistic concurrency on support_cases
+        ALTER TABLE support_cases ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+
+        -- Idempotency key for case creation dedup (e.g. Discord interaction ID)
+        ALTER TABLE support_cases ADD COLUMN idempotency_key TEXT;
+
+        -- Unique index on idempotency_key (partial: only non-null keys)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_support_cases_idempotency
+          ON support_cases(idempotency_key)
+          WHERE idempotency_key IS NOT NULL;
+
+        -- Discord message ID for message-level idempotency
+        ALTER TABLE support_case_messages ADD COLUMN discord_message_id TEXT;
+
+        -- Unique index on discord_message_id (partial: only non-null)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_support_case_messages_discord
+          ON support_case_messages(discord_message_id)
+          WHERE discord_message_id IS NOT NULL;
+
+        -- Unique evidence per case+message to prevent duplicate evidence items
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_support_case_evidence_unique
+          ON support_case_evidence(case_id, message_id);
+      `,
+    },
   ];
 }
 

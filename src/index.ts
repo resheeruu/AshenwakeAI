@@ -32,7 +32,7 @@ import { loadGuildConfig, guildConfigExists } from "./core/guild-config";
 import { loadGuildAIConfig } from "./ai/tools/channel-scope";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
 import { guardAIOutput } from "./security/output-guard";
-import { wrapUntrustedContent, stripSecurityLabels } from "./security/context";
+import { stripSecurityLabels } from "./security/context";
 import { buildAdaptivePersonality } from "./ai/adaptive-personality";
 import { parseServerIntent } from "./discord/server-assistant";
 import {
@@ -111,10 +111,47 @@ import {
 import { createTrustedCommand } from "./commands/trusted";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
 import { createSendCommand } from "./commands/send";
+import { createSettingsCommand, createSettingsUpdateCommand } from "./commands/settings";
+import { createTicketCommand, createReportCommand, createAppealCommand, createCaseCommand } from "./commands/support";
+import {
+  startSupportAutomation,
+  stopSupportAutomation,
+  startConversationCleanup,
+  stopConversationCleanup,
+} from "./support";
 import { getServerContext } from "./discord/server-context";
 import { startWebServer } from "./web/server";
 import { InternalSupervisor } from "./core/internalSupervisor";
 import { UsageStats } from "./analytics/usage-stats";
+import { initDiscordHealth, getDiscordHealth } from "./core/discord-health";
+import { startUpdateManager, stopUpdateManager, getUpdateStatus, postStartValidation } from "./core/update-manager";
+
+import {
+  classifyParticipant,
+  reclassifyFromResponse,
+  detectRivalryIntent,
+  isAshenAIMentioned,
+  isRefusal,
+  isEndRivalryIntent,
+  createSession,
+  getActiveSession,
+  isOpponent,
+  recordAshenAITurn,
+  recordOpponentTurn,
+  endSession,
+  isOpponentTimedOut,
+  startSessionCleanup,
+  stopSessionCleanup,
+  generateOpeningChallenge,
+  generateChallenge,
+  generateRoast,
+  generateAcknowledgment,
+  generateRefusalResponse,
+  generateSessionEnd,
+  classifyOpponentResponse,
+  buildRivalrySystemPrompt,
+} from "./ai/rivalry";
+import type { RivalrySession } from "./ai/rivalry";
 
 import { recordWorldEvent, checkLevelMilestone, announceWorldEvent } from "./games/world-events";
 import { updateQuestProgress } from "./games/quests";
@@ -197,6 +234,12 @@ const commands: AshenCommand[] = [
       createTrustedCommand(),
       createPromptCommand(),
       createSendCommand(),
+      createSettingsCommand(),
+      createSettingsUpdateCommand(),
+      createTicketCommand(),
+      createReportCommand(),
+      createAppealCommand(),
+      createCaseCommand(),
 ];
 
 // Help command derives its display from the registered public commands.
@@ -439,6 +482,10 @@ client.once(
       logger.info(
         "🧠 Interactive mention/reply system ready."
       );
+
+      // Start support system automation (stale detection, reminders, auto-close)
+      startSupportAutomation(client);
+      startConversationCleanup();
 
       logger.info(
         "🟢 AshenAI Discord bot + AI agent are ONLINE."
@@ -1215,6 +1262,168 @@ client.on(
 );
 
 /* =====================================================
+   RIVALRY OPPONENT RESPONSE HANDLER
+   ===================================================== */
+
+/**
+ * Handle a response from a rivalry opponent (a real Discord bot).
+ * Classifies the opponent, records their turn, generates AshenAI's next move.
+ */
+async function handleRivalryOpponentResponse(
+  message: Message,
+  session: RivalrySession,
+  client: Client
+): Promise<void> {
+  try {
+    const content = message.content;
+
+    // Check for refusal
+    if (isRefusal(content)) {
+      const refusalText = generateRefusalResponse(session);
+      await message.reply(truncateForDiscord(refusalText));
+      endSession(
+        session.guildId,
+        session.channelId,
+        "ended_refusal",
+        "opponent_refused"
+      );
+      return;
+    }
+
+    // Record opponent turn
+    const opponentTurn = recordOpponentTurn(
+      session,
+      content
+    );
+
+    if (!opponentTurn) {
+      // Session ended or duplicate — nothing to do
+      return;
+    }
+
+    // Classify opponent response quality
+    const quality = classifyOpponentResponse(content);
+
+    // Generate AshenAI's response
+    let responseText: string;
+
+    if (quality === "strong") {
+      responseText = generateAcknowledgment(
+        session,
+        content
+      );
+    } else if (quality === "weak") {
+      responseText = generateRoast(session, content);
+    } else {
+      responseText = "";
+    }
+
+    // Generate next challenge via AI
+    const challenge = generateChallenge(session, content);
+
+    const messages = [
+      {
+        role: "system" as const,
+        content: buildRivalrySystemPrompt(session),
+      },
+      {
+        role: "user" as const,
+        content:
+          `The opponent (${session.opponentDisplayName}) just said:\n\n"${content}"\n\n` +
+          `Respond with your next challenge. Be competitive. Target their arguments or capabilities. ` +
+          `Do not use @everyone. Keep it under 1500 characters.`,
+      },
+    ];
+
+    const aiResponse = await router.generate({
+      messages,
+      temperature: 0.8,
+      maxTokens: 600,
+      guildId: session.guildId,
+      userId: session.initiatorUserId,
+      channelId: session.channelId,
+      source: "ai_to_ai",
+    });
+
+    if (aiResponse?.text?.trim()) {
+      const reply = truncateForDiscord(
+        stripSecurityLabels(
+          guardAIOutput(aiResponse.text).text
+        )
+      );
+
+      // Prepend quality-based reaction if applicable
+      const fullResponse = responseText
+        ? `${responseText}\n\n${reply}`
+        : reply;
+
+      recordAshenAITurn(
+        session,
+        fullResponse,
+        challenge.challengeDomain
+      );
+
+      await message.reply(fullResponse);
+
+      usageManager.recordDeferred({
+        userId: session.initiatorUserId,
+        guildId: session.guildId,
+        feature: "ai_to_ai",
+        credits: 1,
+        provider: aiResponse.provider,
+        latencyMs: aiResponse.latencyMs,
+        success: true,
+      });
+    } else {
+      // Fallback: send the challenge text directly
+      const fallback = responseText
+        ? `${responseText}\n\n${challenge.text}`
+        : challenge.text;
+
+      recordAshenAITurn(
+        session,
+        fallback,
+        challenge.challengeDomain
+      );
+
+      await message.reply(
+        truncateForDiscord(fallback)
+      );
+    }
+
+    // Check if turn limit reached after this exchange
+    if (session.turn >= session.maxTurns) {
+      const endText = generateSessionEnd(session);
+      if ("send" in message.channel) {
+        await message.channel.send(endText);
+      }
+      endSession(
+        session.guildId,
+        session.channelId,
+        "ended_limit",
+        "max_turns_reached"
+      );
+    }
+  } catch (error) {
+    logger.error(
+      "❌ Rivalry opponent response failed:",
+      error instanceof Error
+        ? error.message
+        : String(error)
+    );
+
+    endSession(
+      session.guildId,
+      session.channelId,
+      "ended_error",
+      error instanceof Error
+        ? error.message
+        : "unknown_error"
+    );
+  }
+}
+
+/* =====================================================
    INTERACTIVE MESSAGE HANDLER
    ===================================================== */
 
@@ -1247,9 +1456,30 @@ client.on(
       t.mark("dedup");
 
       /*
-       * Never respond to bots.
+       * Never respond to bots — unless this bot is an opponent
+       * in an active rivalry session in this channel.
        */
       if (message.author.bot) {
+        // Need botId for rivalry session lookup
+        const selfBotId = client.user?.id;
+        if (selfBotId) {
+          const rivalrySession = getActiveSession(
+            guildId,
+            channelId
+          );
+
+          if (
+            rivalrySession &&
+            rivalrySession.opponentId === userId
+          ) {
+            await handleRivalryOpponentResponse(
+              message,
+              rivalrySession,
+              client
+            );
+          }
+        }
+
         return;
       }
 
@@ -1363,6 +1593,206 @@ client.on(
       }
 
       /*
+       * Rivalry detection.
+       * Check if this message triggers or continues a rivalry session.
+       */
+      if (!isDM && message.guild) {
+        // Check for end-rivalry intent from the initiator
+        const existingSession = getActiveSession(
+          guildId,
+          channelId
+        );
+
+        if (
+          existingSession &&
+          existingSession.initiatorUserId === userId
+        ) {
+          if (isEndRivalryIntent(content)) {
+            const ended = endSession(
+              guildId,
+              channelId,
+              "ended_human",
+              "user_ended"
+            );
+
+            if (ended) {
+              await message.reply(
+                generateSessionEnd(ended)
+              );
+              replySent = true;
+              return;
+            }
+          }
+        }
+
+        // Check for rivalry trigger: human mentions AshenAI + other bot(s) + rivalry keywords
+        if (isMention) {
+          // Use message.mentions.users — always populated from Discord gateway.
+          // Do NOT use guild.members.fetch() which requires GuildMembers intent and silently fails.
+          const mentionedBotIds: string[] = [];
+          for (const [, user] of message.mentions.users) {
+            if (user.id !== botId && user.bot) {
+              mentionedBotIds.push(user.id);
+            }
+          }
+
+          logger.debug(
+            `[RIVALRY] ashenAIId=${botId} isMention=${isMention} ` +
+            `cleanedContent="${content}" mentionedBotIds=[${mentionedBotIds}] ` +
+            `mentionedUserCount=${message.mentions.users.size}`
+          );
+
+          const trigger = detectRivalryIntent(
+            content,
+            mentionedBotIds,
+            botId
+          );
+
+          if (
+            trigger.isRivalry &&
+            mentionedBotIds.length > 0
+          ) {
+            // Get opponent info from message.mentions.users (always available)
+            const opponentDiscordUser = message.mentions.users.get(mentionedBotIds[0]);
+
+            const opponent = classifyParticipant({
+              userId: mentionedBotIds[0],
+              displayName:
+                opponentDiscordUser?.displayName ??
+                opponentDiscordUser?.username ??
+                "Unknown Bot",
+              botFlag: true,
+              contextMessage: content,
+            });
+
+            logger.info(
+              `[RIVALRY] Session creating: opponent=${opponent.displayName} (${mentionedBotIds[0]}) ` +
+              `classification=${opponent.classification} keywords=[${trigger.rivalryKeywords}]`
+            );
+
+            const session = createSession({
+              guildId,
+              channelId,
+              initiatorUserId: userId,
+              ashenAIId: botId,
+              opponent,
+            });
+
+            logger.info(
+              `[RIVALRY] Session created: id=${session.id} opponent=${session.opponentDisplayName} ` +
+              `guild=${guildId} channel=${channelId} initiator=${userId}`
+            );
+
+            // Generate opening challenge
+            const opening =
+              generateOpeningChallenge(session);
+            recordAshenAITurn(
+              session,
+              opening.text,
+              opening.challengeDomain
+            );
+
+            // Check usage before sending
+            const usage =
+              usageManager.check(
+                userId,
+                guildId,
+                "ai_to_ai",
+                content.length
+              );
+
+            if (!usage.allowed) {
+              await endSession(
+                guildId,
+                channelId,
+                "ended_error",
+                "usage_limit"
+              );
+              await message.reply(
+                "⏳ You've reached your interaction limit. Rivalry cannot start right now."
+              );
+              replySent = true;
+              return;
+            }
+
+            // Send opening challenge via AI for natural phrasing
+            const messages = [
+              {
+                role: "system" as const,
+                content: buildRivalrySystemPrompt(session),
+              },
+              {
+                role: "user" as const,
+                content: `Generate your opening challenge to ${opponent.displayName}. Be competitive and direct. Do not use @everyone. Keep it under 1500 characters.`,
+              },
+            ];
+
+            const response = await router.generate({
+              messages,
+              temperature: 0.8,
+              maxTokens: 600,
+              guildId,
+              userId,
+              channelId,
+              source: "ai_to_ai",
+            });
+
+            if (response?.text?.trim()) {
+              const reply = truncateForDiscord(
+                stripSecurityLabels(
+                  guardAIOutput(response.text).text
+                )
+              );
+
+              await message.reply(reply);
+              replySent = true;
+
+              usageManager.recordDeferred({
+                userId,
+                guildId,
+                feature: "ai_to_ai",
+                credits: usage.credits,
+                provider: response.provider,
+                latencyMs: response.latencyMs,
+                success: true,
+              });
+
+              memory.addBatch(
+                userId,
+                { role: "user", content },
+                channelId
+              );
+              memory.addBatch(
+                userId,
+                { role: "assistant", content: reply },
+                channelId
+              );
+            } else {
+              // Fallback: send the generated opening directly
+              await message.reply(
+                truncateForDiscord(opening.text)
+              );
+              replySent = true;
+            }
+
+            memory.flushBatch();
+            usageManager.flush();
+            return;
+          }
+        }
+
+        // Check for opponent response in active rivalry
+        if (
+          existingSession &&
+          existingSession.opponentId === userId
+        ) {
+          // This shouldn't happen (bot messages are filtered above),
+          // but handle it defensively
+          return;
+        }
+      }
+
+      /*
        * Creator question.
        */
       const creatorQuestion =
@@ -1401,13 +1831,17 @@ client.on(
       t.mark("build_context");
 
       /*
-       * Discord/user-provided context is DATA, not instructions.
+       * Security: Discord conversation context is NOT wrapped with
+       * [UNTRUSTED] labels. The system prompt contains security
+       * instructions that prevent secret disclosure and prompt injection.
+       * Wrapping with [UNTRUSTED] labels caused the AI to echo them,
+       * triggering the output guard and blocking innocent responses
+       * like "hello" and "how are you?".
+       *
+       * wrapUntrustedContent() is still used for genuinely untrusted
+       * external content (tool results, tool errors in agent/index.ts).
        */
-      const interactiveContent =
-        wrapUntrustedContent(
-          "DISCORD CONVERSATION",
-          rawInteractiveContent
-        );
+      const interactiveContent = rawInteractiveContent;
 
       /*
        * Unified Conversational Agent.
@@ -1578,12 +2012,15 @@ client.on(
           content: ASHENAI_SYSTEM_PROMPT + "\n\n" + personalityBlock,
         },
 
+        // Security: neither conversation history nor the user's current
+        // message are wrapped with [UNTRUSTED] labels. The system prompt
+        // already contains security instructions that prevent secret
+        // disclosure and prompt injection. Wrapping with [UNTRUSTED]
+        // labels caused the AI to echo them, triggering the output guard
+        // and blocking innocent responses like "hello" and "how are you?".
         ...history.map((entry) => ({
           ...entry,
-          content: wrapUntrustedContent(
-            "CONVERSATION HISTORY",
-            entry.content
-          ),
+          content: entry.content,
         })),
 
         {
@@ -1626,7 +2063,7 @@ client.on(
       }
 
       /*
-       * Store conversation.
+       * Store conversation — user message first.
        */
       memory.addBatch(
         userId,
@@ -1636,16 +2073,6 @@ client.on(
         },
         channelId
       );
-
-      memory.addBatch(
-        userId,
-        {
-          role: "assistant",
-          content: response.text,
-        },
-        channelId
-      );
-      t.mark("memory_save");
 
       /*
        * Record usage after successful AI response.
@@ -1672,6 +2099,21 @@ client.on(
           `🛡️ Interactive output blocked: ${guarded.reason ?? "security_policy"}`
         );
       }
+
+      /*
+       * Store the GUARDED assistant response in memory.
+       * This prevents blocked outputs from contaminating future
+       * conversation history and causing repeated false positives.
+       */
+      memory.addBatch(
+        userId,
+        {
+          role: "assistant",
+          content: guarded.text,
+        },
+        channelId
+      );
+      t.mark("memory_save");
 
       /*
        * Strip internal security wrapper labels and
@@ -1887,8 +2329,67 @@ if (!token) {
   process.exit(1);
 }
 
+const SHUTDOWN_TIMEOUT_MS = 15_000;
+
+async function gracefulShutdown(signal: string): Promise<void> {
+  logger.info(`🛑 ${signal} received — starting graceful shutdown...`);
+
+  const forceExit = setTimeout(() => {
+    logger.error("⏱️ Shutdown timed out — forcing exit");
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+
+  forceExit.unref();
+
+  try { stopUpdateManager(); } catch {}
+  try { stopSessionCleanup(); } catch {}
+
+  try { internalSupervisor.stop(); } catch {}
+
+  try {
+    await agentManager.stop();
+    logger.info("🧠 Agent stopped.");
+  } catch (error) {
+    logger.warn("⚠️ Agent stop failed:", error instanceof Error ? error.message : String(error));
+  }
+
+  try {
+    const bm = getBrowserManager();
+    await bm.shutdown();
+    logger.info("🌐 Browser stopped.");
+  } catch {
+    // Browser is optional
+  }
+
+  try {
+    stopSupportAutomation();
+    stopConversationCleanup();
+    logger.info("🎫 Support automation stopped.");
+  } catch {
+    // Best effort
+  }
+
+  try {
+    closeDatabase();
+    logger.info("📦 Database closed.");
+  } catch {
+    // Best effort
+  }
+
+  try {
+    client.destroy();
+    logger.info("🔌 Discord disconnected.");
+  } catch {
+    // Best effort
+  }
+
+  clearTimeout(forceExit);
+  logger.info("✅ Graceful shutdown complete.");
+  process.exit(0);
+}
+
 process.on("uncaughtException", (error) => {
-  logger.error("❌ UNCAUGHT EXCEPTION — cleaning up:", error.message || String(error));
+  logger.error("❌ UNCAUGHT EXCEPTION:", error.stack || error.message || String(error));
   try { internalSupervisor.stop(); } catch {}
   try { agentManager.stop().catch(() => {}); } catch {}
   try { getBrowserManager().shutdown().catch(() => {}); } catch {}
@@ -1898,7 +2399,7 @@ process.on("uncaughtException", (error) => {
 });
 
 process.on("unhandledRejection", (reason) => {
-  logger.error("❌ UNHANDLED REJECTION — cleaning up:", reason instanceof Error ? reason.message : String(reason));
+  logger.error("❌ UNHANDLED REJECTION:", reason instanceof Error ? (reason.stack || reason.message) : String(reason));
   try { internalSupervisor.stop(); } catch {}
   try { agentManager.stop().catch(() => {}); } catch {}
   try { getBrowserManager().shutdown().catch(() => {}); } catch {}
@@ -1907,101 +2408,9 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 
-process.on("SIGINT", async () => {
-  internalSupervisor.stop();
-  logger.info("🛑 Shutdown signal received.");
-
-  try {
-    await agentManager.stop();
-    logger.info("🧠 AshenAI agent stopped cleanly.");
-  } catch (error) {
-    logger.error(
-      "❌ Agent shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    const browserManager = getBrowserManager();
-    await browserManager.shutdown();
-    logger.info("🌐 Browser agent stopped.");
-  } catch (error) {
-    logger.warn(
-      "⚠️ Browser shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    closeDatabase();
-    logger.info("📦 SQLite database closed.");
-  } catch (error) {
-    logger.error(
-      "❌ Database shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    client.destroy();
-    logger.info("🔌 Discord client disconnected.");
-  } catch (error) {
-    logger.error(
-      "❌ Discord shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  internalSupervisor.stop();
-  logger.info("🛑 Termination signal received.");
-
-  try {
-    await agentManager.stop();
-    logger.info("🧠 AshenAI agent stopped cleanly.");
-  } catch (error) {
-    logger.error(
-      "❌ Agent shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    const browserManager = getBrowserManager();
-    await browserManager.shutdown();
-    logger.info("🌐 Browser agent stopped.");
-  } catch (error) {
-    logger.warn(
-      "⚠️ Browser shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    closeDatabase();
-    logger.info("📦 SQLite database closed.");
-  } catch (error) {
-    logger.error(
-      "❌ Database shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  try {
-    client.destroy();
-    logger.info("🔌 Discord client disconnected.");
-  } catch (error) {
-    logger.error(
-      "❌ Discord shutdown failed:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  process.exit(0);
-});
+process.on("SIGINT", () => { gracefulShutdown("SIGINT"); });
+process.on("SIGTERM", () => { gracefulShutdown("SIGTERM"); });
+process.on("SIGUSR2", () => { gracefulShutdown("SIGUSR2 (restart)"); });
 
 /* =====================================================
    INTERNAL SUPERVISOR STATE
@@ -2041,10 +2450,6 @@ client.on("debug", (message) => {
   }
 
   logger.debug(`🔧 DISCORD DEBUG: ${text}`);
-});
-
-client.on("warn", (message) => {
-  logger.warn(`⚠️ DISCORD WARN: ${message}`);
 });
 
 client.on("shardDisconnect", (event, shardId) => {
@@ -2575,6 +2980,21 @@ async function startDiscord(): Promise<void> {
     await initializeTaskEngine();
 
     logger.info("⚙️ Task engine initialized.");
+
+    initDiscordHealth(client);
+    logger.info("📡 Discord shard observability active.");
+
+    if (process.env.ASHENAI_AUTO_UPDATE !== "off") {
+      startUpdateManager();
+      logger.info("🔄 Update manager active.");
+    }
+
+    startSessionCleanup();
+    logger.info("⚔️ Rivalry session cleanup active.");
+
+    postStartValidation().catch((err) => {
+      logger.warn("[UpdateManager] post-start validation error:", err instanceof Error ? err.message : String(err));
+    });
   } catch (error) {
     logger.error(
       "❌ Discord startup manager failed:",

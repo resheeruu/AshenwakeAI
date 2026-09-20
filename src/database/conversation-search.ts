@@ -43,20 +43,9 @@ export function searchConversations(
 
     const params: any[] = [sanitizedQuery, limit];
 
-    if (guildId) {
-      sql = `
-        SELECT
-          conversation_key,
-          messages_json,
-          snippet(conversations_fts, 1, '>>>', '<<<', '...', 32) as snippet,
-          rank
-        FROM conversations_fts
-        WHERE conversations_fts MATCH ? AND conversation_key LIKE ?
-        ORDER BY rank
-        LIMIT ?
-      `;
-      params.splice(1, 0, `${guildId}:%`);
-    }
+    // NOTE: guildId filtering is not supported with current key format (${userId}:${channelId}).
+    // To add guild-scoped search, the conversation key would need to include guildId.
+    // For now, this filter is intentionally skipped to avoid returning zero results.
 
     if (userId) {
       sql = `

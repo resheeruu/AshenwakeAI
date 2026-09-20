@@ -40,6 +40,8 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Audit Integrity", file: "scripts/test-audit-integrity.ts", category: "security" },
   { name: "Security Hardening", file: "scripts/test-security-hardening.ts", category: "security" },
   { name: "Auth Upgrade", file: "scripts/test-auth-upgrade.ts", category: "security" },
+  { name: "Ask Command", file: "scripts/test-ask-command.ts", category: "security" },
+  { name: "Conversation Wrapper", file: "scripts/test-conversation-wrapper.ts", category: "security" },
 
   // Browser
   { name: "Browser", file: "scripts/test-browser.ts", category: "browser" },
@@ -47,6 +49,10 @@ const MANDATORY_SUITES: TestSuite[] = [
   // Tool Registry
   { name: "Tool Registry", file: "scripts/test-tool-registry.ts", category: "tool" },
   { name: "Template Execution", file: "scripts/test-template-execution.ts", category: "tool" },
+  { name: "Builder inspectServer", file: "scripts/test-builder-inspect-server.ts", category: "tool" },
+  { name: "Production Upgrade", file: "scripts/test-production-upgrade.ts", category: "integration" },
+  { name: "Update Rollback", file: "scripts/test-update-rollback.ts", category: "integration" },
+  { name: "Rivalry", file: "scripts/test-rivalry.ts", category: "integration" },
 
   // Web
   { name: "Web Security", file: "scripts/test-web-security.ts", category: "web" },
@@ -54,6 +60,11 @@ const MANDATORY_SUITES: TestSuite[] = [
 
   // Error coverage
   { name: "Error Coverage", file: "scripts/test-error-coverage.ts", category: "integration" },
+
+  // Support
+  { name: "Support", file: "scripts/test-support.ts", category: "core" },
+  { name: "Support AI", file: "scripts/test-support-ai.ts", category: "core" },
+  { name: "Support Hardening", file: "scripts/test-support-hardening.ts", category: "security" },
 
   // Integration
   { name: "Coding Agents", file: "scripts/test-coding-agents.ts", category: "integration" },

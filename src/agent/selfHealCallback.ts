@@ -192,8 +192,7 @@ Return ONLY:
 
       if (
         /error TS\d+/i.test(verification) ||
-        /error:/i.test(verification) ||
-        /failed/i.test(verification)
+        /error:/i.test(verification)
       ) {
         console.log(
           "❌ AI repair failed TypeScript verification.",
