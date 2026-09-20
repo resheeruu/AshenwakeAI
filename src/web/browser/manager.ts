@@ -7,6 +7,7 @@
  * ================================================================ */
 
 import type { Browser, BrowserContext, Page } from "playwright";
+import fs from "node:fs";
 import { logger } from "../../logger";
 import type {
   BrowserConfig,
@@ -100,7 +101,7 @@ export class BrowserManager {
       throw new Error("Playwright not available");
     }
 
-    const launchOptions = {
+    const launchOptions: Record<string, unknown> = {
       headless: this.config.headless,
       args: [
         "--no-sandbox",
@@ -121,11 +122,15 @@ export class BrowserManager {
       ],
     };
 
-    if (this.config.executablePath) {
-      (launchOptions as any).executablePath = this.config.executablePath;
+    // Resolve the full Chromium executable explicitly so we never
+    // accidentally launch the headless-shell binary.
+    const resolvedExecutable = this.resolveChromiumExecutable();
+    if (resolvedExecutable) {
+      launchOptions.executablePath = resolvedExecutable;
+      logger.info(`Using Chromium executable: ${resolvedExecutable}`);
     }
 
-    this.browser = await chromiumModule.chromium.launch(launchOptions);
+    this.browser = await chromiumModule.chromium.launch(launchOptions as any);
 
     this.browser.on("disconnected", () => {
       logger.warn("🔴 Browser disconnected");
@@ -134,6 +139,59 @@ export class BrowserManager {
     });
 
     logger.info("🚀 Browser launched successfully");
+  }
+
+  /* ================================================================
+   * CHROMIUM EXECUTABLE RESOLUTION
+   * ================================================================ */
+
+  private resolveChromiumExecutable(): string | null {
+    // Priority 1: explicit config path
+    if (this.config.executablePath) {
+      try {
+        fs.accessSync(this.config.executablePath, fs.constants.X_OK);
+        return this.config.executablePath;
+      } catch {
+        logger.warn(
+          `Config executablePath "${this.config.executablePath}" not found or not executable; trying alternatives.`
+        );
+      }
+    }
+
+    // Priority 2: environment variable
+    const envPath = process.env.ASHENAI_CHROMIUM_EXECUTABLE;
+    if (envPath) {
+      try {
+        fs.accessSync(envPath, fs.constants.X_OK);
+        return envPath;
+      } catch {
+        logger.warn(
+          `ASHENAI_CHROMIUM_EXECUTABLE "${envPath}" not found or not executable; trying alternatives.`
+        );
+      }
+    }
+
+    // Priority 3: Playwright's own detection (full Chromium, not headless-shell)
+    if (chromiumModule) {
+      try {
+        const pwPath = chromiumModule.chromium.executablePath();
+        if (pwPath) {
+          try {
+            fs.accessSync(pwPath, fs.constants.X_OK);
+            return pwPath;
+          } catch {
+            logger.warn(
+              `Playwright chromium.executablePath() returned "${pwPath}" but it is not executable.`
+            );
+          }
+        }
+      } catch {
+        // executablePath() may throw if browsers are not installed
+      }
+    }
+
+    logger.warn("No executable Chromium binary found. Browser features will be disabled.");
+    return null;
   }
 
   /* ================================================================
