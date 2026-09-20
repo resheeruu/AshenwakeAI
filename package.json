@@ -20,7 +20,12 @@
     "agents": "tsx scripts/check-coding-agents.ts",
     "test-agents": "tsx scripts/test-coding-agents.ts",
     "auth:owner-recover": "tsx scripts/owner-recover.ts",
-    "deploy:advisor": "tsx scripts/deployment-advisor.ts"
+    "deploy:advisor": "tsx scripts/deployment-advisor.ts",
+    "build:emojis": "tsx scripts/build-emojis.ts",
+    "upload:emojis": "tsx scripts/upload-emojis.ts",
+    "icons:check": "tsx scripts/icons.ts check",
+    "icons:update": "tsx scripts/icons.ts update",
+    "icons:validate": "tsx scripts/icons.ts validate"
   },
   "license": "MIT",
   "keywords": [

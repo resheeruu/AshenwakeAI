@@ -97,22 +97,13 @@ import {
   setPendingAction,
   clearPendingAction,
 } from "./discord/action-confirmations";
-import {
-  createWarnCommand,
-  createWarningsCommand,
-  createTimeoutCommand,
-  createUntimeoutCommand,
-} from "./commands/moderation";
-import {
-  createServerCommand,
-  createUserInfoCommand,
-  createRolesCommand,
-} from "./commands/server";
-import { createTrustedCommand } from "./commands/trusted";
+import { createServerCommand } from "./commands/server";
+import { createModerationCommand } from "./commands/moderation";
+import { createSupportCommand } from "./commands/support";
+import { createAccessCommand } from "./commands/access";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
-import { createSendCommand } from "./commands/send";
-import { createSettingsCommand, createSettingsUpdateCommand, handleSettingsModalSubmit } from "./commands/settings";
-import { createTicketCommand, createReportCommand, createAppealCommand, createCaseCommand } from "./commands/support";
+import { createPersonalityCommand } from "./commands/personality";
+import { createSettingsCommand, handleSettingsModalSubmit } from "./commands/settings";
 import {
   startSupportAutomation,
   stopSupportAutomation,
@@ -224,22 +215,13 @@ const commands: AshenCommand[] = [
   createGameCommand(),
   createResetCommand(memory),
   createStatusCommand(router, memory, agentManager),
-      createServerCommand(),
-      createUserInfoCommand(),
-      createRolesCommand(),
-      createWarnCommand(),
-      createWarningsCommand(),
-      createTimeoutCommand(),
-      createUntimeoutCommand(),
-      createTrustedCommand(),
-      createPromptCommand(),
-      createSendCommand(),
-      createSettingsCommand(),
-      createSettingsUpdateCommand(),
-      createTicketCommand(),
-      createReportCommand(),
-      createAppealCommand(),
-      createCaseCommand(),
+  createServerCommand(),
+  createModerationCommand(),
+  createSupportCommand(),
+  createAccessCommand(),
+  createPromptCommand(),
+  createPersonalityCommand(),
+  createSettingsCommand(),
 ];
 
 // Help command derives its display from the registered public commands.

@@ -99,6 +99,19 @@ export interface GuildConfig {
   staff?: {
     roleIds: string[];
   };
+  social?: {
+    enabled: boolean;
+    channels: Record<string, {
+      enabled: boolean;
+      cooldownMs: number;
+      responseProbability: number;
+      debateEnabled: boolean;
+      contextWindow: number;
+      minActivityThreshold: number;
+    }>;
+    globalCooldownMs: number;
+    maxResponsesPerHour: number;
+  };
   createdAt: number;
   updatedAt: number;
 }

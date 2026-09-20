@@ -359,10 +359,63 @@ export function createSettingsCommand(): AshenCommand {
     data: new SlashCommandBuilder()
       .setName("settings")
       .setDescription("Interactive server settings panel for AshenAI")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addSubcommand((sub) =>
+        sub
+          .setName("update")
+          .setDescription("Update a specific setting (advanced/manual)")
+          .addStringOption((opt) =>
+            opt
+              .setName("category")
+              .setDescription("Settings category")
+              .setRequired(true)
+              .addChoices(
+                { name: "Support", value: "support" },
+                { name: "Reports", value: "reports" },
+                { name: "Appeals", value: "appeals" },
+                { name: "AI", value: "ai" },
+                { name: "Logging", value: "logging" },
+                { name: "Staff", value: "staff" },
+                { name: "Moderation", value: "moderation" },
+              )
+          )
+          .addStringOption((opt) =>
+            opt.setName("setting").setDescription("Setting name to update").setRequired(true)
+          )
+          .addStringOption((opt) =>
+            opt.setName("value").setDescription("New value (true/false, channel ID, role ID, or number)").setRequired(true)
+          )
+      ),
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       try {
         if (!interaction.guild) { await interaction.editReply("This command can only be used in a server."); return; }
+        if (interaction.options.getSubcommand() === "update") {
+          const guildId = interaction.guild.id;
+          const category = interaction.options.getString("category", true) as SettingsCategory;
+          const settingName = interaction.options.getString("setting", true).toLowerCase();
+          const rawValue = interaction.options.getString("value", true);
+          const settings = getSettingsByCategory(category);
+          const descriptor = settings.find((s) => {
+            const parts = s.id.split(".");
+            return parts[parts.length - 1].toLowerCase() === settingName || s.id.toLowerCase().includes(settingName);
+          });
+          if (!descriptor) {
+            await interaction.editReply(`Unknown setting \`${settingName}\` for category \`${category}\`. Use \`/settings\` for the interactive panel.`);
+            return;
+          }
+          const validation = validateSettingValue(descriptor, rawValue, guildId);
+          if (!validation.valid) { await interaction.editReply(validation.error ?? "Invalid value."); return; }
+          const config = loadGuildConfig(guildId);
+          ensureConfigSections(config);
+          const currentValue = applySettingValue(config, descriptor.id);
+          applySettingValue(config, descriptor.id, validation.normalized);
+          saveSettingChange(config, {
+            settingId: descriptor.id, category: descriptor.category, path: descriptor.path, label: descriptor.label,
+            oldValue: currentValue, newValue: validation.normalized, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
+          }, interaction.user.id, interaction.user.tag);
+          await interaction.editReply(`Updated **${descriptor.label}**: ${formatValue(currentValue)} \u2192 ${formatValue(validation.normalized)}`);
+          return;
+        }
         const guildId = interaction.guild.id;
         const userId = interaction.user.id;
         registerSession(guildId, userId, interaction.channelId, "");

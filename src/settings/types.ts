@@ -32,6 +32,8 @@ export type SettingsCategory =
   | "reports"
   | "appeals"
   | "ai"
+  | "social"
+  | "personality"
   | "logging"
   | "staff"
   | "audit";

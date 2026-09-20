@@ -6,6 +6,7 @@ import { createResetCommand } from "../src/commands/reset";
 import { createHelpCommand } from "../src/commands/help";
 import { createStatusCommand } from "../src/commands/status";
 import { createPromptCommand } from "../src/commands/prompt";
+import { createPersonalityCommand } from "../src/commands/personality";
 import { UsageManager } from "../src/ai/usage-manager";
 import {
   insertAIUsageDB,
@@ -41,7 +42,8 @@ try {
   const reset = createResetCommand(memory);
   const status = createStatusCommand(router, memory);
   const prompt = createPromptCommand();
-  const help = createHelpCommand([ask, reset, status, prompt]);
+  const personality = createPersonalityCommand();
+  const help = createHelpCommand([ask, reset, status, prompt, personality]);
   if (ask && ask.data.name === "ask" && typeof ask.execute === "function") {
     pass("/ask command factory");
   } else {
@@ -80,12 +82,22 @@ try {
 
   if (
     prompt &&
-    prompt.data.name === "prompt" &&
+    prompt.data.name === "build" &&
     typeof prompt.execute === "function"
   ) {
-    pass("/prompt command factory");
+    pass("/build command factory");
   } else {
-    fail("/prompt command factory");
+    fail("/build command factory");
+  }
+
+  if (
+    personality &&
+    personality.data.name === "prompt" &&
+    typeof personality.execute === "function"
+  ) {
+    pass("/prompt personality command factory");
+  } else {
+    fail("/prompt personality command factory");
   }
 
   // ─────────────────────────────────────
@@ -98,6 +110,7 @@ try {
     help.data.name,
     status.data.name,
     prompt.data.name,
+    personality.data.name,
   ];
 
   const expectedNames = [
@@ -105,6 +118,7 @@ try {
     "reset",
     "help",
     "status",
+    "build",
     "prompt",
   ];
 

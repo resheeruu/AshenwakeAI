@@ -10,6 +10,7 @@ import { AshenCommand } from "./definitions";
 import { AgentManager } from "../agent/manager";
 import { getAIUsageSummaryDB } from "../database/ai-usage-repo";
 import { logger } from "../logger";
+import { emoji } from "../discord/emojis";
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -67,24 +68,24 @@ export function createStatusCommand(
 
         const agentEmoji =
           agentStatus.status === "online"
-            ? "🟢"
+            ? emoji("ash_online")
             : agentStatus.status === "degraded"
-              ? "🟡"
-              : "🔴";
+              ? emoji("ash_degraded")
+              : emoji("ash_offline");
 
         const lines = [
-          "🟢 **AshenAI Status**",
+          `${emoji("ash_online")} **AshenAI Status**`,
           "",
-          `🤖 **Bot:** Online`,
+          `${emoji("ash_ai")} **Bot:** Online`,
           `${agentEmoji} **Agent:** ${agentLabel}`,
-          "⚡ **System:** Operational",
-          `⏱️ **Uptime:** ${formatUptime(uptimeSec)}`,
+          `${emoji("ash_loading")} **System:** Operational`,
+          `${emoji("ash_refresh")} **Uptime:** ${formatUptime(uptimeSec)}`,
           "",
-          "🧠 **Memory**",
+          `${emoji("ash_memory")} **Memory**`,
           `Conversations: ${stats.conversations}`,
           `Messages: ${stats.messages}`,
           "",
-          "📊 **Your AI Usage**",
+          `${emoji("ash_stats")} **Your AI Usage**`,
           `Today — ${today.requests} requests · ${formatTokens(today.totalTokens)} tokens`,
           `This week — ${week.requests} requests · ${formatTokens(week.totalTokens)} tokens`,
           `This month — ${month.requests} requests · ${formatTokens(month.totalTokens)} tokens`,
@@ -102,11 +103,11 @@ export function createStatusCommand(
         try {
           if (interaction.deferred || interaction.replied) {
             await interaction.editReply({
-              content: "❌ Status check failed. Please try again.",
+              content: `${emoji("ash_error")} Status check failed. Please try again.`,
             });
           } else {
             await interaction.reply({
-              content: "❌ Status check failed.",
+              content: `${emoji("ash_error")} Status check failed.`,
               flags: MessageFlags.Ephemeral,
             });
           }

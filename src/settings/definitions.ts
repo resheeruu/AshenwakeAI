@@ -7,6 +7,8 @@ export const SETTINGS_CATEGORIES: SettingsCategoryMeta[] = [
   { id: "reports", label: "Reports", emoji: "🚨" },
   { id: "appeals", label: "Appeals", emoji: "🔨" },
   { id: "ai", label: "AI", emoji: "🤖" },
+  { id: "social", label: "AI Social", emoji: "💬" },
+  { id: "personality", label: "Personality", emoji: "🎭" },
   { id: "logging", label: "Logging", emoji: "📋" },
   { id: "staff", label: "Staff", emoji: "👥" },
   { id: "audit", label: "Audit/Logs", emoji: "📜" },
@@ -227,6 +229,59 @@ export const ALL_SETTINGS: SettingDescriptor[] = [
     category: "ai",
     path: "supportAi.allowWebResearch",
     defaultValue: false,
+  },
+
+  // ── Social ──
+  {
+    id: "social.enabled",
+    label: "AI Social Enabled",
+    description: "Enable AI Social mode (autonomous conversation participation)",
+    type: "boolean",
+    category: "social",
+    path: "social.enabled",
+    defaultValue: false,
+  },
+  {
+    id: "social.globalCooldownMs",
+    label: "Global Cooldown (ms)",
+    description: "Minimum time between any social responses (10000-300000ms)",
+    type: "number",
+    category: "social",
+    path: "social.globalCooldownMs",
+    defaultValue: 30000,
+    min: 10000,
+    max: 300000,
+  },
+  {
+    id: "social.maxResponsesPerHour",
+    label: "Max Responses Per Hour",
+    description: "Maximum social responses per hour across all channels (1-50)",
+    type: "number",
+    category: "social",
+    path: "social.maxResponsesPerHour",
+    defaultValue: 10,
+    min: 1,
+    max: 50,
+  },
+
+  // ── Personality ──
+  {
+    id: "personality.name",
+    label: "Bot Name",
+    description: "How the bot refers to itself (1-50 characters)",
+    type: "boolean",
+    category: "personality",
+    path: "personality.name",
+    defaultValue: "AshenAI",
+  },
+  {
+    id: "personality.tone",
+    label: "Tone",
+    description: "Default tone: professional, casual, friendly, neutral, or stern",
+    type: "boolean",
+    category: "personality",
+    path: "personality.tone",
+    defaultValue: "friendly",
   },
 
   // ── Logging ──

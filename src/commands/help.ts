@@ -11,6 +11,7 @@ import {
 } from "discord.js";
 import { AshenCommand } from "./definitions";
 import { logger } from "../logger";
+import { emoji } from "../discord/emojis";
 
 interface HelpCategory {
   id: string;
@@ -33,16 +34,13 @@ const COMMAND_METADATA: Record<string, { description: string; category: string; 
   ask:    { description: "Ask AshenAI anything", category: "ai" },
   reset:  { description: "Reset your conversation memory", category: "ai" },
   game:   { description: "Play games, earn coins, level up", category: "ai" },
-  prompt: { description: "Open a private Builder session for server management", category: "server" },
-  serverinfo: { description: "View server structure and stats", category: "server" },
-  userinfo:   { description: "View info about a member", category: "server" },
-  roles:       { description: "List a member's roles", category: "server" },
-  warn:     { description: "Warn a member", category: "moderation", modOnly: true },
-  warnings: { description: "Check warnings for a member", category: "moderation", modOnly: true },
-  timeout:  { description: "Timeout a member", category: "moderation", modOnly: true },
-  untimeout: { description: "Remove timeout from a member", category: "moderation", modOnly: true },
-  trusted: { description: "Manage trusted users", category: "access", adminOnly: true },
-  send:    { description: "Send a message as AshenAI (trusted only)", category: "access" },
+  build:  { description: "Open a private Builder session for server management", category: "server" },
+  prompt: { description: "Set your custom AI personality prompt for this server", category: "ai", adminOnly: true },
+  server: { description: "Server info, member info, and role management", category: "server" },
+  moderation: { description: "Warn, timeout, and manage members", category: "moderation", modOnly: true },
+  support: { description: "Tickets, reports, appeals, and case management", category: "support" },
+  access: { description: "Manage trusted users and send messages as AshenAI", category: "access" },
+  settings: { description: "Server settings panel", category: "system", adminOnly: true },
   status:  { description: "Show system status and your AI usage", category: "system" },
 };
 
@@ -56,8 +54,8 @@ interface CategoryDef {
 }
 
 const CATEGORY_DEFS: CategoryDef[] = [
-  { id: "ai", name: "AI Chat", emoji: "\u{1F916}", description: "Chat naturally with AshenAI." },
-  { id: "server", name: "Server Management", emoji: "\u{1F6E0}\uFE0F", description: "Manage your Discord server using natural language.",
+  { id: "ai", name: "AI Chat", emoji: emoji("ash_ai"), description: "Chat naturally with AshenAI." },
+  { id: "server", name: "Server Management", emoji: emoji("ash_settings"), description: "Manage your Discord server using natural language.",
     features: [
       { name: "Templates", description: "Set up your server with a template (gaming, community, etc.)" },
       { name: "Server improvements", description: "Fix and organize your server" },
@@ -65,9 +63,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { name: "Role management", description: "Create roles, manage permissions" },
     ],
   },
-  { id: "moderation", name: "Moderation", emoji: "\u{1F6E1}\uFE0F", description: "Keep the server safe and manage members." },
-  { id: "access", name: "Access Control", emoji: "\u{1F510}", description: "Trusted users and permission management." },
-  { id: "system", name: "System", emoji: "\u2699\uFE0F", description: "System status and AI usage." },
+  { id: "moderation", name: "Moderation", emoji: "🛡️", description: "Keep the server safe and manage members." },
+  { id: "support", name: "Support", emoji: "🎫", description: "Tickets, reports, appeals, and case management." },
+  { id: "access", name: "Access Control", emoji: "🔑", description: "Trusted users and permission management." },
+  { id: "system", name: "System", emoji: emoji("ash_stats"), description: "System status, settings, and AI usage." },
 ];
 
 const TRY_ASKING = [

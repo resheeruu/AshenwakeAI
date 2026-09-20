@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "upstreamRevision": "3.47.0",
+  "lastChecked": "2026-09-20T18:56:25.678Z",
+  "icons": {
+    "ai": {
+      "name": "ai",
+      "tablerIcon": "robot",
+      "localFile": "ash_ai.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/robot.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:23.517Z",
+      "lastUpdated": "2026-09-20T18:56:23.517Z",
+      "checksum": "58zgzv",
+      "source": "tabler"
+    },
+    "success": {
+      "name": "success",
+      "tablerIcon": "circle-check",
+      "localFile": "ash_success.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/circle-check.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:23.690Z",
+      "lastUpdated": "2026-09-20T18:56:23.690Z",
+      "checksum": "wsoepb",
+      "source": "tabler"
+    },
+    "error": {
+      "name": "error",
+      "tablerIcon": "circle-x",
+      "localFile": "ash_error.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/circle-x.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:23.837Z",
+      "lastUpdated": "2026-09-20T18:56:23.837Z",
+      "checksum": "as2v8v",
+      "source": "tabler"
+    },
+    "warning": {
+      "name": "warning",
+      "tablerIcon": "alert-triangle",
+      "localFile": "ash_warning.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/alert-triangle.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:24.004Z",
+      "lastUpdated": "2026-09-20T18:56:24.004Z",
+      "checksum": "6r3lxy",
+      "source": "tabler"
+    },
+    "info": {
+      "name": "info",
+      "tablerIcon": "info-circle",
+      "localFile": "ash_info.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/info-circle.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:24.155Z",
+      "lastUpdated": "2026-09-20T18:56:24.155Z",
+      "checksum": "b5ocqd",
+      "source": "tabler"
+    },
+    "loading": {
+      "name": "loading",
+      "tablerIcon": "loader",
+      "localFile": "ash_loading.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/loader.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:24.303Z",
+      "lastUpdated": "2026-09-20T18:56:24.303Z",
+      "checksum": "gbc5tz",
+      "source": "tabler"
+    },
+    "online": {
+      "name": "online",
+      "tablerIcon": "heartbeat",
+      "localFile": "ash_online.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/heartbeat.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:24.451Z",
+      "lastUpdated": "2026-09-20T18:56:24.451Z",
+      "checksum": "o2yefw",
+      "source": "tabler"
+    },
+    "offline": {
+      "name": "offline",
+      "tablerIcon": "circle-off",
+      "localFile": "ash_offline.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/circle-off.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:24.625Z",
+      "lastUpdated": "2026-09-20T18:56:24.625Z",
+      "checksum": "qy3txh",
+      "source": "tabler"
+    },
+    "degraded": {
+      "name": "degraded",
+      "tablerIcon": "alert-octagon",
+      "localFile": "ash_degraded.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/alert-octagon.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:24.797Z",
+      "lastUpdated": "2026-09-20T18:56:24.797Z",
+      "checksum": "gkahak",
+      "source": "tabler"
+    },
+    "settings": {
+      "name": "settings",
+      "tablerIcon": "settings",
+      "localFile": "ash_settings.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/settings.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:24.946Z",
+      "lastUpdated": "2026-09-20T18:56:24.946Z",
+      "checksum": "4nvcmg",
+      "source": "tabler"
+    },
+    "arrow": {
+      "name": "arrow",
+      "tablerIcon": "arrow-right",
+      "localFile": "ash_arrow.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/arrow-right.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:25.088Z",
+      "lastUpdated": "2026-09-20T18:56:25.088Z",
+      "checksum": "58fjec",
+      "source": "tabler"
+    },
+    "menu": {
+      "name": "menu",
+      "tablerIcon": "menu-2",
+      "localFile": "ash_menu.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/menu-2.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:25.223Z",
+      "lastUpdated": "2026-09-20T18:56:25.223Z",
+      "checksum": "rlq2pe",
+      "source": "tabler"
+    },
+    "refresh": {
+      "name": "refresh",
+      "tablerIcon": "refresh",
+      "localFile": "ash_refresh.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/refresh.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:25.368Z",
+      "lastUpdated": "2026-09-20T18:56:25.368Z",
+      "checksum": "dkyrjt",
+      "source": "tabler"
+    },
+    "memory": {
+      "name": "memory",
+      "tablerIcon": "brain",
+      "localFile": "ash_memory.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/brain.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:25.519Z",
+      "lastUpdated": "2026-09-20T18:56:25.519Z",
+      "checksum": "yg0vun",
+      "source": "tabler"
+    },
+    "stats": {
+      "name": "stats",
+      "tablerIcon": "chart-bar",
+      "localFile": "ash_stats.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/chart-bar.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-20T18:56:25.678Z",
+      "lastUpdated": "2026-09-20T18:56:25.678Z",
+      "checksum": "pbuohk",
+      "source": "tabler"
+    }
+  }
+}

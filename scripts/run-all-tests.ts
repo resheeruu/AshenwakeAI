@@ -68,6 +68,10 @@ const MANDATORY_SUITES: TestSuite[] = [
 
   // Integration
   { name: "Coding Agents", file: "scripts/test-coding-agents.ts", category: "integration" },
+
+  // AI Social & Personality
+  { name: "AI Social", file: "scripts/test-ai-social.ts", category: "core" },
+  { name: "Personality", file: "scripts/test-personality.ts", category: "core" },
 ];
 
 const OPTIONAL_SUITES: TestSuite[] = [
