@@ -111,7 +111,7 @@ import {
 import { createTrustedCommand } from "./commands/trusted";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
 import { createSendCommand } from "./commands/send";
-import { createSettingsCommand, createSettingsUpdateCommand } from "./commands/settings";
+import { createSettingsCommand, createSettingsUpdateCommand, handleSettingsModalSubmit } from "./commands/settings";
 import { createTicketCommand, createReportCommand, createAppealCommand, createCaseCommand } from "./commands/support";
 import {
   startSupportAutomation,
@@ -2313,6 +2313,16 @@ client.on(
     }
   }
 );
+
+/* =====================================================
+   SETTINGS MODAL SUBMISSIONS
+   ===================================================== */
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isModalSubmit()) return;
+  if (!interaction.customId.startsWith("an:")) return;
+  await handleSettingsModalSubmit(interaction);
+});
 
 /* =====================================================
    LOGIN
