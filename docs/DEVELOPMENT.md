@@ -4,9 +4,8 @@
 
 1. Read `docs/ARCHITECTURE.md`
 2. Read `docs/AGENT_RULES.md`
-3. Read `AGENTS.md` (AI agent loop instructions)
-4. Run `git status`
-5. Inspect the existing implementation.
+3. Run `git status`
+4. Inspect the existing implementation.
 
 ## During Coding
 
