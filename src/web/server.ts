@@ -106,7 +106,6 @@ import {
   getSystemInformation,
 } from "../seraph";
 import { providerService } from "../ai/providers/platform";
-import { providerService } from "../ai/providers/platform";
 
 const app = express();
 app.set("trust proxy", 1);
