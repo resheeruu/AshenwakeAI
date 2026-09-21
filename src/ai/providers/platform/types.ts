@@ -76,6 +76,7 @@ export interface UpdateProviderInput {
   timeoutMs?: number;
   retryMaxAttempts?: number;
   metadata?: Record<string, unknown>;
+  protocol?: ProviderProtocol;
 }
 
 export interface TestConnectionResult {

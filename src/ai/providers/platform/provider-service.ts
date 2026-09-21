@@ -1,4 +1,5 @@
 import { providerRepo } from "./provider-repo";
+import { providerRuntimeManager } from "./provider-runtime-manager";
 import { storeCredential, getCredential, deleteAllCredentials } from "./credential-store";
 import { testProviderConnection, discoverModels } from "./connection-tester";
 import { createDynamicProvider, loadAllDynamicProviders } from "./provider-adapter";
@@ -21,6 +22,9 @@ function toStatusView(def: ProviderDefinition, modelCount: number): ProviderStat
     if (def.endpoint) endpointHostname = new URL(def.endpoint).hostname;
   } catch { /* ignore */ }
 
+  const runtime = providerRuntimeManager.getRuntime(def.id);
+  const healthState = runtime?.healthState ?? (def.enabled ? "CONFIGURED" : "NOT_CONFIGURED");
+
   return {
     id: def.id,
     name: def.name,
@@ -34,10 +38,13 @@ function toStatusView(def: ProviderDefinition, modelCount: number): ProviderStat
     modelCount,
     health: {
       available: def.enabled,
-      successes: 0,
-      failures: 0,
-      averageLatencyMs: 0,
-      healthState: def.enabled ? "HEALTHY" : "NOT_CONFIGURED",
+      successes: runtime?.successes ?? 0,
+      failures: runtime?.failures ?? 0,
+      averageLatencyMs: runtime?.averageLatencyMs ?? 0,
+      healthState,
+      lastLatencyMs: runtime?.lastLatencyMs,
+      lastSuccessAt: runtime?.lastSuccessAt,
+      lastFailureAt: runtime?.lastFailureAt,
     },
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,
@@ -60,85 +67,16 @@ export const providerService = {
     return toStatusView(def, models.length);
   },
 
-  createProvider(input: CreateProviderInput, actorUserId: string, actorUserName: string): ProviderDefinition {
-    const id = `dp_${nanoid(12)}`;
-
-    if (providerRepo.exists(input.name)) {
-      throw new Error(`Provider name "${input.name}" is already taken`);
-    }
-
-    const def = providerRepo.create({
-      id,
-      name: input.name,
-      displayName: input.displayName,
-      providerType: input.providerType,
-      protocol: input.protocol,
-      endpoint: input.endpoint,
-      enabled: true,
-      priority: input.priority ?? 100,
-      defaultModel: input.defaultModel,
-      timeoutMs: input.timeoutMs ?? 15000,
-      retryMaxAttempts: input.retryMaxAttempts ?? 2,
-      metadata: input.metadata ?? {},
-    });
-
-    if (input.apiKey) {
-      storeCredential(id, "api_key", input.apiKey);
-    }
-
-    recordAudit({
-      who: actorUserId,
-      whoName: actorUserName,
-      what: `Created provider: ${input.displayName} (${input.name})`,
-      where: "provider-platform",
-      result: "success",
-      details: `type=${input.providerType} protocol=${input.protocol}`,
-    });
-
-    logger.info(`➕ Provider created: ${input.displayName} (${id}) by ${actorUserName}`);
-    return def;
+  createProvider(input: CreateProviderInput, actorUserId: string, actorUserName: string): Promise<ProviderDefinition> {
+    return providerRuntimeManager.createProvider(input, actorUserId, actorUserName);
   },
 
-  updateProvider(id: string, input: UpdateProviderInput, actorUserId: string, actorUserName: string): void {
-    const existing = providerRepo.getById(id);
-    if (!existing) throw new Error("Provider not found");
-
-    providerRepo.update(id, input);
-
-    if (input.apiKey !== undefined) {
-      storeCredential(id, "api_key", input.apiKey);
-    }
-
-    recordAudit({
-      who: actorUserId,
-      whoName: actorUserName,
-      what: `Updated provider: ${existing.displayName}`,
-      where: "provider-platform",
-      result: "success",
-    });
-
-    logger.info(`✏️ Provider updated: ${existing.displayName} (${id}) by ${actorUserName}`);
+  async updateProvider(id: string, input: UpdateProviderInput, actorUserId: string, actorUserName: string): Promise<void> {
+    await providerRuntimeManager.updateProvider(id, input, actorUserId, actorUserName);
   },
 
-  deleteProvider(id: string, actorUserId: string, actorUserName: string): void {
-    const existing = providerRepo.getById(id);
-    if (!existing) throw new Error("Provider not found");
-
-    deleteAllCredentials(id);
-    providerRepo.deleteModels(id);
-    providerRepo.delete(id);
-
-    providerRegistry.unregister(existing.name);
-
-    recordAudit({
-      who: actorUserId,
-      whoName: actorUserName,
-      what: `Deleted provider: ${existing.displayName} (${existing.name})`,
-      where: "provider-platform",
-      result: "success",
-    });
-
-    logger.info(`🗑️ Provider deleted: ${existing.displayName} (${id}) by ${actorUserName}`);
+  async deleteProvider(id: string, actorUserId: string, actorUserName: string): Promise<void> {
+    await providerRuntimeManager.deleteProvider(id, actorUserId, actorUserName);
   },
 
   async testConnection(id: string): Promise<TestConnectionResult> {
@@ -155,8 +93,7 @@ export const providerService = {
     apiKey: string | undefined,
     timeoutMs?: number,
   ): Promise<TestConnectionResult> {
-    const encrypted = apiKey ? undefined : undefined;
-    return testProviderConnection(protocol as any, endpoint, undefined, timeoutMs).then(result => {
+    return testProviderConnection(protocol as any, endpoint, apiKey, timeoutMs).then(result => {
       if (apiKey && result.success) {
         return { ...result, modelIds: result.modelIds, modelsDiscovered: result.modelsDiscovered };
       }
@@ -170,6 +107,10 @@ export const providerService = {
 
     const apiKeyEncrypted = getCredential(def.id, "api_key");
     const result = await discoverModels(def.protocol, def.endpoint, apiKeyEncrypted, def.timeoutMs);
+
+    if (result.success && result.models.length > 0) {
+      providerRuntimeManager.refreshFromRepository();
+    }
 
     if (result.success && result.models.length > 0) {
       providerRepo.deleteModels(def.id);
@@ -215,30 +156,11 @@ export const providerService = {
   },
 
   toggleProvider(id: string, enabled: boolean, actorUserId: string, actorUserName: string): void {
-    const def = providerRepo.getById(id);
-    if (!def) throw new Error("Provider not found");
-
-    providerRepo.update(id, { enabled });
-
-    if (enabled) {
-      const provider = createDynamicProvider({ ...def, enabled });
-      providerRegistry.register(provider, def.priority);
-    } else {
-      providerRegistry.unregister(def.name);
-    }
-
-    recordAudit({
-      who: actorUserId,
-      whoName: actorUserName,
-      what: `${enabled ? "Enabled" : "Disabled"} provider: ${def.displayName}`,
-      where: "provider-platform",
-      result: "success",
-    });
-
-    logger.info(`${enabled ? "✅" : "🚫"} Provider ${def.displayName} ${enabled ? "enabled" : "disabled"} by ${actorUserName}`);
+    providerRuntimeManager.toggleProvider(id, enabled, actorUserId, actorUserName);
   },
 
   syncDynamicProviders(): void {
+    providerRuntimeManager.refreshFromRepository();
     const dynamicProviders = loadAllDynamicProviders();
     for (const { provider, priority } of dynamicProviders) {
       if (!providerRegistry.has(provider.name)) {

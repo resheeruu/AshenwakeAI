@@ -9,8 +9,11 @@ const TAG_LENGTH = 16;
 function getCredentialKey(): Buffer {
   const secret = process.env.SESSION_SECRET || process.env.ASHENAI_CREDENTIAL_KEY;
   if (!secret || secret.length < 16) {
-    logger.warn("⚠️ No SESSION_SECRET set; using derived key for credential encryption");
-    return crypto.createHash("sha256").update("ashenai-default-credential-key-v1").digest();
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SESSION_SECRET is required in production. Set it in your .env file.");
+    }
+    logger.warn("⚠️ No SESSION_SECRET set; using derived key for credential encryption (development mode)");
+    return crypto.createHash("sha256").update("ashenai-dev-credential-key-v1").digest();
   }
   return crypto.createHash("sha256").update(secret).digest();
 }

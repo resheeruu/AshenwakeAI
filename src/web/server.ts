@@ -647,7 +647,7 @@ app.get("/api/providers/manage/:id", requireAuth, requireRole("admin"), (req: Re
   }
 });
 
-app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const body = req.body as Record<string, unknown> || {};
@@ -667,7 +667,7 @@ app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf
     if (!["openai_compatible", "anthropic", "gemini", "ollama"].includes(protocol)) {
       return res.status(400).json({ ok: false, error: "Invalid protocol" });
     }
-    const provider = providerService.createProvider({
+    const provider = await providerService.createProvider({
       name, displayName, providerType: providerType as any, protocol: protocol as any,
       endpoint: body.endpoint as string | undefined,
       apiKey: body.apiKey as string | undefined,
@@ -806,7 +806,7 @@ app.get("/api/providers/manage/:id", requireAuth, requireRole("admin"), (req: Re
   }
 });
 
-app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const body = req.body as Record<string, unknown> || {};
@@ -826,7 +826,7 @@ app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf
     if (!["openai_compatible", "anthropic", "gemini", "ollama"].includes(protocol)) {
       return res.status(400).json({ ok: false, error: "Invalid protocol" });
     }
-    const provider = providerService.createProvider({
+    const provider = await providerService.createProvider({
       name, displayName, providerType: providerType as any, protocol: protocol as any,
       endpoint: body.endpoint as string | undefined,
       apiKey: body.apiKey as string | undefined,
