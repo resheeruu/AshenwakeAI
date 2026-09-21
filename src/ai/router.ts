@@ -67,7 +67,7 @@ interface ProviderHealth {
   lastHttpStatus?: number;
 }
 
-interface SavedProviderHealth {
+export interface SavedProviderHealth {
   successes: number;
   failures: number;
   totalLatencyMs: number;
@@ -85,6 +85,94 @@ interface SavedProviderHealth {
   healthState?: HealthState;
   lastHttpStatus?: number;
   modelHealth?: Record<string, ModelHealthState>;
+}
+/* =====================================================
+   LEGACY HEALTH STATE COMPATIBILITY
+   =====================================================
+
+   provider-health.json may originate from an earlier build that did
+   not persist an explicit healthState, or from a prior deploy where
+   the provider already exceeded its failure threshold.
+
+   Principles:
+   - Never prove a provider healthy out of nothing: a HEALTHY state
+     is only restored when there is either an explicit persisted state
+     that already proved the provider worked, OR a non-zero success
+     count recorded in prior runs.
+   - CONFIGURED (unverified/untested) is safe to restore when there
+     is no evidence yet of success or failure.
+   - The restored state is used only as a start-of-day scheduling
+     status, not as an assertion of current health. The router will
+     re-classify on the very next real request.
+   ===================================================== */
+
+const LEGACY_RESTORED_HEALTHY_STATES = new Set<HealthState>([
+  HealthState.HEALTHY,
+  HealthState.CONFIGURED,
+]);
+
+/*
+ * Persistent problem states carry real evidence about credentials,
+ * billing, or repeated failures. They must survive a restart —
+ * restoring HEALTHY over them would hide genuine authentication,
+ * quota, or quarantine failures.
+ */
+const LEGACY_PERSISTENT_FAILURE_STATES = new Set<HealthState>([
+  HealthState.AUTH_FAILED,
+  HealthState.NO_CREDITS,
+  HealthState.QUARANTINED,
+  HealthState.NOT_CONFIGURED,
+]);
+
+/*
+ * Soft/transient states describe what a previous process observed.
+ * They are re-established by the next real request, so a historical
+ * success is enough to restore HEALTHY instead of carrying a stale
+ * soft-failure across a restart.
+ */
+const LEGACY_TRANSIENT_STATES = new Set<HealthState>([
+  HealthState.DEGRADED,
+  HealthState.TIMEOUT,
+  HealthState.NETWORK_ERROR,
+  HealthState.RATE_LIMITED,
+  HealthState.RECOVERING,
+]);
+
+export function restoreHealthStateFromLegacyJson(data: SavedProviderHealth): HealthState {
+  const persisted = data.healthState;
+  const knownPersisted =
+    typeof persisted === "string" &&
+    (LEGACY_RESTORED_HEALTHY_STATES.has(persisted as HealthState) ||
+      LEGACY_PERSISTENT_FAILURE_STATES.has(persisted as HealthState) ||
+      LEGACY_TRANSIENT_STATES.has(persisted as HealthState));
+
+  // 1. Persistent failure evidence is real: never fake it away.
+  if (
+    knownPersisted &&
+    LEGACY_PERSISTENT_FAILURE_STATES.has(persisted as HealthState)
+  ) {
+    return persisted as HealthState;
+  }
+
+  // 2. Proven-good persisted state is kept as-is.
+  if (
+    knownPersisted &&
+    LEGACY_RESTORED_HEALTHY_STATES.has(persisted as HealthState)
+  ) {
+    return persisted as HealthState;
+  }
+
+  // 3. Transient states and legacy records without a usable state:
+  //    a historical success proves the provider has already worked
+  //    with these credentials, so preserve HEALTHY instead of
+  //    starting the process in a stale failed state.
+  if (data.successes > 0) {
+    return HealthState.HEALTHY;
+  }
+
+  // 4. No success and no persistent failure evidence: start as
+  //    configured-but-untested. The first real request decides.
+  return HealthState.CONFIGURED;
 }
 
 const DATA_DIR = path.join(
@@ -187,9 +275,18 @@ export class AIRouter {
      * Ensure every configured provider has a health record.
      * This allows newly added providers to participate in
      * cooldowns, quarantine, recovery probes, and scoring.
+     *
+     * Legacy compatibility: a provider whose persisted state still
+     * says NOT_CONFIGURED but whose credentials are available NOW
+     * (e.g. the API key was added after the previous run) must be
+     * re-tested instead of being reported as unconfigured. This only
+     * applies when there is no outcome evidence yet, so it can never
+     * manufacture a healthy provider.
      */
     for (const provider of this.providers) {
-      if (!this.health.has(provider.name)) {
+      const existing = this.health.get(provider.name);
+
+      if (!existing) {
         this.health.set(provider.name, {
           failures: 0,
           successes: 0,
@@ -209,6 +306,15 @@ export class AIRouter {
             : HealthState.NOT_CONFIGURED,
           modelHealth: new Map(),
         });
+      } else if (
+        provider.isAvailable() &&
+        existing.healthState === HealthState.NOT_CONFIGURED &&
+        existing.successes === 0 &&
+        existing.failures === 0
+      ) {
+        // Credentials appeared after the last run: allow the provider
+        // to be exercised again instead of staying NOT_CONFIGURED.
+        existing.healthState = HealthState.CONFIGURED;
       }
     }
 
@@ -297,7 +403,7 @@ export class AIRouter {
               data.lastError,
 
             healthState:
-              data.healthState ?? HealthState.CONFIGURED,
+              restoreHealthStateFromLegacyJson(data),
             modelHealth,
             lastHttpStatus:
               data.lastHttpStatus,

@@ -46,5 +46,16 @@ if (localLLM.isAvailable()) {
   providerRegistry.register(localLLM, 200);
 }
 
+// Load dynamic providers from database (custom + local providers added via dashboard)
+try {
+  const { loadAllDynamicProviders } = require("./platform/provider-adapter");
+  const dynamicProviders = loadAllDynamicProviders();
+  for (const { provider, priority } of dynamicProviders) {
+    providerRegistry.register(provider, priority);
+  }
+} catch {
+  // Database not yet initialized or platform not available — skip dynamic providers
+}
+
 export const providers: AIProvider[] =
   providerRegistry.getAll();

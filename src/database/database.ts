@@ -414,6 +414,59 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
           ON support_case_evidence(case_id, message_id);
       `,
     },
+    {
+      version: 16,
+      description: "AI provider platform: dynamic provider management",
+      sql: `
+        -- Provider definitions (built-in + custom)
+        CREATE TABLE IF NOT EXISTS providers (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          provider_type TEXT NOT NULL CHECK(provider_type IN ('builtin', 'custom', 'local')),
+          protocol TEXT NOT NULL DEFAULT 'openai_compatible',
+          endpoint TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          priority INTEGER NOT NULL DEFAULT 100,
+          default_model TEXT,
+          timeout_ms INTEGER NOT NULL DEFAULT 15000,
+          retry_max_attempts INTEGER NOT NULL DEFAULT 2,
+          metadata_json TEXT DEFAULT '{}',
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+        );
+        CREATE INDEX IF NOT EXISTS idx_providers_type ON providers(provider_type);
+        CREATE INDEX IF NOT EXISTS idx_providers_enabled ON providers(enabled);
+
+        -- Provider credentials (API keys, secrets) -- stored separately from metadata
+        CREATE TABLE IF NOT EXISTS provider_credentials (
+          provider_id TEXT NOT NULL,
+          credential_key TEXT NOT NULL,
+          credential_value TEXT NOT NULL,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          PRIMARY KEY (provider_id, credential_key),
+          FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+        );
+
+        -- Discovered/configured models per provider
+        CREATE TABLE IF NOT EXISTS provider_models (
+          id TEXT PRIMARY KEY,
+          provider_id TEXT NOT NULL,
+          model_id TEXT NOT NULL,
+          display_name TEXT,
+          context_length INTEGER,
+          capabilities_json TEXT DEFAULT '[]',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          priority INTEGER NOT NULL DEFAULT 100,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_provider_models_provider ON provider_models(provider_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_models_unique ON provider_models(provider_id, model_id);
+      `,
+    },
   ];
 }
 

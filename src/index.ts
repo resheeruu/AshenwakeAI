@@ -2426,9 +2426,18 @@ let discordLastFailureAt = 0;
 let discordLastFailureReason = "";
 let discordLastReadyAt = 0;
 
+// Startup grace window — see provider lifecycle semantics in
+// src/core/preflight.ts. During this window the supervisor records
+// transient start-of-day signals but does not count them towards
+// termination, because providers have not yet completed their first
+// real request and the supervisor must not treat initialisation as a
+// sustained production failure.
+const SUPERVISOR_GRACE_MS = 120_000;
+
 const internalSupervisor = new InternalSupervisor({
   intervalMs: 30_000,
   failureThreshold: 3,
+  startupGraceMs: SUPERVISOR_GRACE_MS,
 
   checks: createSupervisorChecks(router),
 
