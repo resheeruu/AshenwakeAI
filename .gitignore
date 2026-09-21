@@ -15,6 +15,7 @@ dist/
 # --- Data & runtime state ---
 data/
 *.log
+.ashenai-dep-hash
 
 # --- Backup directories & files ---
 .agent-backups/

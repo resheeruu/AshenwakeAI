@@ -119,12 +119,12 @@ stage_begin 3 "Dependencies"
 SKIP_INSTALL=0
 
 # Dependency validation strategy:
-# Store a sha256 content hash of package-lock.json inside node_modules/
-# after each successful npm ci. On restart, recompute the hash and compare.
-# This directly proves the lockfile has not changed since the last install,
-# without relying on filesystem timestamps (which are unreliable in
-# containers) or lockfileVersion alone (which does not prove content match).
-DEP_HASH_FILE="node_modules/.ashenai-dep-hash"
+# Store a sha256 content hash of package-lock.json OUTSIDE node_modules/
+# (in the project root) after each successful npm ci. On restart, recompute
+# the hash and compare. Placing the marker outside node_modules ensures it
+# survives `npm ci` (which deletes node_modules entirely) and prevents the
+# install-skip marker from being destroyed on every dependency installation.
+DEP_HASH_FILE=".ashenai-dep-hash"
 LOCKFILE_HASH=$(sha256sum package-lock.json 2>/dev/null | awk '{print $1}' || echo "")
 
 if [ -d "node_modules" ] && [ -f "package-lock.json" ] && [ -n "$LOCKFILE_HASH" ]; then
@@ -132,7 +132,7 @@ if [ -d "node_modules" ] && [ -f "package-lock.json" ] && [ -n "$LOCKFILE_HASH" 
     STORED_HASH=$(cat "$DEP_HASH_FILE" 2>/dev/null || echo "")
     if [ "$LOCKFILE_HASH" = "$STORED_HASH" ]; then
       SKIP_INSTALL=1
-      echo "[Wispbyte] Dependency hash matches lockfile (skipping install)"
+      echo "[Wispbyte] Dependencies already installed — skipping npm ci."
     else
       echo "[Wispbyte] Dependency hash mismatch (lockfile changed or node_modules stale)"
     fi
@@ -164,19 +164,25 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
       stage_fail 3 "Dependencies" "npm ci failed"
       exit 1
     fi
-    # Store the lockfile hash after successful install for future restarts.
-    mkdir -p node_modules
-    sha256sum package-lock.json | awk '{print $1}' > "$DEP_HASH_FILE"
-    echo "[Wispbyte] Dependency hash stored for future restarts"
   else
     echo "[Wispbyte] No package-lock.json. Running npm install..."
     if ! npm install --no-fund --no-audit 2>&1; then
       stage_fail 3 "Dependencies" "npm install failed"
       exit 1
     fi
-    mkdir -p node_modules
-    sha256sum package-lock.json | awk '{print $1}' > "$DEP_HASH_FILE"
   fi
+
+  # Verify installation succeeded before writing the marker.
+  if [ ! -d "node_modules" ] || [ ! -f "node_modules/.package-lock.json" ]; then
+    stage_fail 3 "Dependencies" "node_modules incomplete after install"
+    exit 1
+  fi
+
+  # Store the lockfile hash atomically after verified successful install.
+  # This marker persists across restarts because it lives outside node_modules.
+  echo "$LOCKFILE_HASH" > "${DEP_HASH_FILE}.tmp"
+  mv "${DEP_HASH_FILE}.tmp" "$DEP_HASH_FILE"
+  echo "[Wispbyte] Dependency hash stored for future restarts"
 fi
 
 stage_ok 3 "Dependencies" "$S3"
