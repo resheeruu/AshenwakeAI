@@ -5,14 +5,46 @@
 # Lightweight startup resource check for constrained hosting.
 # Reports disk, RAM, and CPU status using POSIX-compatible tools.
 #
+# STORAGE SEMANTICS (do NOT misinterpret):
+#   1. Physical device storage — the real disk in the datacenter.
+#   2. Host machine storage — what the host OS sees.
+#   3. Container-visible filesystem capacity — what `df` reports
+#      from inside the container (may be the host fs, an overlay
+#      upperdir, or a mounted volume; NOT the account quota).
+#   4. Hosting account/server quota — the limit Wispbyte imposes on
+#      this server (often NOT visible via df/statfs from inside
+#      the container).
+#   5. Individual filesystem / writable-layer limits — overlay
+#      upperdir size, /tmp (tmpfs) size, inode exhaustion, or
+#      per-directory quotas that can raise ENOSPC even when `df`
+#      on APP_DIR looks large.
+#
+# Therefore a large "Disk free" value MUST NEVER be presented as
+# proof that the hosting account has sufficient allocated storage.
+# When the platform does not expose the real quota, this script
+# explicitly reports:
+#   "Actual Wispbyte storage quota could not be verified from inside the container."
+#
+# This script only identifies the filesystem(s) actually used by:
+#   - Playwright browser cache (PLAYWRIGHT_BROWSERS_PATH)
+#   - npm cache (npm config get cache)
+#   - temporary downloads (TMPDIR / /tmp)
+#   - application runtime data (APP_DIR / HOME)
+# It never deletes files to "fix" ENOSPC.
+#
 # Output format:
 #   [RESOURCE] Disk: 1.82 GB free / 5.00 GB (36.4%) OK
+#   [RESOURCE] Disk detail: path=... device=... mount=... free=... inodes_free=...
+#   [RESOURCE] Disk note: df shows container-visible filesystem capacity, NOT hosting account/server quota.
 #   [RESOURCE] RAM: 286 MB RSS / 512 MB available (55.9%) OK
 #   [RESOURCE] CPU: load 0.42 OK
 #
 # Exit code: always 0 (never crashes startup).
 # Side effects: exports ASHENAI_RESOURCE_DISK_STATE, ASHENAI_RESOURCE_RAM_STATE,
 #               ASHENAI_RESOURCE_CPU_STATE, ASHENAI_RESOURCE_DISK_FREE_MB
+#               (DISK_FREE_MB is the CONSERVATIVE MINIMUM across probed paths,
+#               because ENOSPC is decided by the most constrained filesystem
+#               in the download path, not by APP_DIR alone.)
 # ============================================================
 
 set -euo pipefail
@@ -42,19 +74,25 @@ log() {
   echo "[RESOURCE] $*"
 }
 
-# Classify disk state based on free MB and free percent
+# Classify disk state based on free MB and free percent (awk; no bc needed)
+float_lt() {
+  awk -v a="$1" -v b="$2" 'BEGIN{exit !(a+0 < b+0)}'
+}
+float_gt() {
+  awk -v a="$1" -v b="$2" 'BEGIN{exit !(a+0 > b+0)}'
+}
 classify_disk() {
   local free_mb="$1"
   local free_pct="$2"
 
   # Critical: either absolute or percentage threshold
-  if [ "$free_mb" -lt "$DISK_CRITICAL_MB" ] || [ "$(echo "$free_pct < $DISK_CRITICAL_PCT" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+  if [ "$free_mb" -lt "$DISK_CRITICAL_MB" ] || float_lt "$free_pct" "$DISK_CRITICAL_PCT"; then
     echo "CRITICAL"
     return
   fi
 
   # Warning: either absolute or percentage threshold
-  if [ "$free_mb" -lt "$DISK_WARN_MB" ] || [ "$(echo "$free_pct < $DISK_WARN_PCT" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+  if [ "$free_mb" -lt "$DISK_WARN_MB" ] || float_lt "$free_pct" "$DISK_WARN_PCT"; then
     echo "WARN"
     return
   fi
@@ -62,16 +100,16 @@ classify_disk() {
   echo "OK"
 }
 
-# Classify RAM state based on available percent used
+# Classify RAM state based on available percent used (awk; no bc needed)
 classify_ram() {
   local used_pct="$1"
 
-  if [ "$(echo "$used_pct > $RAM_CRITICAL_PCT" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+  if float_gt "$used_pct" "$RAM_CRITICAL_PCT"; then
     echo "CRITICAL"
     return
   fi
 
-  if [ "$(echo "$used_pct > $RAM_WARN_PCT" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+  if float_gt "$used_pct" "$RAM_WARN_PCT"; then
     echo "WARN"
     return
   fi
@@ -79,11 +117,11 @@ classify_ram() {
   echo "OK"
 }
 
-# Classify CPU state based on load average
+# Classify CPU state based on load average (awk; no bc needed)
 classify_cpu() {
   local load="$1"
 
-  if [ "$(echo "$load > $CPU_WARN_LOAD" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+  if float_gt "$load" "$CPU_WARN_LOAD"; then
     echo "WARN"
     return
   fi
@@ -91,24 +129,112 @@ classify_cpu() {
   echo "OK"
 }
 
-# Format bytes to human-readable
+# Format bytes to human-readable (awk; no bc needed)
 format_bytes() {
   local bytes="$1"
   if [ "$bytes" -ge 1073741824 ]; then
-    echo "$(echo "scale=2; $bytes / 1073741824" | bc 2>/dev/null || echo "0") GB"
+    awk -v b="$bytes" 'BEGIN{printf "%.2f GB", b/1073741824}'
   elif [ "$bytes" -ge 1048576 ]; then
-    echo "$(echo "scale=0; $bytes / 1048576" | bc 2>/dev/null || echo "0") MB"
+    awk -v b="$bytes" 'BEGIN{printf "%d MB", b/1048576}'
   else
     echo "${bytes} B"
   fi
 }
 
 # ---------- Disk Check ----------
+# ENOSPC can strike on ANY fs in the download path (quota, overlay
+# upperdir, /tmp tmpfs, inode exhaustion) even when APP_DIR looks
+# large. Probe each path; classify on the conservative minimum.
+
+probe_disk_path() {
+  local target_path="$1"
+  _PD_FREE_MB="0"; _PD_FREE_PCT="100"; _PD_TOTAL_MB="0"
+  _PD_DEVICE="unknown"; _PD_MOUNT="unknown"
+  _PD_INO_FREE="unknown"; _PD_INO_PCT="unknown"
+  if [ ! -e "$target_path" ]; then
+    target_path=$(dirname "$target_path")
+  fi
+  [ -e "$target_path" ] || return 1
+  local df_line
+  df_line=$(df -P "$target_path" 2>/dev/null | awk 'NR==2 {print $1,$2,$3,$4,$6}') || return 1
+  [ -n "$df_line" ] || return 1
+  local device total_kb free_kb mount
+  device=$(echo "$df_line" | awk '{print $1}')
+  total_kb=$(echo "$df_line" | awk '{print $2}')
+  free_kb=$(echo "$df_line" | awk '{print $4}')
+  mount=$(echo "$df_line" | awk '{print $5}')
+  if [ -z "$total_kb" ] || [ "$total_kb" -le 0 ] 2>/dev/null; then return 1; fi
+  _PD_DEVICE="$device"; _PD_MOUNT="$mount"
+  # df -P reports 512-byte blocks on Linux/POSIX (NOT 1K): convert to MB.
+  _PD_TOTAL_MB=$(( total_kb * 512 / 1048576 )); _PD_FREE_MB=$(( free_kb * 512 / 1048576 ))
+  _PD_FREE_PCT=$(awk -v f="$free_kb" -v t="$total_kb" 'BEGIN{printf "%.1f", (t>0 ? f*100/t : 100)}')
+  local ino_line
+  ino_line=$(df -i -P "$target_path" 2>/dev/null | awk 'NR==2 {print $4,$5}') || true
+  if [ -n "$ino_line" ]; then
+    _PD_INO_FREE=$(echo "$ino_line" | awk '{print $1}')
+    _PD_INO_PCT=$(echo "$ino_line" | awk '{print $2}')
+  fi
+  return 0
+}
 
 check_disk() {
   local target_path="${APP_DIR:-.}"
-
-  # Try df (POSIX standard)
+  local browsers_path="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+  local npm_cache_path=""
+  if command -v npm >/dev/null 2>&1; then
+    npm_cache_path=$(npm config get cache 2>/dev/null | tr -d '\r\n' || true)
+  fi
+  local tmp_path="${TMPDIR:-/tmp}"
+  local home_path="${HOME:-$target_path}"
+  local cands="$target_path
+$browsers_path
+$tmp_path
+$home_path"
+  if [ -n "$npm_cache_path" ]; then cands="$cands
+$npm_cache_path"; fi
+  if [ "$tmp_path" != "/tmp" ]; then cands="$cands
+/tmp"; fi
+  local min_free_mb="" min_free_pct="100" min_path="" min_dev="" min_mnt=""
+  local sum_total_mb="0" sum_free_mb="0" sum_free_pct="100" probed=0
+  local cand
+  while IFS= read -r cand; do
+    [ -z "$cand" ] && continue
+    if probe_disk_path "$cand"; then
+      probed=1
+      log "Disk detail: path=${cand} device=${_PD_DEVICE} mount=${_PD_MOUNT} free=$((_PD_FREE_MB))MB/ $((_PD_TOTAL_MB))MB (${_PD_FREE_PCT}%) inodes_free=${_PD_INO_FREE} (${_PD_INO_PCT})"
+      if [ "$cand" = "$target_path" ]; then
+        sum_total_mb="$_PD_TOTAL_MB"; sum_free_mb="$_PD_FREE_MB"; sum_free_pct="$_PD_FREE_PCT"
+      fi
+      if [ -z "$min_free_mb" ] || [ "$_PD_FREE_MB" -lt "$min_free_mb" ]; then
+        min_free_mb="$_PD_FREE_MB"; min_free_pct="$_PD_FREE_PCT"
+        min_path="$cand"; min_dev="$_PD_DEVICE"; min_mnt="$_PD_MOUNT"
+      fi
+      if [ "$_PD_INO_FREE" = "0" ]; then
+        min_free_mb="0"; min_free_pct="0"
+        min_path="$cand (inodes exhausted)"; min_dev="$_PD_DEVICE"; min_mnt="$_PD_MOUNT"
+      fi
+    else
+      log "Disk detail: path=${cand} (unavailable)"
+    fi
+  done <<CANDS_EOF
+$cands
+CANDS_EOF
+  if [ "$probed" -eq 1 ] && [ -n "$min_free_mb" ]; then
+    export ASHENAI_RESOURCE_DISK_FREE_MB="$min_free_mb"
+    ASHENAI_RESOURCE_DISK_STATE=$(classify_disk "$min_free_mb" "$min_free_pct")
+    export ASHENAI_RESOURCE_DISK_STATE
+    local total_fmt free_fmt
+    total_fmt=$(format_bytes "$((sum_total_mb * 1048576))")
+    free_fmt=$(format_bytes "$((sum_free_mb * 1048576))")
+    log "Disk: ${free_fmt} free / ${total_fmt} (${sum_free_pct}%) ${ASHENAI_RESOURCE_DISK_STATE} (container-visible; app path)"
+    if [ "$min_path" != "$target_path" ]; then
+      log "Disk: most constrained path: ${min_path} (${min_free_mb} MB free on ${min_dev} at ${min_mnt})"
+    fi
+    log "Disk note: df/statfs show container-visible capacity, NOT hosting account/server quota."
+    log "Actual Wispbyte storage quota could not be verified from inside the container."
+    return
+  fi
+  # Fallback single-path df (only reached if multi-path probe failed)
   local df_output
   if df_output=$(df -P "$target_path" 2>/dev/null); then
     local line
@@ -121,20 +247,23 @@ check_disk() {
 
       if [ -n "$total_kb" ] && [ "$total_kb" -gt 0 ] 2>/dev/null; then
         local total_mb free_mb used_pct free_pct
-        total_mb=$(( total_kb / 1024 ))
-        free_mb=$(( free_kb / 1024 ))
-        used_pct=$(echo "scale=1; ($total_kb - $free_kb) * 100 / $total_kb" | bc 2>/dev/null || echo "0")
-        free_pct=$(echo "scale=1; $free_kb * 100 / $total_kb" | bc 2>/dev/null || echo "100")
+        # df -P reports 512-byte blocks (NOT 1K).
+        total_mb=$(( total_kb * 512 / 1048576 ))
+        free_mb=$(( free_kb * 512 / 1048576 ))
+        used_pct=$(awk -v f="$free_kb" -v t="$total_kb" 'BEGIN{printf "%.1f", (t>0 ? (t-f)*100/t : 0)}')
+        free_pct=$(awk -v f="$free_kb" -v t="$total_kb" 'BEGIN{printf "%.1f", (t>0 ? f*100/t : 100)}')
 
         export ASHENAI_RESOURCE_DISK_FREE_MB="$free_mb"
         ASHENAI_RESOURCE_DISK_STATE=$(classify_disk "$free_mb" "$free_pct")
         export ASHENAI_RESOURCE_DISK_STATE
 
         local total_fmt free_fmt
-        total_fmt=$(format_bytes "$((total_kb * 1024))")
-        free_fmt=$(format_bytes "$((free_kb * 1024))")
+        total_fmt=$(format_bytes "$((total_kb * 512))")
+        free_fmt=$(format_bytes "$((free_kb * 512))")
 
-        log "Disk: ${free_fmt} free / ${total_fmt} (${free_pct}%) ${ASHENAI_RESOURCE_DISK_STATE}"
+        log "Disk: ${free_fmt} free / ${total_fmt} (${free_pct}%) ${ASHENAI_RESOURCE_DISK_STATE} (container-visible; single-path fallback)"
+        log "Disk note: df/statfs show container-visible capacity, NOT hosting account/server quota."
+        log "Actual Wispbyte storage quota could not be verified from inside the container."
         return
       fi
     fi
@@ -180,13 +309,16 @@ check_disk() {
         total_fmt=$(format_bytes "$total_b")
         free_fmt=$(format_bytes "$free_b")
 
-        log "Disk: ${free_fmt} free / ${total_fmt} (${free_pct}%) ${ASHENAI_RESOURCE_DISK_STATE}"
+        log "Disk: ${free_fmt} free / ${total_fmt} (${free_pct}%) ${ASHENAI_RESOURCE_DISK_STATE} (container-visible; statfs fallback)"
+        log "Disk note: df/statfs show container-visible capacity, NOT hosting account/server quota."
+        log "Actual Wispbyte storage quota could not be verified from inside the container."
         return
       fi
     fi
   fi
 
   log "Disk: unavailable"
+  log "Actual Wispbyte storage quota could not be verified from inside the container."
   export ASHENAI_RESOURCE_DISK_STATE="UNAVAILABLE"
 }
 
@@ -244,7 +376,7 @@ check_ram() {
   # Classify
   if [ "$total_mb" -gt 0 ] && [ "$available_mb" -gt 0 ]; then
     local used_pct
-    used_pct=$(echo "scale=1; ($total_mb - $available_mb) * 100 / $total_mb" | bc 2>/dev/null || echo "0")
+    used_pct=$(awk -v t="$total_mb" -v a="$available_mb" 'BEGIN{printf "%.1f", (t>0 ? (t-a)*100/t : 0)}')
 
     ASHENAI_RESOURCE_RAM_STATE=$(classify_ram "$used_pct")
     export ASHENAI_RESOURCE_RAM_STATE

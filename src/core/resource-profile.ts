@@ -5,6 +5,15 @@ import path from "node:path";
 // ============================================================
 // U19: Resource Profile — hosting-aware resource classification
 // Standalone module — does not import from scripts/ to stay within rootDir.
+//
+// STORAGE SEMANTICS: disk.* below is container-visible filesystem
+// capacity from statfsSync(cwd) — NOT the hosting account/server
+// quota. A large freeGB value MUST NEVER be presented as proof of
+// sufficient hosting quota. Distinguish:
+//  1. physical device storage, 2. host machine storage,
+//  3. container-visible filesystem capacity (this field),
+//  4. hosting account/server quota (NOT visible in-container),
+//  5. filesystem/writable-layer limits (overlay, /tmp tmpfs, inodes).
 // ============================================================
 
 export type HostClassification = "healthy" | "constrained" | "degraded" | "critical" | "unknown";
@@ -29,6 +38,9 @@ export interface ResourceProfile {
     freeGB: number;
     usedPct: number;
     dataDirMB: number;
+    /** Always false in-container: hosting quota is not exposed via statfs. */
+    quotaVerified: boolean;
+    quotaNote: string;
   };
   runtime: {
     nodeVersion: string;
@@ -105,7 +117,11 @@ export function buildResourceProfile(): ResourceProfile {
     classification,
     memory: { totalMB: totalMemMB, freeMB: freeMemMB, availableMB: freeMemMB, nodeRSS_MB: rssMB, nodeHeap_MB: heapMB },
     cpu: { cores: os.cpus().length || 1, arch: os.arch(), loadAvg: os.loadavg() },
-    disk: { totalGB, freeGB, usedPct, dataDirMB },
+    disk: {
+      totalGB, freeGB, usedPct, dataDirMB,
+      quotaVerified: false,
+      quotaNote: "Actual Wispbyte storage quota could not be verified from inside the container.",
+    },
     runtime: { nodeVersion: process.version, platform: os.platform(), uptime: Math.round(process.uptime()) },
     capabilities,
     recommendations,

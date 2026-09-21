@@ -146,6 +146,18 @@ test("disk usage measured (LIVE)", "LIVE VERIFIED", () => {
   assert.ok(profile.disk.usedPct >= 0 && profile.disk.usedPct <= 100, `usedPct: ${profile.disk.usedPct}`);
 });
 
+test("disk quota explicitly NOT verified in-container", "LIVE VERIFIED", () => {
+  // Container-visible statfs capacity is NOT the hosting account/server
+  // quota. The profile must say so explicitly and never imply otherwise.
+  const profile = buildResourceProfile();
+  assert.equal(profile.disk.quotaVerified, false, "disk.quotaVerified must be false");
+  assert.equal(
+    profile.disk.quotaNote,
+    "Actual Wispbyte storage quota could not be verified from inside the container.",
+    "disk.quotaNote must state the quota is unverifiable",
+  );
+});
+
 test("no secrets in profile", "LIVE VERIFIED", () => {
   const profile = JSON.stringify(buildResourceProfile());
   assert.ok(!profile.match(/sk-[a-zA-Z0-9]{20,}/), "profile contains API key");

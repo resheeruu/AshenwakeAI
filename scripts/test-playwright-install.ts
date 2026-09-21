@@ -110,6 +110,22 @@ async function main(): Promise<void> {
     "ensure-playwright.sh has installing/ready/failed state transitions",
   );
 
+  // Unsupported platform (Termux/Android) must NOT be reported as a disk problem.
+  assert(
+    shellScript.includes("Unsupported platform"),
+    "ensure-playwright.sh detects 'Unsupported platform' from Playwright",
+  );
+
+  assert(
+    shellScript.includes('"unsupported"'),
+    "ensure-playwright.sh records an 'unsupported' bootstrap state",
+  );
+
+  assert(
+    /Unsupported platform[\s\S]{0,600}unrelated to disk space/.test(shellScript),
+    "ensure-playwright.sh states unsupported platform is unrelated to disk space",
+  );
+
   /* ================================================================
    * ENSURE-PLAYWRIGHT.SH DOES NOT CRASH ON FAILURE
    * ================================================================ */

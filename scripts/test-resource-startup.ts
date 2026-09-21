@@ -306,23 +306,37 @@ async function main(): Promise<void> {
 
   const startScript = readFile("scripts/start.sh");
 
-  // Verify start.sh calls check-resources.sh BEFORE ensure-playwright.sh
-  const resourceIdx = startScript.indexOf("check-resources.sh");
-  const playwrightIdx = startScript.indexOf("ensure-playwright.sh");
+  // Verify start.sh runs check-resources.sh BEFORE ensure-playwright.sh.
+  // start.sh SOURCES check-resources.sh (`. "scripts/check-resources.sh"`)
+  // so ASHENAI_RESOURCE_* exports propagate — indexOf("check-resources.sh")
+  // alone is not sufficient since the filename appears inside the
+  // shellcheck comment too. Match the actual invocation lines instead.
+  const resourceCallIdx = Math.max(
+    startScript.indexOf('bash "$APP_DIR/scripts/check-resources.sh"'),
+    startScript.indexOf(". \"$APP_DIR/scripts/check-resources.sh\""),
+    startScript.indexOf("scripts/check-resources.sh\" || true"),
+  );
+  const playwrightIdx = Math.max(
+    startScript.indexOf('bash "$APP_DIR/scripts/ensure-playwright.sh"'),
+    startScript.indexOf(". \"$APP_DIR/scripts/ensure-playwright.sh\""),
+    startScript.indexOf("scripts/ensure-playwright.sh\""),
+  );
 
   assert(
-    resourceIdx >= 0 && playwrightIdx >= 0,
+    resourceCallIdx >= 0 && playwrightIdx >= 0,
     "start.sh calls both check-resources.sh and ensure-playwright.sh",
   );
 
   assert(
-    resourceIdx < playwrightIdx,
+    resourceCallIdx < playwrightIdx,
     "start.sh calls check-resources.sh BEFORE ensure-playwright.sh",
   );
 
   assert(
-    startScript.includes('export APP_DIR'),
-    "start.sh exports APP_DIR for check-resources.sh",
+    startScript.includes('export APP_DIR') &&
+      (startScript.includes('bash "$APP_DIR/scripts/check-resources.sh"') ||
+        startScript.includes('. "$APP_DIR/scripts/check-resources.sh"')),
+    "start.sh runs check-resources.sh with APP_DIR exported (exec or source)",
   );
 
   assert(
@@ -418,6 +432,129 @@ async function main(): Promise<void> {
   assert(
     ensurePlaywright.includes("FORCE"),
     "ensure-playwright.sh supports ASHENAI_PLAYWRIGHT_BOOTSTRAP_FORCE for retry",
+  );
+
+  assert(
+    ensurePlaywright.includes("Actual Wispbyte storage quota could not be verified from inside the container."),
+    "ensure-playwright.sh states the Wispbyte quota cannot be verified in-container",
+  );
+
+  assert(
+    ensurePlaywright.includes("container-visible") || ensurePlaywright.includes("container-visible capacity"),
+    "ensure-playwright.sh labels df values as container-visible, not quota",
+  );
+
+  assert(
+    ensurePlaywright.includes("inode") || ensurePlaywright.includes("df -i"),
+    "ensure-playwright.sh lists inode exhaustion as an ENOSPC cause",
+  );
+
+  assert(
+    ensurePlaywright.includes("npm_cache_dir") || ensurePlaywright.includes("npm config get cache"),
+    "ensure-playwright.sh probes the npm cache filesystem",
+  );
+
+  assert(
+    ensurePlaywright.includes("TMPDIR") && ensurePlaywright.includes("/tmp"),
+    "ensure-playwright.sh probes TMPDIR and /tmp filesystems",
+  );
+
+  assert(
+    ensurePlaywright.includes("PLAYWRIGHT_BROWSERS_PATH") && ensurePlaywright.includes("min_disk_space_mb"),
+    "ensure-playwright.sh classifies on the minimum across pipeline paths",
+  );
+
+  // Must never "fix" ENOSPC by deleting arbitrary files.
+  assert(
+    !ensurePlaywright.match(/rm\s+-rf\s+(?!\"\$LOCK_DIR\")\S/m) ||
+      !ensurePlaywright.includes("rm -rf $HOME/.cache"),
+    "ensure-playwright.sh never deletes cache dirs to fix ENOSPC (only lock dir)",
+  );
+
+  assert(
+    checkResources.includes("Actual Wispbyte storage quota could not be verified from inside the container."),
+    "check-resources.sh states the Wispbyte quota cannot be verified in-container",
+  );
+
+  assert(
+    checkResources.includes("NOT the hosting account/server quota") ||
+      checkResources.includes("NOT hosting account/server quota"),
+    "check-resources.sh labels df output as container-visible, not quota",
+  );
+
+  assert(
+    checkResources.includes("df -i") || checkResources.includes("inodes_free"),
+    "check-resources.sh reports inode usage (df -i)",
+  );
+
+  /* ================================================================
+   * DISK / ENOSPC DIAGNOSTIC SCRIPT
+   * ================================================================ */
+
+  section("Disk/ENOSPC Diagnostic");
+
+  const diagPath = "scripts/diagnose-disk-enospc.ts";
+  const diag = fs.existsSync(diagPath) ? readFile(diagPath) : "";
+
+  assert(diag.length > 0, "scripts/diagnose-disk-enospc.ts exists");
+
+  assert(
+    diag.includes("Actual Wispbyte storage quota could not be verified from inside the container."),
+    "diagnostic states the Wispbyte quota cannot be verified in-container",
+  );
+
+  // Must distinguish the five storage layers rather than treating df as quota.
+  assert(
+    diag.includes("physical device storage") &&
+      diag.includes("host machine storage") &&
+      diag.includes("hosting account quota") &&
+      diag.includes("writable-layer"),
+    "diagnostic distinguishes device / host / container / quota / writable-layer storage",
+  );
+
+  assert(
+    diag.includes("df free space alone cannot prove") ||
+      diag.includes("NOT proof of sufficient hosting storage"),
+    "diagnostic refuses to treat df free space as proof of sufficient storage",
+  );
+
+  assert(
+    diag.includes("inode") && diag.includes("overlay") && diag.includes("tmpfs"),
+    "diagnostic checks inode exhaustion, overlay and tmpfs filesystems",
+  );
+
+  assert(
+    diag.includes("npm config get cache") && diag.includes("TMPDIR") && diag.includes("/tmp"),
+    "diagnostic probes npm cache, TMPDIR and /tmp filesystems",
+  );
+
+  // Bounded writes only: probe size must be clamped.
+  assert(
+    diag.includes("Math.min(parsed, 512)"),
+    "diagnostic clamps the write probe size (never unbounded)",
+  );
+
+  // Never deletes arbitrary files: only the unique probe file is unlinked.
+  assert(
+    (diag.match(/unlinkSync\(/g) || []).length === 1 &&
+      diag.includes("ashenai-diskprobe-"),
+    "diagnostic only removes its own uniquely-named probe file",
+  );
+
+  assert(
+    !/rm\s+-rf|rimraf|fs\.rmSync/.test(diag),
+    "diagnostic never deletes directories or arbitrary files",
+  );
+
+  // Diagnostic must not make network calls.
+  assert(
+    !/require\(["'](node:)?(https|http|net|dns)["']\)|from\s+["'](node:)?(https|http|net|dns)["']|fetch\(/.test(diag),
+    "diagnostic performs no network access",
+  );
+
+  assert(
+    diag.includes("NOT VERIFIED"),
+    "diagnostic marks unverifiable values as NOT VERIFIED",
   );
 
   /* ================================================================
@@ -519,6 +656,11 @@ async function main(): Promise<void> {
   assert(
     envExample.includes("ASHENAI_PLAYWRIGHT_BOOTSTRAP_FORCE"),
     ".env.example documents ASHENAI_PLAYWRIGHT_BOOTSTRAP_FORCE",
+  );
+
+  assert(
+    envExample.includes("Actual Wispbyte storage quota could not be verified"),
+    ".env.example states the Wispbyte quota cannot be verified in-container",
   );
 
   /* ================================================================

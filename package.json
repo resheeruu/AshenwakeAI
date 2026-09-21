@@ -21,6 +21,8 @@
     "test-agents": "tsx scripts/test-coding-agents.ts",
     "auth:owner-recover": "tsx scripts/owner-recover.ts",
     "deploy:advisor": "tsx scripts/deployment-advisor.ts",
+    "diagnose:disk": "tsx scripts/diagnose-disk-enospc.ts",
+    "diagnose:playwright": "tsx scripts/check-playwright-runtime.ts",
     "build:emojis": "tsx scripts/build-emojis.ts",
     "upload:emojis": "tsx scripts/upload-emojis.ts",
     "icons:check": "tsx scripts/icons.ts check",

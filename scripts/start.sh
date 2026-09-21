@@ -37,10 +37,15 @@ echo "[start] PORT=${PORT}"
 
 # Lightweight resource check: disk, RAM, CPU.
 # Never crashes startup — always exits 0.
-# Exports ASHENAI_RESOURCE_DISK_STATE, ASHENAI_RESOURCE_RAM_STATE,
-# ASHENAI_RESOURCE_CPU_STATE, ASHENAI_RESOURCE_DISK_FREE_MB
+# Sourced (not executed) so ASHENAI_RESOURCE_DISK_STATE,
+# ASHENAI_RESOURCE_RAM_STATE, ASHENAI_RESOURCE_CPU_STATE and
+# ASHENAI_RESOURCE_DISK_FREE_MB propagate to ensure-playwright.sh.
+# `set -a` auto-exports them for the child process.
 export APP_DIR
-bash "$APP_DIR/scripts/check-resources.sh" || true
+set -a
+# shellcheck source=check-resources.sh
+. "$APP_DIR/scripts/check-resources.sh" || true
+set +a
 
 # ---------- Playwright Chromium (optional) ----------
 

@@ -158,8 +158,13 @@ fi
 
 # Resource check: disk, RAM, CPU.
 # Never crashes startup — always exits 0.
+# Sourced (not executed) so the ASHENAI_RESOURCE_* values propagate
+# to ensure-playwright.sh; `set -a` auto-exports them.
 export APP_DIR
-bash "$APP_DIR/scripts/check-resources.sh" || true
+set -a
+# shellcheck source=check-resources.sh
+. "$APP_DIR/scripts/check-resources.sh" || true
+set +a
 
 # Chromium is optional — the application degrades gracefully when unavailable.
 # We only install when ASHENAI_PLAYWRIGHT_BOOTSTRAP=1 and the binary is missing.
