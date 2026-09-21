@@ -118,33 +118,26 @@ stage_begin 3 "Dependencies"
 
 SKIP_INSTALL=0
 
-# Robust dependency cache detection:
-# Instead of comparing timestamps (unreliable in containers), verify that
-# node_modules exists AND contains a valid .package-lock.json record.
-# If both exist, dependencies were installed by npm ci/install and should
-# be correct. Timestamp-based checks fail when containers recreate
-# filesystems with different mount times.
-if [ -d "node_modules" ] && [ -f "package-lock.json" ]; then
-  if [ -f "node_modules/.package-lock.json" ]; then
-    # Verify the installed lockfile matches the repo lockfile.
-    # Both are JSON with lockfileVersion — compare the version field.
-    INSTALLED_LOCK_VER=$(node -e "
-      try { console.log(require('./node_modules/.package-lock.json').lockfileVersion || '0'); }
-      catch { console.log('0'); }
-    " 2>/dev/null || echo "0")
-    REPO_LOCK_VER=$(node -e "
-      try { console.log(require('./package-lock.json').lockfileVersion || '0'); }
-      catch { console.log('0'); }
-    " 2>/dev/null || echo "0")
+# Dependency validation strategy:
+# Store a sha256 content hash of package-lock.json inside node_modules/
+# after each successful npm ci. On restart, recompute the hash and compare.
+# This directly proves the lockfile has not changed since the last install,
+# without relying on filesystem timestamps (which are unreliable in
+# containers) or lockfileVersion alone (which does not prove content match).
+DEP_HASH_FILE="node_modules/.ashenai-dep-hash"
+LOCKFILE_HASH=$(sha256sum package-lock.json 2>/dev/null | awk '{print $1}' || echo "")
 
-    if [ "$INSTALLED_LOCK_VER" = "$REPO_LOCK_VER" ] && [ "$INSTALLED_LOCK_VER" != "0" ]; then
+if [ -d "node_modules" ] && [ -f "package-lock.json" ] && [ -n "$LOCKFILE_HASH" ]; then
+  if [ -f "$DEP_HASH_FILE" ]; then
+    STORED_HASH=$(cat "$DEP_HASH_FILE" 2>/dev/null || echo "")
+    if [ "$LOCKFILE_HASH" = "$STORED_HASH" ]; then
       SKIP_INSTALL=1
-      echo "[Wispbyte] node_modules valid (lockfileVersion ${INSTALLED_LOCK_VER} matches)"
+      echo "[Wispbyte] Dependency hash matches lockfile (skipping install)"
     else
-      echo "[Wispbyte] lockfileVersion mismatch (installed=${INSTALLED_LOCK_VER} repo=${REPO_LOCK_VER})"
+      echo "[Wispbyte] Dependency hash mismatch (lockfile changed or node_modules stale)"
     fi
   else
-    echo "[Wispbyte] node_modules exists but missing .package-lock.json"
+    echo "[Wispbyte] No dependency hash found (first run after manual install)"
   fi
 else
   if [ ! -d "node_modules" ]; then
@@ -152,6 +145,9 @@ else
   fi
   if [ ! -f "package-lock.json" ]; then
     echo "[Wispbyte] package-lock.json not found"
+  fi
+  if [ -z "$LOCKFILE_HASH" ]; then
+    echo "[Wispbyte] Could not compute lockfile hash"
   fi
 fi
 
@@ -165,18 +161,21 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
   if [ -f "package-lock.json" ]; then
     echo "[Wispbyte] Running npm ci..."
     if ! npm ci --no-fund --no-audit 2>&1; then
-      echo "[Wispbyte] WARNING: npm ci failed. Trying npm install..."
-      if ! npm install --no-fund --no-audit 2>&1; then
-        stage_fail 3 "Dependencies" "npm ci and npm install both failed"
-        exit 1
-      fi
+      stage_fail 3 "Dependencies" "npm ci failed"
+      exit 1
     fi
+    # Store the lockfile hash after successful install for future restarts.
+    mkdir -p node_modules
+    sha256sum package-lock.json | awk '{print $1}' > "$DEP_HASH_FILE"
+    echo "[Wispbyte] Dependency hash stored for future restarts"
   else
     echo "[Wispbyte] No package-lock.json. Running npm install..."
     if ! npm install --no-fund --no-audit 2>&1; then
       stage_fail 3 "Dependencies" "npm install failed"
       exit 1
     fi
+    mkdir -p node_modules
+    sha256sum package-lock.json | awk '{print $1}' > "$DEP_HASH_FILE"
   fi
 fi
 
