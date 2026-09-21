@@ -2561,67 +2561,6 @@ client.on("error", (error) => {
   );
 });
 
-async function testRawDiscordGateway(): Promise<void> {
-  logger.info("🔬 RAW DISCORD WEBSOCKET TEST: Starting...");
-
-  const { default: WebSocket } = await import("ws");
-  const url = "wss://gateway.discord.gg/?v=10&encoding=json";
-
-  await new Promise<void>((resolve) => {
-    let finished = false;
-
-    const finish = (message: string) => {
-      if (finished) return;
-      finished = true;
-      logger.info(message);
-      try {
-        ws.close();
-      } catch {}
-      resolve();
-    };
-
-    const ws = new WebSocket(url, {
-      handshakeTimeout: 15000,
-    });
-
-    const timeout = setTimeout(() => {
-      finish("❌ RAW DISCORD WEBSOCKET TEST: TIMEOUT after 15s");
-    }, 20000);
-
-    ws.once("open", () => {
-      logger.info("🟢 RAW DISCORD WEBSOCKET: OPEN");
-    });
-
-    ws.on("message", (data: Buffer) => {
-      try {
-        const payload = JSON.parse(data.toString());
-
-        if (payload.op === 10) {
-          clearTimeout(timeout);
-          logger.info(
-            `🟢 RAW DISCORD WEBSOCKET: HELLO received, heartbeat_interval=${payload.d?.heartbeat_interval}`,
-          );
-          finish("✅ RAW DISCORD WEBSOCKET TEST: PASSED");
-        }
-      } catch (error) {
-        logger.error("❌ RAW DISCORD WEBSOCKET: Invalid payload", error);
-      }
-    });
-
-    ws.once("error", (error: Error) => {
-      clearTimeout(timeout);
-      logger.error("❌ RAW DISCORD WEBSOCKET ERROR:", error.message);
-      finish("❌ RAW DISCORD WEBSOCKET TEST: FAILED");
-    });
-
-    ws.once("close", (code: number, reason: Buffer) => {
-      logger.info(
-        `🔌 RAW DISCORD WEBSOCKET CLOSED: code=${code} reason=${reason.toString()}`,
-      );
-    });
-  });
-}
-
 const DISCORD_CONNECT_TIMEOUT_MS = 60_000;
 const DISCORD_INITIAL_RETRY_MS = 5_000;
 const DISCORD_MAX_RETRY_MS = 60_000;
@@ -2850,116 +2789,14 @@ async function startDiscord(): Promise<void> {
       discordReady: client.isReady(),
     }), usageManager, usageStats, undefined, memory, systemUsage);
 
-    logger.info("🌐 Web server started. Waiting for Discord...");
+    logger.info("🌐 Web server started.");
     logger.info("🚀 AshenAI startup beginning...");
-    logger.info("🔐 Attempting Discord login...");
-    await testRawDiscordGateway();
-
-    logger.info("🧪 Discord client diagnostics:");
-    logger.info(
-      `   Client ready before login: ${client.isReady()}`,
-    );
-    logger.info(
-      `   Client ws status before login: ${client.ws.status}`,
-    );
-    logger.info(
-      `   Client shard count: ${client.ws.shards.size}`,
-    );
-
-    /*
-     * Never log the actual Discord token or its length.
-     * Presence is enough for diagnostics.
-     */
-    logger.info(
-      `🔐 Discord token configured: ${Boolean(token)}`,
-    );
 
     if (!token) {
-      throw new Error(
-        "DISCORD_TOKEN is missing.",
-      );
+      throw new Error("DISCORD_TOKEN is missing.");
     }
 
-    logger.info(
-      "🔌 Using discord.js Gateway connection only.",
-    );
-
-    /*
-     * Render → Discord network diagnostics.
-     */
-    try {
-      const dns = await import("node:dns/promises");
-      const https = await import("node:https");
-
-      logger.info(
-        "🌐 DISCORD NETWORK TEST: Resolving gateway.discord.gg...",
-      );
-
-      const addresses = await dns.lookup(
-        "gateway.discord.gg",
-        { all: true },
-      );
-
-      logger.info(
-        `🌐 DISCORD DNS OK: ${addresses
-          .map((a) => `${a.address}/${a.family}`)
-          .join(", ")}`,
-      );
-
-      logger.info(
-        "🌐 DISCORD HTTPS TEST: Requesting /gateway...",
-      );
-
-      await new Promise<void>((resolve, reject) => {
-        const req = https.request(
-          {
-            hostname: "discord.com",
-            path: "/api/v10/gateway",
-            method: "GET",
-            timeout: 15_000,
-            headers: {
-              "User-Agent": "AshenAI/1.0",
-            },
-          },
-          (res) => {
-            logger.info(
-              `🌐 DISCORD HTTPS OK: status=${res.statusCode}`,
-            );
-
-            res.resume();
-
-            res.on("end", resolve);
-          },
-        );
-
-        req.on("timeout", () => {
-          req.destroy(
-            new Error(
-              "Discord HTTPS test timed out.",
-            ),
-          );
-        });
-
-        req.on("error", reject);
-
-        req.end();
-      });
-
-      logger.info(
-        "🌐 DISCORD NETWORK TEST PASSED.",
-      );
-    } catch (error) {
-      /*
-       * Network diagnostics are informational.
-       * Do not prevent discord.js from attempting the Gateway.
-       */
-      logger.warn(
-        "⚠️ Discord network diagnostic failed:",
-        error instanceof Error
-          ? error.message
-          : String(error),
-      );
-    }
+    logger.info("🔌 Connecting to Discord Gateway...");
 
     /*
      * Production Gateway recovery loop.

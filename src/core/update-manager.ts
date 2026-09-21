@@ -86,7 +86,11 @@ function sleep(ms: number): Promise<void> {
 
 function getShortCommit(): string {
   try {
-    return execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+    return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      encoding: "utf8",
+      timeout: 5_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
   } catch {
     return "unknown";
   }
@@ -94,7 +98,11 @@ function getShortCommit(): string {
 
 function getFullCommit(): string {
   try {
-    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+      timeout: 5_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
   } catch {
     return "unknown";
   }
@@ -108,6 +116,8 @@ function getRemoteHead(): string | null {
     });
     return execFileSync("git", ["rev-parse", `origin/${config.branch}`], {
       encoding: "utf8",
+      timeout: 5_000,
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch (error) {
     logger.warn(

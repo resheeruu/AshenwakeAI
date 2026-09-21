@@ -186,7 +186,11 @@ let getVersionFn: () => string = () => "unknown";
 
 function getVersion(): string {
   try {
-    return execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+    return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      encoding: "utf8",
+      timeout: 5_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
   } catch {
     return process.env.RENDER_GIT_COMMIT?.slice(0, 7) || "unknown";
   }
