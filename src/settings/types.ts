@@ -1,6 +1,6 @@
 import type { GuildConfig } from "../core/guild-config";
 
-export type SettingType = "boolean" | "channel" | "role" | "number" | "roles";
+export type SettingType = "boolean" | "channel" | "role" | "number" | "roles" | "string";
 
 export type ChannelTypeFilter = "Text" | "Voice" | "Category" | "Announcement" | "Stage";
 
