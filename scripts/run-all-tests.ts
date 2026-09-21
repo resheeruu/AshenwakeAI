@@ -137,8 +137,8 @@ function runSuite(suite: TestSuite): boolean {
     const output = stderr || stdout;
 
     // Extract pass/fail counts from output
-    const passMatch = output.match(/Passed:\s*(\d+)/);
-    const failMatch = output.match(/Failed:\s*(\d+)/);
+    const passMatch = output.match(/(?:Passed|passed):\s*(\d+)/) || output.match(/(\d+)\s+passed/);
+    const failMatch = output.match(/(?:Failed|failed):\s*(\d+)/) || output.match(/(\d+)\s+failed/);
     const passCount = passMatch ? parseInt(passMatch[1]) : 0;
     const failCount = failMatch ? parseInt(failMatch[1]) : 0;
 

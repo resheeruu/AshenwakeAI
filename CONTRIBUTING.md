@@ -22,7 +22,7 @@ npm test
 ## Code Style
 
 - TypeScript strict mode
-- No duplicate subsystems — reuse existing implementations (see AGENTS.md)
+- No duplicate subsystems — reuse existing implementations (see `docs/AGENT_RULES.md`)
 - All external inputs are untrusted — validate at boundaries
 - Every expensive operation must have bounds
 

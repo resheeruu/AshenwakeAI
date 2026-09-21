@@ -35,9 +35,11 @@ jobs:
         run: npm test
 
       - name: Dependency check
-        run: npm ls --depth=0 2>&1 | head -50
+        run: |
+          set -o pipefail
+          npm ls --depth=0 2>&1 | head -50
 
-      - name: Audit dependencies
+      - name: Audit dependencies (informational)
         run: npm audit --omit=dev 2>&1 | head -30 || true
 
       - name: Verify browser graceful degradation
