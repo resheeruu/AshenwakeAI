@@ -420,9 +420,40 @@ test("application code does not require external music server", () => {
 
 // 38. PID file not tracked
 test("runtime PID files not tracked in git", () => {
+  // The intent is that runtime PID files never enter version control.
+  // Either an explicit entry or a wildcard (*.pid) satisfies that intent,
+  // and git check-ignore proves the real behaviour.
   const gitignore = fs.readFileSync(".gitignore", "utf8");
-  assert.ok(gitignore.includes(".anomaly-monitor.pid"), "anomaly-monitor.pid must be gitignored");
-  assert.ok(gitignore.includes(".ashennai-supervisor.pid"), "supervisor.pid must be gitignored");
+  const pidNames = [".anomaly-monitor.pid", ".ashennai-supervisor.pid"];
+
+  const covered = (name: string) =>
+    gitignore.includes(name) || /^[^\n]*\*\.pid\s*$/m.test(gitignore);
+  for (const name of pidNames) {
+    assert.ok(covered(name), name + " must be gitignored (explicit entry or *.pid)");
+  }
+
+  // Live verification: git must actually ignore these paths.
+  const { execSync } = require("node:child_process") as typeof import("node:child_process");
+  for (const name of pidNames) {
+    let ignored = false;
+    try {
+      execSync(`git check-ignore -q "${name}"`, { stdio: "ignore" });
+      ignored = true;
+    } catch {
+      ignored = false;
+    }
+    assert.ok(ignored, name + " must be reported as ignored by git check-ignore");
+  }
+
+  // And none of them may be tracked.
+  const tracked = execSync("git ls-files", { encoding: "utf8" }).split("\n");
+  for (const name of pidNames) {
+    assert.ok(!tracked.includes(name), name + " must not be tracked");
+  }
+  assert.ok(
+    !tracked.some((f) => f.endsWith(".pid")),
+    "no *.pid file may be tracked",
+  );
 });
 
 console.log("\n===== SUMMARY =====");

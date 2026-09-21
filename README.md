@@ -106,6 +106,29 @@ npm run build               # Build
 - **Docker**: `Dockerfile` included, uses `scripts/start.sh`
 - **Render**: Built-in recovery manager with health watchdog
 
+### Storage / ENOSPC diagnostics (hosting-aware)
+
+`ENOSPC: no space left on device` during the Playwright ~184 MB Chromium download
+is **not** proof that the hosting account has too little storage, and a large
+`df -h` value is **not** proof that it has enough. These are different layers:
+
+1. physical device storage
+2. host machine storage
+3. container-visible filesystem capacity (what `df`/`statfs` report in-container)
+4. hosting account/server quota (usually **not** visible in-container)
+5. filesystem / writable-layer limits (overlay upperdir, `/tmp` tmpfs, inode
+   exhaustion, per-directory quotas, provider per-container limits)
+
+```bash
+npm run diagnose:disk                 # read-only inventory of every pipeline path
+npm run diagnose:disk -- --probe=220  # bounded 220 MB write probe per path
+npm run diagnose:playwright           # Playwright env + per-path storage report
+```
+
+Both diagnostics report `Actual Wispbyte storage quota could not be verified from
+inside the container.` and never delete files to "fix" ENOSPC. Startup scripts do
+the same (`scripts/check-resources.sh`, `scripts/ensure-playwright.sh`).
+
 See `docs/DEVELOPMENT.md` for development setup.
 
 ## Documentation
