@@ -42,7 +42,7 @@ Web Research
 
 16+ provider adapters with automatic fallback and circuit breaker:
 
-Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, OpenAI-compatible (any provider)
+Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, OpenAI-compatible (any provid[...]
 
 ## Commands
 
@@ -50,7 +50,7 @@ Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cer
 |---------|-------------|
 | `npm start` | Start bot (uses `scripts/start.sh`) |
 | `npm run bot` | Start directly via `tsx src/index.ts` |
-| `npm test` | Run mandatory test suite (21 suites, 2000+ assertions) |
+| `npm test` | Run mandatory test suite (35 suites, 2000+ assertions) |
 | `npm run test:smoke` | Production smoke test |
 | `npm run test:all` | Run all tests including optional suites |
 | `npm run typecheck` | TypeScript type check |
@@ -92,7 +92,7 @@ See `.env.example` for full configuration options.
 ## Testing
 
 ```bash
-npm test                    # 21 mandatory suites (~2000+ assertions)
+npm test                    # 35 mandatory suites (~2000+ assertions)
 npm run test:smoke          # Production smoke test (103 assertions)
 npm run test:all            # All suites including optional
 npm run typecheck           # TypeScript check
@@ -137,7 +137,6 @@ See `docs/DEVELOPMENT.md` for development setup.
 - `docs/DEVELOPMENT.md` — Development guide
 - `docs/ADMIN-MODERATOR-MANUAL.md` — Admin/moderator usage
 - `docs/AGENT_RULES.md` — Agent behavior rules
-- `AGENTS.md` — AI agent finalization loop instructions
 
 ## Known Limitations
 
