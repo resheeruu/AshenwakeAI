@@ -10,6 +10,7 @@
 # --- Dependencies & build ---
 node_modules/
 dist/
+*.tsbuildinfo
 
 # --- Data & runtime state ---
 data/
