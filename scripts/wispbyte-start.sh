@@ -101,7 +101,11 @@ fi
 
 REPO_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 REPO_BRANCH="$(git branch --show-current 2>/dev/null || echo 'unknown')"
-echo "[Wispbyte] Commit: ${REPO_SHA} branch: ${REPO_BRANCH}"
+if [ "$REPO_SHA" = "unknown" ] || [ "$REPO_BRANCH" = "unknown" ]; then
+  echo "[Wispbyte] Commit: ${REPO_SHA} branch: ${REPO_BRANCH} (git metadata unavailable in this environment)"
+else
+  echo "[Wispbyte] Commit: ${REPO_SHA} branch: ${REPO_BRANCH}"
+fi
 
 stage_ok 2 "Repository" "$S2"
 
@@ -114,14 +118,40 @@ stage_begin 3 "Dependencies"
 
 SKIP_INSTALL=0
 
-# Check if node_modules exists and is newer than package-lock.json
+# Robust dependency cache detection:
+# Instead of comparing timestamps (unreliable in containers), verify that
+# node_modules exists AND contains a valid .package-lock.json record.
+# If both exist, dependencies were installed by npm ci/install and should
+# be correct. Timestamp-based checks fail when containers recreate
+# filesystems with different mount times.
 if [ -d "node_modules" ] && [ -f "package-lock.json" ]; then
-  if [ -d "node_modules/.package-lock.json" ]; then
-    # node_modules was created by npm ci/install — compare timestamps
-    if [ "node_modules/.package-lock.json" -nt "package-lock.json" ] 2>/dev/null; then
+  if [ -f "node_modules/.package-lock.json" ]; then
+    # Verify the installed lockfile matches the repo lockfile.
+    # Both are JSON with lockfileVersion — compare the version field.
+    INSTALLED_LOCK_VER=$(node -e "
+      try { console.log(require('./node_modules/.package-lock.json').lockfileVersion || '0'); }
+      catch { console.log('0'); }
+    " 2>/dev/null || echo "0")
+    REPO_LOCK_VER=$(node -e "
+      try { console.log(require('./package-lock.json').lockfileVersion || '0'); }
+      catch { console.log('0'); }
+    " 2>/dev/null || echo "0")
+
+    if [ "$INSTALLED_LOCK_VER" = "$REPO_LOCK_VER" ] && [ "$INSTALLED_LOCK_VER" != "0" ]; then
       SKIP_INSTALL=1
-      echo "[Wispbyte] node_modules up to date (skipping install)"
+      echo "[Wispbyte] node_modules valid (lockfileVersion ${INSTALLED_LOCK_VER} matches)"
+    else
+      echo "[Wispbyte] lockfileVersion mismatch (installed=${INSTALLED_LOCK_VER} repo=${REPO_LOCK_VER})"
     fi
+  else
+    echo "[Wispbyte] node_modules exists but missing .package-lock.json"
+  fi
+else
+  if [ ! -d "node_modules" ]; then
+    echo "[Wispbyte] node_modules not found (fresh install)"
+  fi
+  if [ ! -f "package-lock.json" ]; then
+    echo "[Wispbyte] package-lock.json not found"
   fi
 fi
 
@@ -181,14 +211,35 @@ stage_ok 4 "Resources" "$S4"
 S5=$(date +%s%N 2>/dev/null || date +%s)
 stage_begin 5 "Environment"
 
+# Load .env file if present (does not override existing env vars).
+# This ensures variables are available for both this bash check
+# and the Node process started in Stage 8.
+if [ -f ".env" ]; then
+  while IFS='=' read -r key value; do
+    # Skip comments and empty lines
+    [[ "$key" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$key" ]] && continue
+    key="$(echo "$key" | xargs)"
+    # Only export if not already set in the environment
+    if [ -z "${!key:-}" ]; then
+      export "$key=$value"
+    fi
+  done < .env
+fi
+
+# Safe diagnostics: show variable presence, never values.
+[ -n "${DISCORD_TOKEN:-}" ] && echo "[Wispbyte] DISCORD_TOKEN: SET" || echo "[Wispbyte] DISCORD_TOKEN: NOT SET"
+[ -n "${DISCORD_CLIENT_ID:-}" ] && echo "[Wispbyte] DISCORD_CLIENT_ID: SET" || echo "[Wispbyte] DISCORD_CLIENT_ID: NOT SET"
+[ -n "${ASHENAI_OWNER_USERNAME:-}" ] && echo "[Wispbyte] ASHENAI_OWNER_USERNAME: SET" || echo "[Wispbyte] ASHENAI_OWNER_USERNAME: NOT SET"
+
 # Validate required environment variables exist (no secrets logged).
 if [ -z "${DISCORD_TOKEN:-}" ]; then
-  stage_fail 5 "Environment" "DISCORD_TOKEN not set"
+  stage_fail 5 "Environment" "DISCORD_TOKEN not set (add it to .env or Wispbyte environment)"
   exit 1
 fi
 
 if [ -z "${DISCORD_CLIENT_ID:-}" ]; then
-  stage_fail 5 "Environment" "DISCORD_CLIENT_ID not set"
+  stage_fail 5 "Environment" "DISCORD_CLIENT_ID not set (add it to .env or Wispbyte environment)"
   exit 1
 fi
 
