@@ -75,6 +75,10 @@ const MANDATORY_SUITES: TestSuite[] = [
 
   // Anime Actions
   { name: "Anime Actions", file: "scripts/test-anime-actions.ts", category: "core" },
+
+  // Resource / hosting storage (disk, RAM, Playwright bootstrap, ENOSPC)
+  { name: "Resource Startup", file: "scripts/test-resource-startup.ts", category: "integration" },
+  { name: "Playwright Install", file: "scripts/test-playwright-install.ts", category: "integration" },
 ];
 
 const OPTIONAL_SUITES: TestSuite[] = [

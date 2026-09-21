@@ -284,9 +284,30 @@ test("Reset form uses JSON.stringify for XSS prevention", () => {
 // ============================================================
 console.log("\n=== MFA BYPASS RESISTANCE ===");
 
-test("MFA enforced for owner/admin password login", () => {
+test("MFA enforced for ALL roles when enabled (no role exemption)", () => {
   const authSrc = fs.readFileSync(path.join(ROOT, "src/control/auth.ts"), "utf8");
-  assert(authSrc.includes('account.mfaEnabled && account.role !== "user"'), "MFA required for non-user roles");
+
+  // MFA must be required whenever the account has MFA enabled — for every
+  // role. Any role-based exemption is a bypass.
+  assert(
+    authSrc.includes("if (account.mfaEnabled)"),
+    "Password login must branch on account.mfaEnabled",
+  );
+  assert(
+    !/account\.mfaEnabled\s*&&\s*account\.role\s*!==/.test(authSrc),
+    "No role-based MFA exemption is allowed",
+  );
+
+  // The MFA branch must issue a pre-auth challenge and return before a full
+  // session is granted.
+  const mfaIdx = authSrc.indexOf("if (account.mfaEnabled)");
+  const sessionIdx = authSrc.indexOf("createSession(account.id");
+  assert(mfaIdx >= 0, "MFA branch must exist");
+  assert(sessionIdx > mfaIdx, "Session must only be created after the MFA branch");
+  assert(
+    authSrc.slice(mfaIdx, sessionIdx).includes("createPreAuthToken("),
+    "MFA branch must issue a pre-auth challenge token instead of a session",
+  );
 });
 
 test("Pre-auth token is NOT a valid session", () => {

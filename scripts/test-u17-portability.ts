@@ -597,10 +597,23 @@ test("no Render-specific assumptions in web server", () => {
 
 test("graceful shutdown cleans up Discord client", () => {
   const content = fs.readFileSync(path.join(ROOT, "src/index.ts"), "utf8");
-  const sigtermIdx = content.indexOf('process.on("SIGTERM"');
-  const sigtermSection = content.slice(sigtermIdx, sigtermIdx + 500);
-  assert.ok(sigtermSection.includes('client.destroy'), 'SIGTERM must destroy client');
-  assert.ok(sigtermSection.includes('agentManager.stop'), 'SIGTERM must stop agent');
+
+  // SIGTERM/SIGINT must route into the single graceful shutdown path.
+  assert.ok(
+    content.includes('process.on("SIGTERM"') && content.includes("gracefulShutdown("),
+    "SIGTERM must invoke gracefulShutdown",
+  );
+  assert.ok(
+    content.includes('process.on("SIGINT"') && content.includes("gracefulShutdown("),
+    "SIGINT must invoke gracefulShutdown",
+  );
+
+  // Within the shutdown implementation, all critical resources must be released.
+  const fnIdx = content.indexOf("gracefulShutdown");
+  const section = content.slice(fnIdx, fnIdx + 6000);
+  assert.ok(section.includes("client.destroy"), "shutdown must destroy the Discord client");
+  assert.ok(section.includes("agentManager.stop"), "shutdown must stop the agent manager");
+  assert.ok(section.includes("closeDatabase"), "shutdown must close the database");
 });
 
 // ============================================================
