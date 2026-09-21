@@ -110,9 +110,11 @@ fi
 # and esbuild (platform binary download) require them.
 if [ -f "package-lock.json" ]; then
   if ! npm ci --no-fund --no-audit 2>&1; then
-    echo "[Wispbyte] npm ci failed. Attempting npm install..."
+    echo "[Wispbyte] WARNING: npm ci failed (lockfile may be stale). Trying npm install..."
+    echo "[Wispbyte] NOTE: If this succeeds, consider regenerating package-lock.json locally."
     if ! npm install --no-fund --no-audit 2>&1; then
-      echo "[Wispbyte] FATAL: Dependency installation failed."
+      echo "[Wispbyte] FATAL: Both npm ci and npm install failed."
+      echo "[Wispbyte] Check Node version ($(node --version)) and platform compatibility."
       exit 1
     fi
   fi

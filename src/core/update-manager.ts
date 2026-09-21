@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { logger } from "../logger";
@@ -86,7 +86,7 @@ function sleep(ms: number): Promise<void> {
 
 function getShortCommit(): string {
   try {
-    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    return execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
   } catch {
     return "unknown";
   }
@@ -94,7 +94,7 @@ function getShortCommit(): string {
 
 function getFullCommit(): string {
   try {
-    return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   } catch {
     return "unknown";
   }
@@ -102,11 +102,11 @@ function getFullCommit(): string {
 
 function getRemoteHead(): string | null {
   try {
-    execSync("git fetch origin " + config.branch + " --quiet", {
+    execFileSync("git", ["fetch", "origin", config.branch, "--quiet"], {
       encoding: "utf8",
       timeout: 30_000,
     });
-    return execSync(`git rev-parse origin/${config.branch}`, {
+    return execFileSync("git", ["rev-parse", `origin/${config.branch}`], {
       encoding: "utf8",
     }).trim();
   } catch (error) {
@@ -121,7 +121,7 @@ function getRemoteHead(): string | null {
 
 function gitCheckout(commit: string): boolean {
   try {
-    execSync(`git checkout ${commit}`, {
+    execFileSync("git", ["checkout", commit], {
       encoding: "utf8",
       timeout: 30_000,
       cwd: process.cwd(),
@@ -140,7 +140,7 @@ function gitCheckout(commit: string): boolean {
 
 function gitPull(): boolean {
   try {
-    execSync(`git pull origin ${config.branch} --ff-only`, {
+    execFileSync("git", ["pull", "origin", config.branch, "--ff-only"], {
       encoding: "utf8",
       timeout: 30_000,
       cwd: process.cwd(),
@@ -235,7 +235,7 @@ export function getUpdateRecord(): UpdateRecord | null {
 
 function runTypecheck(): boolean {
   try {
-    execSync("node ./node_modules/.bin/tsc --noEmit", {
+    execFileSync("node", ["./node_modules/.bin/tsc", "--noEmit"], {
       encoding: "utf8",
       timeout: 120_000,
       cwd: process.cwd(),
@@ -248,7 +248,7 @@ function runTypecheck(): boolean {
 
 function runBuild(): boolean {
   try {
-    execSync("node ./node_modules/.bin/tsc", {
+    execFileSync("node", ["./node_modules/.bin/tsc"], {
       encoding: "utf8",
       timeout: 120_000,
       cwd: process.cwd(),
@@ -261,7 +261,7 @@ function runBuild(): boolean {
 
 function runCriticalTests(): boolean {
   try {
-    execSync("node ./node_modules/.bin/tsx scripts/run-all-tests.ts", {
+    execFileSync("node", ["./node_modules/.bin/tsx", "scripts/run-all-tests.ts"], {
       encoding: "utf8",
       timeout: 600_000,
       cwd: process.cwd(),
@@ -280,7 +280,7 @@ function installDepsIfNeeded(): boolean {
 
     if (!existsSync(nodeModules) || !existsSync(lockfile)) {
       logger.info("[UpdateManager] installing dependencies...");
-      execSync("npm ci --include=dev", {
+      execFileSync("npm", ["ci", "--include=dev"], {
         encoding: "utf8",
         timeout: 120_000,
         cwd: process.cwd(),
