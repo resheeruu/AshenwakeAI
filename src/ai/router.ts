@@ -297,7 +297,10 @@ export class AIRouter {
               data.lastError,
 
             healthState:
-              data.healthState ?? HealthState.CONFIGURED,
+              data.healthState ??
+              (data.successes > 0
+                ? HealthState.HEALTHY
+                : HealthState.CONFIGURED),
             modelHealth,
             lastHttpStatus:
               data.lastHttpStatus,

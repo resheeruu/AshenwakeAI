@@ -280,9 +280,65 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-providers">
-        <div class="section-title">&#9889; AI Providers <i class="help-btn">?<span class="help-tip">AI services AshenAI can use. Shows configured vs available providers, latency, and success rates. Providers may be temporarily disabled after failures.</span></i></div>
+        <div class="section-title">&#9889; AI Providers <i class="help-btn">?<span class="help-tip">AI services AshenAI can use. Add custom OpenAI-compatible, Anthropic, Gemini, or Ollama providers. Built-in providers are configured via environment variables.</span></i></div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-primary" onclick="showAddProviderModal()">+ Add Provider</button>
+          <button class="btn" onclick="loadManagedProviders()">Refresh</button>
+        </div>
+        <div class="card" id="managedProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card" id="providerList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card"><h3>Performance</h3><div id="providerPerf"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
+
+        <div id="addProviderModal" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
+          <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto">
+            <h3 style="margin:0 0 16px 0">Add Provider</h3>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <label style="font-size:13px;color:#888">Provider Type
+                <select id="ap-type" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+                  <option value="custom">Custom (OpenAI Compatible)</option>
+                  <option value="local">Local (Ollama)</option>
+                </select>
+              </label>
+              <label style="font-size:13px;color:#888">Display Name
+                <input id="ap-displayName" type="text" placeholder="My Custom Provider" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+              </label>
+              <label style="font-size:13px;color:#888">Internal Name
+                <input id="ap-name" type="text" placeholder="my-custom-provider" pattern="[a-z0-9_-]+" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+              </label>
+              <label style="font-size:13px;color:#888">Protocol
+                <select id="ap-protocol" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+                  <option value="openai_compatible">OpenAI Compatible</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="ollama">Ollama</option>
+                </select>
+              </label>
+              <label style="font-size:13px;color:#888">Base URL
+                <input id="ap-endpoint" type="url" placeholder="https://api.example.com/v1" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+              </label>
+              <label style="font-size:13px;color:#888">API Key
+                <input id="ap-apiKey" type="password" placeholder="sk-..." style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+              </label>
+              <label style="font-size:13px;color:#888">Default Model
+                <input id="ap-defaultModel" type="text" placeholder="gpt-4o" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+              </label>
+              <div style="display:flex;gap:8px">
+                <label style="font-size:13px;color:#888;flex:1">Priority (lower = higher)
+                  <input id="ap-priority" type="number" value="100" min="1" max="999" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+                </label>
+                <label style="font-size:13px;color:#888;flex:1">Timeout (ms)
+                  <input id="ap-timeout" type="number" value="15000" min="1000" max="120000" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+                </label>
+              </div>
+              <div id="ap-testResult" style="display:none;padding:8px;border-radius:6px;font-size:13px"></div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+                <button class="btn" onclick="testNewProvider()" id="ap-testBtn">Test Connection</button>
+                <button class="btn" onclick="closeAddProviderModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveNewProvider()" id="ap-saveBtn">Save Provider</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="section-page" id="sec-usage">
@@ -845,7 +901,7 @@ a{color:var(--accent);text-decoration:none}
     switch(sec){
       case 'overview':loadOverview();break;
       case 'bot-control':loadBotControl();break;
-      case 'providers':loadProviders();break;
+      case 'providers':loadManagedProviders();loadProviders();break;
       case 'usage':loadUsage();break;
       case 'memory':loadMemory();break;
       case 'servers':loadServers();break;
@@ -926,7 +982,141 @@ a{color:var(--accent);text-decoration:none}
     var pEl=document.getElementById('providerPerf');
     if(!perf){renderEmpty(pEl,'No performance data available.');}
     else{var entries=Object.entries(perf);if(!entries.length){renderEmpty(pEl,'No performance data available.');}
-    else{pEl.innerHTML='<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency?v.latency+'ms':'---')+'</td></tr>'}).join('')+'</tbody></table>';}}
+    else{pEl.innerHTML='<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency?v.latency+'ms':'---')+'</td></tr>'}).join('')+'</tbody></table>';}
+  }
+
+  // ── Provider Management ──
+  var _managedProviders = [];
+
+  async function loadManagedProviders(){
+    var el = document.getElementById('managedProviders');
+    if(!el) return;
+    try {
+      var data = await api('/api/providers/manage');
+      if(!data || !data.ok || !data.providers) { renderEmpty(el, 'No managed providers.'); return; }
+      _managedProviders = data.providers;
+      if(!data.providers.length) { el.innerHTML = '<div class="card"><p style="color:#888;margin:0">No custom providers configured. Click "+ Add Provider" to add one.</p></div>'; return; }
+      el.innerHTML = data.providers.map(function(p){
+        var healthColor = p.health.available ? 'var(--success)' : 'var(--danger)';
+        var healthText = p.health.available ? 'Connected' : 'Unavailable';
+        return '<div class="provider-row" style="flex-direction:column;align-items:flex-start;gap:8px;padding:12px">' +
+          '<div style="display:flex;justify-content:space-between;width:100%;align-items:center">' +
+            '<div><span class="provider-name">' + esc(p.displayName) + '</span> <span class="badge" style="background:' + healthColor + '22;color:' + healthColor + '">' + healthText + '</span> <span style="color:#888;font-size:12px">' + esc(p.protocol) + ' | Priority ' + p.priority + '</span></div>' +
+            '<div style="display:flex;gap:6px">' +
+              '<button class="btn" onclick="testManagedProvider(\'' + p.id + '\')" style="font-size:12px;padding:4px 8px">Test</button>' +
+              '<button class="btn" onclick="toggleManagedProvider(\'' + p.id + '\',' + !p.enabled + ')" style="font-size:12px;padding:4px 8px">' + (p.enabled ? 'Disable' : 'Enable') + '</button>' +
+              '<button class="btn" style="color:var(--danger);font-size:12px;padding:4px 8px" onclick="deleteManagedProvider(\'' + p.id + '\',\'' + esc(p.displayName) + '\')">Remove</button>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#888">' +
+            (p.endpointHostname ? 'Endpoint: ' + esc(p.endpointHostname) + ' | ' : '') +
+            'Models: ' + p.modelCount + (p.defaultModel ? ' | Default: ' + esc(p.defaultModel) : '') +
+            ' | Created: ' + fmtTs(p.createdAt) +
+          '</div>' +
+        '</div>';
+      }).join('');
+    } catch(e) { renderError(el, 'Failed to load providers.'); }
+  }
+
+  function showAddProviderModal(){
+    var modal = document.getElementById('addProviderModal');
+    if(modal) { modal.style.display = 'flex'; }
+  }
+
+  function closeAddProviderModal(){
+    var modal = document.getElementById('addProviderModal');
+    if(modal) { modal.style.display = 'none'; }
+    var result = document.getElementById('ap-testResult');
+    if(result) { result.style.display = 'none'; }
+  }
+
+  async function testNewProvider(){
+    var btn = document.getElementById('ap-testBtn');
+    var result = document.getElementById('ap-testResult');
+    btn.disabled = true; btn.textContent = 'Testing...';
+    result.style.display = 'none';
+    try {
+      var protocol = document.getElementById('ap-protocol').value;
+      var endpoint = document.getElementById('ap-endpoint').value;
+      var data = await api('/api/providers/manage', {method:'POST',headers:apiHeaders(),body:JSON.stringify({
+        name: document.getElementById('ap-name').value || 'test-' + Date.now(),
+        displayName: 'Test Provider',
+        providerType: 'custom',
+        protocol: protocol,
+        endpoint: endpoint || undefined,
+        apiKey: document.getElementById('ap-apiKey').value || undefined,
+      })});
+      if(data && data.ok && data.provider) {
+        var testResult = await api('/api/providers/manage/' + data.provider.id + '/test', {method:'POST',headers:apiHeaders()});
+        await api('/api/providers/manage/' + data.provider.id, {method:'DELETE',headers:apiHeaders()});
+        if(testResult && testResult.ok && testResult.result) {
+          var r = testResult.result;
+          result.style.display = 'block';
+          result.style.background = r.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+          result.style.color = r.success ? 'var(--success)' : 'var(--danger)';
+          result.textContent = r.success ? ('Connected - Latency: ' + r.latencyMs + 'ms - Models: ' + r.modelsDiscovered) : ('Failed - ' + (r.error || 'Unknown error'));
+        }
+      }
+    } catch(e) {
+      result.style.display = 'block';
+      result.style.background = 'rgba(239,68,68,0.1)';
+      result.style.color = 'var(--danger)';
+      result.textContent = 'Test failed: ' + (e.message || 'Unknown error');
+    }
+    btn.disabled = false; btn.textContent = 'Test Connection';
+  }
+
+  async function saveNewProvider(){
+    var btn = document.getElementById('ap-saveBtn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try {
+      var data = await api('/api/providers/manage', {method:'POST',headers:apiHeaders(),body:JSON.stringify({
+        name: document.getElementById('ap-name').value,
+        displayName: document.getElementById('ap-displayName').value,
+        providerType: document.getElementById('ap-type').value,
+        protocol: document.getElementById('ap-protocol').value,
+        endpoint: document.getElementById('ap-endpoint').value || undefined,
+        apiKey: document.getElementById('ap-apiKey').value || undefined,
+        defaultModel: document.getElementById('ap-defaultModel').value || undefined,
+        priority: parseInt(document.getElementById('ap-priority').value) || 100,
+        timeoutMs: parseInt(document.getElementById('ap-timeout').value) || 15000,
+      })});
+      if(data && data.ok) {
+        closeAddProviderModal();
+        loadManagedProviders();
+        loadProviders();
+      } else {
+        alert('Failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch(e) { alert('Failed to save: ' + e.message); }
+    btn.disabled = false; btn.textContent = 'Save Provider';
+  }
+
+  async function testManagedProvider(id){
+    try {
+      var data = await api('/api/providers/manage/' + id + '/test', {method:'POST',headers:apiHeaders()});
+      if(data && data.ok && data.result) {
+        var r = data.result;
+        alert(r.success ? ('Connected - Latency: ' + r.latencyMs + 'ms - Models: ' + r.modelsDiscovered) : ('Failed - ' + (r.error || 'Unknown error')));
+      }
+    } catch(e) { alert('Test failed: ' + e.message); }
+  }
+
+  async function toggleManagedProvider(id, enabled){
+    try {
+      await api('/api/providers/manage/' + id + '/toggle', {method:'POST',headers:apiHeaders(),body:JSON.stringify({enabled})});
+      loadManagedProviders();
+      loadProviders();
+    } catch(e) { alert('Toggle failed: ' + e.message); }
+  }
+
+  async function deleteManagedProvider(id, name){
+    if(!confirm('Remove provider "' + name + '"? This cannot be undone.')) return;
+    try {
+      await api('/api/providers/manage/' + id, {method:'DELETE',headers:apiHeaders()});
+      loadManagedProviders();
+      loadProviders();
+    } catch(e) { alert('Delete failed: ' + e.message); }
   }
 
   async function loadUsage(){

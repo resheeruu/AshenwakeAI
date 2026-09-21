@@ -105,6 +105,8 @@ import {
   getMonitoringInfo,
   getSystemInformation,
 } from "../seraph";
+import { providerService } from "../ai/providers/platform";
+import { providerService } from "../ai/providers/platform";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -620,6 +622,324 @@ app.get("/api/providers/performance", requireAuth, requireRole("admin"), (_req: 
 
 app.get("/api/providers/current", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
   res.json({ ok: true, model: getCurrentModel() });
+});
+
+// ── Provider Management API ──
+
+app.get("/api/providers/manage", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+  try {
+    const providers = providerService.listProviders();
+    res.json({ ok: true, providers });
+  } catch (err) {
+    logger.error("Failed to list providers:", err);
+    res.status(500).json({ ok: false, error: "Failed to list providers" });
+  }
+});
+
+app.get("/api/providers/manage/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const provider = providerService.getProvider(id);
+    if (!provider) return res.status(404).json({ ok: false, error: "Provider not found" });
+    res.json({ ok: true, provider });
+  } catch (err) {
+    logger.error("Failed to get provider:", err);
+    res.status(500).json({ ok: false, error: "Failed to get provider" });
+  }
+});
+
+app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const body = req.body as Record<string, unknown> || {};
+    const name = body.name as string;
+    const displayName = body.displayName as string;
+    const providerType = body.providerType as string;
+    const protocol = body.protocol as string;
+    if (!name || !displayName || !providerType || !protocol) {
+      return res.status(400).json({ ok: false, error: "Missing required fields: name, displayName, providerType, protocol" });
+    }
+    if (typeof name !== "string" || !/^[a-z0-9_-]{1,64}$/.test(name)) {
+      return res.status(400).json({ ok: false, error: "Name must be 1-64 characters, lowercase alphanumeric with hyphens/underscores" });
+    }
+    if (!["builtin", "custom", "local"].includes(providerType)) {
+      return res.status(400).json({ ok: false, error: "Invalid providerType" });
+    }
+    if (!["openai_compatible", "anthropic", "gemini", "ollama"].includes(protocol)) {
+      return res.status(400).json({ ok: false, error: "Invalid protocol" });
+    }
+    const provider = providerService.createProvider({
+      name, displayName, providerType: providerType as any, protocol: protocol as any,
+      endpoint: body.endpoint as string | undefined,
+      apiKey: body.apiKey as string | undefined,
+      defaultModel: body.defaultModel as string | undefined,
+      priority: typeof body.priority === "number" ? body.priority : 100,
+      timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : 15000,
+      retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : 2,
+      metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : {},
+    }, authReq.accountId!, authReq.username!);
+    res.status(201).json({ ok: true, provider: providerService.getProvider(provider.id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to create provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    const body = req.body as Record<string, unknown> || {};
+    providerService.updateProvider(id, {
+      displayName: body.displayName as string | undefined,
+      endpoint: body.endpoint as string | undefined,
+      apiKey: body.apiKey as string | undefined,
+      defaultModel: body.defaultModel as string | undefined,
+      enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+      priority: typeof body.priority === "number" ? body.priority : undefined,
+      timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : undefined,
+      retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : undefined,
+      metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : undefined,
+    }, authReq.accountId!, authReq.username!);
+    res.json({ ok: true, provider: providerService.getProvider(id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to update provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.delete("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    providerService.deleteProvider(id, authReq.accountId!, authReq.username!);
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to delete provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/providers/manage/:id/test", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const result = await providerService.testConnection(id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to test provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/providers/manage/:id/discover-models", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const result = await providerService.discoverModelsForProvider(id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to discover models:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    const body = req.body as Record<string, unknown> || {};
+    const enabled = body.enabled;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ ok: false, error: "enabled must be a boolean" });
+    }
+    providerService.toggleProvider(id, enabled, authReq.accountId!, authReq.username!);
+    res.json({ ok: true, provider: providerService.getProvider(id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to toggle provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.put("/api/providers/manage/:id/default-model", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    const body = req.body as Record<string, unknown> || {};
+    const modelId = body.modelId;
+    if (typeof modelId !== "string") {
+      return res.status(400).json({ ok: false, error: "modelId must be a string" });
+    }
+    providerService.setDefaultModel(id, modelId, authReq.accountId!, authReq.username!);
+    res.json({ ok: true, provider: providerService.getProvider(id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to set default model:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+// ── Provider Management API ──
+
+app.get("/api/providers/manage", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+  try {
+    const providers = providerService.listProviders();
+    res.json({ ok: true, providers });
+  } catch (err) {
+    logger.error("Failed to list providers:", err);
+    res.status(500).json({ ok: false, error: "Failed to list providers" });
+  }
+});
+
+app.get("/api/providers/manage/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const provider = providerService.getProvider(id);
+    if (!provider) return res.status(404).json({ ok: false, error: "Provider not found" });
+    res.json({ ok: true, provider });
+  } catch (err) {
+    logger.error("Failed to get provider:", err);
+    res.status(500).json({ ok: false, error: "Failed to get provider" });
+  }
+});
+
+app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const body = req.body as Record<string, unknown> || {};
+    const name = body.name as string;
+    const displayName = body.displayName as string;
+    const providerType = body.providerType as string;
+    const protocol = body.protocol as string;
+    if (!name || !displayName || !providerType || !protocol) {
+      return res.status(400).json({ ok: false, error: "Missing required fields: name, displayName, providerType, protocol" });
+    }
+    if (typeof name !== "string" || !/^[a-z0-9_-]{1,64}$/.test(name)) {
+      return res.status(400).json({ ok: false, error: "Name must be 1-64 characters, lowercase alphanumeric with hyphens/underscores" });
+    }
+    if (!["builtin", "custom", "local"].includes(providerType)) {
+      return res.status(400).json({ ok: false, error: "Invalid providerType" });
+    }
+    if (!["openai_compatible", "anthropic", "gemini", "ollama"].includes(protocol)) {
+      return res.status(400).json({ ok: false, error: "Invalid protocol" });
+    }
+    const provider = providerService.createProvider({
+      name, displayName, providerType: providerType as any, protocol: protocol as any,
+      endpoint: body.endpoint as string | undefined,
+      apiKey: body.apiKey as string | undefined,
+      defaultModel: body.defaultModel as string | undefined,
+      priority: typeof body.priority === "number" ? body.priority : 100,
+      timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : 15000,
+      retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : 2,
+      metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : {},
+    }, authReq.accountId, authReq.username);
+    res.status(201).json({ ok: true, provider: providerService.getProvider(provider.id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to create provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    const body = req.body as Record<string, unknown> || {};
+    providerService.updateProvider(id, {
+      displayName: body.displayName as string | undefined,
+      endpoint: body.endpoint as string | undefined,
+      apiKey: body.apiKey as string | undefined,
+      defaultModel: body.defaultModel as string | undefined,
+      enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+      priority: typeof body.priority === "number" ? body.priority : undefined,
+      timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : undefined,
+      retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : undefined,
+      metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : undefined,
+    }, authReq.accountId, authReq.username);
+    res.json({ ok: true, provider: providerService.getProvider(id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to update provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.delete("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    providerService.deleteProvider(id, authReq.accountId, authReq.username);
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to delete provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/providers/manage/:id/test", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const result = await providerService.testConnection(id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to test provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/providers/manage/:id/discover-models", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const result = await providerService.discoverModelsForProvider(id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to discover models:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    const body = req.body as Record<string, unknown> || {};
+    const enabled = body.enabled;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ ok: false, error: "enabled must be a boolean" });
+    }
+    providerService.toggleProvider(id, enabled, authReq.accountId, authReq.username);
+    res.json({ ok: true, provider: providerService.getProvider(id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to toggle provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+app.put("/api/providers/manage/:id/default-model", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const id = String(req.params.id);
+    const body = req.body as Record<string, unknown> || {};
+    const modelId = body.modelId;
+    if (typeof modelId !== "string") {
+      return res.status(400).json({ ok: false, error: "modelId must be a string" });
+    }
+    providerService.setDefaultModel(id, modelId, authReq.accountId, authReq.username);
+    res.json({ ok: true, provider: providerService.getProvider(id) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to set default model:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
 });
 
 app.get("/api/memory/stats", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {

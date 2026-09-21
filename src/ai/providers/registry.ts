@@ -16,10 +16,6 @@ export class ProviderRegistry {
   ): void {
     const key = provider.name.toLowerCase();
 
-    if (this.registrations.has(key)) {
-      return;
-    }
-
     this.registrations.set(key, {
       name: provider.name,
       provider,
