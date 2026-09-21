@@ -55,7 +55,6 @@ import { UsageManager } from "./ai/usage-manager";
 import { SystemUsageManager } from "./ai/system-usage";
 import { GuildKnowledge } from "./ai/knowledge";
 import { VisionHandler } from "./ai/vision";
-import { TicketManager } from "./tickets/ticket-manager";
 import { CaseManager } from "./moderation/cases";
 import { XPSystem } from "./community/xp-system";
 import { SuggestionManager } from "./community/suggestions";
@@ -184,7 +183,6 @@ const usageManager = new UsageManager();
 const systemUsage = new SystemUsageManager();
 const knowledge = new GuildKnowledge();
 const vision = new VisionHandler(usageManager);
-const ticketManager = new TicketManager();
 const caseManager = new CaseManager();
 const xpSystem = new XPSystem();
 const suggestionManager = new SuggestionManager();
@@ -2530,7 +2528,7 @@ client.on(Events.GuildCreate, async (guild) => {
         },
         {
           name: "Trusted Users",
-          value: "🔐 **Server owner:** Use `/trusted add @user` to allow others to use server-management features.\nTrusted users can use `/send` to send messages as AshenAI.",
+          value: "🔐 **Server owner:** Use `/access add @user` to allow others to use server-management features.\nTrusted users can use `/send` to send messages as AshenAI.",
         }
       )
       .setFooter({ text: "Nothing has been changed." });

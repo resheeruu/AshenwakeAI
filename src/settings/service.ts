@@ -89,6 +89,23 @@ export function validateSettingValue(
       return { valid: true, normalized: rawValue };
     }
 
+    case "string": {
+      const trimmed = rawValue.trim();
+      if (trimmed === "none" || trimmed === "unset" || trimmed === "reset") {
+        return { valid: true, normalized: descriptor.defaultValue };
+      }
+      if (trimmed.length === 0) {
+        return { valid: false, error: `String value cannot be empty` };
+      }
+      if (descriptor.max !== undefined && trimmed.length > descriptor.max) {
+        return { valid: false, error: `Maximum length is ${descriptor.max} characters` };
+      }
+      if (descriptor.min !== undefined && trimmed.length < descriptor.min) {
+        return { valid: false, error: `Minimum length is ${descriptor.min} characters` };
+      }
+      return { valid: true, normalized: trimmed };
+    }
+
     default:
       return { valid: false, error: `Unknown setting type: "${descriptor.type}"` };
   }
