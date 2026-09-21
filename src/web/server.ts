@@ -835,7 +835,7 @@ app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf
       timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : 15000,
       retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : 2,
       metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : {},
-    }, authReq.accountId, authReq.username);
+    }, authReq.accountId!, authReq.username!);
     res.status(201).json({ ok: true, provider: providerService.getProvider(provider.id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -859,7 +859,7 @@ app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireC
       timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : undefined,
       retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : undefined,
       metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : undefined,
-    }, authReq.accountId, authReq.username);
+    }, authReq.accountId!, authReq.username!);
     res.json({ ok: true, provider: providerService.getProvider(id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -872,7 +872,7 @@ app.delete("/api/providers/manage/:id", requireAuth, requireRole("owner"), requi
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
-    providerService.deleteProvider(id, authReq.accountId, authReq.username);
+    providerService.deleteProvider(id, authReq.accountId!, authReq.username!);
     res.json({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -914,7 +914,7 @@ app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), 
     if (typeof enabled !== "boolean") {
       return res.status(400).json({ ok: false, error: "enabled must be a boolean" });
     }
-    providerService.toggleProvider(id, enabled, authReq.accountId, authReq.username);
+    providerService.toggleProvider(id, enabled, authReq.accountId!, authReq.username!);
     res.json({ ok: true, provider: providerService.getProvider(id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -932,7 +932,7 @@ app.put("/api/providers/manage/:id/default-model", requireAuth, requireRole("own
     if (typeof modelId !== "string") {
       return res.status(400).json({ ok: false, error: "modelId must be a string" });
     }
-    providerService.setDefaultModel(id, modelId, authReq.accountId, authReq.username);
+    providerService.setDefaultModel(id, modelId, authReq.accountId!, authReq.username!);
     res.json({ ok: true, provider: providerService.getProvider(id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

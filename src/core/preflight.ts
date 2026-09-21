@@ -392,6 +392,118 @@ function checkDatabase(): PreflightCheck[] {
   return checks;
 }
 
+/* =====================================================
+   PROVIDER LIFECYCLE ASSESSMENT
+   =====================================================
+   Startup must never be reported as a provider failure just
+   because configured providers have not completed their first
+   request yet. The lifecycle is therefore:
+
+     configured + untested          -> CONFIGURED (pending, not a failure)
+     configured + healthy           -> HEALTHY
+     configured + tested failures   -> DEGRADED
+     configured + all tested + zero healthy -> FAILED (genuinely unhealthy)
+     zero configured                -> NOT_CONFIGURED
+
+   "Untested" means the provider is configured (credentials
+   present) but has completed no request yet — no success and no
+   failure. "Tested" therefore means the provider has completed at
+   least one real request.
+
+   A provider is NEVER reported healthy here unless the router has
+   recorded an actual successful request for it. No synthetic health
+   and no probing requests are used to satisfy the supervisor.
+   ===================================================== */
+
+export interface ProviderHealthCounts {
+  configuredProviders?: number;
+  healthyProviders?: number;
+  degradedProviders?: number;
+  quarantinedProviders?: number;
+  untestedProviders?: number;
+}
+
+export interface ProviderLifecycleAssessment {
+  /** Providers whose credentials are configured. */
+  configured: number;
+  /** Providers with recorded success and no active failure state. */
+  healthy: number;
+  degraded: number;
+  quarantined: number;
+  /** Configured providers that have not completed any request yet. */
+  untested: number;
+  /** Configured providers that completed at least one request. */
+  tested: number;
+  /** Aggregate preflight status for the provider subsystem. */
+  status: PreflightStatus;
+  /**
+   * True only when every configured provider has actually been
+   * exercised and none is healthy. This is the only state that may be
+   * treated as a sustained production provider failure.
+   */
+  sustainedProviderFailure: boolean;
+  /** Human readable counts (safe for logs/reports, no secrets). */
+  detail: string;
+}
+
+function healthCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : 0;
+}
+
+/**
+ * Classify provider lifecycle state from an AIRouter health report.
+ * Pure function: no API calls, no hidden state.
+ */
+export function assessProviderLifecycle(
+  counts: ProviderHealthCounts,
+): ProviderLifecycleAssessment {
+  const configured = healthCount(counts?.configuredProviders);
+  const healthy = Math.min(healthCount(counts?.healthyProviders), configured);
+  const degraded = Math.min(healthCount(counts?.degradedProviders), configured);
+  const quarantined = Math.min(
+    healthCount(counts?.quarantinedProviders),
+    configured,
+  );
+  const untested = Math.min(healthCount(counts?.untestedProviders), configured);
+  const tested = Math.max(0, configured - untested);
+
+  let status: PreflightStatus;
+
+  if (configured === 0) {
+    status = "NOT_CONFIGURED";
+  } else if (healthy > 0) {
+    status = degraded > healthy ? "DEGRADED" : "HEALTHY";
+  } else if (tested === 0) {
+    // Configured, but no provider has completed a request yet.
+    // This is initialisation, not a provider failure.
+    status = "CONFIGURED";
+  } else if (untested > 0) {
+    // Some providers already recorded failures, others have not been
+    // exercised yet — degraded, but not a conclusive total failure.
+    status = "DEGRADED";
+  } else {
+    // Every configured provider has been tested and none is healthy.
+    status = "FAILED";
+  }
+
+  return {
+    configured,
+    healthy,
+    degraded,
+    quarantined,
+    untested,
+    tested,
+    status,
+    sustainedProviderFailure:
+      configured > 0 && healthy === 0 && tested > 0 && untested === 0,
+    detail:
+      `${healthy} healthy, ${degraded} degraded, ${quarantined} quarantined, ` +
+      `${untested} untested of ${configured} configured (${tested} tested)`,
+  };
+}
+
 /**
  * Auto-discover AI provider status from existing ProviderRegistry + AIRouter.
  * This is the key integration point — it queries the actual router health.
@@ -445,24 +557,16 @@ function checkAIProviders(router: any): PreflightCheck[] {
     lastChecked: Date.now(),
   });
 
-  // Provider summary — auto-discovered from registry
-  const configured = report.configuredProviders;
-  const healthy = report.healthyProviders;
-  const degraded = report.degradedProviders;
-  const quarantined = report.quarantinedProviders;
-  const untested = report.untestedProviders;
-
-  let providerStatus: PreflightStatus = "HEALTHY";
-  if (healthy === 0 && configured > 0) providerStatus = "DEGRADED";
-  else if (configured === 0) providerStatus = "NOT_CONFIGURED";
-  else if (degraded > healthy) providerStatus = "DEGRADED";
+  // Provider summary — auto-discovered from registry.
+  // Lifecycle-aware: configured-but-untested is NOT a failure.
+  const lifecycle = assessProviderLifecycle(report);
 
   checks.push({
     name: "ai_providers",
     category: "ai",
-    status: providerStatus,
+    status: lifecycle.status,
     required: true,
-    details: `${healthy} healthy, ${degraded} degraded, ${quarantined} quarantined, ${untested} untested of ${configured} configured`,
+    details: lifecycle.detail,
     lastChecked: Date.now(),
   });
 
@@ -1354,12 +1458,22 @@ export function createSupervisorChecks(
   return () => {
     const reasons: string[] = [];
 
-    // Check router health
+    // Check router health.
+    //
+    // Lifecycle-correct: configured providers that have not completed
+    // their first request yet are NOT a failure. Only a provider
+    // subsystem where every configured provider has actually been
+    // exercised and none is healthy counts as a sustained failure.
     if (router) {
       try {
         const report = router.getHealthReport();
-        if (report.healthyProviders === 0 && report.configuredProviders > 0) {
-          reasons.push("No healthy AI providers");
+        const lifecycle = assessProviderLifecycle(report ?? {});
+
+        if (lifecycle.sustainedProviderFailure) {
+          reasons.push(
+            `No healthy AI providers (${lifecycle.configured} configured, ` +
+              `${lifecycle.tested} tested, 0 healthy)`,
+          );
         }
       } catch {
         reasons.push("AI router health check failed");

@@ -25,6 +25,9 @@ const TSX = "node ./node_modules/.bin/tsx";
 const MANDATORY_SUITES: TestSuite[] = [
   // Core
   { name: "Router", file: "scripts/test-router.ts", category: "core" },
+  { name: "Provider Lifecycle", file: "scripts/test-provider-lifecycle.ts", category: "core" },
+  { name: "Preflight", file: "scripts/test-preflight.ts", category: "core" },
+  { name: "Provider Health", file: "scripts/test-provider-health.ts", category: "core" },
   { name: "Core", file: "scripts/test-core.ts", category: "core" },
   { name: "Commands", file: "scripts/test-commands.ts", category: "core" },
   { name: "Rate Limit", file: "scripts/test-rate-limit.ts", category: "core" },
