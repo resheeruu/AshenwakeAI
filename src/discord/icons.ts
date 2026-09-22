@@ -39,7 +39,17 @@ export type IconName =
   | "menu"
   | "refresh"
   | "memory"
-  | "stats";
+  | "stats"
+  | "think"
+  | "happy"
+  | "sad"
+  | "angry"
+  | "confused"
+  | "shy"
+  | "surprised"
+  | "sleep"
+  | "focus"
+  | "laugh";
 
 export interface IconConfig {
   /** Tabler Icons outline filename (without .svg extension) */
@@ -72,6 +82,16 @@ export const ICON_MAP: Record<IconName, IconConfig> = {
   refresh:  { tabler: "refresh",         color: "#7c3aed", fallback: "🔄", envVar: "EMOJI_ASH_REFRESH_ID" },
   memory:   { tabler: "brain",           color: "#7c3aed", fallback: "🧠", envVar: "EMOJI_ASH_MEMORY_ID" },
   stats:    { tabler: "chart-bar",       color: "#7c3aed", fallback: "📊", envVar: "EMOJI_ASH_STATS_ID" },
+  think:    { tabler: "brain",           color: "#7c3aed", fallback: "🤔", envVar: "EMOJI_ASH_THINK_ID" },
+  happy:    { tabler: "mood-happy",      color: "#22c55e", fallback: "😊", envVar: "EMOJI_ASH_HAPPY_ID" },
+  sad:      { tabler: "mood-sad",        color: "#3b82f6", fallback: "😢", envVar: "EMOJI_ASH_SAD_ID" },
+  angry:    { tabler: "mood-angry",      color: "#ef4444", fallback: "😠", envVar: "EMOJI_ASH_ANGRY_ID" },
+  confused: { tabler: "mood-confused",   color: "#f59e0b", fallback: "😕", envVar: "EMOJI_ASH_CONFUSED_ID" },
+  shy:      { tabler: "mood-happy",      color: "#ec4899", fallback: "😊", envVar: "EMOJI_ASH_SHY_ID" },
+  surprised:{ tabler: "mood-smile",      color: "#8b5cf6", fallback: "😮", envVar: "EMOJI_ASH_SURPRISED_ID" },
+  sleep:    { tabler: "moon",            color: "#6b7280", fallback: "😴", envVar: "EMOJI_ASH_SLEEP_ID" },
+  focus:    { tabler: "mood-search",     color: "#3b82f6", fallback: "🧐", envVar: "EMOJI_ASH_FOCUS_ID" },
+  laugh:    { tabler: "mood-smile",      color: "#22c55e", fallback: "😄", envVar: "EMOJI_ASH_LAUGH_ID" },
 };
 
 // ---------------------------------------------------------------------------

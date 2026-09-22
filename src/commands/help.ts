@@ -66,6 +66,12 @@ const CATEGORY_DEFS: CategoryDef[] = [
   { id: "moderation", name: "Moderation", emoji: "🛡️", description: "Keep the server safe and manage members." },
   { id: "support", name: "Support", emoji: "🎫", description: "Tickets, reports, appeals, and case management." },
   { id: "access", name: "Access Control", emoji: "🔑", description: "Trusted users and permission management." },
+  { id: "social", name: "Social", emoji: "💬", description: "Anime reactions and social interactions.",
+    features: [
+      { name: "Anime actions", description: "Use ash <action> @user for reactions (hug, pat, bonk, etc.)" },
+      { name: "Reaction commands", description: "Affection, combat, and fun interactions" },
+    ],
+  },
   { id: "system", name: "System", emoji: emoji("ash_stats"), description: "System status, settings, and AI usage." },
 ];
 

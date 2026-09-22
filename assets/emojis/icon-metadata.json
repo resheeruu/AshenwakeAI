@@ -1,7 +1,7 @@
 {
   "version": 1,
   "upstreamRevision": "3.47.0",
-  "lastChecked": "2026-09-20T18:56:25.678Z",
+  "lastChecked": "2026-09-22T05:45:17.207Z",
   "icons": {
     "ai": {
       "name": "ai",
@@ -166,6 +166,116 @@
       "lastChecked": "2026-09-20T18:56:25.678Z",
       "lastUpdated": "2026-09-20T18:56:25.678Z",
       "checksum": "pbuohk",
+      "source": "tabler"
+    },
+    "think": {
+      "name": "think",
+      "tablerIcon": "brain",
+      "localFile": "ash_think.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/brain.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:14.785Z",
+      "lastUpdated": "2026-09-22T05:45:14.788Z",
+      "checksum": "yg0vun",
+      "source": "tabler"
+    },
+    "happy": {
+      "name": "happy",
+      "tablerIcon": "mood-happy",
+      "localFile": "ash_happy.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-happy.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:15.243Z",
+      "lastUpdated": "2026-09-22T05:45:15.243Z",
+      "checksum": "qu0kqq",
+      "source": "tabler"
+    },
+    "sad": {
+      "name": "sad",
+      "tablerIcon": "mood-sad",
+      "localFile": "ash_sad.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-sad.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:15.449Z",
+      "lastUpdated": "2026-09-22T05:45:15.449Z",
+      "checksum": "k5198h",
+      "source": "tabler"
+    },
+    "angry": {
+      "name": "angry",
+      "tablerIcon": "mood-angry",
+      "localFile": "ash_angry.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-angry.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:15.674Z",
+      "lastUpdated": "2026-09-22T05:45:15.674Z",
+      "checksum": "re4cw4",
+      "source": "tabler"
+    },
+    "confused": {
+      "name": "confused",
+      "tablerIcon": "mood-confused",
+      "localFile": "ash_confused.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-confused.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:15.860Z",
+      "lastUpdated": "2026-09-22T05:45:15.860Z",
+      "checksum": "qh00mv",
+      "source": "tabler"
+    },
+    "shy": {
+      "name": "shy",
+      "tablerIcon": "mood-happy",
+      "localFile": "ash_shy.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-happy.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:16.272Z",
+      "lastUpdated": "2026-09-22T05:45:16.272Z",
+      "checksum": "qu0kqq",
+      "source": "tabler"
+    },
+    "surprised": {
+      "name": "surprised",
+      "tablerIcon": "mood-smile",
+      "localFile": "ash_surprised.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-smile.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:16.558Z",
+      "lastUpdated": "2026-09-22T05:45:16.558Z",
+      "checksum": "ti74v1",
+      "source": "tabler"
+    },
+    "sleep": {
+      "name": "sleep",
+      "tablerIcon": "moon",
+      "localFile": "ash_sleep.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/moon.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:16.898Z",
+      "lastUpdated": "2026-09-22T05:45:16.898Z",
+      "checksum": "lbvpum",
+      "source": "tabler"
+    },
+    "focus": {
+      "name": "focus",
+      "tablerIcon": "mood-search",
+      "localFile": "ash_focus.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-search.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:17.038Z",
+      "lastUpdated": "2026-09-22T05:45:17.038Z",
+      "checksum": "ww826z",
+      "source": "tabler"
+    },
+    "laugh": {
+      "name": "laugh",
+      "tablerIcon": "mood-smile",
+      "localFile": "ash_laugh.svg",
+      "upstreamUrl": "https://unpkg.com/@tabler/icons@latest/icons/outline/mood-smile.svg",
+      "upstreamRevision": "3.47.0",
+      "lastChecked": "2026-09-22T05:45:17.206Z",
+      "lastUpdated": "2026-09-22T05:45:17.206Z",
+      "checksum": "ti74v1",
       "source": "tabler"
     }
   }

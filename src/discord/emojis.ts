@@ -224,3 +224,35 @@ export const E_MEMORY = () => emoji("memory");
 
 /** Shorthand: stats/chart emoji */
 export const E_STATS = () => emoji("stats");
+
+// ── Anime Emotion Emojis ──
+
+/** Shorthand: thinking emoji */
+export const E_THINK = () => emoji("think");
+
+/** Shorthand: happy emoji */
+export const E_HAPPY = () => emoji("happy");
+
+/** Shorthand: sad emoji */
+export const E_SAD = () => emoji("sad");
+
+/** Shorthand: angry emoji */
+export const E_ANGRY = () => emoji("angry");
+
+/** Shorthand: confused emoji */
+export const E_CONFUSED = () => emoji("confused");
+
+/** Shorthand: shy emoji */
+export const E_SHY = () => emoji("shy");
+
+/** Shorthand: surprised emoji */
+export const E_SURPRISED = () => emoji("surprised");
+
+/** Shorthand: sleep emoji */
+export const E_SLEEP = () => emoji("sleep");
+
+/** Shorthand: focus emoji */
+export const E_FOCUS = () => emoji("focus");
+
+/** Shorthand: laugh emoji */
+export const E_LAUGH = () => emoji("laugh");

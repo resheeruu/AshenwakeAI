@@ -5,154 +5,311 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AshenAI Control Center</title>
 <style>
-:root{--bg:#07070b;--surface:rgba(18,18,27,.78);--surface-2:#11111a;--surface-3:#191925;--border:rgba(255,255,255,.09);--border-strong:rgba(255,255,255,.15);--text:#f7f7fb;--muted:#9696a8;--accent:#9b7cff;--accent-2:#6d5dfc;--success:#61e294;--danger:#ff6f7d;--warning:#ffb347;--shadow:0 18px 60px rgba(0,0,0,.35)}
+:root{
+  --bg:#06060a;--surface:rgba(16,16,24,.82);--surface-2:#0e0e16;--surface-3:#161622;
+  --border:rgba(255,255,255,.07);--border-strong:rgba(255,255,255,.13);
+  --text:#f0f0f8;--muted:#8888a0;--dim:#55556a;
+  --accent:#9b7cff;--accent-2:#7c5dfc;--accent-glow:rgba(155,124,255,.12);
+  --success:#5ce0a0;--danger:#ff6b7a;--warning:#ffb347;--info:#5b9cf6;
+  --shadow:0 16px 48px rgba(0,0,0,.4);
+  --radius:10px;--radius-sm:6px;--radius-lg:14px;
+  --font:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"SF Mono",ui-monospace,Monaco,Consolas,monospace;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-html{min-height:100%;background:var(--bg)}
-body{min-height:100vh;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:radial-gradient(circle at 50% -10%,rgba(123,92,255,.18),transparent 34%),radial-gradient(circle at 100% 45%,rgba(73,91,255,.08),transparent 30%),var(--bg)}
+html{min-height:100%;background:var(--bg);-webkit-text-size-adjust:100%}
+body{min-height:100vh;font-family:var(--font);color:var(--text);background:var(--bg);
+  background:radial-gradient(ellipse at 50% -20%,rgba(123,92,255,.12),transparent 50%),var(--bg);
+  line-height:1.5;-webkit-font-smoothing:antialiased}
 a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:var(--accent);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+/* Toast container */
+#toastContainer{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{pointer-events:auto;padding:12px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;
+  display:flex;align-items:center;gap:8px;max-width:360px;backdrop-filter:blur(16px);
+  box-shadow:0 8px 32px rgba(0,0,0,.3);animation:toastIn .25s ease-out;cursor:pointer}
+.toast.removing{animation:toastOut .2s ease-in forwards}
+.toast-success{background:rgba(20,20,30,.92);border:1px solid rgba(92,224,160,.3);color:var(--success)}
+.toast-error{background:rgba(20,20,30,.92);border:1px solid rgba(255,107,122,.3);color:var(--danger)}
+.toast-warning{background:rgba(20,20,30,.92);border:1px solid rgba(255,179,71,.3);color:var(--warning)}
+.toast-info{background:rgba(20,20,30,.92);border:1px solid rgba(91,156,246,.3);color:var(--info)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(-8px) scale(.96)}}
+@media(max-width:480px){#toastContainer{left:12px;right:12px;bottom:12px}.toast{max-width:100%}}
+
+/* Login */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 32px;max-width:380px;width:100%;text-align:center;backdrop-filter:blur(20px)}
-.login-box h1{font-size:22px;margin-bottom:4px}
-.login-box>p{color:var(--muted);font-size:13px;margin-bottom:20px}
-.login-box input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:13px;margin-bottom:10px;outline:none}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:36px 28px;max-width:360px;width:100%;text-align:center;backdrop-filter:blur(24px)}
+.login-box h1{font-size:20px;font-weight:800;margin-bottom:2px;letter-spacing:-.3px}
+.login-box>p{color:var(--muted);font-size:12px;margin-bottom:18px}
+.login-box input{width:100%;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);
+  background:var(--surface-2);color:var(--text);font-size:13px;margin-bottom:10px;outline:none;transition:border-color .15s}
 .login-box input:focus{border-color:var(--accent)}
-.login-box button[type=submit]{width:100%;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:transform .15s}
+.login-box button[type=submit]{width:100%;padding:10px;border-radius:var(--radius-sm);border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:13px;font-weight:700;
+  cursor:pointer;transition:transform .12s,opacity .12s}
 .login-box button:hover{transform:translateY(-1px)}
-.login-box button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.login-box button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .login-error{color:var(--danger);font-size:12px;margin-top:6px;min-height:16px}
-.login-hint{color:var(--muted);font-size:11px;margin-top:12px;line-height:1.5}
+.login-hint{color:var(--dim);font-size:10px;margin-top:12px;line-height:1.5}
+
+/* App layout */
 #app{display:none;min-height:100vh}
-.topbar{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(7,7,11,.85);border-bottom:1px solid var(--border);backdrop-filter:blur(20px)}
+.topbar{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;height:48px;background:rgba(6,6,10,.88);border-bottom:1px solid var(--border);backdrop-filter:blur(20px)}
 .topbar-brand{display:flex;align-items:center;gap:8px}
-.topbar-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#a98cff,#6253ed);display:grid;place-items:center;font-size:16px;font-weight:900;color:#fff}
-.topbar-title{font-size:14px;font-weight:700}
+.topbar-logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#a98cff,#6253ed);
+  display:grid;place-items:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0}
+.topbar-title{font-size:13px;font-weight:700;letter-spacing:-.2px}
 .topbar-sub{font-size:10px;color:var(--muted)}
 .topbar-right{display:flex;align-items:center;gap:8px}
-.topbar-status{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--success)}
-.topbar-status .dot{width:5px;height:5px;border-radius:50%;background:var(--success);box-shadow:0 0 6px rgba(97,226,148,.5)}
-.hamburger{display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:2px 6px}
-.btn-logout{background:rgba(255,255,255,.06);border:1px solid var(--border-strong);color:var(--muted);padding:5px 10px;border-radius:6px;font-size:10px;cursor:pointer;font-weight:600}
-.btn-logout:hover{background:rgba(255,111,125,.15);color:var(--danger);border-color:var(--danger)}
+.topbar-status{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--success);font-weight:500}
+.topbar-status .dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 8px rgba(92,224,160,.4);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.hamburger{display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px 6px;border-radius:var(--radius-sm);-webkit-tap-highlight-color:transparent}
+.hamburger:active{background:rgba(255,255,255,.06)}
+.btn-logout{background:rgba(255,255,255,.05);border:1px solid var(--border-strong);color:var(--muted);
+  padding:5px 10px;border-radius:var(--radius-sm);font-size:10px;cursor:pointer;font-weight:600;
+  transition:all .12s;-webkit-tap-highlight-color:transparent}
+.btn-logout:hover{background:rgba(255,107,122,.1);color:var(--danger);border-color:rgba(255,107,122,.3)}
 .role-badge{font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
-.role-owner{background:rgba(155,124,255,.2);color:var(--accent)}
-.role-admin{background:rgba(97,226,148,.15);color:var(--success)}
-.role-user{background:rgba(255,179,71,.15);color:var(--warning)}
-.layout{display:flex;min-height:calc(100vh - 46px)}
-.sidebar{width:200px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:8px 0;overflow-y:auto;position:sticky;top:46px;height:calc(100vh - 46px)}
-.sidebar a{display:flex;align-items:center;gap:6px;padding:7px 14px;font-size:12px;color:var(--muted);transition:all .15s;border-left:3px solid transparent}
-.sidebar a:hover{color:var(--text);background:rgba(255,255,255,.04)}
-.sidebar a.active{color:var(--accent);background:rgba(155,124,255,.08);border-left-color:var(--accent);font-weight:600}
-.sidebar .nav-icon{width:16px;text-align:center;font-size:12px}
+.role-owner{background:rgba(155,124,255,.15);color:var(--accent)}
+.role-admin{background:rgba(92,224,160,.12);color:var(--success)}
+.role-user{background:rgba(255,179,71,.12);color:var(--warning)}
+.layout{display:flex;min-height:calc(100vh - 48px)}
+.sidebar{width:200px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  padding:8px 0;overflow-y:auto;position:sticky;top:48px;height:calc(100vh - 48px)}
+.sidebar a{display:flex;align-items:center;gap:7px;padding:8px 14px;font-size:12px;color:var(--muted);
+  transition:all .12s;border-left:3px solid transparent;-webkit-tap-highlight-color:transparent;text-decoration:none}
+.sidebar a:hover{color:var(--text);background:rgba(255,255,255,.03);text-decoration:none}
+.sidebar a.active{color:var(--accent);background:var(--accent-glow);border-left-color:var(--accent);font-weight:600}
+.sidebar .nav-icon{width:16px;text-align:center;font-size:13px}
 .sidebar .nav-label{white-space:nowrap}
-.main{flex:1;padding:14px 14px;max-width:1000px;overflow-x:hidden}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;backdrop-filter:blur(10px)}
-.card h3{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
-.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
-.stat-card{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
-.stat-card .stat-value{font-size:18px;font-weight:800;margin-bottom:2px}
-.stat-card .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.sidebar .nav-section{font-size:9px;color:var(--dim);padding:10px 14px 3px;text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.main{flex:1;padding:16px;max-width:1000px;overflow-x:hidden}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;margin-bottom:12px;backdrop-filter:blur(8px);transition:border-color .15s}
+.card:hover{border-color:var(--border-strong)}
+.card h3{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+
+/* Stat cards */
+.stat-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;text-align:center;transition:border-color .15s}
+.stat-card:hover{border-color:var(--border-strong)}
+.stat-card .stat-value{font-size:20px;font-weight:800;margin-bottom:2px;letter-spacing:-.3px;line-height:1.2}
+.stat-card .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:500}
 .stat-card.green .stat-value{color:var(--success)}
 .stat-card.red .stat-value{color:var(--danger)}
 .stat-card.yellow .stat-value{color:var(--warning)}
 .stat-card.purple .stat-value{color:var(--accent)}
-.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:16px;font-size:10px;font-weight:600}
-.badge-green{background:rgba(97,226,148,.15);color:var(--success)}
-.badge-red{background:rgba(255,111,125,.15);color:var(--danger)}
-.badge-yellow{background:rgba(255,179,71,.15);color:var(--warning)}
-.badge-purple{background:rgba(155,124,255,.15);color:var(--accent)}
-.badge-muted{background:rgba(255,255,255,.05);color:var(--muted)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:16px;font-size:10px;font-weight:600}
+.badge-green{background:rgba(92,224,160,.12);color:var(--success)}
+.badge-red{background:rgba(255,107,122,.12);color:var(--danger)}
+.badge-yellow{background:rgba(255,179,71,.12);color:var(--warning)}
+.badge-purple{background:rgba(155,124,255,.12);color:var(--accent)}
+.badge-muted{background:rgba(255,255,255,.04);color:var(--dim)}
+
+/* Tables */
 .data-table{width:100%;border-collapse:collapse;font-size:12px}
-.data-table th{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border-strong);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
-.data-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
-.data-table tr:hover td{background:rgba(255,255,255,.02)}
-.btn{padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border-strong);transition:all .15s}
-.btn:hover{transform:translateY(-1px)}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.data-table th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-strong);
+  color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.data-table td{padding:8px 10px;border-bottom:1px solid var(--border)}
+.data-table tr:hover td{background:rgba(255,255,255,.015)}
+
+/* Buttons */
+.btn{padding:7px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border-strong);transition:all .12s;-webkit-tap-highlight-color:transparent;
+  display:inline-flex;align-items:center;gap:6px;line-height:1.4}
+.btn:hover{transform:translateY(-1px);text-decoration:none}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border:none}
-.btn-danger{background:rgba(255,111,125,.15);color:var(--danger);border-color:rgba(255,111,125,.3)}
-.btn-danger:hover{background:rgba(255,111,125,.25)}
-.btn-success{background:rgba(97,226,148,.15);color:var(--success);border-color:rgba(97,226,148,.3)}
+.btn-primary:hover{box-shadow:0 4px 16px rgba(155,124,255,.25)}
+.btn-danger{background:rgba(255,107,122,.1);color:var(--danger);border-color:rgba(255,107,122,.25)}
+.btn-danger:hover{background:rgba(255,107,122,.18)}
+.btn-success{background:rgba(92,224,160,.1);color:var(--success);border-color:rgba(92,224,160,.25)}
 .btn-outline{background:transparent;color:var(--text)}
-.btn-sm{padding:4px 8px;font-size:10px}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;padding:20px}
+.btn-outline:hover{background:rgba(255,255,255,.04)}
+.btn-sm{padding:5px 10px;font-size:11px}
+
+/* Modals */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;
+  align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
 .modal-overlay.show{display:flex}
-.modal{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:12px;padding:20px;max-width:400px;width:100%;backdrop-filter:blur(20px)}
-.modal h3{margin-bottom:6px;font-size:15px}
-.modal p{color:var(--muted);font-size:12px;margin-bottom:12px}
-.modal-actions{display:flex;gap:8px;justify-content:flex-end}
-.log-controls{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
-.log-controls input,.log-controls select{padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px}
-.log-controls input{flex:1;min-width:120px}
-.log-list{max-height:400px;overflow-y:auto;font-family:"SF Mono",Monaco,Consolas,monospace;font-size:11px;line-height:1.6}
-.log-entry{padding:3px 6px;border-radius:3px;border-bottom:1px solid var(--border)}
-.log-entry:hover{background:rgba(255,255,255,.03)}
-.log-entry .log-ts{color:var(--muted);margin-right:6px;font-size:10px}
-.log-entry .log-level{font-weight:700;margin-right:6px;text-transform:uppercase;font-size:9px}
-.log-entry.error .log-level{color:var(--danger)}
-.log-entry.warn .log-level{color:var(--warning)}
-.log-entry.info .log-level{color:var(--accent)}
-.section-page{display:none}
-.section-page.active{display:block}
-.section-title{font-size:16px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.provider-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border)}
+.modal{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--radius-lg);
+  padding:24px;max-width:440px;width:100%;backdrop-filter:blur(24px);animation:modalIn .2s ease-out}
+.modal h3{margin-bottom:6px;font-size:16px;font-weight:700}
+.modal p{color:var(--muted);font-size:12px;margin-bottom:14px;line-height:1.6}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+@keyframes modalIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+
+/* Form inputs */
+.input{width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);
+  background:var(--surface-2);color:var(--text);font-size:13px;outline:none;transition:border-color .15s}
+.input:focus{border-color:var(--accent)}
+.select{appearance:none;padding:9px 30px 9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);
+  background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238888a0'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 10px center;
+  color:var(--text);font-size:13px;outline:none;cursor:pointer;transition:border-color .15s}
+.select:focus{border-color:var(--accent)}
+.label{font-size:12px;color:var(--muted);font-weight:500;margin-bottom:4px;display:block}
+.field{margin-bottom:12px}
+
+/* Provider rows */
+.provider-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
+  border-bottom:1px solid var(--border);transition:background .1s}
 .provider-row:last-child{border-bottom:none}
-.provider-name{font-weight:600;font-size:12px}
-.provider-meta{display:flex;gap:10px;font-size:10px;color:var(--muted)}
-.guild-card{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
-.guild-card h4{font-size:13px;margin-bottom:6px}
-.guild-meta{display:flex;gap:10px;font-size:10px;color:var(--muted);flex-wrap:wrap}
-.inv-finding{padding:8px 10px;border-left:3px solid var(--border);margin-bottom:6px;border-radius:0 6px 6px 0;background:var(--surface-2);font-size:12px}
+.provider-row:hover{background:rgba(255,255,255,.015)}
+.provider-name{font-weight:600;font-size:13px}
+.provider-meta{display:flex;gap:12px;font-size:10px;color:var(--muted);margin-top:2px}
+
+/* Guild cards */
+.guild-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;margin-bottom:10px;transition:border-color .15s}
+.guild-card:hover{border-color:var(--border-strong)}
+.guild-card h4{font-size:13px;margin-bottom:6px;font-weight:600}
+.guild-meta{display:flex;gap:12px;font-size:10px;color:var(--muted);flex-wrap:wrap}
+
+/* Investigation findings */
+.inv-finding{padding:10px 12px;border-left:3px solid var(--border);margin-bottom:8px;
+  border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--surface-2);font-size:12px;line-height:1.5}
 .inv-finding.error{border-left-color:var(--danger)}
 .inv-finding.warning{border-left-color:var(--warning)}
 .inv-finding.info{border-left-color:var(--accent)}
-.help-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);font-size:10px;cursor:pointer;position:relative;font-style:normal}
-.help-btn:hover{background:rgba(155,124,255,.15);color:var(--accent);border-color:var(--accent)}
-.help-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--surface-3);border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--muted);white-space:nowrap;max-width:280px;white-space:normal;z-index:50;line-height:1.4;font-style:normal}
+
+/* Logs */
+.log-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.log-controls input,.log-controls select{padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);
+  background:var(--surface-2);color:var(--text);font-size:12px;outline:none}
+.log-controls input{flex:1;min-width:140px}
+.log-controls input:focus,.log-controls select:focus{border-color:var(--accent)}
+.log-list{max-height:400px;overflow-y:auto;font-family:var(--mono);font-size:11px;line-height:1.7}
+.log-entry{padding:4px 8px;border-radius:4px;border-bottom:1px solid var(--border);transition:background .1s}
+.log-entry:hover{background:rgba(255,255,255,.02)}
+.log-entry .log-ts{color:var(--dim);margin-right:8px;font-size:10px}
+.log-entry .log-level{font-weight:700;margin-right:8px;text-transform:uppercase;font-size:9px}
+.log-entry.error .log-level{color:var(--danger)}
+.log-entry.warn .log-level{color:var(--warning)}
+.log-entry.info .log-level{color:var(--accent)}
+
+/* Section pages */
+.section-page{display:none}
+.section-page.active{display:block}
+.section-title{font-size:16px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px;letter-spacing:-.2px}
+
+/* Help tooltip */
+.help-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+  border-radius:50%;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--dim);
+  font-size:10px;cursor:pointer;position:relative;font-style:normal;transition:all .12s}
+.help-btn:hover{background:var(--accent-glow);color:var(--accent);border-color:var(--accent)}
+.help-tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  background:var(--surface-3);border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  padding:10px 12px;font-size:11px;color:var(--muted);max-width:280px;z-index:50;line-height:1.5;
+  font-style:normal;box-shadow:var(--shadow)}
 .help-btn:hover .help-tip{display:block}
-.error-box{text-align:center;padding:20px;color:var(--danger);font-size:12px}
-.error-box .retry-btn{margin-top:8px}
+
+/* Empty / Error / Loading states */
+.error-box{text-align:center;padding:24px;color:var(--danger);font-size:12px;line-height:1.6}
+.error-box .retry-btn{margin-top:10px}
+.empty-state{text-align:center;padding:28px 20px;color:var(--muted);font-size:13px;line-height:1.6}
+.empty-state .empty-icon{font-size:28px;margin-bottom:8px;opacity:.5}
+.empty-state .empty-title{font-weight:600;color:var(--text);margin-bottom:4px;font-size:13px}
+.empty-state .empty-desc{color:var(--dim);font-size:11px}
+.loading{text-align:center;padding:24px;color:var(--muted);font-size:12px;display:flex;align-items:center;justify-content:center;gap:8px}
+.info-note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.5}
+
+/* Spinner */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Provider add modal steps */
+.step-indicator{display:flex;gap:6px;margin-bottom:18px}
+.step-dot{width:8px;height:8px;border-radius:50%;background:var(--border-strong);transition:background .2s}
+.step-dot.active{background:var(--accent)}
+.step-dot.done{background:var(--success)}
+.step-view{display:none}
+.step-view.active{display:block}
+.step-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.test-result{padding:10px 12px;border-radius:var(--radius-sm);font-size:12px;margin-top:10px;display:none;line-height:1.5}
+.test-result.success{background:rgba(92,224,160,.08);border:1px solid rgba(92,224,160,.2);color:var(--success)}
+.test-result.error{background:rgba(255,107,122,.08);border:1px solid rgba(255,107,122,.2);color:var(--danger)}
+.test-result.testing{background:rgba(155,124,255,.08);border:1px solid rgba(155,124,255,.2);color:var(--accent)}
+
+/* Anime accent bar */
+.accent-bar{height:2px;background:linear-gradient(90deg,var(--accent),var(--accent-2),transparent);border-radius:1px;margin-bottom:14px;opacity:.6}
+
+/* Mobile responsive */
 @media(max-width:768px){
   .hamburger{display:block}
-  .sidebar{display:none;position:fixed;top:46px;left:0;bottom:0;z-index:90;width:220px;box-shadow:var(--shadow)}
-  .sidebar.open{display:block}
+  .sidebar{display:none;position:fixed;top:48px;left:0;bottom:0;z-index:90;width:240px;
+    box-shadow:var(--shadow);background:var(--surface)}
+  .sidebar.open{display:block;animation:slideIn .2s ease-out}
   .card-grid{grid-template-columns:1fr 1fr}
   .topbar-sub{display:none}
+  .main{padding:12px}
+  .provider-row{flex-direction:column;align-items:flex-start;gap:8px}
+  .btn{min-height:40px;min-width:40px}
+  .log-controls{flex-direction:column}
+  .log-controls input,.log-controls select{min-width:100%}
+  .modal{margin:8px;max-width:calc(100vw - 16px)}
 }
+@keyframes slideIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
 @media(max-width:480px){
   .card-grid{grid-template-columns:1fr}
-  .stat-card .stat-value{font-size:16px}
+  .stat-card .stat-value{font-size:18px}
+  .topbar{padding:0 12px}
+  .login-box{padding:28px 20px}
 }
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.loading{text-align:center;padding:24px;color:var(--muted);font-size:12px}
-.empty{text-align:center;padding:20px;color:var(--muted);font-size:12px}
-.info-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+
+/* Reduced motion */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+  .topbar-status .dot{animation:none}
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--dim)}
 </style>
 </head>
 <body>
+
+<div id="toastContainer"></div>
 
 <div id="loginScreen">
   <div class="login-box">
     <h1>AshenAI</h1>
     <p>Control Center</p>
     <div id="oauthButtons">
-      <button class="btn btn-outline" id="discordBtn" style="width:100%;margin-bottom:6px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:8px;font-size:12px" onclick="window.location.href='/auth/discord'">
+      <button class="btn btn-outline" id="discordBtn" style="width:100%;margin-bottom:6px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:9px;font-size:12px" onclick="window.location.href='/auth/discord'">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
         Sign in with Discord
       </button>
-      <button class="btn btn-outline" id="googleBtn" style="width:100%;margin-bottom:12px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:8px;font-size:12px" onclick="window.location.href='/auth/google'">
+      <button class="btn btn-outline" id="googleBtn" style="width:100%;margin-bottom:12px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:9px;font-size:12px" onclick="window.location.href='/auth/google'">
         <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
         Sign in with Google
       </button>
     </div>
-    <div style="text-align:center;color:var(--muted);font-size:11px;margin-bottom:12px" id="loginDivider">─── or ───</div>
+    <div style="text-align:center;color:var(--dim);font-size:11px;margin-bottom:12px" id="loginDivider">or</div>
     <form id="loginForm">
-      <input type="text" id="loginUser" placeholder="Username" autocomplete="username" required>
-      <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" required>
+      <input type="text" id="loginUser" class="input" placeholder="Username" autocomplete="username" required aria-label="Username">
+      <input type="password" id="loginPass" class="input" placeholder="Password" autocomplete="current-password" required aria-label="Password">
       <button type="submit" id="loginBtn">Sign In</button>
-      <div class="login-error" id="loginError"></div>
-      <div style="text-align:right;margin-top:6px">
-        <a href="#" onclick="showForgotPassword();return false" style="font-size:11px;color:var(--muted)">Forgot password?</a>
+      <div class="login-error" id="loginError" role="alert"></div>
+      <div style="text-align:right;margin-top:8px">
+        <a href="#" onclick="showForgotPassword();return false" style="font-size:11px;color:var(--dim)">Forgot password?</a>
       </div>
     </form>
     <div class="login-hint">Local accounts use an AshenAI username and password. OAuth accounts can be linked later from Account Settings.</div>
@@ -163,8 +320,8 @@ a{color:var(--accent);text-decoration:none}
   <div class="modal">
     <h3>Reset Password</h3>
     <p>Enter the email address associated with your account. If the account exists and email is configured, a reset link will be sent.</p>
-    <input type="email" id="forgotEmail" placeholder="Email address" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:8px;box-sizing:border-box;font-size:12px">
-    <div id="forgotMsg" style="font-size:11px;margin-bottom:8px"></div>
+    <input type="email" id="forgotEmail" class="input" placeholder="Email address" aria-label="Email address">
+    <div id="forgotMsg" style="font-size:11px;margin-top:8px"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeForgotPassword()">Cancel</button>
       <button class="btn btn-primary" id="forgotBtn" onclick="submitForgotPassword()">Send Reset Link</button>
@@ -177,19 +334,19 @@ a{color:var(--accent);text-decoration:none}
     <h1>MFA Verification</h1>
     <p id="mfaChallengeSubtitle">Enter the code from your authenticator app</p>
     <div id="mfaTotpInput" style="margin-bottom:12px">
-      <input type="text" id="mfaCode" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:18px;letter-spacing:4px">
+      <input type="text" id="mfaCode" class="input" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:18px;letter-spacing:4px" aria-label="MFA code">
     </div>
     <div id="mfaRecoverySection" style="margin-bottom:12px;display:none">
-      <div style="text-align:center;color:var(--muted);font-size:11px;margin-bottom:6px">─── or use a recovery code ───</div>
-      <input type="text" id="mfaRecoveryCode" placeholder="Recovery code (e.g. A1B2C3D4)" style="text-transform:uppercase">
+      <div style="text-align:center;color:var(--dim);font-size:11px;margin-bottom:6px">or use a recovery code</div>
+      <input type="text" id="mfaRecoveryCode" class="input" placeholder="Recovery code (e.g. A1B2C3D4)" style="text-transform:uppercase" aria-label="Recovery code">
     </div>
     <button class="btn btn-primary" style="width:100%" id="mfaVerifyBtn" onclick="verifyMfaChallenge()">Verify</button>
-    <div class="login-error" id="mfaError"></div>
-    <div style="text-align:right;margin-top:6px">
-      <a href="#" onclick="showRecoveryInput();return false" style="font-size:11px;color:var(--muted)">Use recovery code</a>
+    <div class="login-error" id="mfaError" role="alert"></div>
+    <div style="text-align:right;margin-top:8px">
+      <a href="#" onclick="showRecoveryInput();return false" style="font-size:11px;color:var(--dim)">Use recovery code</a>
     </div>
     <div style="text-align:center;margin-top:8px">
-      <a href="#" onclick="cancelMfaChallenge();return false" style="font-size:11px;color:var(--muted)">Cancel</a>
+      <a href="#" onclick="cancelMfaChallenge();return false" style="font-size:11px;color:var(--dim)">Cancel</a>
     </div>
   </div>
 </div>
@@ -198,7 +355,7 @@ a{color:var(--accent);text-decoration:none}
   <div class="modal">
     <h3>Link Account</h3>
     <p>An account with this email already exists. Link this OAuth provider to your existing account?</p>
-    <div style="background:var(--surface-3);border-radius:6px;padding:10px;margin-bottom:12px;font-size:12px">
+    <div style="background:var(--surface-3);border-radius:var(--radius-sm);padding:10px;margin-bottom:14px;font-size:12px">
       <div><strong>Account:</strong> <span id="linkModalUser"></span></div>
       <div><strong>Provider:</strong> <span id="linkModalProvider"></span></div>
     </div>
@@ -212,7 +369,7 @@ a{color:var(--accent);text-decoration:none}
 <div id="app">
   <header class="topbar">
     <div class="topbar-brand">
-      <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle navigation">&#9776;</button>
       <div class="topbar-logo">A</div>
       <div>
         <div class="topbar-title">AshenAI</div>
@@ -227,8 +384,8 @@ a{color:var(--accent);text-decoration:none}
   </header>
 
   <div class="layout">
-    <nav class="sidebar" id="sidebar">
-      <div style="font-size:9px;color:var(--muted);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:1px">General</div>
+    <nav class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+      <div class="nav-section">General</div>
       <a href="#overview" class="active" data-section="overview"><span class="nav-icon">&#9673;</span><span class="nav-label">Overview</span></a>
       <a href="#providers" data-section="providers"><span class="nav-icon">&#9889;</span><span class="nav-label">AI Providers</span></a>
       <a href="#usage" data-section="usage"><span class="nav-icon">&#9776;</span><span class="nav-label">Usage</span></a>
@@ -237,14 +394,14 @@ a{color:var(--accent);text-decoration:none}
       <a href="#security" data-section="security"><span class="nav-icon">&#128274;</span><span class="nav-label">Security</span></a>
       <a href="#help" data-section="help"><span class="nav-icon">?</span><span class="nav-label">Help</span></a>
 
-      <div style="font-size:9px;color:var(--muted);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:1px" data-min-role="admin">Server Management</div>
+      <div class="nav-section" data-min-role="admin">Server Management</div>
       <a href="#servers" data-section="servers" data-min-role="admin"><span class="nav-icon">&#9878;</span><span class="nav-label">Servers</span></a>
       <a href="#diagnostics" data-section="diagnostics" data-min-role="admin"><span class="nav-icon">&#9883;</span><span class="nav-label">Diagnostics</span></a>
       <a href="#logs" data-section="logs" data-min-role="admin"><span class="nav-icon">&#9776;</span><span class="nav-label">Logs</span></a>
       <a href="#seraph" data-section="seraph" data-min-role="admin"><span class="nav-icon">&#9733;</span><span class="nav-label">Seraph</span></a>
       <a href="#config" data-section="config" data-min-role="admin"><span class="nav-icon">&#9874;</span><span class="nav-label">Configuration</span></a>
 
-      <div style="font-size:9px;color:var(--muted);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:1px" data-min-role="owner">System</div>
+      <div class="nav-section" data-min-role="owner">System</div>
       <a href="#bot-control" data-section="bot-control" data-min-role="owner"><span class="nav-icon">&#9881;</span><span class="nav-label">Bot Control</span></a>
       <a href="#investigations" data-section="investigations" data-min-role="owner"><span class="nav-icon">&#128269;</span><span class="nav-label">Investigations</span></a>
       <a href="#reports" data-section="reports" data-min-role="owner"><span class="nav-icon">&#128196;</span><span class="nav-label">Reports</span></a>
@@ -257,6 +414,7 @@ a{color:var(--accent);text-decoration:none}
     <main class="main" id="mainContent">
 
       <div class="section-page active" id="sec-overview">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9673; Overview <i class="help-btn">?<span class="help-tip">System overview showing AshenAI status, Discord connection, AI providers, health score, and recent errors. Visible to all users.</span></i></div>
         <div class="card-grid" id="overviewStats"></div>
         <div class="card"><h3>Provider Health</h3><div id="overviewProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
@@ -264,10 +422,11 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-bot-control">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9881; Bot Control</div>
         <div class="card">
           <h3>System Actions</h3>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="confirmAction('restart')">Restart</button>
             <button class="btn btn-danger" onclick="confirmAction('stop')">Stop</button>
             <button class="btn btn-success" onclick="confirmAction('reload_config')">Reload Config</button>
@@ -280,61 +439,106 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-providers">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9889; AI Providers <i class="help-btn">?<span class="help-tip">AI services AshenAI can use. Add custom OpenAI-compatible, Anthropic, Gemini, or Ollama providers. Built-in providers are configured via environment variables.</span></i></div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button class="btn btn-primary" onclick="showAddProviderModal()">+ Add Provider</button>
+          <button class="btn btn-primary" onclick="showAddProviderFlow()">+ Add Provider</button>
           <button class="btn" onclick="loadManagedProviders()">Refresh</button>
         </div>
         <div class="card" id="managedProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card" id="providerList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card"><h3>Performance</h3><div id="providerPerf"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
 
-        <div id="addProviderModal" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
-          <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto">
-            <h3 style="margin:0 0 16px 0">Add Provider</h3>
-            <div style="display:flex;flex-direction:column;gap:12px">
-              <label style="font-size:13px;color:#888">Provider Type
-                <select id="ap-type" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-                  <option value="custom">Custom (OpenAI Compatible)</option>
-                  <option value="local">Local (Ollama)</option>
-                </select>
-              </label>
-              <label style="font-size:13px;color:#888">Display Name
-                <input id="ap-displayName" type="text" placeholder="My Custom Provider" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-              </label>
-              <label style="font-size:13px;color:#888">Internal Name
-                <input id="ap-name" type="text" placeholder="my-custom-provider" pattern="[a-z0-9_-]+" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-              </label>
-              <label style="font-size:13px;color:#888">Protocol
-                <select id="ap-protocol" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
+        <!-- Add Provider Step-by-Step Modal -->
+        <div id="addProviderModal" class="modal-overlay">
+          <div class="modal" style="max-width:480px">
+            <div class="step-indicator">
+              <div class="step-dot active" id="step1Dot"></div>
+              <div class="step-dot" id="step2Dot"></div>
+              <div class="step-dot" id="step3Dot"></div>
+              <div class="step-dot" id="step4Dot"></div>
+            </div>
+
+            <!-- Step 1: Provider Type -->
+            <div class="step-view active" id="apStep1">
+              <h3>Step 1: Provider Type</h3>
+              <p>Choose the protocol for your AI provider.</p>
+              <div class="field">
+                <label class="label">Protocol</label>
+                <select id="ap-protocol" class="select" style="width:100%" onchange="onProtocolChange()">
                   <option value="openai_compatible">OpenAI Compatible</option>
                   <option value="anthropic">Anthropic</option>
                   <option value="gemini">Google Gemini</option>
-                  <option value="ollama">Ollama</option>
+                  <option value="ollama">Ollama (Local)</option>
                 </select>
-              </label>
-              <label style="font-size:13px;color:#888">Base URL
-                <input id="ap-endpoint" type="url" placeholder="https://api.example.com/v1" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-              </label>
-              <label style="font-size:13px;color:#888">API Key
-                <input id="ap-apiKey" type="password" placeholder="sk-..." style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-              </label>
-              <label style="font-size:13px;color:#888">Default Model
-                <input id="ap-defaultModel" type="text" placeholder="gpt-4o" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-              </label>
-              <div style="display:flex;gap:8px">
-                <label style="font-size:13px;color:#888;flex:1">Priority (lower = higher)
-                  <input id="ap-priority" type="number" value="100" min="1" max="999" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-                </label>
-                <label style="font-size:13px;color:#888;flex:1">Timeout (ms)
-                  <input id="ap-timeout" type="number" value="15000" min="1000" max="120000" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:#e6e6e6;margin-top:4px">
-                </label>
               </div>
-              <div id="ap-testResult" style="display:none;padding:8px;border-radius:6px;font-size:13px"></div>
-              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-                <button class="btn" onclick="testNewProvider()" id="ap-testBtn">Test Connection</button>
-                <button class="btn" onclick="closeAddProviderModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveNewProvider()" id="ap-saveBtn">Save Provider</button>
+              <div id="protocolDesc" class="info-note" style="margin-top:4px">Works with OpenAI, OpenRouter, Together, Groq, and any OpenAI-compatible API.</div>
+              <div class="step-actions">
+                <button class="btn btn-outline" onclick="closeAddProviderModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="apNextStep(2)">Next</button>
+              </div>
+            </div>
+
+            <!-- Step 2: Connection Details -->
+            <div class="step-view" id="apStep2">
+              <h3>Step 2: Connection</h3>
+              <p>Configure how AshenAI connects to this provider.</p>
+              <div class="field">
+                <label class="label">Display Name</label>
+                <input id="ap-displayName" class="input" placeholder="My Custom Provider">
+              </div>
+              <div class="field">
+                <label class="label">Internal Name</label>
+                <input id="ap-name" class="input" placeholder="my-custom-provider" pattern="[a-z0-9_-]+">
+              </div>
+              <div class="field">
+                <label class="label">Base URL</label>
+                <input id="ap-endpoint" class="input" placeholder="https://api.example.com/v1">
+              </div>
+              <div class="field">
+                <label class="label">API Key</label>
+                <input id="ap-apiKey" class="input" type="password" placeholder="sk-...">
+              </div>
+              <div class="field">
+                <label class="label">Default Model</label>
+                <input id="ap-defaultModel" class="input" placeholder="gpt-4o">
+              </div>
+              <div style="display:flex;gap:10px">
+                <div class="field" style="flex:1">
+                  <label class="label">Priority (lower = higher)</label>
+                  <input id="ap-priority" class="input" type="number" value="100" min="1" max="999">
+                </div>
+                <div class="field" style="flex:1">
+                  <label class="label">Timeout (ms)</label>
+                  <input id="ap-timeout" class="input" type="number" value="15000" min="1000" max="120000">
+                </div>
+              </div>
+              <div class="step-actions">
+                <button class="btn btn-outline" onclick="apNextStep(1)">Back</button>
+                <button class="btn btn-primary" onclick="apNextStep(3)">Next</button>
+              </div>
+            </div>
+
+            <!-- Step 3: Test Connection -->
+            <div class="step-view" id="apStep3">
+              <h3>Step 3: Test Connection</h3>
+              <p>Verify that AshenAI can connect to this provider before saving.</p>
+              <button class="btn btn-primary" id="ap-testBtn" onclick="testNewProvider()" style="width:100%;justify-content:center;margin-top:8px">Test Connection</button>
+              <div class="test-result" id="ap-testResult"></div>
+              <div class="step-actions">
+                <button class="btn btn-outline" onclick="apNextStep(2)">Back</button>
+                <button class="btn btn-primary" onclick="apNextStep(4)">Continue</button>
+              </div>
+            </div>
+
+            <!-- Step 4: Confirm & Save -->
+            <div class="step-view" id="apStep4">
+              <h3>Step 4: Confirm & Save</h3>
+              <p>Review your provider configuration before saving.</p>
+              <div style="background:var(--surface-3);border-radius:var(--radius-sm);padding:12px;font-size:12px;line-height:1.7;margin-top:8px" id="ap-summary"></div>
+              <div class="step-actions">
+                <button class="btn btn-outline" onclick="apNextStep(3)">Back</button>
+                <button class="btn btn-primary" id="ap-saveBtn" onclick="saveNewProvider()">Save Provider</button>
               </div>
             </div>
           </div>
@@ -342,32 +546,37 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-usage">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9776; Usage <i class="help-btn">?<span class="help-tip">Tracks AI requests, credits, and token usage across all providers. Credits shown only when the provider actually reports them.</span></i></div>
         <div class="card-grid" id="usageGlobal"></div>
         <div class="card"><h3>Provider Usage</h3><div id="usageProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
       <div class="section-page" id="sec-memory">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9997; Memory <i class="help-btn">?<span class="help-tip">Conversation memory tracks chat context per user. Shows stored conversations and messages.</span></i></div>
         <div class="card-grid" id="memoryStats"></div>
       </div>
 
       <div class="section-page" id="sec-servers">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9878; Servers <i class="help-btn">?<span class="help-tip">Discord servers where AshenAI is active. Admins see only servers they are authorized to manage.</span></i></div>
         <div id="serverList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
       <div class="section-page" id="sec-diagnostics">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9883; Diagnostics <i class="help-btn">?<span class="help-tip">System health checks covering files, memory, uptime, providers, and project structure. Score 0-100.</span></i></div>
         <div class="card" id="diagResults"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
       <div class="section-page" id="sec-logs">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9776; Logs <i class="help-btn">?<span class="help-tip">Real-time application logs. Filter by level or search for specific messages.</span></i></div>
         <div class="card">
           <div class="log-controls">
-            <input type="text" id="logSearch" placeholder="Search logs...">
-            <select id="logLevel">
+            <input type="text" id="logSearch" placeholder="Search logs..." aria-label="Search logs">
+            <select id="logLevel" aria-label="Log level filter">
               <option value="">All Levels</option>
               <option value="error">Error</option>
               <option value="warn">Warning</option>
@@ -381,6 +590,7 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-seraph">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9733; Seraph <i class="help-btn">?<span class="help-tip">System monitoring and diagnostic tools. Shows component health, available tools, and system information.</span></i></div>
         <div class="card-grid" id="seraphStats"></div>
         <div class="card"><h3>Components</h3><div id="seraphComponents"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
@@ -389,22 +599,24 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-investigations">
+        <div class="accent-bar"></div>
         <div class="section-title">&#128269; Investigations</div>
         <div class="card">
           <h3>Run Investigation</h3>
-          <div style="display:flex;gap:6px;margin-top:6px">
-            <input type="text" id="invProblem" placeholder="Describe the problem..." style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:12px">
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <input type="text" id="invProblem" class="input" placeholder="Describe the problem..." style="flex:1" aria-label="Problem description">
             <button class="btn btn-primary" onclick="runInvestigation()">Investigate</button>
           </div>
-          <div id="invResult" style="margin-top:10px"></div>
+          <div id="invResult" style="margin-top:12px"></div>
         </div>
       </div>
 
       <div class="section-page" id="sec-reports">
+        <div class="accent-bar"></div>
         <div class="section-title">&#128196; Reports</div>
         <div class="card">
           <h3>Generate Report</h3>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
             <button class="btn btn-outline" onclick="generateReport('health')">Health</button>
             <button class="btn btn-outline" onclick="generateReport('performance')">Performance</button>
             <button class="btn btn-outline" onclick="generateReport('security')">Security</button>
@@ -415,24 +627,27 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-config">
+        <div class="accent-bar"></div>
         <div class="section-title">&#9874; Configuration <i class="help-btn">?<span class="help-tip">Shows which subsystems are configured: Discord, AI providers, OAuth, email, storage, and environment.</span></i></div>
         <div class="card" id="configDisplay"><div class="loading"><span class="spinner"></span> Loading...</div></div>
       </div>
 
       <div class="section-page" id="sec-backups">
+        <div class="accent-bar"></div>
         <div class="section-title">&#128190; Backups <i class="help-btn">?<span class="help-tip">Backups protect persistent data so it can be restored after failure or migration.</span></i></div>
         <div class="card">
           <h3>Backup Status</h3>
-          <p style="color:var(--muted);font-size:12px;margin-bottom:8px">Creates a snapshot of guild configs, conversation memory, usage stats, audit logs, and other persistent data.</p>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:10px">Creates a snapshot of guild configs, conversation memory, usage stats, audit logs, and other persistent data.</p>
           <button class="btn btn-primary" onclick="confirmAction('backup')">Trigger Backup</button>
         </div>
       </div>
 
       <div class="section-page" id="sec-maintenance">
+        <div class="accent-bar"></div>
         <div class="section-title">&#128295; Maintenance</div>
         <div class="card">
           <h3>Dangerous Actions</h3>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
             <button class="btn btn-danger" onclick="confirmAction('clear_memory')">Clear Memory</button>
             <button class="btn btn-danger" onclick="confirmAction('reset_usage')">Reset Usage</button>
           </div>
@@ -441,10 +656,11 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-audit">
+        <div class="accent-bar"></div>
         <div class="section-title">&#128220; Audit Logs <i class="help-btn">?<span class="help-tip">Security audit trail. Every login, configuration change, and destructive action is recorded.</span></i></div>
         <div class="card">
           <div class="log-controls">
-            <input type="text" id="auditSearch" placeholder="Search audit...">
+            <input type="text" id="auditSearch" placeholder="Search audit..." aria-label="Search audit logs">
             <button class="btn btn-outline btn-sm" onclick="loadAudit()">Refresh</button>
           </div>
           <div class="log-list" id="auditList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
@@ -452,72 +668,76 @@ a{color:var(--accent);text-decoration:none}
       </div>
 
       <div class="section-page" id="sec-accounts">
+        <div class="accent-bar"></div>
         <div class="section-title">&#128101; Account Management</div>
         <div class="card">
           <h3>Accounts</h3>
-          <div class="info-note" style="margin-bottom:6px">Accounts created here use AshenAI username/password authentication. OAuth accounts can be linked separately from Security settings.</div>
+          <div class="info-note" style="margin-bottom:8px">Accounts created here use AshenAI username/password authentication. OAuth accounts can be linked separately from Security settings.</div>
           <div id="accountList"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         </div>
         <div class="card">
           <h3>Create Account</h3>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            <input type="text" id="newUsername" placeholder="Username" style="flex:1;min-width:100px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
-            <input type="password" id="newPassword" placeholder="Password (min 8 chars)" style="flex:1;min-width:100px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
-            <select id="newRole" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <input type="text" id="newUsername" class="input" placeholder="Username" style="flex:1;min-width:100px" aria-label="New username">
+            <input type="password" id="newPassword" class="input" placeholder="Password (min 8 chars)" style="flex:1;min-width:100px" aria-label="New password">
+            <select id="newRole" class="select" aria-label="Account role">
               <option value="user">User</option>
               <option value="admin">Admin</option>
               <option value="owner">Owner</option>
             </select>
             <button class="btn btn-primary" onclick="createAccount()">Create</button>
           </div>
-          <div id="createAccountError" style="color:var(--danger);font-size:11px;margin-top:6px;min-height:14px"></div>
+          <div id="createAccountError" style="color:var(--danger);font-size:11px;margin-top:8px;min-height:14px" role="alert"></div>
         </div>
       </div>
 
       <div class="section-page" id="sec-account">
+        <div class="accent-bar"></div>
         <div class="section-title">&#128100; My Account</div>
         <div class="card" id="accountInfo"><div class="loading"><span class="spinner"></span> Loading...</div></div>
         <div class="card">
           <h3>Change Password</h3>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            <input type="password" id="currentPassword" placeholder="Current password" style="flex:1;min-width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
-            <input type="password" id="newPasswordInput" placeholder="New password (min 8 chars)" style="flex:1;min-width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-size:11px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <input type="password" id="currentPassword" class="input" placeholder="Current password" style="flex:1;min-width:130px" aria-label="Current password">
+            <input type="password" id="newPasswordInput" class="input" placeholder="New password (min 8 chars)" style="flex:1;min-width:130px" aria-label="New password">
             <button class="btn btn-primary" onclick="changePassword()">Change Password</button>
           </div>
-          <div id="changePwError" style="color:var(--danger);font-size:11px;margin-top:6px;min-height:14px"></div>
-          <div id="changePwSuccess" style="color:var(--success);font-size:11px;margin-top:6px;min-height:14px"></div>
+          <div id="changePwError" style="color:var(--danger);font-size:11px;margin-top:8px;min-height:14px" role="alert"></div>
+          <div id="changePwSuccess" style="color:var(--success);font-size:11px;margin-top:8px;min-height:14px"></div>
         </div>
       </div>
 
       <div class="section-page" id="sec-security">
-        <div class="section-title">&#128274; Security <i class="help-btn">?<span class="help-tip">Authentication methods, multi-factor authentication, active sessions, and linked OAuth providers.</span></i></div></div>
+        <div class="accent-bar"></div>
+        <div class="section-title">&#128274; Security <i class="help-btn">?<span class="help-tip">Authentication methods, multi-factor authentication, active sessions, and linked OAuth providers.</span></i></div>
         <div class="card"><h3>Authentication Methods</h3><div id="securityAuthMethods"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
         <div class="card"><h3>Multi-Factor Authentication</h3><div id="securityMFA"><div class="loading"><span class="spinner"></span> Loading...</div></div>
-          <div id="mfaSetup" style="display:none;margin-top:10px">
-            <p style="font-size:12px;color:var(--muted);margin-bottom:6px">Scan this QR code or enter the secret in your authenticator app:</p>
-            <div id="mfaQrCode" style="text-align:center;margin-bottom:8px"></div>
-            <div id="mfaSecret" style="font-family:monospace;font-size:12px;padding:6px;background:var(--surface-2);border-radius:4px;margin-bottom:6px;word-break:break-all"></div>
-            <input type="text" id="mfaSetupCode" placeholder="Enter 6-digit code" style="padding:6px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:6px;font-size:12px">
+          <div id="mfaSetup" style="display:none;margin-top:12px">
+            <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Scan this QR code or enter the secret in your authenticator app:</p>
+            <div id="mfaQrCode" style="text-align:center;margin-bottom:10px"></div>
+            <div id="mfaSecret" style="font-family:var(--mono);font-size:12px;padding:8px;background:var(--surface-2);border-radius:var(--radius-sm);margin-bottom:8px;word-break:break-all"></div>
+            <input type="text" id="mfaSetupCode" class="input" placeholder="Enter 6-digit code" style="margin-bottom:8px" aria-label="MFA setup code">
             <button class="btn btn-primary btn-sm" onclick="verifyMFA(true)">Enable MFA</button>
           </div>
-          <div id="mfaDisable" style="display:none;margin-top:10px">
-            <p style="font-size:11px;color:var(--muted);margin-bottom:6px">Enter your password and a TOTP code to disable MFA:</p>
-            <input type="password" id="mfaDisablePw" placeholder="Password" style="padding:6px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:6px;font-size:12px">
-            <input type="text" id="mfaDisableCode" placeholder="6-digit TOTP code" maxlength="6" style="padding:6px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);margin-bottom:6px;font-size:12px">
+          <div id="mfaDisable" style="display:none;margin-top:12px">
+            <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Enter your password and a TOTP code to disable MFA:</p>
+            <input type="password" id="mfaDisablePw" class="input" placeholder="Password" style="margin-bottom:8px" aria-label="Password for MFA disable">
+            <input type="text" id="mfaDisableCode" class="input" placeholder="6-digit TOTP code" maxlength="6" style="margin-bottom:8px" aria-label="TOTP code for disable">
             <button class="btn btn-danger btn-sm" onclick="disableMFA()">Disable MFA</button>
           </div>
-          <div id="mfaRecovery" style="display:none;margin-top:10px">
-            <p style="font-size:12px;color:var(--warning);margin-bottom:6px">Recovery codes provide access if you lose your MFA device. Store them somewhere secure. They will not be shown again.</p>
-            <div id="recoveryCodesList" style="font-family:monospace;font-size:11px;padding:6px;background:var(--surface-2);border-radius:4px;white-space:pre-line"></div>
+          <div id="mfaRecovery" style="display:none;margin-top:12px">
+            <p style="font-size:12px;color:var(--warning);margin-bottom:8px">Recovery codes provide access if you lose your MFA device. Store them somewhere secure. They will not be shown again.</p>
+            <div id="recoveryCodesList" style="font-family:var(--mono);font-size:11px;padding:8px;background:var(--surface-2);border-radius:var(--radius-sm);white-space:pre-line"></div>
           </div>
         </div>
         <div class="card"><h3>Sessions</h3><div id="securitySessions"><div class="loading"><span class="spinner"></span> Loading...</div></div>
-          <div style="margin-top:6px"><button class="btn btn-danger btn-sm" onclick="revokeAllSessions()">Revoke All Other Sessions</button></div>
+          <div style="margin-top:8px"><button class="btn btn-danger btn-sm" onclick="revokeAllSessions()">Revoke All Other Sessions</button></div>
         </div>
         <div class="card"><h3>Linked Accounts</h3><div id="securityIdentities"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
       </div>
 
       <div class="section-page" id="sec-help">
+        <div class="accent-bar"></div>
         <div class="section-title">? Help</div>
         <div class="card"><h3>What is AshenAI?</h3>
           <p style="font-size:12px;color:var(--muted);line-height:1.8">AshenAI is an AI-powered Discord assistant and Control Center. It manages Discord servers, provides AI conversation, and offers server administration tools.</p>
@@ -526,7 +746,7 @@ a{color:var(--accent);text-decoration:none}
           <div style="font-size:12px;color:var(--muted);line-height:1.8">
             <p><strong>Local accounts</strong> use AshenAI username/password authentication.</p>
             <p><strong>Discord/Google accounts</strong> authenticate through OAuth. After successful authorization, you are automatically signed in.</p>
-            <p><strong>Roles:</strong></p>
+            <p style="margin-top:6px"><strong>Roles:</strong></p>
             <ul style="margin:4px 0 0 16px">
               <li><strong>User</strong> — Personal AI features, account management, Help</li>
               <li><strong>Admin</strong> — Manage authorized Discord servers, server diagnostics, utilities</li>
@@ -563,7 +783,7 @@ a{color:var(--accent);text-decoration:none}
               <li>Create and organize channels</li>
               <li>Moderate where Discord permissions permit</li>
             </ul>
-            <p style="margin-top:6px">Destructive changes require confirmation. AshenAI respects both its own permissions and your Discord permissions.</p>
+            <p style="margin-top:8px">Destructive changes require confirmation. AshenAI respects both its own permissions and your Discord permissions.</p>
           </div>
         </div>
         <div class="card"><h3>Status Legend</h3>
@@ -587,7 +807,7 @@ a{color:var(--accent);text-decoration:none}
     <h3 id="confirmTitle">Confirm Action</h3>
     <p id="confirmMsg">Are you sure?</p>
     <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-outline" onclick="closeConfirmModal()">Cancel</button>
       <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirmedAction()">Confirm</button>
     </div>
   </div>
@@ -600,6 +820,7 @@ a{color:var(--accent);text-decoration:none}
   var refreshInterval = null;
   var csrfToken = null;
   var currentUser = null;
+  var apCurrentStep = 1;
 
   var ROLE_HIERARCHY = ['owner', 'admin', 'user'];
   function roleLevel(r){ return ROLE_HIERARCHY.indexOf(r); }
@@ -615,11 +836,35 @@ a{color:var(--accent);text-decoration:none}
   }
 
   function renderError(container, msg){
-    container.innerHTML='<div class="error-box">'+esc(msg||'Unable to load data.')+'<br><button class="btn btn-outline btn-sm retry-btn" onclick="location.reload()">Retry</button></div>';
+    container.innerHTML='<div class="error-box"><div class="empty-icon">&#9888;</div><div>'+esc(msg||'Unable to load data.')+'</div><button class="btn btn-outline btn-sm retry-btn" onclick="location.reload()" style="margin-top:10px">Retry</button></div>';
   }
 
-  function renderEmpty(container, msg){
-    container.innerHTML='<div class="empty">'+esc(msg||'No data available.')+'</div>';
+  function renderEmpty(container, title, desc){
+    var h = '<div class="empty-state">';
+    if(title) h += '<div class="empty-icon">&#9744;</div><div class="empty-title">'+esc(title)+'</div>';
+    if(desc) h += '<div class="empty-desc">'+esc(desc)+'</div>';
+    if(!title && !desc) h += esc('No data available.');
+    h += '</div>';
+    container.innerHTML = h;
+  }
+
+  // ── Toast notifications ──
+  function toast(msg, type, duration){
+    type = type || 'info';
+    duration = duration || 4000;
+    var c = document.getElementById('toastContainer');
+    var t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    var icons = {success:'&#10003;',error:'&#10007;',warning:'&#9888;',info:'&#8505;'};
+    t.innerHTML = '<span>'+(icons[type]||'')+'</span><span>'+esc(msg)+'</span>';
+    t.onclick = function(){ removeToast(t); };
+    c.appendChild(t);
+    setTimeout(function(){ removeToast(t); }, duration);
+  }
+  function removeToast(t){
+    if(!t || !t.parentNode) return;
+    t.classList.add('removing');
+    setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 200);
   }
 
   async function api(path, opts){
@@ -693,6 +938,10 @@ a{color:var(--accent);text-decoration:none}
         a.style.display = '';
       }
     });
+  }
+
+  function toggleSidebar(){
+    document.querySelector('.sidebar').classList.toggle('open');
   }
 
   async function loadOAuthConfig(){
@@ -871,8 +1120,8 @@ a{color:var(--accent);text-decoration:none}
     try {
       var r = await fetch(API + '/api/account/identities/' + currentLinkData.provider + '/link', { method: 'POST', credentials: 'include', headers: apiHeaders('POST'), body: JSON.stringify({ linkToken: currentLinkData.linkToken }) });
       var j = await r.json();
-      if (j.ok) { window.location.href = '/'; } else { alert(j.error || 'Linking failed'); }
-    } catch(ex) { alert('Connection failed'); }
+      if (j.ok) { window.location.href = '/'; } else { toast(j.error || 'Linking failed', 'error'); }
+    } catch(ex) { toast('Connection failed', 'error'); }
     btn.disabled = false;
   };
 
@@ -935,7 +1184,7 @@ a{color:var(--accent);text-decoration:none}
   async function loadOverview(){
     var data = await Promise.all([api('/api/system/status'),api('/api/system/health'),api('/api/providers/status'),api('/api/system/config'),api('/api/logs/errors?limit=5')]);
     var status=data[0],health=data[1],providers=data[2],cfg=data[3],errors=data[4];
-    if(!status){renderError(document.getElementById('overviewStats'),'Unable to load system status.');renderEmpty(document.getElementById('overviewProviders'),'No provider data.');renderEmpty(document.getElementById('overviewErrors'),'No error data.');return;}
+    if(!status){renderError(document.getElementById('overviewStats'),'Unable to load system status.');renderEmpty(document.getElementById('overviewProviders'),'No provider data','Configure AI providers to see health information.');renderEmpty(document.getElementById('overviewErrors'),'No error data','System is running cleanly.');return;}
     var s=status.status||status;
     var uptime=fmtDuration(s.uptime);
     var avail=providers?providers.filter(function(p){return p.available}).length:0;
@@ -954,14 +1203,14 @@ a{color:var(--accent);text-decoration:none}
     ]);
     if(providers){
       var el=document.getElementById('overviewProviders');
-      if(!providers.length){renderEmpty(el,'No provider data available.');}
+      if(!providers.length){renderEmpty(el,'No providers','Configure AI providers to see health data.');}
       else{el.innerHTML=providers.map(function(p){return '<div class="provider-row"><span class="provider-name">'+esc(p.name)+'</span><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Online':'Offline')+'</span><span class="provider-meta"><span>'+p.successes+' ok</span><span>'+p.failures+' fail</span><span>'+(p.averageLatencyMs?p.averageLatencyMs+'ms':'---')+'</span></span></div>'}).join('');}
     }
     if(errors){
       var eEl=document.getElementById('overviewErrors');
       if(errors.entries&&errors.entries.length){
         eEl.innerHTML=errors.entries.map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(fmtTs(e.timestamp))+'</span><span class="log-level">ERR</span>'+esc(redact(e.message))+'</div>'}).join('');
-      } else { renderEmpty(eEl,'No recent errors.'); }
+      } else { renderEmpty(eEl,'No recent errors','System is running cleanly.'); }
     }
     document.getElementById('topStatus').textContent=s.running?'Online':'Offline';
   }
@@ -970,22 +1219,21 @@ a{color:var(--accent);text-decoration:none}
     var d=await api('/api/system/status');
     if(!d){renderError(document.getElementById('botStatus'),'Unable to load status.');return;}
     var s=d.status||d;
-    document.getElementById('botStatus').innerHTML='<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px"><span>Status: <b>'+(s.running?'Running':'Stopped')+'</b></span><span>PID: '+(s.pid||'Unavailable')+'</span><span>Version: '+esc(s.version||'Unavailable')+'</span><span>Node: '+esc(s.nodeVersion||'Unavailable')+'</span><span>Platform: '+esc(s.platform||'Unavailable')+'</span><span>Environment: '+esc(s.environment||'Unavailable')+'</span></div>';
+    document.getElementById('botStatus').innerHTML='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px"><span>Status: <b>'+(s.running?'Running':'Stopped')+'</b></span><span>PID: '+(s.pid||'Unavailable')+'</span><span>Version: '+esc(s.version||'Unavailable')+'</span><span>Node: '+esc(s.nodeVersion||'Unavailable')+'</span><span>Platform: '+esc(s.platform||'Unavailable')+'</span><span>Environment: '+esc(s.environment||'Unavailable')+'</span></div>';
   }
 
   async function loadProviders(){
     var data=await Promise.all([api('/api/providers/status'),api('/api/providers/performance')]);
     var status=data[0],perf=data[1];
     var el=document.getElementById('providerList');
-    if(!status||!status.length){renderEmpty(el,'No provider health data available yet.');}
+    if(!status||!status.length){renderEmpty(el,'No provider health data','Provider health data will appear once requests are made.');}
     else{el.innerHTML='<div>'+status.map(function(p){return '<div class="provider-row"><div><span class="provider-name">'+esc(p.name)+'</span><div class="provider-meta" style="margin-top:2px"><span>Latency: '+(p.averageLatencyMs?p.averageLatencyMs+'ms':'---')+'</span><span>Success: '+p.successes+'</span><span>Fail: '+p.failures+'</span>'+(p.disabledUntil?'<span>Cooldown until '+new Date(p.disabledUntil).toLocaleTimeString()+'</span>':'')+(p.lastError?'<span style="color:var(--danger)">Last: '+esc(p.lastError)+'</span>':'')+'</div></div><span class="badge '+(p.available?'badge-green':'badge-red')+'">'+(p.available?'Available':'Disabled')+'</span></div>'}).join('')+'</div>';}
     var pEl=document.getElementById('providerPerf');
-    if(!perf){renderEmpty(pEl,'No performance data available.');}
-    else{var entries=Object.entries(perf);if(!entries.length){renderEmpty(pEl,'No performance data available.');}
+    if(!perf){renderEmpty(pEl,'No performance data','Performance data will appear after requests.');}
+    else{var entries=Object.entries(perf);if(!entries.length){renderEmpty(pEl,'No performance data','Performance data will appear after requests.');}
     else{pEl.innerHTML='<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency?v.latency+'ms':'---')+'</td></tr>'}).join('')+'</tbody></table>';}
   }
 
-  // ── Provider Management ──
   var _managedProviders = [];
 
   async function loadManagedProviders(){
@@ -993,22 +1241,22 @@ a{color:var(--accent);text-decoration:none}
     if(!el) return;
     try {
       var data = await api('/api/providers/manage');
-      if(!data || !data.ok || !data.providers) { renderEmpty(el, 'No managed providers.'); return; }
+      if(!data || !data.ok || !data.providers) { renderEmpty(el, 'No managed providers', 'Add your first AI provider to start routing requests.'); return; }
       _managedProviders = data.providers;
-      if(!data.providers.length) { el.innerHTML = '<div class="card"><p style="color:#888;margin:0">No custom providers configured. Click "+ Add Provider" to add one.</p></div>'; return; }
+      if(!data.providers.length) { renderEmpty(el, 'No custom providers configured', 'Click "+ Add Provider" to add your first custom AI provider.'); return; }
       el.innerHTML = data.providers.map(function(p){
         var healthColor = p.health.available ? 'var(--success)' : 'var(--danger)';
         var healthText = p.health.available ? 'Connected' : 'Unavailable';
         return '<div class="provider-row" style="flex-direction:column;align-items:flex-start;gap:8px;padding:12px">' +
-          '<div style="display:flex;justify-content:space-between;width:100%;align-items:center">' +
-            '<div><span class="provider-name">' + esc(p.displayName) + '</span> <span class="badge" style="background:' + healthColor + '22;color:' + healthColor + '">' + healthText + '</span> <span style="color:#888;font-size:12px">' + esc(p.protocol) + ' | Priority ' + p.priority + '</span></div>' +
-            '<div style="display:flex;gap:6px">' +
-              '<button class="btn" onclick="testManagedProvider(\'' + p.id + '\')" style="font-size:12px;padding:4px 8px">Test</button>' +
-              '<button class="btn" onclick="toggleManagedProvider(\'' + p.id + '\',' + !p.enabled + ')" style="font-size:12px;padding:4px 8px">' + (p.enabled ? 'Disable' : 'Enable') + '</button>' +
-              '<button class="btn" style="color:var(--danger);font-size:12px;padding:4px 8px" onclick="deleteManagedProvider(\'' + p.id + '\',\'' + esc(p.displayName) + '\')">Remove</button>' +
+          '<div style="display:flex;justify-content:space-between;width:100%;align-items:center;flex-wrap:wrap;gap:8px">' +
+            '<div><span class="provider-name">' + esc(p.displayName) + '</span> <span class="badge" style="background:' + healthColor + '18;color:' + healthColor + '">' + healthText + '</span> <span style="color:var(--muted);font-size:11px;margin-left:4px">' + esc(p.protocol) + ' | Priority ' + p.priority + '</span></div>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+              '<button class="btn btn-sm" onclick="testManagedProvider(\'' + p.id + '\')" aria-label="Test provider">Test</button>' +
+              '<button class="btn btn-sm" onclick="toggleManagedProvider(\'' + p.id + '\',' + !p.enabled + ')" aria-label="'+(p.enabled?'Disable':'Enable')+' provider">' + (p.enabled ? 'Disable' : 'Enable') + '</button>' +
+              '<button class="btn btn-sm btn-danger" onclick="deleteManagedProvider(\'' + p.id + '\',\'' + esc(p.displayName) + '\')" aria-label="Remove provider">Remove</button>' +
             '</div>' +
           '</div>' +
-          '<div style="font-size:12px;color:#888">' +
+          '<div style="font-size:11px;color:var(--muted)">' +
             (p.endpointHostname ? 'Endpoint: ' + esc(p.endpointHostname) + ' | ' : '') +
             'Models: ' + p.modelCount + (p.defaultModel ? ' | Default: ' + esc(p.defaultModel) : '') +
             ' | Created: ' + fmtTs(p.createdAt) +
@@ -1018,14 +1266,58 @@ a{color:var(--accent);text-decoration:none}
     } catch(e) { renderError(el, 'Failed to load providers.'); }
   }
 
-  function showAddProviderModal(){
-    var modal = document.getElementById('addProviderModal');
-    if(modal) { modal.style.display = 'flex'; }
+  // ── Add Provider Flow ──
+  var protocolDescriptions = {
+    openai_compatible: 'Works with OpenAI, OpenRouter, Together, Groq, and any OpenAI-compatible API.',
+    anthropic: 'Connect to Anthropic\'s Claude API. Requires an Anthropic API key.',
+    gemini: 'Connect to Google\'s Gemini API. Requires a Google AI Studio API key.',
+    ollama: 'Connect to a local Ollama instance. No API key required for local use.'
+  };
+
+  window.onProtocolChange = function(){
+    var proto = document.getElementById('ap-protocol').value;
+    document.getElementById('protocolDesc').textContent = protocolDescriptions[proto] || '';
+  };
+
+  window.showAddProviderFlow = function(){
+    apCurrentStep = 1;
+    updateAddProviderSteps();
+    document.getElementById('addProviderModal').classList.add('show');
+    document.getElementById('ap-testResult').style.display = 'none';
+  };
+
+  window.apNextStep = function(step){
+    if(step === 3){
+      var name = document.getElementById('ap-displayName').value || document.getElementById('ap-name').value;
+      if(!name){ toast('Please enter a provider name', 'warning'); return; }
+    }
+    apCurrentStep = step;
+    updateAddProviderSteps();
+    if(step === 4) renderProviderSummary();
+  };
+
+  function updateAddProviderSteps(){
+    for(var i=1;i<=4;i++){
+      document.getElementById('apStep'+i).classList.toggle('active', i===apCurrentStep);
+      var dot = document.getElementById('step'+i+'Dot');
+      dot.className = 'step-dot' + (i===apCurrentStep?' active': i<apCurrentStep?' done':'');
+    }
+  }
+
+  function renderProviderSummary(){
+    var summary = '<div style="display:flex;flex-direction:column;gap:4px">';
+    summary += '<div><strong>Name:</strong> ' + esc(document.getElementById('ap-displayName').value || '---') + '</div>';
+    summary += '<div><strong>Protocol:</strong> ' + esc(document.getElementById('ap-protocol').value) + '</div>';
+    summary += '<div><strong>Endpoint:</strong> ' + esc(document.getElementById('ap-endpoint').value || 'Default') + '</div>';
+    summary += '<div><strong>Model:</strong> ' + esc(document.getElementById('ap-defaultModel').value || 'Default') + '</div>';
+    summary += '<div><strong>API Key:</strong> ' + (document.getElementById('ap-apiKey').value ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : 'Not set') + '</div>';
+    summary += '<div><strong>Priority:</strong> ' + esc(document.getElementById('ap-priority').value) + '</div>';
+    summary += '</div>';
+    document.getElementById('ap-summary').innerHTML = summary;
   }
 
   function closeAddProviderModal(){
-    var modal = document.getElementById('addProviderModal');
-    if(modal) { modal.style.display = 'none'; }
+    document.getElementById('addProviderModal').classList.remove('show');
     var result = document.getElementById('ap-testResult');
     if(result) { result.style.display = 'none'; }
   }
@@ -1034,7 +1326,9 @@ a{color:var(--accent);text-decoration:none}
     var btn = document.getElementById('ap-testBtn');
     var result = document.getElementById('ap-testResult');
     btn.disabled = true; btn.textContent = 'Testing...';
-    result.style.display = 'none';
+    result.style.display = 'block';
+    result.className = 'test-result testing';
+    result.textContent = 'Testing connection...';
     try {
       var protocol = document.getElementById('ap-protocol').value;
       var endpoint = document.getElementById('ap-endpoint').value;
@@ -1051,16 +1345,12 @@ a{color:var(--accent);text-decoration:none}
         await api('/api/providers/manage/' + data.provider.id, {method:'DELETE',headers:apiHeaders()});
         if(testResult && testResult.ok && testResult.result) {
           var r = testResult.result;
-          result.style.display = 'block';
-          result.style.background = r.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
-          result.style.color = r.success ? 'var(--success)' : 'var(--danger)';
-          result.textContent = r.success ? ('Connected - Latency: ' + r.latencyMs + 'ms - Models: ' + r.modelsDiscovered) : ('Failed - ' + (r.error || 'Unknown error'));
+          result.className = 'test-result ' + (r.success ? 'success' : 'error');
+          result.textContent = r.success ? ('Connected - Latency: ' + r.latencyMs + 'ms - Models discovered: ' + r.modelsDiscovered) : ('Failed - ' + (r.error || 'Unknown error'));
         }
       }
     } catch(e) {
-      result.style.display = 'block';
-      result.style.background = 'rgba(239,68,68,0.1)';
-      result.style.color = 'var(--danger)';
+      result.className = 'test-result error';
       result.textContent = 'Test failed: ' + (e.message || 'Unknown error');
     }
     btn.disabled = false; btn.textContent = 'Test Connection';
@@ -1073,7 +1363,7 @@ a{color:var(--accent);text-decoration:none}
       var data = await api('/api/providers/manage', {method:'POST',headers:apiHeaders(),body:JSON.stringify({
         name: document.getElementById('ap-name').value,
         displayName: document.getElementById('ap-displayName').value,
-        providerType: document.getElementById('ap-type').value,
+        providerType: 'custom',
         protocol: document.getElementById('ap-protocol').value,
         endpoint: document.getElementById('ap-endpoint').value || undefined,
         apiKey: document.getElementById('ap-apiKey').value || undefined,
@@ -1083,12 +1373,13 @@ a{color:var(--accent);text-decoration:none}
       })});
       if(data && data.ok) {
         closeAddProviderModal();
+        toast('Provider saved successfully', 'success');
         loadManagedProviders();
         loadProviders();
       } else {
-        alert('Failed: ' + (data.error || 'Unknown error'));
+        toast('Failed: ' + (data.error || 'Unknown error'), 'error');
       }
-    } catch(e) { alert('Failed to save: ' + e.message); }
+    } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
     btn.disabled = false; btn.textContent = 'Save Provider';
   }
 
@@ -1097,32 +1388,41 @@ a{color:var(--accent);text-decoration:none}
       var data = await api('/api/providers/manage/' + id + '/test', {method:'POST',headers:apiHeaders()});
       if(data && data.ok && data.result) {
         var r = data.result;
-        alert(r.success ? ('Connected - Latency: ' + r.latencyMs + 'ms - Models: ' + r.modelsDiscovered) : ('Failed - ' + (r.error || 'Unknown error')));
+        if(r.success){ toast('Connected - Latency: ' + r.latencyMs + 'ms - Models: ' + r.modelsDiscovered, 'success'); }
+        else { toast('Failed - ' + (r.error || 'Unknown error'), 'error'); }
       }
-    } catch(e) { alert('Test failed: ' + e.message); }
+    } catch(e) { toast('Test failed: ' + e.message, 'error'); }
   }
 
   async function toggleManagedProvider(id, enabled){
     try {
       await api('/api/providers/manage/' + id + '/toggle', {method:'POST',headers:apiHeaders(),body:JSON.stringify({enabled})});
+      toast(enabled ? 'Provider enabled' : 'Provider disabled', 'success');
       loadManagedProviders();
       loadProviders();
-    } catch(e) { alert('Toggle failed: ' + e.message); }
+    } catch(e) { toast('Toggle failed: ' + e.message, 'error'); }
   }
 
   async function deleteManagedProvider(id, name){
-    if(!confirm('Remove provider "' + name + '"? This cannot be undone.')) return;
-    try {
-      await api('/api/providers/manage/' + id, {method:'DELETE',headers:apiHeaders()});
-      loadManagedProviders();
-      loadProviders();
-    } catch(e) { alert('Delete failed: ' + e.message); }
+    showConfirmModal(
+      'Remove Provider',
+      'Remove provider "' + name + '"? This cannot be undone.',
+      'btn-danger',
+      async function(){
+        try {
+          await api('/api/providers/manage/' + id, {method:'DELETE',headers:apiHeaders()});
+          toast('Provider removed', 'success');
+          loadManagedProviders();
+          loadProviders();
+        } catch(e) { toast('Delete failed: ' + e.message, 'error'); }
+      }
+    );
   }
 
   async function loadUsage(){
     var data=await Promise.all([api('/api/usage/global'),api('/api/usage/system')]);
     var d=data[0],sd=data[1];
-    if(!d||!d.usage){renderError(document.getElementById('usageGlobal'),'Unable to load usage data.');renderEmpty(document.getElementById('usageProviders'),'No provider usage data.');return;}
+    if(!d||!d.usage){renderError(document.getElementById('usageGlobal'),'Unable to load usage data.');renderEmpty(document.getElementById('usageProviders'),'No provider usage data','Usage data will appear after AI requests.');return;}
     var g=d.usage.global||{};
     renderStats(document.getElementById('usageGlobal'),[
       {value:g.totalRequests||0,label:'Total Requests',color:'purple'},
@@ -1133,13 +1433,13 @@ a{color:var(--accent);text-decoration:none}
     var provs=d.usage.providers||{};
     var entries=Object.entries(provs);
     var pEl=document.getElementById('usageProviders');
-    if(!entries.length){renderEmpty(pEl,'No provider usage data available.');}
+    if(!entries.length){renderEmpty(pEl,'No provider usage data','Provider usage will appear after requests.');}
     else{pEl.innerHTML='<table class="data-table"><thead><tr><th>Provider</th><th>Requests</th><th>Credits</th><th>Latency</th></tr></thead><tbody>'+entries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.requests||0)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.latency?v.latency+'ms':'---')+'</td></tr>'}).join('')+'</tbody></table>';}
     if(sd&&sd.systemUsage){
       var su=sd.systemUsage;var budget=su.budget||{};var systems=su.systems||{};
       var sysEntries=Object.entries(systems);
       if(sysEntries.length){
-        pEl.innerHTML+='<h3 style="margin-top:12px;font-size:12px">Internal AI Usage</h3>'+
+        pEl.innerHTML+='<h3 style="margin-top:14px;font-size:13px">Internal AI Usage</h3>'+
           '<table class="data-table"><thead><tr><th>System</th><th>Credits</th><th>Failures</th></tr></thead><tbody>'+
           sysEntries.map(function(nv){var n=nv[0],v=nv[1];return '<tr><td>'+esc(n)+'</td><td>'+(v.credits||0)+'</td><td>'+(v.failures||0)+'</td></tr>'}).join('')+
           '</tbody></table>'+
@@ -1164,7 +1464,7 @@ a{color:var(--accent);text-decoration:none}
     if(!d||!d.guilds){renderError(document.getElementById('serverList'),'Unable to load server data.');return;}
     var guilds=d.guilds;
     var el=document.getElementById('serverList');
-    if(!guilds.length){renderEmpty(el,'No Discord servers connected.');}
+    if(!guilds.length){renderEmpty(el,'No Discord servers connected','AshenAI will appear here once added to a server.');}
     else{el.innerHTML=guilds.map(function(g){return '<div class="guild-card"><h4>'+esc(g.guildName||g.guildId)+'</h4><div class="guild-meta"><span>ID: '+esc(g.guildId)+'</span><span class="badge '+(g.enabled?'badge-green':'badge-red')+'">'+(g.enabled?'Enabled':'Disabled')+'</span></div></div>'}).join('');}
   }
 
@@ -1179,28 +1479,28 @@ a{color:var(--accent);text-decoration:none}
     var warns=checks.filter(function(c){return c.status==='warn'}).length;
     var fails=checks.filter(function(c){return c.status==='fail'}).length;
     document.getElementById('diagResults').innerHTML=
-      '<div style="margin-bottom:10px"><span class="badge '+(overall==='healthy'?'badge-green':overall==='degraded'?'badge-yellow':'badge-red')+'">'+esc(overall)+' ('+score+'/100)</span> '+
+      '<div style="margin-bottom:12px"><span class="badge '+(overall==='healthy'?'badge-green':overall==='degraded'?'badge-yellow':'badge-red')+'">'+esc(overall)+' ('+score+'/100)</span> '+
       '<span style="font-size:11px;color:var(--muted);margin-left:8px">'+checks.length+' checks: '+passed+' passed, '+warns+' warnings, '+fails+' failures</span></div>'+
-      (checks.length?checks.map(function(c){return '<div class="provider-row"><div><span class="provider-name">'+esc(c.name)+'</span><div style="font-size:11px;color:var(--muted);margin-top:1px">'+esc(c.message)+'</div></div><span class="badge '+(c.status==='pass'?'badge-green':c.status==='warn'?'badge-yellow':'badge-red')+'">'+c.status+'</span></div>'}).join(''):'<div class="empty">No checks available.</div>');
+      (checks.length?checks.map(function(c){return '<div class="provider-row"><div><span class="provider-name">'+esc(c.name)+'</span><div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(c.message)+'</div></div><span class="badge '+(c.status==='pass'?'badge-green':c.status==='warn'?'badge-yellow':'badge-red')+'">'+c.status+'</span></div>'}).join(''):'<div class="empty-state"><div class="empty-title">No checks available</div></div>');
   }
 
   window.loadLogs=async function(){
     var d=await api('/api/logs?limit=200');
     var logEl=document.getElementById('logList');
     var errEl=document.getElementById('logErrors');
-    if(!d||!d.entries){renderError(logEl,'Unable to load logs.');renderEmpty(errEl,'No error data.');return;}
+    if(!d||!d.entries){renderError(logEl,'Unable to load logs.');renderEmpty(errEl,'No error data');return;}
     var search=(document.getElementById('logSearch').value||'').toLowerCase();
     var level=document.getElementById('logLevel').value;
     var entries=d.entries;
     if(level)entries=entries.filter(function(e){return e.level===level});
     if(search)entries=entries.filter(function(e){return(e.message||'').toLowerCase().includes(search)});
-    if(!entries.length){renderEmpty(logEl,'No logs found.');}
+    if(!entries.length){renderEmpty(logEl,'No logs found','Try adjusting your search or filter.');}
     else{logEl.innerHTML=entries.slice(-100).reverse().map(function(e){return '<div class="log-entry '+e.level+'"><span class="log-ts">'+esc(fmtTs(e.timestamp))+'</span><span class="log-level">'+esc(e.level)+'</span>'+esc(redact(e.message))+'</div>'}).join('');}
     var errD=await api('/api/logs/errors?limit=10');
     if(errD&&errD.entries){
-      if(!errD.entries.length){renderEmpty(errEl,'No recent errors.');}
+      if(!errD.entries.length){renderEmpty(errEl,'No recent errors','System is running cleanly.');}
       else{errEl.innerHTML=errD.entries.reverse().map(function(e){return '<div class="log-entry error"><span class="log-ts">'+esc(fmtTs(e.timestamp))+'</span>'+esc(redact(e.message))+'</div>'}).join('');}
-    } else {renderEmpty(errEl,'No error data.');}
+    } else {renderEmpty(errEl,'No error data');}
   };
   document.getElementById('logSearch').addEventListener('input',function(){loadLogs()});
   document.getElementById('logLevel').addEventListener('change',function(){loadLogs()});
@@ -1208,7 +1508,7 @@ a{color:var(--accent);text-decoration:none}
   async function loadSeraph(){
     var data=await Promise.all([api('/api/seraph/status'),api('/api/seraph/tools'),api('/api/seraph/system')]);
     var status=data[0],tools=data[1],sys=data[2];
-    if(!status){renderError(document.getElementById('seraphStats'),'Unable to load Seraph data.');renderEmpty(document.getElementById('seraphComponents'),'No component data.');renderEmpty(document.getElementById('seraphTools'),'No tools available.');renderEmpty(document.getElementById('seraphSys'),'No system information.');return;}
+    if(!status){renderError(document.getElementById('seraphStats'),'Unable to load Seraph data.');renderEmpty(document.getElementById('seraphComponents'),'No component data');renderEmpty(document.getElementById('seraphTools'),'No tools available');renderEmpty(document.getElementById('seraphSys'),'No system information');return;}
     var st=status.status||status;
     renderStats(document.getElementById('seraphStats'),[
       {value:st.active!==false?'Active':'Inactive',label:'Status',color:st.active!==false?'green':'yellow'},
@@ -1217,13 +1517,13 @@ a{color:var(--accent);text-decoration:none}
     ]);
     var cEl=document.getElementById('seraphComponents');
     if(st.components&&st.components.length){cEl.innerHTML=st.components.map(function(c){return '<div class="provider-row"><span class="provider-name">'+esc(c.name)+'</span><span class="badge '+(c.status==='operational'?'badge-green':c.status==='degraded'?'badge-yellow':'badge-red')+'">'+c.status+'</span><span class="provider-meta">'+(c.message?esc(c.message):'')+'</span></div>'}).join('');}
-    else{renderEmpty(cEl,'No component data available.');}
+    else{renderEmpty(cEl,'No component data available');}
     var tEl=document.getElementById('seraphTools');
     if(tools&&tools.length){tEl.innerHTML=tools.map(function(t){return '<div class="provider-row"><div><span class="provider-name">'+esc(t.name)+'</span><div style="font-size:10px;color:var(--muted)">'+esc(t.description)+'</div></div><span class="badge badge-purple">'+esc(t.category)+'</span></div>'}).join('');}
-    else{renderEmpty(tEl,'No tools available.');}
+    else{renderEmpty(tEl,'No tools available');}
     var sEl=document.getElementById('seraphSys');
     if(sys&&Object.keys(sys).length){sEl.innerHTML='<table class="data-table"><tbody>'+Object.entries(sys).map(function(kv){return '<tr><td style="font-weight:600">'+esc(kv[0])+'</td><td>'+esc(String(kv[1]))+'</td></tr>'}).join('')+'</tbody></table>';}
-    else{renderEmpty(sEl,'No system information available.');}
+    else{renderEmpty(sEl,'No system information available');}
   }
 
   window.runInvestigation=async function(){
@@ -1234,18 +1534,19 @@ a{color:var(--accent);text-decoration:none}
     var d=await api('/api/seraph/investigate',{method:'POST',body:JSON.stringify({problem:problem})});
     if(!d||!d.investigation){renderError(container,'Investigation failed. Check Seraph status.');return;}
     var inv=d.investigation;
-    container.innerHTML='<div class="card"><h3>Result: '+esc(inv.status)+'</h3>'+(inv.findings.length?inv.findings.map(function(f){return '<div class="inv-finding '+f.severity+'"><strong>'+esc(f.severity.toUpperCase())+'</strong> - '+esc(f.area)+': '+esc(f.message)+(f.evidence?'<div style="font-size:10px;color:var(--muted);margin-top:2px">Evidence: '+esc(f.evidence)+'</div>':'')+'</div>'}).join(''):'<div class="empty">No findings.</div>')+(inv.recommendations.length?'<h3 style="margin-top:10px;font-size:12px">Recommendations</h3><ul style="margin:6px 0 0 14px;font-size:12px;color:var(--muted)">'+inv.recommendations.map(function(r){return '<li>'+esc(r)+'</li>'}).join('')+'</ul>':'')+'</div>';
+    container.innerHTML='<div class="card"><h3>Result: '+esc(inv.status)+'</h3>'+(inv.findings.length?inv.findings.map(function(f){return '<div class="inv-finding '+f.severity+'"><strong>'+esc(f.severity.toUpperCase())+'</strong> - '+esc(f.area)+': '+esc(f.message)+(f.evidence?'<div style="font-size:10px;color:var(--muted);margin-top:4px">Evidence: '+esc(f.evidence)+'</div>':'')+'</div>'}).join(''):'<div class="empty-state"><div class="empty-title">No findings</div></div>')+(inv.recommendations.length?'<h3 style="margin-top:12px;font-size:13px">Recommendations</h3><ul style="margin:8px 0 0 16px;font-size:12px;color:var(--muted)">'+inv.recommendations.map(function(r){return '<li>'+esc(r)+'</li>'}).join('')+'</ul>':'')+'</div>';
   };
 
   async function loadReports(){
     var d=await api('/api/seraph/reports');
     var el=document.getElementById('reportList');
     if(!d||!d.reports){renderError(el,'Unable to load reports.');return;}
-    if(!d.reports.length){renderEmpty(el,'No reports yet. Generate one above.');}
+    if(!d.reports.length){renderEmpty(el,'No reports yet','Generate one using the buttons above.');}
     else{el.innerHTML=d.reports.map(function(r){return '<div class="provider-row"><div><span class="provider-name">['+esc(r.type)+'] '+esc(r.summary)+'</span><div style="font-size:10px;color:var(--muted)">'+fmtTs(r.generatedAt)+'</div></div></div>'}).join('');}
   }
   window.generateReport=async function(type){
     await api('/api/seraph/reports/generate',{method:'POST',body:JSON.stringify({type:type})});
+    toast(type.charAt(0).toUpperCase()+type.slice(1)+' report generated', 'success');
     loadReports();
   };
 
@@ -1276,7 +1577,7 @@ a{color:var(--accent);text-decoration:none}
     var search=(document.getElementById('auditSearch').value||'').toLowerCase();
     var entries=d.entries;
     if(search)entries=entries.filter(function(e){return(e.what||'').toLowerCase().includes(search)||(e.who||'').toLowerCase().includes(search)});
-    if(!entries.length){renderEmpty(el,'No audit entries found.');}
+    if(!entries.length){renderEmpty(el,'No audit entries found','Try adjusting your search.');}
     else{el.innerHTML=entries.slice(-50).reverse().map(function(e){
       var ts=fmtTs(e.timestamp||e.createdAt);
       var resultClass=e.result==='failure'||e.result==='denied'?'error':'';
@@ -1296,7 +1597,7 @@ a{color:var(--accent);text-decoration:none}
     var d=await api('/api/accounts');
     var el=document.getElementById('accountList');
     if(!d||!d.accounts){renderError(el,'Unable to load accounts.');return;}
-    if(!d.accounts.length){renderEmpty(el,'No accounts.');}
+    if(!d.accounts.length){renderEmpty(el,'No accounts','Create an account above.');}
     else{el.innerHTML='<table class="data-table"><thead><tr><th>Username</th><th>Role</th><th>Enabled</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>'+d.accounts.map(function(a){
       return '<tr><td>'+esc(a.username)+'</td><td><span class="role-badge role-'+a.role+'">'+a.role+'</span></td><td><span class="badge '+(a.enabled?'badge-green':'badge-red')+'">'+(a.enabled?'Yes':'No')+'</span></td><td>'+(a.lastLoginAt?fmtTs(a.lastLoginAt):'Never')+'</td><td><button class="btn btn-outline btn-sm" onclick="toggleAccount(\''+a.id+'\','+(!a.enabled)+')">'+(a.enabled?'Disable':'Enable')+'</button> <button class="btn btn-danger btn-sm" onclick="deleteAccountConfirm(\''+a.id+'\',\''+esc(a.username)+'\')">Delete</button></td></tr>';
     }).join('')+'</tbody></table>';}
@@ -1311,16 +1612,20 @@ a{color:var(--accent);text-decoration:none}
     if(!username||!password){errDiv.textContent='Username and password required.';return;}
     if(password.length<8){errDiv.textContent='Password must be at least 8 characters.';return;}
     var d=await api('/api/accounts',{method:'POST',body:JSON.stringify({username:username,password:password,role:role})});
-    if(d&&d.ok){document.getElementById('newUsername').value='';document.getElementById('newPassword').value='';loadAccounts();}
+    if(d&&d.ok){document.getElementById('newUsername').value='';document.getElementById('newPassword').value='';toast('Account created','success');loadAccounts();}
     else{errDiv.textContent=(d&&d.error)?d.error:'Failed to create account';}
   };
   window.toggleAccount=async function(id,enabled){
     await api('/api/accounts/'+id,{method:'PUT',body:JSON.stringify({enabled:enabled})});
+    toast(enabled?'Account enabled':'Account disabled','success');
     loadAccounts();
   };
   window.deleteAccountConfirm=function(id,username){
-    if(!confirm('Delete account "'+username+'"? This cannot be undone.'))return;
-    api('/api/accounts/'+id,{method:'DELETE'}).then(function(){loadAccounts()});
+    showConfirmModal('Delete Account','Delete account "'+username+'"? This cannot be undone.','btn-danger',async function(){
+      await api('/api/accounts/'+id,{method:'DELETE'});
+      toast('Account deleted','success');
+      loadAccounts();
+    });
   };
 
   window.changePassword=async function(){
@@ -1336,33 +1641,53 @@ a{color:var(--accent);text-decoration:none}
     else{errDiv.textContent=(d&&d.error)?d.error:'Failed to change password';}
   };
 
+  // ── Confirm Modal System ──
+  var confirmCallback = null;
+  function showConfirmModal(title, msg, btnClass, callback){
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').textContent = msg;
+    document.getElementById('confirmBtn').className = 'btn ' + (btnClass || 'btn-danger');
+    confirmCallback = callback;
+    document.getElementById('confirmModal').classList.add('show');
+  }
+  window.closeConfirmModal = function(){
+    document.getElementById('confirmModal').classList.remove('show');
+    confirmCallback = null;
+    pendingAction = null;
+  };
+  window.executeConfirmedAction = async function(){
+    if(confirmCallback){
+      var cb = confirmCallback;
+      closeConfirmModal();
+      await cb();
+      return;
+    }
+    if(!pendingAction) return;
+    var action = pendingAction;
+    closeConfirmModal();
+    var d = await api('/api/actions/execute',{method:'POST',body:JSON.stringify({action:action,confirmed:true})});
+    if(d&&d.ok){ toast(d.message||'Action executed', 'success'); }
+    else{ toast('Failed: '+(d&&d.error?d.error:'Unknown error'), 'error'); }
+    if(action==='restart'||action==='stop'){ setTimeout(function(){loadOverview()},3000); }
+  };
+
   window.confirmAction=function(action){
     pendingAction=action;
-    var dangerous=['stop','clear_memory','reset_usage','provider_disable'];
-    var titles={restart:'Restart Bot',stop:'Stop Bot',reload_config:'Reload Configuration',clear_memory:'Clear Memory',reset_usage:'Reset Usage',run_diagnostics:'Run Diagnostics',backup:'Trigger Backup',provider_disable:'Disable Provider',provider_enable:'Enable Provider'};
-    var msgs={restart:'Restarts the AshenAI process. Users may temporarily lose access.',stop:'Stops AshenAI completely. It will not restart automatically.',clear_memory:'This permanently removes ALL conversation memory.',reset_usage:'This permanently resets ALL usage statistics.',run_diagnostics:'Runs a full system diagnostic scan.',backup:'Creates a data backup.',reload_config:'Reloads supported runtime configuration.',provider_disable:'Disables the specified AI provider.',provider_enable:'Enables the specified AI provider.'};
-    document.getElementById('confirmTitle').textContent=titles[action]||'Confirm Action';
-    document.getElementById('confirmMsg').textContent=msgs[action]||'Are you sure?';
-    document.getElementById('confirmBtn').className=dangerous.includes(action)?'btn btn-danger':'btn btn-primary';
-    document.getElementById('confirmModal').classList.add('show');
-  };
-  window.closeModal=function(){document.getElementById('confirmModal').classList.remove('show');pendingAction=null;};
-  window.executeConfirmedAction=async function(){
-    if(!pendingAction)return;
-    var action=pendingAction;
-    closeModal();
-    var target=(action==='provider_disable'||action==='provider_enable')?prompt('Provider name:'):undefined;
-    if((action==='provider_disable'||action==='provider_enable')&&!target)return;
-    var d=await api('/api/actions/execute',{method:'POST',body:JSON.stringify({action:action,target:target,confirmed:true})});
-    if(d&&d.ok){alert(d.message||'Action executed');}
-    else{alert('Failed: '+(d&&d.error?d.error:'Unknown error'));}
-    if(action==='restart'||action==='stop'){setTimeout(function(){loadOverview()},3000);}
+    var titles={restart:'Restart Bot',stop:'Stop Bot',reload_config:'Reload Configuration',clear_memory:'Clear Memory',reset_usage:'Reset Usage',run_diagnostics:'Run Diagnostics',backup:'Trigger Backup'};
+    var msgs={restart:'Restarts the AshenAI process. Users may temporarily lose access.',stop:'Stops AshenAI completely. It will not restart automatically.',clear_memory:'This permanently removes ALL conversation memory.',reset_usage:'This permanently resets ALL usage statistics.',run_diagnostics:'Runs a full system diagnostic scan.',backup:'Creates a data backup.',reload_config:'Reloads supported runtime configuration.'};
+    var isDangerous = ['stop','clear_memory','reset_usage'].includes(action);
+    showConfirmModal(
+      titles[action]||'Confirm Action',
+      msgs[action]||'Are you sure?',
+      isDangerous ? 'btn-danger' : 'btn-primary',
+      null
+    );
   };
 
   async function loadSecurity(){
     var data=await Promise.all([api('/api/account/security'),api('/api/account/sessions')]);
     var sec=data[0],sess=data[1];
-    if(!sec||!sec.security){renderError(document.getElementById('securityAuthMethods'),'Unable to load security data.');renderEmpty(document.getElementById('securitySessions'),'No session data.');renderEmpty(document.getElementById('securityIdentities'),'No identity data.');return;}
+    if(!sec||!sec.security){renderError(document.getElementById('securityAuthMethods'),'Unable to load security data.');renderEmpty(document.getElementById('securitySessions'),'No session data');renderEmpty(document.getElementById('securityIdentities'),'No identity data');return;}
     var s=sec.security;
     var authMethods='<div style="font-size:12px">';
     authMethods+='<p><strong>Password:</strong> '+(s.hasPassword?'<span style="color:var(--success)">Configured</span>':'<span style="color:var(--muted)">Not set</span>')+'</p>';
@@ -1372,16 +1697,16 @@ a{color:var(--accent);text-decoration:none}
 
     var mfaHtml='<div style="font-size:12px">';
     mfaHtml+='<p><strong>Status:</strong> '+(s.mfaEnabled?'<span style="color:var(--success)">Enabled</span>':'<span style="color:var(--muted)">Disabled</span>')+'</p>';
-    if(!s.mfaEnabled){mfaHtml+='<button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="setupMFA()">Enable MFA</button>';}
-    else{mfaHtml+='<button class="btn btn-danger btn-sm" style="margin-top:6px" onclick="document.getElementById(\'mfaDisable\').style.display=\'block\'">Disable MFA</button> <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="regenerateRecovery()">New Recovery Codes</button>';}
+    if(!s.mfaEnabled){mfaHtml+='<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="setupMFA()">Enable MFA</button>';}
+    else{mfaHtml+='<button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="document.getElementById(\'mfaDisable\').style.display=\'block\'">Disable MFA</button> <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="regenerateRecovery()">New Recovery Codes</button>';}
     mfaHtml+='</div>';
     document.getElementById('securityMFA').innerHTML=mfaHtml;
 
     if(sess&&sess.sessions){
       var sHtml='<div style="font-size:12px">';
       sess.sessions.forEach(function(s){
-        sHtml+='<div style="padding:6px;border-bottom:1px solid var(--border)">';
-        sHtml+='<span style="font-family:monospace">'+esc(s.sessionId)+'</span>';
+        sHtml+='<div style="padding:8px;border-bottom:1px solid var(--border)">';
+        sHtml+='<span style="font-family:var(--mono)">'+esc(s.sessionId)+'</span>';
         if(s.isCurrent)sHtml+=' <span class="badge badge-green">Current</span>';
         sHtml+=' <span style="color:var(--muted);font-size:10px">IP: '+esc(s.lastSeenIp)+'</span>';
         sHtml+=' <span style="color:var(--muted);font-size:10px">Created: '+fmtTs(s.createdAt)+'</span>';
@@ -1389,25 +1714,25 @@ a{color:var(--accent);text-decoration:none}
       });
       sHtml+='</div>';
       document.getElementById('securitySessions').innerHTML=sHtml;
-    } else {renderEmpty(document.getElementById('securitySessions'),'No session data.');}
+    } else {renderEmpty(document.getElementById('securitySessions'),'No session data');}
     await loadSecurityIdentities(sec);
   }
 
   async function loadSecurityIdentities(secData){
     var sec=secData||await api('/api/account/security');
-    if(!sec||!sec.security){renderEmpty(document.getElementById('securityIdentities'),'No identity data.');return;}
+    if(!sec||!sec.security){renderEmpty(document.getElementById('securityIdentities'),'No identity data');return;}
     var linked=sec.security.linkedProviders||[];
     var el=document.getElementById('securityIdentities');
     var html='<div style="font-size:12px">';
     if(linked.length){
       linked.forEach(function(p){
-        html+='<div style="padding:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
+        html+='<div style="padding:8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
         html+='<div><strong>'+esc(p.provider)+'</strong> - '+esc(p.displayName||'Connected')+'</div>';
         html+='<button class="btn btn-danger btn-sm" onclick="unlinkProvider(\''+esc(p.provider)+'\')">Unlink</button>';
         html+='</div>';
       });
     } else { html+='<p style="color:var(--muted)">No linked accounts</p>'; }
-    html+='<div style="margin-top:6px">';
+    html+='<div style="margin-top:8px">';
     if(!linked.find(function(p){return p.provider==='discord'})){html+='<button class="btn btn-outline btn-sm" style="margin-right:6px" onclick="linkProvider(\'discord\')">Link Discord</button>';}
     if(!linked.find(function(p){return p.provider==='google'})){html+='<button class="btn btn-outline btn-sm" onclick="linkProvider(\'google\')">Link Google</button>';}
     html+='</div></div>';
@@ -1417,17 +1742,21 @@ a{color:var(--accent);text-decoration:none}
   window.linkProvider=async function(provider){
     var d=await api('/api/account/identities/'+provider+'/link',{method:'POST'});
     if(d&&d.ok&&d.url){window.location.href=d.url;}
-    else{alert((d&&d.error)||'Failed to initiate linking');}
+    else{toast((d&&d.error)||'Failed to initiate linking','error');}
   };
   window.unlinkProvider=async function(provider){
-    if(!confirm('Unlink '+provider+' account?'))return;
-    var d=await api('/api/account/identities/'+provider+'/unlink',{method:'POST'});
-    if(d&&d.ok){loadSecurityIdentities();}else{alert((d&&d.error)||'Failed to unlink');}
+    showConfirmModal('Unlink Account','Unlink '+provider+' account?','btn-danger',async function(){
+      var d=await api('/api/account/identities/'+provider+'/unlink',{method:'POST'});
+      if(d&&d.ok){toast('Account unlinked','success');loadSecurityIdentities();}
+      else{toast((d&&d.error)||'Failed to unlink','error');}
+    });
   };
   window.revokeAllSessions=async function(){
-    if(!confirm('Revoke all other sessions? You will remain logged in.'))return;
-    var d=await api('/api/account/sessions/revoke-all',{method:'POST'});
-    if(d&&d.ok){loadSecurity();}else{alert('Failed to revoke sessions');}
+    showConfirmModal('Revoke Sessions','Revoke all other sessions? You will remain logged in.','btn-danger',async function(){
+      var d=await api('/api/account/sessions/revoke-all',{method:'POST'});
+      if(d&&d.ok){toast('Sessions revoked','success');loadSecurity();}
+      else{toast('Failed to revoke sessions','error');}
+    });
   };
   window.setupMFA=async function(){
     var d=await api('/auth/mfa/setup',{method:'POST'});
@@ -1435,34 +1764,37 @@ a{color:var(--accent);text-decoration:none}
       document.getElementById('mfaSetup').style.display='block';
       document.getElementById('mfaSecret').textContent=d.secret;
       var qrContainer=document.getElementById('mfaQrCode');
-      if(d.qrCode){qrContainer.innerHTML='<img src="'+d.qrCode+'" alt="MFA QR Code" style="border-radius:6px;max-width:200px">';}
+      if(d.qrCode){qrContainer.innerHTML='<img src="'+d.qrCode+'" alt="MFA QR Code" style="border-radius:var(--radius-sm);max-width:200px">';}
       else{qrContainer.innerHTML='<p style="color:var(--muted);font-size:11px">QR code unavailable. Use the secret above.</p>';}
-    } else {alert((d&&d.error)||'Failed to setup MFA');}
+    } else {toast((d&&d.error)||'Failed to setup MFA','error');}
   };
   window.verifyMFA=async function(enable){
     var code=document.getElementById('mfaSetupCode').value;
-    if(!code||code.length!==6){alert('Enter a 6-digit code');return;}
+    if(!code||code.length!==6){toast('Enter a 6-digit code','warning');return;}
     var d=await api('/auth/mfa/verify',{method:'POST',body:JSON.stringify({code:code,enable:enable})});
     if(d&&d.ok){
       if(d.recoveryCodes){document.getElementById('mfaSetup').style.display='none';document.getElementById('mfaRecovery').style.display='block';document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');}
+      toast('MFA enabled','success');
       loadSecurity();
-    } else {alert((d&&d.error)||'Invalid code');}
+    } else {toast((d&&d.error)||'Invalid code','error');}
   };
   window.disableMFA=async function(){
     var pw=document.getElementById('mfaDisablePw').value;
     var code=document.getElementById('mfaDisableCode').value;
-    if(!pw){alert('Password required');return;}
-    if(!code||code.length!==6){alert('Enter a 6-digit TOTP code');return;}
+    if(!pw){toast('Password required','warning');return;}
+    if(!code||code.length!==6){toast('Enter a 6-digit TOTP code','warning');return;}
     var d=await api('/auth/mfa/disable',{method:'POST',body:JSON.stringify({password:pw,code:code})});
-    if(d&&d.ok){document.getElementById('mfaDisable').style.display='none';loadSecurity();}
-    else{alert((d&&d.error)||'Failed to disable MFA');}
+    if(d&&d.ok){document.getElementById('mfaDisable').style.display='none';toast('MFA disabled','success');loadSecurity();}
+    else{toast((d&&d.error)||'Failed to disable MFA','error');}
   };
   window.regenerateRecovery=async function(){
-    var pw=prompt('Enter your password to regenerate recovery codes:');
-    if(!pw)return;
-    var d=await api('/auth/mfa/recovery-codes',{method:'POST',body:JSON.stringify({password:pw})});
-    if(d&&d.ok){document.getElementById('mfaRecovery').style.display='block';document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');}
-    else{alert((d&&d.error)||'Failed to regenerate codes');}
+    showConfirmModal('Regenerate Recovery Codes','Enter your password in the next prompt to regenerate recovery codes. Old codes will stop working.','btn-primary',async function(){
+      var pw = prompt('Enter your password to regenerate recovery codes:');
+      if(!pw) return;
+      var d=await api('/auth/mfa/recovery-codes',{method:'POST',body:JSON.stringify({password:pw})});
+      if(d&&d.ok){document.getElementById('mfaRecovery').style.display='block';document.getElementById('recoveryCodesList').textContent=d.recoveryCodes.join('\n');toast('Recovery codes regenerated','success');}
+      else{toast((d&&d.error)||'Failed to regenerate codes','error');}
+    });
   };
 
   checkAuth();

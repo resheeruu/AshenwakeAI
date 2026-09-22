@@ -2,6 +2,7 @@ import {
   ChatInputCommandInteraction,
   MessageFlags,
   SlashCommandBuilder,
+  EmbedBuilder,
 } from "discord.js";
 
 import { AIRouter } from "../ai/router";
@@ -11,6 +12,8 @@ import { AgentManager } from "../agent/manager";
 import { getAIUsageSummaryDB } from "../database/ai-usage-repo";
 import { logger } from "../logger";
 import { emoji } from "../discord/emojis";
+
+const EMBED_COLOR = 0x2c2f33;
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -27,6 +30,10 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+function statusDot(online: boolean): string {
+  return online ? `${emoji("ash_online")}` : `${emoji("ash_offline")}`;
+}
+
 export function createStatusCommand(
   _router: AIRouter,
   memory: ConversationMemory,
@@ -35,9 +42,7 @@ export function createStatusCommand(
   return {
     data: new SlashCommandBuilder()
       .setName("status")
-      .setDescription(
-        "Show AshenAI health and your AI usage"
-      ),
+      .setDescription("Show AshenAI health and your AI usage"),
 
     async execute(
       interaction: ChatInputCommandInteraction
@@ -57,43 +62,62 @@ export function createStatusCommand(
         const month = getAIUsageSummaryDB(userId, now - 30 * DAY);
         const lifetime = getAIUsageSummaryDB(userId, 0);
 
-        const agentLabel =
-          agentStatus.status === "online"
-            ? "Online"
-            : agentStatus.status === "starting"
-              ? "Starting"
-              : agentStatus.status === "degraded"
-                ? "Degraded"
-                : "Offline";
+        const isOnline = agentStatus.status === "online";
+        const isDegraded = agentStatus.status === "degraded";
 
-        const agentEmoji =
-          agentStatus.status === "online"
-            ? emoji("ash_online")
-            : agentStatus.status === "degraded"
-              ? emoji("ash_degraded")
-              : emoji("ash_offline");
+        const embed = new EmbedBuilder()
+          .setColor(EMBED_COLOR)
+          .setTitle(`${emoji("ash_online")} AshenAI Status`)
+          .setDescription("System overview and your AI usage statistics.")
+          .addFields(
+            {
+              name: `${emoji("ash_ai")} Discord`,
+              value: `${statusDot(true)} Connected`,
+              inline: true,
+            },
+            {
+              name: `${emoji("ash_ai")} AI Runtime`,
+              value: `${statusDot(isOnline)} ${isOnline ? "Healthy" : isDegraded ? "Degraded" : "Offline"}`,
+              inline: true,
+            },
+            {
+              name: `${emoji("ash_refresh")} Uptime`,
+              value: formatUptime(uptimeSec),
+              inline: true,
+            }
+          )
+          .addFields(
+            {
+              name: `${emoji("ash_memory")} Memory`,
+              value: [
+                `Conversations: ${stats.conversations}`,
+                `Messages: ${stats.messages}`,
+              ].join("\n"),
+              inline: true,
+            },
+            {
+              name: `${emoji("ash_stats")} Version`,
+              value: process.env.npm_package_version || "1.0.0",
+              inline: true,
+            }
+          )
+          .setFooter({ text: "AshenAI" })
+          .setTimestamp();
 
-        const lines = [
-          `${emoji("ash_online")} **AshenAI Status**`,
-          "",
-          `${emoji("ash_ai")} **Bot:** Online`,
-          `${agentEmoji} **Agent:** ${agentLabel}`,
-          `${emoji("ash_loading")} **System:** Operational`,
-          `${emoji("ash_refresh")} **Uptime:** ${formatUptime(uptimeSec)}`,
-          "",
-          `${emoji("ash_memory")} **Memory**`,
-          `Conversations: ${stats.conversations}`,
-          `Messages: ${stats.messages}`,
-          "",
-          `${emoji("ash_stats")} **Your AI Usage**`,
-          `Today — ${today.requests} requests · ${formatTokens(today.totalTokens)} tokens`,
-          `This week — ${week.requests} requests · ${formatTokens(week.totalTokens)} tokens`,
-          `This month — ${month.requests} requests · ${formatTokens(month.totalTokens)} tokens`,
-          `All time — ${lifetime.requests} requests · ${formatTokens(lifetime.totalTokens)} tokens`,
-        ];
+        const usageLines: string[] = [];
+        usageLines.push(`Today — ${today.requests} requests · ${formatTokens(today.totalTokens)} tokens`);
+        usageLines.push(`This week — ${week.requests} requests · ${formatTokens(week.totalTokens)} tokens`);
+        usageLines.push(`This month — ${month.requests} requests · ${formatTokens(month.totalTokens)} tokens`);
+        usageLines.push(`All time — ${lifetime.requests} requests · ${formatTokens(lifetime.totalTokens)} tokens`);
+
+        embed.addFields({
+          name: `${emoji("ash_stats")} Your AI Usage`,
+          value: usageLines.join("\n"),
+          inline: false,
+        });
 
         await interaction.editReply({
-          content: lines.join("\n"),
+          embeds: [embed],
         });
       } catch (error) {
         logger.error(
