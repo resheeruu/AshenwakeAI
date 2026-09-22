@@ -6,6 +6,8 @@
  * content-type abuse. Fail-closed design.
  * ================================================================ */
 
+import { validateOutboundUrl } from "../../security/network-boundary";
+
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/gif",
   "image/webp",
@@ -16,25 +18,6 @@ const ALLOWED_CONTENT_TYPES = new Set([
 const MAX_MEDIA_SIZE = 8 * 1024 * 1024; // 8 MB — generous for animated GIFs
 const MAX_REDIRECTS = 5;
 const MEDIA_TIMEOUT_MS = 10_000;
-
-function isPrivateIP(ip: string): boolean {
-  if (/^127\./.test(ip)) return true;
-  if (/^10\./.test(ip)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
-  if (/^192\.168\./.test(ip)) return true;
-  if (/^169\.254\./.test(ip)) return true;
-  if (/^0\./.test(ip)) return true;
-  if (/^::1$/.test(ip)) return true;
-  if (/^fc00:/.test(ip)) return true;
-  if (/^fd00:/.test(ip)) return true;
-  if (/^fe80:/.test(ip)) return true;
-  if (/^::ffff:127\./.test(ip)) return true;
-  if (/^::ffff:10\./.test(ip)) return true;
-  if (/^::ffff:172\./.test(ip)) return true;
-  if (/^::ffff:192\.168\./.test(ip)) return true;
-  if (/^::ffff:169\.254\./.test(ip)) return true;
-  return false;
-}
 
 export interface MediaValidationResult {
   ok: boolean;
@@ -49,18 +32,31 @@ export function validateMediaUrl(url: string): MediaValidationResult {
     return { ok: false, error: "invalid URL" };
   }
 
+  /*
+   * Single source of truth for outbound safety: rejects non-HTTP(S)
+   * protocols, internal hostnames, metadata endpoints, and private/reserved
+   * IP ranges (including IPv4-mapped IPv6 forms). See
+   * src/security/network-boundary.ts.
+   */
+  const check = validateOutboundUrl(url, { requireHttps: true });
+  if (check.valid) {
+    return { ok: true };
+  }
+
+  // Report the operator-facing reason this module has always used.
+  const hostname = parsed.hostname.toLowerCase();
+
   if (parsed.protocol !== "https:") {
     return { ok: false, error: "only HTTPS allowed" };
   }
 
-  const hostname = parsed.hostname.toLowerCase();
-
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]") {
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  ) {
     return { ok: false, error: "localhost blocked" };
-  }
-
-  if (isPrivateIP(hostname)) {
-    return { ok: false, error: "private IP blocked" };
   }
 
   if (hostname.endsWith(".local") || hostname.endsWith(".internal")) {
@@ -75,7 +71,7 @@ export function validateMediaUrl(url: string): MediaValidationResult {
     return { ok: false, error: "metadata endpoint blocked" };
   }
 
-  return { ok: true };
+  return { ok: false, error: "private IP blocked" };
 }
 
 export async function safeMediaFetch(

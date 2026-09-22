@@ -5,6 +5,13 @@ import pRetry from "p-retry";
 import { LRUCache } from "lru-cache";
 import { logger } from "../logger";
 import { isUrlAllowedByRobots } from "./robots";
+import {
+  MAX_REDIRECTS,
+  isBlockedHostname,
+  isPrivateOrReservedIP,
+  validateOutboundUrl,
+  validateRedirectTarget,
+} from "../security/network-boundary";
 
 export interface FetchedPage {
   url: string;
@@ -26,69 +33,18 @@ const USER_AGENT =
   "Mozilla/5.0 (compatible; AshenAI/1.0; +https://github.com/AshenAI)";
 
 /**
- * Check if an IP address is in a private/reserved range.
- * Blocks SSRF against cloud metadata, loopback, and internal networks.
+ * URL / hostname / IP validation lives in src/security/network-boundary.ts so
+ * that web retrieval, provider connection tests, and media downloads share one
+ * audited implementation. See docs/SECURITY-BOUNDARIES.md.
  */
-function isPrivateIP(ip: string): boolean {
-  // IPv4 private/reserved ranges
-  if (/^127\./.test(ip)) return true;           // Loopback
-  if (/^10\./.test(ip)) return true;             // Class A private
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;  // Class B private
-  if (/^192\.168\./.test(ip)) return true;       // Class C private
-  if (/^169\.254\./.test(ip)) return true;       // Link-local
-  if (/^0\./.test(ip)) return true;              // Current network
-  if (/^100\.6[4-9]\./.test(ip)) return true;    // Carrier-grade NAT (100.64.0.0/10)
-  if (/^100\.(?:7\d|8\d|9\d|1[01]\d|11[0-9]|12[0-7])\./.test(ip)) return true; // Extended CGNAT
-  if (/^192\.0\.0\./.test(ip)) return true;      // IETF protocol assignments
-  if (/^192\.0\.2\./.test(ip)) return true;      // Documentation TEST-NET-1
-  if (/^198\.51\.100\./.test(ip)) return true;   // Documentation TEST-NET-2
-  if (/^203\.0\.113\./.test(ip)) return true;    // Documentation TEST-NET-3
-  if (/^224\./.test(ip)) return true;            // Multicast
-  if (/^240\./.test(ip)) return true;            // Reserved
-  // IPv6 private/reserved
-  if (/^::1$/.test(ip)) return true;             // Loopback
-  if (/^fc00:/.test(ip)) return true;            // ULA
-  if (/^fd00:/.test(ip)) return true;            // ULA
-  if (/^fe80:/.test(ip)) return true;            // Link-local
-  if (/^::ffff:127\./.test(ip)) return true;     // IPv4-mapped loopback
-  if (/^::ffff:10\./.test(ip)) return true;      // IPv4-mapped private
-  if (/^::ffff:172\./.test(ip)) return true;     // IPv4-mapped private
-  if (/^::ffff:192\.168\./.test(ip)) return true; // IPv4-mapped private
-  if (/^::ffff:169\.254\./.test(ip)) return true; // IPv4-mapped link-local
-  if (/^0:0:0:0:0:ffff:/.test(ip)) return true;  // IPv4-compatible IPv6
-  if (/^fd00:ec2::/.test(ip)) return true;        // AWS EC2 metadata IPv6
-  return false;
-}
 
 /**
  * Validate a URL for SSRF safety before DNS resolution.
- * Blocks dangerous protocols and hostnames.
+ * Delegates to the shared network boundary (protocol + hostname + IP checks).
  */
 export function validateUrl(url: string): { valid: boolean; reason?: string } {
-  try {
-    const parsed = new URL(url);
-
-    // Block dangerous protocols
-    const blockedProtocols = ["file:", "ftp:", "javascript:", "data:", "about:", "blob:"];
-    if (blockedProtocols.includes(parsed.protocol)) {
-      return { valid: false, reason: `Blocked protocol: ${parsed.protocol}` };
-    }
-
-    // Block localhost and special hostnames
-    const hostname = parsed.hostname.toLowerCase();
-    const blockedHostnames = ["localhost", "0.0.0.0", "::1", "[::1]", "metadata.google.internal", "169.254.169.254"];
-    if (blockedHostnames.includes(hostname)) {
-      return { valid: false, reason: `Blocked hostname: ${hostname}` };
-    }
-
-    if (hostname.endsWith(".local") || hostname.endsWith(".internal") || hostname.endsWith(".localhost")) {
-      return { valid: false, reason: `Blocked internal hostname: ${hostname}` };
-    }
-
-    return { valid: true };
-  } catch {
-    return { valid: false, reason: "Invalid URL" };
-  }
+  const result = validateOutboundUrl(url);
+  return result.valid ? { valid: true } : { valid: false, reason: result.reason };
 }
 
 /**
@@ -96,25 +52,6 @@ export function validateUrl(url: string): { valid: boolean; reason?: string } {
  * Checks ALL resolved addresses to prevent DNS rebinding / multi-address SSRF.
  * Prevents SSRF against internal infrastructure.
  */
-const BLOCKED_HOSTNAMES = new Set([
-  "localhost",
-  "0.0.0.0",
-  "::1",
-  "[::1]",
-  "metadata.google.internal",
-  "169.254.169.254",
-  "instance-metadata",
-  "azure-metadata",
-  "dscloud.metadata",
-]);
-
-function isBlockedHostname(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  if (BLOCKED_HOSTNAMES.has(lower)) return true;
-  if (lower.endsWith(".local") || lower.endsWith(".internal") || lower.endsWith(".localhost")) return true;
-  return false;
-}
-
 async function resolveAndValidateHost(url: string): Promise<void> {
   const parsed = new URL(url);
   const hostname = parsed.hostname;
@@ -131,7 +68,7 @@ async function resolveAndValidateHost(url: string): Promise<void> {
     }
 
     for (const result of results) {
-      if (isPrivateIP(result.address)) {
+      if (isPrivateOrReservedIP(result.address)) {
         logger.warn(`🌐 SSRF blocked: ${hostname} has private/reserved address ${result.address}`);
         throw new Error(`Blocked: ${hostname} resolves to a private/reserved IP address`);
       }
@@ -144,6 +81,69 @@ async function resolveAndValidateHost(url: string): Promise<void> {
     // Prevents TOCTOU: if DNS fails now but resolves to a private IP
     // at the HTTP client level, the request would reach internal infrastructure.
     throw new Error(`Blocked: DNS resolution failed for ${hostname}`);
+  }
+}
+
+/**
+ * Perform one request without following redirects.
+ * Redirects are resolved and validated manually (see requestWithValidatedRedirects)
+ * so a public host cannot bounce the request into internal infrastructure.
+ */
+type FetchResponse = Awaited<ReturnType<typeof undiciFetch>>;
+
+function requestOnce(url: string, timeoutMs: number): Promise<FetchResponse> {
+  return undiciFetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+    redirect: "manual",
+    dispatcher: agent,
+  });
+}
+
+/**
+ * Follow redirects manually, validating every hop before it is requested:
+ *   1. the hop URL (protocol / hostname / IP literal) via validateRedirectTarget
+ *   2. the DNS-resolved addresses of that hop via resolveAndValidateHost
+ *
+ * This closes the SSRF gap of `redirect: "follow"`, where the HTTP client
+ * would follow a redirect to e.g. the cloud metadata endpoint unvalidated.
+ */
+export async function requestWithValidatedRedirects(
+  startUrl: string,
+  timeoutMs: number,
+): Promise<{ response: FetchResponse; finalUrl: string }> {
+  const startCheck = validateOutboundUrl(startUrl);
+  if (!startCheck.valid) {
+    throw new Error(`Blocked: ${startCheck.reason}`);
+  }
+
+  let currentUrl = startUrl;
+
+  for (let hop = 0; ; hop++) {
+    const response = await requestOnce(currentUrl, timeoutMs);
+    const location = response.headers.get("location");
+    const isRedirect = response.status >= 300 && response.status < 400;
+
+    if (!isRedirect || !location) {
+      return { response, finalUrl: currentUrl };
+    }
+
+    if (hop >= MAX_REDIRECTS) {
+      throw new Error(`Blocked: too many redirects for ${startUrl}`);
+    }
+
+    const target = validateRedirectTarget(location, currentUrl);
+    if (!target.valid || !target.url) {
+      logger.warn(`🌐 SSRF blocked: redirect target rejected (${target.reason})`);
+      throw new Error(`Blocked: redirect target rejected (${target.reason})`);
+    }
+
+    await resolveAndValidateHost(target.url);
+    currentUrl = target.url;
   }
 }
 
@@ -201,16 +201,8 @@ export async function fetchPage(
 
   const result = await pRetry(
     async () => {
-      const response = await undiciFetch(url, {
-        headers: {
-          "User-Agent": USER_AGENT,
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        signal: AbortSignal.timeout(timeoutMs),
-        redirect: "follow",
-        dispatcher: agent,
-      });
+      // Redirects are followed manually so every hop is validated.
+      const { response, finalUrl } = await requestWithValidatedRedirects(url, timeoutMs);
 
       const contentType = response.headers.get("content-type") || "";
       const contentLength = Number(response.headers.get("content-length") || "0");
@@ -231,11 +223,11 @@ export async function fetchPage(
 
       return {
         url,
-        finalUrl: response.url || url,
+        finalUrl,
         status: response.status,
         contentType,
         html,
-        redirected: response.redirected,
+        redirected: finalUrl !== url,
       };
     },
     {

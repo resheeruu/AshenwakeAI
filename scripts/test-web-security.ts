@@ -57,6 +57,16 @@ function assertNotIncludes(haystack: string, needle: string, message: string) {
   assert(!haystack.includes(needle), `${message} (did not expect "${needle}" in "${haystack}")`);
 }
 
+/** Assert that a promise rejects — used for fail-closed security paths. */
+async function assertRejection(promise: Promise<unknown>, message: string) {
+  try {
+    await promise;
+    assert(false, message);
+  } catch {
+    assert(true, message);
+  }
+}
+
 /* ================================================================
  * HELPERS
  * ================================================================ */
@@ -408,18 +418,164 @@ console.log("\n===== J. PASSWORD HASHING =====");
 }
 
 /* ================================================================
- * CLEANUP & SUMMARY
+ * K. OUTBOUND NETWORK BOUNDARY (SSRF)
+ *
+ * Regression coverage for concrete SSRF issues:
+ *  - private/loopback/link-local/metadata targets must be blocked
+ *    (including exotic IPv4 notations and IPv4-mapped IPv6 forms)
+ *  - every redirect hop must be validated (no blind redirect: "follow")
+ *  - blocked targets fail closed without performing any request
  * ================================================================ */
 
-cleanupTestAccount();
+import fs from "node:fs";
+import path from "node:path";
+import {
+  isPrivateOrReservedIP,
+  validateOutboundUrl,
+  validateRedirectTarget,
+} from "../src/security/network-boundary";
+import { fetchPage, requestWithValidatedRedirects } from "../src/web/fetch";
 
-console.log("\n===== RESULTS =====");
-console.log(`  Passed: ${passed}`);
-console.log(`  Failed: ${failed}`);
+{
+  const blockedIps = [
+    "127.0.0.1", "10.0.0.1", "100.64.0.1", "169.254.169.254", "172.16.0.1",
+    "192.168.1.1", "198.18.0.5", "224.0.0.1", "255.255.255.255", "0.0.0.0",
+    "::1", "::", "fd00::1", "fe80::1", "ff02::1",
+    "::ffff:127.0.0.1", "::ffff:7f00:1", "64:ff9b::7f00:1", "2002:7f00:1::",
+  ];
+  for (const ip of blockedIps) {
+    assert(
+      isPrivateOrReservedIP(ip) === true,
+      `private/reserved IP blocked: ${ip}`,
+    );
+  }
 
-if (failed > 0) {
-  console.log("\n❌ SOME TESTS FAILED");
-  process.exit(1);
-} else {
-  console.log("\n🎉 ALL TESTS PASSED");
+  const publicIps = ["8.8.8.8", "1.1.1.1", "172.32.0.1", "2606:4700::1111"];
+  for (const ip of publicIps) {
+    assert(
+      isPrivateOrReservedIP(ip) === false,
+      `public IP allowed: ${ip}`,
+    );
+  }
 }
+
+{
+  const blockedUrls = [
+    "http://127.0.0.1/",            // loopback
+    "http://127.1/",                // short-form IPv4 (normalizes to 127.0.0.1)
+    "http://0x7f.1/",               // hex-form IPv4
+    "http://2130706433/",           // decimal-form 127.0.0.1
+    "http://169.254.169.254/latest/meta-data/", // cloud metadata
+    "http://[::1]/",
+    "http://[::ffff:127.0.0.1]/",   // IPv4-mapped loopback
+    "http://[fd00::1]/",
+    "http://[fe80::1]/",
+    "http://255.255.255.255/",      // broadcast (240/4)
+    "http://localhost:8080/",
+    "http://metadata.google.internal/",
+    "http://service.internal/",
+    "http://printer.local/",
+    "file:///etc/passwd",
+    "javascript:alert(1)",
+    "data:text/html,<b>x</b>",
+    "gopher://internal/",
+    "http://user:pass@example.com/", // credentials in URL
+    "not-a-url",
+    "",
+  ];
+  for (const url of blockedUrls) {
+    assert(validateOutboundUrl(url).valid === false, `outbound URL blocked: ${url || "(empty)"}`);
+  }
+
+  const allowedUrls = ["https://example.com/", "http://example.com/", "https://8.8.8.8/"];
+  for (const url of allowedUrls) {
+    assert(validateOutboundUrl(url).valid === true, `outbound URL allowed: ${url}`);
+  }
+}
+
+{
+  // Redirects are the classic SSRF bypass: a public host can bounce the
+  // request into internal infrastructure. Every hop must be validated.
+  const toMetadata = validateRedirectTarget(
+    "http://169.254.169.254/latest/meta-data/",
+    "https://example.com/start",
+  );
+  assert(toMetadata.valid === false, "redirect to metadata endpoint blocked");
+
+  const toLoopback = validateRedirectTarget("//127.0.0.1/", "https://example.com/start");
+  assert(toLoopback.valid === false, "protocol-relative redirect to loopback blocked");
+
+  const toInternal = validateRedirectTarget("http://db.internal/", "https://example.com/start");
+  assert(toInternal.valid === false, "redirect to .internal hostname blocked");
+
+  const relative = validateRedirectTarget("/next", "https://example.com/start");
+  assert(relative.valid === true && relative.url === "https://example.com/next",
+    "safe relative redirect allowed");
+}
+
+{
+  // Fail-closed request checks (no network, blocked before any request)
+  // run in the async finalize step below, together with the summary.
+}
+
+{
+  // Source-level guard: automatic ("follow") redirect handling lets the HTTP
+  // client follow redirect chains unvalidated — the concrete SSRF issue fixed
+  // in this module. Comment lines are removed so documentation may mention it
+  // (line-based, because header strings legitimately contain "*").
+  const fetchSource = fs.readFileSync(
+    path.join(process.cwd(), "src", "web", "fetch.ts"),
+    "utf8",
+  );
+  const codeOnly = fetchSource
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      return !(t.startsWith("//") || t.startsWith("/*") || t.startsWith("*") || t.startsWith("*/"));
+    })
+    .join("\n");
+
+  assert(codeOnly.includes('redirect: "manual"'),
+    "fetch.ts uses redirect: \"manual\" (per-hop validation)");
+  assert(!codeOnly.includes('redirect: "follow"'),
+    "fetch.ts does not use redirect: \"follow\" (unvalidated redirect chain)");
+}
+
+/* ================================================================
+ * FAIL-CLOSED REQUEST CHECKS + CLEANUP & SUMMARY
+ * ================================================================ */
+
+async function finish(): Promise<void> {
+  // Blocked targets must fail closed WITHOUT performing a request.
+  // (All of these are rejected by validation before DNS/network I/O.)
+  await assertRejection(
+    fetchPage("http://127.0.0.1/", { respectRobots: false, useCache: false }),
+    "fetchPage rejects loopback URL without requesting",
+  );
+  await assertRejection(
+    fetchPage("file:///etc/passwd", { respectRobots: false, useCache: false }),
+    "fetchPage rejects file:// URL without requesting",
+  );
+  await assertRejection(
+    requestWithValidatedRedirects("http://169.254.169.254/", 1_000),
+    "redirect-following rejects metadata start URL without requesting",
+  );
+
+  cleanupTestAccount();
+
+  console.log("\n===== RESULTS =====");
+  console.log(`  Passed: ${passed}`);
+  console.log(`  Failed: ${failed}`);
+
+  if (failed > 0) {
+    console.log("\n❌ SOME TESTS FAILED");
+    process.exit(1);
+  } else {
+    console.log("\n🎉 ALL TESTS PASSED");
+  }
+}
+
+void finish().catch((error) => {
+  console.error("❌ Web security test runner failed:", error);
+  process.exit(1);
+});
