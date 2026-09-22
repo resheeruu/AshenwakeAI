@@ -21,6 +21,15 @@ import {
 import {
   validateMediaUrl,
 } from "../src/games/anime-actions/media-security";
+import {
+  animeEmote,
+  hasAnimeEmote,
+  isValidAnimeEmote,
+  allAnimeEmoteNames,
+  ANIME_EMOTE_MAP,
+  animeTextFallback,
+  type AnimeEmoteName,
+} from "../src/discord/anime-emotes";
 
 let passed = 0;
 let failed = 0;
@@ -658,6 +667,154 @@ try {
   }
 } catch (e) {
   fail("Categories balanced", e);
+}
+
+// ─────────────────────────────────────
+// ANIME EMOTES
+// ─────────────────────────────────────
+
+console.log("\n--- Anime Emotes ---");
+
+// 44. animeEmote returns text fallback when no custom emoji configured
+try {
+  const result = animeEmote("hug");
+  if (typeof result === "string" && result.length > 0) {
+    pass("animeEmote returns text fallback");
+  } else {
+    fail("animeEmote returns text fallback", result);
+  }
+} catch (e) {
+  fail("animeEmote returns text fallback", e);
+}
+
+// 45. All action emoteNames map to valid anime emotes
+try {
+  const actions = getAllActions();
+  const allValid = actions
+    .filter((a) => a.emoteName)
+    .every((a) => isValidAnimeEmote(a.emoteName!));
+  if (allValid) {
+    pass("All action emoteNames map to valid anime emotes");
+  } else {
+    fail("All action emoteNames map to valid anime emotes");
+  }
+} catch (e) {
+  fail("All action emoteNames map to valid anime emotes", e);
+}
+
+// 46. All emote names are valid
+try {
+  const names = allAnimeEmoteNames();
+  const allValid = names.every((n) => isValidAnimeEmote(n));
+  if (allValid && names.length >= 30) {
+    pass(`All ${names.length} emote names are valid`);
+  } else {
+    fail("All emote names are valid", { count: names.length, allValid });
+  }
+} catch (e) {
+  fail("All emote names are valid", e);
+}
+
+// 47. Text fallbacks never contain Unicode emoji
+try {
+  const names = allAnimeEmoteNames();
+  const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{2764}\u{FE0F}\u{20E3}\u{E0020}-\u{E007F}]/gu;
+  const withEmoji = names.filter((n) => {
+    const fallback = animeTextFallback(n);
+    return emojiRegex.test(fallback);
+  });
+  if (withEmoji.length === 0) {
+    pass("Text fallbacks contain no Unicode emoji");
+  } else {
+    fail("Text fallbacks contain no Unicode emoji", withEmoji);
+  }
+} catch (e) {
+  fail("Text fallbacks contain no Unicode emoji", e);
+}
+
+// 48. animeEmote returns text fallback (no custom emoji configured)
+try {
+  const result = animeEmote("slap");
+  if (result === "[slap]") {
+    pass("animeEmote('slap') returns '[slap]'");
+  } else {
+    fail("animeEmote('slap') returns '[slap]'", result);
+  }
+} catch (e) {
+  fail("animeEmote('slap') returns '[slap]'", e);
+}
+
+// 49. ANIME_EMOTE_MAP has all required categories
+try {
+  const hasReactions = "happy" in ANIME_EMOTE_MAP && "smug" in ANIME_EMOTE_MAP;
+  const hasActions = "hug" in ANIME_EMOTE_MAP && "slap" in ANIME_EMOTE_MAP;
+  const hasSystem = "ai" in ANIME_EMOTE_MAP && "success" in ANIME_EMOTE_MAP;
+  if (hasReactions && hasActions && hasSystem) {
+    pass("ANIME_EMOTE_MAP has all categories");
+  } else {
+    fail("ANIME_EMOTE_MAP has all categories");
+  }
+} catch (e) {
+  fail("ANIME_EMOTE_MAP has all categories", e);
+}
+
+// 50. Every anime emote has env var configured
+try {
+  const names = allAnimeEmoteNames();
+  const allHaveEnv = names.every((n) => {
+    const config = ANIME_EMOTE_MAP[n];
+    return config && config.envVar.length > 0 && config.textFallback.length > 0;
+  });
+  if (allHaveEnv) {
+    pass("All emotes have env var and text fallback configured");
+  } else {
+    fail("All emotes have env var and text fallback configured");
+  }
+} catch (e) {
+  fail("All emotes have env var and text fallback configured", e);
+}
+
+// ─────────────────────────────────────
+// ZERO UNICODE POLICY
+// ─────────────────────────────────────
+
+console.log("\n--- Zero Unicode Policy ---");
+
+// 51. Action emoji fields contain no Unicode
+try {
+  const actions = getAllActions();
+  const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{2764}\u{FE0F}\u{20E3}\u{E0020}-\u{E007F}]/gu;
+  const withEmoji = actions.filter((a) => emojiRegex.test(a.emoji));
+  if (withEmoji.length === 0) {
+    pass("Action emoji fields contain no Unicode");
+  } else {
+    fail("Action emoji fields contain no Unicode", withEmoji.map((a) => a.name));
+  }
+} catch (e) {
+  fail("Action emoji fields contain no Unicode", e);
+}
+
+// 52. Response templates contain no Unicode emoji
+try {
+  const actions = getAllActions();
+  const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{2764}\u{FE0F}\u{20E3}\u{E0020}-\u{E007F}]/gu;
+  let found = false;
+  for (const action of actions) {
+    for (const r of [...action.responses, ...action.botResponses, ...action.selfResponses]) {
+      if (emojiRegex.test(r)) {
+        found = true;
+        break;
+      }
+    }
+    if (found) break;
+  }
+  if (!found) {
+    pass("Response templates contain no Unicode emoji");
+  } else {
+    fail("Response templates contain no Unicode emoji");
+  }
+} catch (e) {
+  fail("Response templates contain no Unicode emoji", e);
 }
 
 // ─────────────────────────────────────
