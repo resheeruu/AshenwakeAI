@@ -608,6 +608,7 @@ async function main(): Promise<void> {
   );
 
   Math.random = originalRandom;
+  process.exit(0);
 }
 
 main().catch((error) => {
