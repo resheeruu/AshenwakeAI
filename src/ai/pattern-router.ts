@@ -236,7 +236,7 @@ export const builtInHandlers: PatternHandler[] = [
     "!help",
     () => ({
       handled: true,
-      response: "Available commands: /ask, /prompt, /send. Use /help for detailed info.",
+      response: "Available commands: /ask, /prompt, /game, /status, /server, /moderation, /support, /access, /personality, /settings, /reset. Use /help for detailed info.",
       ephemeral: true,
     }),
     "Show available commands",

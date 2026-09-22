@@ -33,25 +33,25 @@ console.log("--- Command Factories ---");
 // 1. Personality command exists
 try {
   const cmd = createPersonalityCommand();
-  if (cmd && cmd.data && cmd.data.name === "prompt" && typeof cmd.execute === "function") {
-    pass("/prompt personality command factory");
+  if (cmd && cmd.data && cmd.data.name === "personality" && typeof cmd.execute === "function") {
+    pass("/personality command factory");
   } else {
-    fail("/prompt personality command factory", cmd?.data?.name);
+    fail("/personality command factory", cmd?.data?.name);
   }
 } catch (e) {
-  fail("/prompt personality command factory", e);
+  fail("/personality command factory", e);
 }
 
-// 2. Builder command renamed to /build
+// 2. Builder command is /prompt
 try {
   const cmd = createPromptCommand();
-  if (cmd && cmd.data && cmd.data.name === "build" && typeof cmd.execute === "function") {
-    pass("/build builder command factory");
+  if (cmd && cmd.data && cmd.data.name === "prompt" && typeof cmd.execute === "function") {
+    pass("/prompt builder command factory");
   } else {
-    fail("/build builder command factory", cmd?.data?.name);
+    fail("/prompt builder command factory", cmd?.data?.name);
   }
 } catch (e) {
-  fail("/build builder command factory", e);
+  fail("/prompt builder command factory", e);
 }
 
 // 3. Personality command has subcommands
@@ -233,25 +233,37 @@ try {
 
 console.log("\n--- Registration ---");
 
-// 11. /prompt and /build have different command names (no collision)
+// 11. /personality and /prompt have different command names (no collision)
 try {
   const personalityCmd = createPersonalityCommand();
   const builderCmd = createPromptCommand();
   if (personalityCmd.data.name !== builderCmd.data.name) {
-    pass("/prompt and /build have different names");
+    pass("/personality and /prompt have different names");
   } else {
-    fail("/prompt and /build have different names", {
-      prompt: personalityCmd.data.name,
-      build: builderCmd.data.name,
+    fail("/personality and /prompt have different names", {
+      personality: personalityCmd.data.name,
+      prompt: builderCmd.data.name,
     });
   }
 } catch (e) {
-  fail("/prompt and /build have different names", e);
+  fail("/personality and /prompt have different names", e);
 }
 
-// 12. /prompt personality command name is "prompt"
+// 12. /personality command name is "personality"
 try {
   const cmd = createPersonalityCommand();
+  if (cmd.data.name === "personality") {
+    pass("/personality name is 'personality'");
+  } else {
+    fail("/personality name is 'personality'", cmd.data.name);
+  }
+} catch (e) {
+  fail("/personality name is 'personality'", e);
+}
+
+// 13. /prompt builder command name is "prompt"
+try {
+  const cmd = createPromptCommand();
   if (cmd.data.name === "prompt") {
     pass("/prompt name is 'prompt'");
   } else {
@@ -259,18 +271,6 @@ try {
   }
 } catch (e) {
   fail("/prompt name is 'prompt'", e);
-}
-
-// 13. /build builder command name is "build"
-try {
-  const cmd = createPromptCommand();
-  if (cmd.data.name === "build") {
-    pass("/build name is 'build'");
-  } else {
-    fail("/build name is 'build'", cmd.data.name);
-  }
-} catch (e) {
-  fail("/build name is 'build'", e);
 }
 
 // 14. /settings-update is NOT registered (dead code)
@@ -294,56 +294,53 @@ try {
 
 console.log("\n--- Help Metadata ---");
 
-// 15. /help metadata has 'build' key (not 'prompt' for builder)
+// 15. /help metadata has 'prompt' key (for builder) and 'personality' key
 try {
-  // The help.ts COMMAND_METADATA must have 'build' for the builder
-  // and 'prompt' for the personality command
   const helpSource = require("fs").readFileSync(
     require("path").resolve(__dirname, "../src/commands/help.ts"),
     "utf-8"
   );
-  const hasBuildKey = /build:\s*\{/.test(helpSource);
   const hasPromptKey = /prompt:\s*\{/.test(helpSource);
-  if (hasBuildKey && hasPromptKey) {
-    pass("/help has both 'build' and 'prompt' metadata keys");
+  const hasPersonalityKey = /personality:\s*\{/.test(helpSource);
+  if (hasPromptKey && hasPersonalityKey) {
+    pass("/help has both 'prompt' and 'personality' metadata keys");
   } else {
-    fail("/help has both 'build' and 'prompt' metadata keys", { hasBuildKey, hasPromptKey });
+    fail("/help has both 'prompt' and 'personality' metadata keys", { hasPromptKey, hasPersonalityKey });
   }
 } catch (e) {
-  fail("/help has both 'build' and 'prompt' metadata keys", e);
+  fail("/help has both 'prompt' and 'personality' metadata keys", e);
 }
 
-// 16. /help metadata 'prompt' refers to personality, not builder
+// 16. /help metadata 'prompt' refers to builder, not personality
 try {
   const helpSource = require("fs").readFileSync(
     require("path").resolve(__dirname, "../src/commands/help.ts"),
     "utf-8"
   );
-  // The prompt metadata should mention "personality" or "custom prompt", not "Builder session"
   const promptLine = helpSource.split("\n").find((l: string) => /prompt:\s*\{/.test(l));
-  if (promptLine && !promptLine.includes("Builder session")) {
-    pass("/help 'prompt' metadata describes personality (not builder)");
+  if (promptLine && (promptLine.includes("builder") || promptLine.includes("server") || promptLine.includes("natural language"))) {
+    pass("/help 'prompt' metadata describes builder (not personality)");
   } else {
-    fail("/help 'prompt' metadata describes personality (not builder)", promptLine);
+    fail("/help 'prompt' metadata describes builder (not personality)", promptLine);
   }
 } catch (e) {
-  fail("/help 'prompt' metadata describes personality (not builder)", e);
+  fail("/help 'prompt' metadata describes builder (not personality)", e);
 }
 
-// 17. /help metadata 'build' refers to Builder session
+// 17. /help metadata 'prompt' refers to Builder session
 try {
   const helpSource = require("fs").readFileSync(
     require("path").resolve(__dirname, "../src/commands/help.ts"),
     "utf-8"
   );
-  const buildLine = helpSource.split("\n").find((l: string) => /build:\s*\{/.test(l));
-  if (buildLine && buildLine.includes("Builder")) {
-    pass("/help 'build' metadata describes Builder session");
+  const promptLine = helpSource.split("\n").find((l: string) => /prompt:\s*\{/.test(l));
+  if (promptLine && /builder|build/i.test(promptLine)) {
+    pass("/help 'prompt' metadata describes Builder session");
   } else {
-    fail("/help 'build' metadata describes Builder session", buildLine);
+    fail("/help 'prompt' metadata describes Builder session", promptLine);
   }
 } catch (e) {
-  fail("/help 'build' metadata describes Builder session", e);
+  fail("/help 'prompt' metadata describes Builder session", e);
 }
 
 // ─────────────────────────────────────

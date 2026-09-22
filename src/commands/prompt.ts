@@ -904,8 +904,8 @@ function formatExecutionResult(
 export function createPromptCommand(): AshenCommand {
   return {
     data: new SlashCommandBuilder()
-      .setName("build")
-      .setDescription("Open a private Builder session to design, inspect, and manage your server")
+      .setName("prompt")
+      .setDescription("AI-powered server builder — describe what you want in natural language")
       .addStringOption((option) =>
         option
           .setName("prompt")

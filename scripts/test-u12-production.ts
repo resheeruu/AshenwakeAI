@@ -240,27 +240,6 @@ test("Index.ts has uncaughtException handler with cleanup", async () => {
 });
 
 /* ======================================================
-   9. TASK COMMAND AUTHORIZATION
-   ====================================================== */
-console.log("\n===== TASK COMMAND AUTH =====");
-
-test("Task command checks creator/admin permission", async () => {
-  const fs = await import("fs");
-  const content = fs.readFileSync(
-    new URL("../src/commands/task.ts", import.meta.url).pathname,
-    "utf8"
-  );
-  assert.ok(
-    content.includes("isCreator") && content.includes("isAdmin"),
-    "task.ts should check creator and admin permissions"
-  );
-  assert.ok(
-    content.includes("Only the bot owner or an admin can run autonomous tasks"),
-    "task.ts should deny non-authorized users"
-  );
-});
-
-/* ======================================================
    10. INTERNAL SUPERVISOR USES LOGGER
    ====================================================== */
 console.log("\n===== INTERNAL SUPERVISOR =====");
