@@ -23,7 +23,6 @@ interface TestSuite {
 const TSX = "node ./node_modules/.bin/tsx";
 
 const MANDATORY_SUITES: TestSuite[] = [
-  // Core
   { name: "Router", file: "scripts/test-router.ts", category: "core" },
   { name: "Provider Lifecycle", file: "scripts/test-provider-lifecycle.ts", category: "core" },
   { name: "Preflight", file: "scripts/test-preflight.ts", category: "core" },
@@ -33,8 +32,6 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Rate Limit", file: "scripts/test-rate-limit.ts", category: "core" },
   { name: "Tasks", file: "scripts/test-tasks.ts", category: "core" },
   { name: "Settlement", file: "scripts/test-settlement.ts", category: "core" },
-
-  // Security
   { name: "Security", file: "scripts/test-security.ts", category: "security" },
   { name: "Hardening", file: "scripts/test-hardening.ts", category: "security" },
   { name: "Adversarial", file: "scripts/test-adversarial.ts", category: "security" },
@@ -45,40 +42,23 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Auth Upgrade", file: "scripts/test-auth-upgrade.ts", category: "security" },
   { name: "Ask Command", file: "scripts/test-ask-command.ts", category: "security" },
   { name: "Conversation Wrapper", file: "scripts/test-conversation-wrapper.ts", category: "security" },
-
-  // Tool Registry
   { name: "Tool Registry", file: "scripts/test-tool-registry.ts", category: "tool" },
   { name: "Template Execution", file: "scripts/test-template-execution.ts", category: "tool" },
   { name: "Builder inspectServer", file: "scripts/test-builder-inspect-server.ts", category: "tool" },
   { name: "Production Upgrade", file: "scripts/test-production-upgrade.ts", category: "integration" },
   { name: "Update Rollback", file: "scripts/test-update-rollback.ts", category: "integration" },
   { name: "Rivalry", file: "scripts/test-rivalry.ts", category: "integration" },
-
-  // Web
   { name: "Web Security", file: "scripts/test-web-security.ts", category: "web" },
   { name: "Web Headers", file: "scripts/test-web-headers.ts", category: "web" },
-
-  // Error coverage
   { name: "Error Coverage", file: "scripts/test-error-coverage.ts", category: "integration" },
-
-  // Support
   { name: "Support", file: "scripts/test-support.ts", category: "core" },
   { name: "Support AI", file: "scripts/test-support-ai.ts", category: "core" },
   { name: "Support Hardening", file: "scripts/test-support-hardening.ts", category: "security" },
-
-  // Integration
   { name: "Coding Agents", file: "scripts/test-coding-agents.ts", category: "integration" },
-
-  // AI Social & Personality
   { name: "AI Social", file: "scripts/test-ai-social.ts", category: "core" },
   { name: "Personality", file: "scripts/test-personality.ts", category: "core" },
-
-  // Anime Actions
   { name: "Anime Actions", file: "scripts/test-anime-actions.ts", category: "core" },
-
-  // Resource / hosting storage (disk, RAM, ENOSPC)
   { name: "Resource Startup", file: "scripts/test-resource-startup.ts", category: "integration" },
-
 ];
 
 const OPTIONAL_SUITES: TestSuite[] = [
@@ -132,23 +112,24 @@ function runSuite(suite: TestSuite): boolean {
     return true;
   } catch (error: any) {
     const duration = Date.now() - start;
-    const stderr = error.stderr?.toString() || "";
+    // A child test can write its summary to stdout and its assertion details
+    // to stderr. Never choose one stream over the other: doing so previously
+    // reported "0 failures" while hiding the real failure and stack trace.
     const stdout = error.stdout?.toString() || "";
-    const output = stderr || stdout;
+    const stderr = error.stderr?.toString() || "";
+    const output = [stdout, stderr].filter(Boolean).join("\n");
 
-    // Extract pass/fail counts from output
     const passMatch = output.match(/(?:Passed|passed):\s*(\d+)/) || output.match(/(\d+)\s+passed/);
     const failMatch = output.match(/(?:Failed|failed):\s*(\d+)/) || output.match(/(\d+)\s+failed/);
-    const passCount = passMatch ? parseInt(passMatch[1]) : 0;
-    const failCount = failMatch ? parseInt(failMatch[1]) : 0;
+    const passCount = passMatch ? parseInt(passMatch[1], 10) : 0;
+    const failCount = failMatch ? parseInt(failMatch[1], 10) : 0;
 
     console.log(`  ❌ FAIL: ${suite.name} (${duration}ms) — ${failCount} failures`);
-    if (failCount > 0) {
-      // Show last few lines of output for context
-      const lines = output.split("\n").filter(l => l.trim()).slice(-5);
-      for (const line of lines) {
-        console.log(`     ${line}`);
-      }
+    console.error(`     ${suite.name} command exited with status ${error.status ?? "unknown"}`);
+    if (output) {
+      console.error(output.trimEnd());
+    } else if (error instanceof Error) {
+      console.error(error.stack ?? error.message);
     }
     results.push({ name: suite.name, status: "FAIL", duration, category: suite.category });
     totalFailed++;
@@ -158,12 +139,10 @@ function runSuite(suite: TestSuite): boolean {
 
 console.log("\n╔══════════════════════════════════════════════╗");
 console.log("║   ASHENAI COMPREHENSIVE TEST SUITE          ║");
-console.log("╚══════════════════════════════════════════════╝\n");
-
+console.log("╚══════════════════════════��═══════════════════╝\n");
 console.log(`Running ${MANDATORY_SUITES.length} mandatory suites...\n`);
 
 let allPassed = true;
-
 for (const suite of MANDATORY_SUITES) {
   if (!runSuite(suite)) {
     allPassed = false;
@@ -174,28 +153,17 @@ for (const suite of MANDATORY_SUITES) {
 
 if (allPassed && OPTIONAL_SUITES.length > 0 && process.argv.includes("--all")) {
   console.log(`\nRunning ${OPTIONAL_SUITES.length} optional suites...\n`);
-  for (const suite of OPTIONAL_SUITES) {
-    runSuite(suite); // Don't abort on optional failures
-  }
+  for (const suite of OPTIONAL_SUITES) runSuite(suite);
 }
 
-// Summary
 console.log("\n╔══════════════════════════════════════════════╗");
 console.log("║   RESULTS SUMMARY                           ║");
 console.log("╚══════════════════════════════════════════════╝\n");
-
 const categories = [...new Set(results.map(r => r.category))];
 for (const cat of categories) {
   const catResults = results.filter(r => r.category === cat);
-  const catPassed = catResults.filter(r => r.status === "PASS").length;
-  const catFailed = catResults.filter(r => r.status === "FAIL").length;
-  const catSkipped = catResults.filter(r => r.status === "SKIP").length;
-  console.log(`  ${cat.toUpperCase().padEnd(12)} ${catPassed} passed, ${catFailed} failed, ${catSkipped} skipped`);
+  console.log(`  ${cat.toUpperCase().padEnd(12)} ${catResults.filter(r => r.status === "PASS").length} passed, ${catResults.filter(r => r.status === "FAIL").length} failed, ${catResults.filter(r => r.status === "SKIP").length} skipped`);
 }
-
 console.log(`\n  TOTAL: ${totalPassed} passed, ${totalFailed} failed, ${totalSkipped} skipped`);
 console.log(`  ${totalFailed === 0 ? "🎉 ALL MANDATORY TESTS PASSED" : "❌ SOME TESTS FAILED"}\n`);
-
-if (totalFailed > 0) {
-  process.exit(1);
-}
+if (totalFailed > 0) process.exit(1);
