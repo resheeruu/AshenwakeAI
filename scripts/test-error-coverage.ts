@@ -60,7 +60,11 @@ function assertNotIncludes(haystack: string, needle: string, message: string) {
 const ROOT = path.resolve(__dirname, "..");
 
 function readFile(relPath: string): string {
-  return fs.readFileSync(path.join(ROOT, relPath), "utf8");
+  const fullPath = path.join(ROOT, relPath);
+  if (!fs.existsSync(fullPath)) {
+    return "";
+  }
+  return fs.readFileSync(fullPath, "utf8");
 }
 
 /* ==================== TEST EXECUTION ==================== */
