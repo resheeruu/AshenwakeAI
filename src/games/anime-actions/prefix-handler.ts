@@ -63,16 +63,21 @@ function buildActionsHelp(): string {
     const meta = CATEGORY_META[category];
     const actions = getActionsByCategory(category);
     const names = actions.map((a) => `\`${a.name}\``).join(" \u2022 ");
-    lines.push(`${meta.emoji} **${meta.label}**`);
+    lines.push(`**${meta.label}**`);
     lines.push(names);
     lines.push("");
   }
 
-  lines.push("**Usage:** `ash <action> @user` or `ash <action>`");
-  lines.push("**Reply:** Reply to a message with `ash <action>` to target that user");
-  lines.push("**Aliases:** `ash h @user` (hug), `ash pu @user` (punch), `ash hp @user` (headpat)");
-  lines.push("**Self:** `ash dance`, `ash cry`, `ash blush` — some actions work without a target");
-  lines.push("**Info:** `ash actions` to see all actions");
+  lines.push("**Usage:**");
+  lines.push("  `ash <action> @user` — target a mentioned user");
+  lines.push("  `ash <action>` — self-target (for actions that support it)");
+  lines.push("  Reply to a message with `ash <action>` to target that user");
+  lines.push("");
+  lines.push("**Examples:**");
+  lines.push("  `ash hug @friend` \u2022 `ash punch @rival` \u2022 `ash dance`");
+  lines.push("  `ash cry` \u2022 `ash blush` \u2022 `ash celebrate`");
+  lines.push("");
+  lines.push("**Aliases:** `h`=hug, `pu`=punch, `hp`=headpat, `sl`=slap, `hf`=highfive");
 
   return lines.join("\n");
 }
@@ -171,8 +176,11 @@ export async function handleAnimeAction(
   const cooldown = checkCooldown(message.author.id, action.name, action.cooldownMs);
   if (!cooldown.allowed) {
     const retrySeconds = Math.ceil((cooldown.retryAfterMs ?? 1000) / 1000);
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
     await message.reply(
-      `${action.emoji} \`${action.name}\` is on cooldown. Try again in ${retrySeconds}s.`
+      `${emoteStr} \`${action.name}\` is on cooldown. Try again in ${retrySeconds}s.`
     ).catch(() => {});
     return true;
   }
@@ -181,8 +189,11 @@ export async function handleAnimeAction(
   let targetId = resolveTarget(message, parts);
 
   if (action.targetRequired && !targetId) {
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
     await message.reply(
-      `${action.emoji} Who should ${actionName}? Usage: \`ash ${actionName} @user\``
+      `${emoteStr} Who should ${actionName}? Usage: \`ash ${actionName} @user\``
     ).catch(() => {});
     return true;
   }
@@ -192,15 +203,21 @@ export async function handleAnimeAction(
   }
 
   if (targetId === message.author.id && !action.selfTargetAllowed) {
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
     await message.reply(
-      `${action.emoji} You can't use \`${actionName}\` on yourself!`
+      `${emoteStr} You can't use \`${actionName}\` on yourself!`
     ).catch(() => {});
     return true;
   }
 
   if (targetId === botId && !action.botTargetAllowed) {
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
     await message.reply(
-      `${action.emoji} AshenAI refuses to be a target for that!`
+      `${emoteStr} AshenAI refuses to be a target for that!`
     ).catch(() => {});
     return true;
   }
