@@ -1,8 +1,8 @@
 /* ================================================================
  * ANIME ACTION SYSTEM TEST SUITE
  *
- * Tests action definitions, engine, prefix parsing, animation
- * providers, safety, and integration.
+ * Tests action definitions, engine, prefix parsing, media security,
+ * animation providers, safety, and integration.
  * ================================================================ */
 
 import {
@@ -18,6 +18,9 @@ import {
   getAnimationCacheStats,
   clearAnimationCache,
 } from "../src/games/anime-actions/providers";
+import {
+  validateMediaUrl,
+} from "../src/games/anime-actions/media-security";
 
 let passed = 0;
 let failed = 0;
@@ -43,10 +46,10 @@ console.log("--- Action Definitions ---");
 // 1. All actions load
 try {
   const actions = getAllActions();
-  if (actions.length >= 14) {
+  if (actions.length >= 30) {
     pass(`All actions loaded (${actions.length})`);
   } else {
-    fail("All actions loaded", actions.length);
+    fail("All actions loaded", `Expected >=30, got ${actions.length}`);
   }
 } catch (e) {
   fail("All actions loaded", e);
@@ -93,7 +96,7 @@ try {
   const affection = getActionsByCategory("affection");
   const combat = getActionsByCategory("combat");
   const fun = getActionsByCategory("fun");
-  if (affection.length >= 5 && combat.length >= 5 && fun.length >= 4) {
+  if (affection.length >= 5 && combat.length >= 5 && fun.length >= 8) {
     pass(`Categories: ${affection.length} affection, ${combat.length} combat, ${fun.length} fun`);
   } else {
     fail("Categories", { affection: affection.length, combat: combat.length, fun: fun.length });
@@ -153,13 +156,94 @@ try {
   fail("Combat outcomes exist", e);
 }
 
+// 10. All actions have mediaKey
+try {
+  const actions = getAllActions();
+  const allHaveMediaKey = actions.every((a) => a.mediaKey.length > 0);
+  if (allHaveMediaKey) {
+    pass("All actions have mediaKey");
+  } else {
+    fail("All actions have mediaKey");
+  }
+} catch (e) {
+  fail("All actions have mediaKey", e);
+}
+
+// ─────────────────────────────────────
+// NEW ACTION LOOKUPS
+// ─────────────────────────────────────
+
+console.log("\n--- New Actions ---");
+
+// 11. New combat actions exist
+try {
+  const hit = getAction("hit");
+  const smack = getAction("smack");
+  const throw_ = getAction("throw");
+  const shoot = getAction("shoot");
+  const stab = getAction("stab");
+  const kill = getAction("kill");
+  const destroy = getAction("destroy");
+  const explode = getAction("explode");
+  if (hit && smack && throw_ && shoot && stab && kill && destroy && explode) {
+    pass("New combat actions exist (8)");
+  } else {
+    fail("New combat actions exist");
+  }
+} catch (e) {
+  fail("New combat actions exist", e);
+}
+
+// 12. New fun actions exist
+try {
+  const laugh = getAction("laugh");
+  const smug = getAction("smug");
+  const panic = getAction("panic");
+  const sleep = getAction("sleep");
+  const celebrate = getAction("celebrate");
+  const roast = getAction("roast");
+  const simp = getAction("simp");
+  if (laugh && smug && panic && sleep && celebrate && roast && simp) {
+    pass("New fun actions exist (7)");
+  } else {
+    fail("New fun actions exist");
+  }
+} catch (e) {
+  fail("New fun actions exist", e);
+}
+
+// 13. New alias lookups work
+try {
+  const ht = getAction("ht");
+  const sk = getAction("sk");
+  const th = getAction("th");
+  const sh = getAction("sh");
+  const st = getAction("st");
+  const ds = getAction("ds");
+  const ex = getAction("ex");
+  const lf = getAction("lf");
+  const sm = getAction("sm");
+  const pa = getAction("pa");
+  const slp = getAction("slp");
+  const ce = getAction("ce");
+  const ro = getAction("ro");
+  const da = getAction("da");
+  if (ht && sk && th && sh && st && ds && ex && lf && sm && pa && slp && ce && ro && da) {
+    pass("New alias lookups work (14)");
+  } else {
+    fail("New alias lookups work");
+  }
+} catch (e) {
+  fail("New alias lookups work", e);
+}
+
 // ─────────────────────────────────────
 // PREFIX PARSING
 // ─────────────────────────────────────
 
 console.log("\n--- Prefix Parsing ---");
 
-// 10. "ash hug @user" detected
+// 14. "ash hug @user" detected
 try {
   if (isAnimeActionPrefix("ash hug @user")) {
     pass("'ash hug @user' detected");
@@ -170,7 +254,7 @@ try {
   fail("'ash hug @user' detected", e);
 }
 
-// 11. "ash" alone detected
+// 15. "ash" alone detected
 try {
   if (isAnimeActionPrefix("ash")) {
     pass("'ash' alone detected");
@@ -181,7 +265,7 @@ try {
   fail("'ash' alone detected", e);
 }
 
-// 12. "ash actions" detected
+// 16. "ash actions" detected
 try {
   if (isAnimeActionPrefix("ash actions")) {
     pass("'ash actions' detected");
@@ -192,7 +276,7 @@ try {
   fail("'ash actions' detected", e);
 }
 
-// 13. Non-ash prefix not detected
+// 17. Non-ash prefix not detected
 try {
   if (!isAnimeActionPrefix("!hug @user")) {
     pass("Non-ash prefix not detected");
@@ -203,7 +287,7 @@ try {
   fail("Non-ash prefix not detected", e);
 }
 
-// 14. "@AshenAI hug @user" not detected (this is mention, not prefix)
+// 18. "@AshenAI hug @user" not detected
 try {
   if (!isAnimeActionPrefix("@AshenAI hug @user")) {
     pass("Mention format not detected as prefix");
@@ -214,7 +298,7 @@ try {
   fail("Mention format not detected as prefix", e);
 }
 
-// 15. Case insensitive
+// 19. Case insensitive
 try {
   if (isAnimeActionPrefix("ASH hug @user") || isAnimeActionPrefix("Ash Hug @user")) {
     pass("Case insensitive prefix detection");
@@ -231,7 +315,7 @@ try {
 
 console.log("\n--- Safety ---");
 
-// 16. Social "kick" is NOT a moderation kick
+// 20. Social "kick" is NOT a moderation kick
 try {
   const action = getAction("kick");
   if (action && action.category === "combat" && !action.name.includes("moderation")) {
@@ -243,7 +327,7 @@ try {
   fail("Social 'kick' is NOT moderation", e);
 }
 
-// 17. Social actions don't require moderation permissions
+// 21. Social actions don't require moderation permissions
 try {
   const actions = getAllActions();
   const allNoPerms = actions.every((a) => a.name !== "moderation");
@@ -256,7 +340,7 @@ try {
   fail("No moderation actions in anime system", e);
 }
 
-// 18. All actions have cooldowns
+// 22. All actions have cooldowns
 try {
   const actions = getAllActions();
   const allHaveCooldowns = actions.every((a) => a.cooldownMs > 0);
@@ -269,7 +353,7 @@ try {
   fail("All actions have cooldowns", e);
 }
 
-// 19. All actions have responses
+// 23. All actions have responses
 try {
   const actions = getAllActions();
   const allHaveResponses = actions.every((a) => a.responses.length > 0);
@@ -282,7 +366,7 @@ try {
   fail("All actions have response templates", e);
 }
 
-// 20. Bot target actions have bot responses
+// 24. Bot target actions have bot responses
 try {
   const actions = getAllActions();
   const botAllowed = actions.filter((a) => a.botTargetAllowed);
@@ -296,13 +380,156 @@ try {
   fail("Bot-targeted actions have bot responses", e);
 }
 
+// 25. Violent actions are fictional only
+try {
+  const kill = getAction("kill")!;
+  const destroy = getAction("destroy")!;
+  const explode = getAction("explode")!;
+  const allFictional = [kill, destroy, explode].every(
+    (a) => a.category === "combat" && a.botTargetAllowed
+  );
+  if (allFictional) {
+    pass("Violent actions are fictional (bot-targetable)");
+  } else {
+    fail("Violent actions are fictional");
+  }
+} catch (e) {
+  fail("Violent actions are fictional", e);
+}
+
+// ─────────────────────────────────────
+// MEDIA SECURITY
+// ─────────────────────────────────────
+
+console.log("\n--- Media Security ---");
+
+// 26. HTTPS required
+try {
+  const result = validateMediaUrl("http://example.com/gif.gif");
+  if (!result.ok) {
+    pass("HTTP rejected");
+  } else {
+    fail("HTTP rejected");
+  }
+} catch (e) {
+  fail("HTTP rejected", e);
+}
+
+// 27. HTTPS accepted
+try {
+  const result = validateMediaUrl("https://api.gifukai.com/hug");
+  if (result.ok) {
+    pass("HTTPS accepted");
+  } else {
+    fail("HTTPS accepted", result.error);
+  }
+} catch (e) {
+  fail("HTTPS accepted", e);
+}
+
+// 28. Localhost rejected
+try {
+  const result = validateMediaUrl("https://localhost/gif.gif");
+  if (!result.ok) {
+    pass("Localhost rejected");
+  } else {
+    fail("Localhost rejected");
+  }
+} catch (e) {
+  fail("Localhost rejected", e);
+}
+
+// 29. 127.0.0.1 rejected
+try {
+  const result = validateMediaUrl("https://127.0.0.1/gif.gif");
+  if (!result.ok) {
+    pass("127.0.0.1 rejected");
+  } else {
+    fail("127.0.0.1 rejected");
+  }
+} catch (e) {
+  fail("127.0.0.1 rejected", e);
+}
+
+// 30. Metadata endpoint rejected
+try {
+  const result = validateMediaUrl("https://169.254.169.254/latest/meta-data/");
+  if (!result.ok) {
+    pass("Metadata endpoint rejected");
+  } else {
+    fail("Metadata endpoint rejected");
+  }
+} catch (e) {
+  fail("Metadata endpoint rejected", e);
+}
+
+// 31. Private IP rejected
+try {
+  const result = validateMediaUrl("https://10.0.0.1/gif.gif");
+  if (!result.ok) {
+    pass("Private IP rejected");
+  } else {
+    fail("Private IP rejected");
+  }
+} catch (e) {
+  fail("Private IP rejected", e);
+}
+
+// 32. 192.168.x.x rejected
+try {
+  const result = validateMediaUrl("https://192.168.1.1/gif.gif");
+  if (!result.ok) {
+    pass("192.168.x.x rejected");
+  } else {
+    fail("192.168.x.x rejected");
+  }
+} catch (e) {
+  fail("192.168.x.x rejected", e);
+}
+
+// 33. 172.16-31.x.x rejected
+try {
+  const result = validateMediaUrl("https://172.16.0.1/gif.gif");
+  if (!result.ok) {
+    pass("172.16.x.x rejected");
+  } else {
+    fail("172.16.x.x rejected");
+  }
+} catch (e) {
+  fail("172.16.x.x rejected", e);
+}
+
+// 34. Invalid URL rejected
+try {
+  const result = validateMediaUrl("not-a-url");
+  if (!result.ok) {
+    pass("Invalid URL rejected");
+  } else {
+    fail("Invalid URL rejected");
+  }
+} catch (e) {
+  fail("Invalid URL rejected", e);
+}
+
+// 35. .local host rejected
+try {
+  const result = validateMediaUrl("https://myhost.local/gif.gif");
+  if (!result.ok) {
+    pass(".local host rejected");
+  } else {
+    fail(".local host rejected");
+  }
+} catch (e) {
+  fail(".local host rejected", e);
+}
+
 // ─────────────────────────────────────
 // CACHE
 // ─────────────────────────────────────
 
 console.log("\n--- Cache ---");
 
-// 21. Cache stats work
+// 36. Cache stats work
 try {
   clearAnimationCache();
   const stats = getAnimationCacheStats();
@@ -315,13 +542,25 @@ try {
   fail("Cache stats work", e);
 }
 
+// 37. Cache tracks requests and failures
+try {
+  const stats = getAnimationCacheStats();
+  if (typeof stats.requests === "number" && typeof stats.failures === "number") {
+    pass("Cache tracks requests and failures");
+  } else {
+    fail("Cache tracks requests and failures", stats);
+  }
+} catch (e) {
+  fail("Cache tracks requests and failures", e);
+}
+
 // ─────────────────────────────────────
 // INTEGRATION
 // ─────────────────────────────────────
 
 console.log("\n--- Integration ---");
 
-// 22. All actions have emoji
+// 38. All actions have emoji
 try {
   const actions = getAllActions();
   const allHaveEmoji = actions.every((a) => a.emoji.length > 0);
@@ -334,7 +573,7 @@ try {
   fail("All actions have emoji", e);
 }
 
-// 23. All actions have valid category
+// 39. All actions have valid category
 try {
   const actions = getAllActions();
   const validCategories = ["affection", "combat", "fun"];
@@ -348,7 +587,7 @@ try {
   fail("All actions have valid category", e);
 }
 
-// 24. Aliases don't collide
+// 40. Aliases don't collide
 try {
   const actions = getAllActions();
   const aliasMap = new Map<string, string>();
@@ -370,6 +609,55 @@ try {
   }
 } catch (e) {
   fail("No alias collisions", e);
+}
+
+// 41. No action name collisions
+try {
+  const actions = getAllActions();
+  const nameSet = new Set<string>();
+  let collision = false;
+  for (const action of actions) {
+    if (nameSet.has(action.name)) {
+      collision = true;
+      break;
+    }
+    nameSet.add(action.name);
+  }
+  if (!collision) {
+    pass("No action name collisions");
+  } else {
+    fail("No action name collisions");
+  }
+} catch (e) {
+  fail("No action name collisions", e);
+}
+
+// 42. mediaKey doesn't collide
+try {
+  const actions = getAllActions();
+  const mediaKeys = actions.map((a) => a.mediaKey);
+  const uniqueKeys = new Set(mediaKeys);
+  if (uniqueKeys.size === mediaKeys.length) {
+    pass("No mediaKey collisions");
+  } else {
+    fail("No mediaKey collisions");
+  }
+} catch (e) {
+  fail("No mediaKey collisions", e);
+}
+
+// 43. Categories are balanced
+try {
+  const affection = getActionsByCategory("affection");
+  const combat = getActionsByCategory("combat");
+  const fun = getActionsByCategory("fun");
+  if (affection.length >= 5 && combat.length >= 10 && fun.length >= 10) {
+    pass(`Balanced categories: ${affection.length}/${combat.length}/${fun.length}`);
+  } else {
+    fail("Categories balanced", { affection: affection.length, combat: combat.length, fun: fun.length });
+  }
+} catch (e) {
+  fail("Categories balanced", e);
 }
 
 // ─────────────────────────────────────
