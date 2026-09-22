@@ -36,6 +36,27 @@ async function run() {
   const decrypted = decryptCredential(encrypted);
   assertEqual(decrypted, plaintext, "Decrypted value matches original");
 
+  /*
+   * Seed the parent provider row first: provider_credentials.provider_id has
+   * a FOREIGN KEY to providers(id), so a credential cannot exist without its
+   * provider definition. Delete first so reruns are idempotent.
+   */
+  providerRepo.delete("test-provider-1");
+  providerRepo.create({
+    id: "test-provider-1",
+    name: "test-credential-provider",
+    displayName: "Test Credential Provider",
+    providerType: "custom",
+    protocol: "openai_compatible",
+    endpoint: "https://api.test.com/v1",
+    enabled: false,
+    priority: 60,
+    defaultModel: "test-model",
+    timeoutMs: 10000,
+    retryMaxAttempts: 3,
+    metadata: { test: true },
+  });
+
   storeCredential("test-provider-1", "api_key", "sk-secret-123");
   const stored = getCredential("test-provider-1", "api_key");
   assertEqual(stored, "sk-secret-123", "Stored credential retrieved correctly");
@@ -50,6 +71,9 @@ async function run() {
   deleteAllCredentials("test-provider-1");
   const afterDelete = getCredential("test-provider-1", "api_key");
   assertEqual(afterDelete, undefined, "Deleted credential returns undefined");
+
+  // Remove the seeded provider row (also cascades any leftover credentials).
+  providerRepo.delete("test-provider-1");
 
   // ── Provider Repository ──
   console.log("\n── Provider Repository ──");
