@@ -82,22 +82,22 @@ try {
 
   if (
     prompt &&
-    prompt.data.name === "build" &&
+    prompt.data.name === "prompt" &&
     typeof prompt.execute === "function"
   ) {
-    pass("/build command factory");
+    pass("/prompt command factory");
   } else {
-    fail("/build command factory");
+    fail("/prompt command factory");
   }
 
   if (
     personality &&
-    personality.data.name === "prompt" &&
+    personality.data.name === "personality" &&
     typeof personality.execute === "function"
   ) {
-    pass("/prompt personality command factory");
+    pass("/personality command factory");
   } else {
-    fail("/prompt personality command factory");
+    fail("/personality command factory");
   }
 
   // ─────────────────────────────────────
@@ -118,8 +118,8 @@ try {
     "reset",
     "help",
     "status",
-    "build",
     "prompt",
+    "personality",
   ];
 
   if (

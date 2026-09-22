@@ -97,10 +97,10 @@ for (const name of ICON_NAMES) {
 }
 
 /** Tabler upstream base URL */
-export const TABLER_BASE_URL = "https://unpkg.com/@tabler/icons@latest/icons/outline";
+export const TABLER_BASE_URL = "https://unpkg.com/@tabler/icons@3.31.0/icons/outline";
 
 /** Tabler upstream revision tracking URL */
-export const TABLER_PACKAGE_URL = "https://unpkg.com/@tabler/icons@latest/package.json";
+export const TABLER_PACKAGE_URL = "https://unpkg.com/@tabler/icons@3.31.0/package.json";
 
 // ---------------------------------------------------------------------------
 // Asset paths

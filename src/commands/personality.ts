@@ -38,7 +38,7 @@ function truncatePreview(text: string, maxLen: number): string {
 export function createPersonalityCommand(): AshenCommand {
   return {
     data: new SlashCommandBuilder()
-      .setName("prompt")
+      .setName("personality")
       .setDescription("Manage AshenAI's custom personality prompt for this server")
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
       .addSubcommand((sub) =>

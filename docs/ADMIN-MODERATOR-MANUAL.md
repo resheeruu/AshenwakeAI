@@ -26,13 +26,13 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 ### AI Commands
 - `/ask <question>` - Ask AshenAI anything. Rate-limited per user.
 - `/reset` - Clear your conversation history with AshenAI.
-- `/prompt <text>` - Set your custom AI personality prompt for this server (Admin+).
+- `/personality <text>` - Set your custom AI personality prompt for this server (Admin+).
 
 ### Server Management Commands
 - `/server info` - View server information and stats.
 - `/server user <user>` - View info about a server member.
 - `/server roles <user>` - List a member's roles.
-- `/build <prompt>` - Open a private Builder session to design, inspect, and manage your server.
+- `/prompt <request>` - AI-powered server builder — describe what you want in natural language.
 
 ### Moderation Commands (Moderator+)
 - `/moderation warn <user> <reason>` - Issue a formal warning to a member.

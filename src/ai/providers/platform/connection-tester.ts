@@ -1,5 +1,4 @@
 import type { TestConnectionResult, DiscoverModelsResult, ProviderProtocol } from "./types";
-import { decryptCredential } from "./credential-store";
 import { logger } from "../../../logger";
 
 const PRIVATE_IP_PATTERNS = [
@@ -214,11 +213,11 @@ async function testOllama(
 export async function testProviderConnection(
   protocol: ProviderProtocol,
   endpoint: string | undefined,
-  apiKeyEncrypted: string | undefined,
+  apiKey: string | undefined,
   timeoutMs: number = 15000,
 ): Promise<TestConnectionResult> {
   const providerName = protocol;
-  const apiKey = apiKeyEncrypted ? decryptCredential(apiKeyEncrypted) : "";
+  const effectiveApiKey = apiKey || "";
 
   if (endpoint && !isSafeEndpoint(endpoint)) {
     return {
@@ -241,17 +240,17 @@ export async function testProviderConnection(
 
   switch (protocol) {
     case "anthropic":
-      result = await testAnthropic(effectiveEndpoint, apiKey, timeoutMs);
+      result = await testAnthropic(effectiveEndpoint, effectiveApiKey, timeoutMs);
       break;
     case "gemini":
-      result = await testGemini(effectiveEndpoint, apiKey, timeoutMs);
+      result = await testGemini(effectiveEndpoint, effectiveApiKey, timeoutMs);
       break;
     case "ollama":
       result = await testOllama(effectiveEndpoint, timeoutMs);
       break;
     case "openai_compatible":
     default:
-      result = await testOpenAICompatible(effectiveEndpoint, apiKey, timeoutMs);
+      result = await testOpenAICompatible(effectiveEndpoint, effectiveApiKey, timeoutMs);
       break;
   }
 
@@ -268,16 +267,15 @@ export async function testProviderConnection(
 export async function discoverModels(
   protocol: ProviderProtocol,
   endpoint: string | undefined,
-  apiKeyEncrypted: string | undefined,
+  apiKey: string | undefined,
   timeoutMs: number = 15000,
 ): Promise<DiscoverModelsResult> {
-  const apiKey = apiKeyEncrypted ? decryptCredential(apiKeyEncrypted) : "";
   const effectiveEndpoint = endpoint || getDefaultEndpoint(protocol);
   if (!effectiveEndpoint) {
     return { success: false, models: [], error: "No endpoint configured" };
   }
 
-  const testResult = await testProviderConnection(protocol, effectiveEndpoint, apiKeyEncrypted, timeoutMs);
+  const testResult = await testProviderConnection(protocol, effectiveEndpoint, apiKey, timeoutMs);
   if (!testResult.success) {
     return { success: false, models: [], error: testResult.error };
   }

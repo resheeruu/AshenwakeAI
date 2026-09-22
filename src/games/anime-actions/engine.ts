@@ -13,6 +13,8 @@ import {
   type ActionDefinition,
 } from "./definitions";
 import { fetchAnimation } from "./providers";
+import { safeMediaFetch } from "./media-security";
+import { animeEmote, type AnimeEmoteName } from "../../discord/anime-emotes";
 import { logger } from "../../logger";
 
 export interface ActionResult {
@@ -54,10 +56,13 @@ export async function executeAction(
     isSelfTarget,
   );
 
-  const animation = await fetchAnimation(action.name);
+  const animation = await fetchAnimation(action.mediaKey);
 
   const outcomeSuffix = outcome ? ` [${outcome}]` : "";
-  const finalText = `${action.emoji} ${text}${outcomeSuffix}`;
+  const emoteStr = action.emoteName
+    ? animeEmote(action.emoteName as AnimeEmoteName)
+    : action.emoji;
+  const finalText = `${emoteStr} ${text}${outcomeSuffix}`;
 
   if (animation) {
     return {
@@ -81,30 +86,22 @@ export async function buildDiscordResponse(
     return { content: result.text };
   }
 
-  try {
-    const response = await fetch(result.animationUrl, {
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) {
-      return { content: result.text };
-    }
-
-    const contentType = response.headers.get("content-type") ?? "";
-    let ext = "gif";
-    if (contentType.includes("webp")) ext = "webp";
-    else if (contentType.includes("png")) ext = "png";
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    const attachment = new AttachmentBuilder(buffer, {
-      name: `anime.${ext}`,
-    });
-
-    return {
-      content: result.text,
-      files: [attachment],
-    };
-  } catch (error) {
-    logger.debug(`Failed to download animation: ${error instanceof Error ? error.message : String(error)}`);
+  const media = await safeMediaFetch(result.animationUrl);
+  if (!media) {
     return { content: result.text };
   }
+
+  let ext = "gif";
+  if (media.contentType.includes("webp")) ext = "webp";
+  else if (media.contentType.includes("png")) ext = "png";
+  else if (media.contentType.includes("jpeg")) ext = "jpg";
+
+  const attachment = new AttachmentBuilder(media.buffer, {
+    name: `anime.${ext}`,
+  });
+
+  return {
+    content: result.text,
+    files: [attachment],
+  };
 }

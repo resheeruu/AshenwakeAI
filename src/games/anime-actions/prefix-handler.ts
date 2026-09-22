@@ -3,39 +3,123 @@
  *
  * Parses "ash <action> @user" messages and dispatches to the
  * action engine. Integrates with the existing MessageCreate handler.
+ * Supports: explicit mentions, reply-based targeting, raw IDs.
  * ================================================================ */
 
 import type { Message, Client } from "discord.js";
 import { UserRateLimiter } from "../../security/rate-limit";
 import { logger } from "../../logger";
-import { getAction, getAllActions, getActionsByCategory } from "./definitions";
+import { getAction, getAllActions, getActionsByCategory, type ActionCategory } from "./definitions";
 import { executeAction, buildDiscordResponse } from "./engine";
+import { animeEmote, type AnimeEmoteName } from "../../discord/anime-emotes";
 
 const PREFIX = "ash ";
 const actionRateLimiter = new UserRateLimiter(15, 60_000);
 
 /* ================================================================
- * HELP TEXT
+ * PER-ACTION COOLDOWN TRACKING
  * ================================================================ */
 
+const actionCooldowns = new Map<string, number>();
+
+function checkCooldown(userId: string, actionName: string, cooldownMs: number): { allowed: boolean; retryAfterMs?: number } {
+  const key = `${userId}:${actionName}`;
+  const lastUsed = actionCooldowns.get(key) ?? 0;
+  const now = Date.now();
+  const elapsed = now - lastUsed;
+  if (elapsed < cooldownMs) {
+    return { allowed: false, retryAfterMs: cooldownMs - elapsed };
+  }
+  actionCooldowns.set(key, now);
+  return { allowed: true };
+}
+
+const COOLDOWN_CLEANUP_INTERVAL = 5 * 60 * 1000;
+const COOLDOWN_MAX_AGE = 60 * 60 * 1000;
+const cooldownCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of actionCooldowns) {
+    if (now - timestamp > COOLDOWN_MAX_AGE) {
+      actionCooldowns.delete(key);
+    }
+  }
+}, COOLDOWN_CLEANUP_INTERVAL);
+cooldownCleanupTimer.unref();
+
+/* ================================================================
+ * HELP TEXT — dynamically derived from registry
+ * ================================================================ */
+
+const CATEGORY_META: Record<ActionCategory, { emoji: string; label: string }> = {
+  affection: { emoji: "[affection]", label: "AFFECTION" },
+  combat: { emoji: "[combat]", label: "COMBAT" },
+  fun: { emoji: "[fun]", label: "FUN" },
+};
+
 function buildActionsHelp(): string {
-  const lines: string[] = [
-    "**ANIME ACTIONS**",
-    "",
-    "\u{1F497} **AFFECTION**",
-    "`hug` \u2022 `cuddle` \u2022 `pat` \u2022 `headpat` \u2022 `kiss`",
-    "",
-    "\u{1F94A} **COMBAT**",
-    "`punch` \u2022 `kick` \u2022 `slap` \u2022 `bonk` \u2022 `bite`",
-    "",
-    "\u2728 **FUN**",
-    "`poke` \u2022 `wave` \u2022 `highfive` \u2022 `yeet`",
-    "",
-    "**Usage:** `ash <action> @user` or `ash <action>`",
-    "**Aliases:** `ash h @user` (hug), `ash pu @user` (punch), `ash hp @user` (headpat)",
-    "**Special:** `ash actions` to see all actions",
-  ];
+  const lines: string[] = ["**ANIME ACTIONS**", ""];
+
+  for (const category of ["affection", "combat", "fun"] as ActionCategory[]) {
+    const meta = CATEGORY_META[category];
+    const actions = getActionsByCategory(category);
+    const names = actions.map((a) => `\`${a.name}\``).join(" \u2022 ");
+    lines.push(`**${meta.label}**`);
+    lines.push(names);
+    lines.push("");
+  }
+
+  lines.push("**Usage:**");
+  lines.push("  `ash <action> @user` — target a mentioned user");
+  lines.push("  `ash <action>` — self-target (for actions that support it)");
+  lines.push("  Reply to a message with `ash <action>` to target that user");
+  lines.push("");
+  lines.push("**Examples:**");
+  lines.push("  `ash hug @friend` \u2022 `ash punch @rival` \u2022 `ash dance`");
+  lines.push("  `ash cry` \u2022 `ash blush` \u2022 `ash celebrate`");
+  lines.push("");
+  lines.push("**Aliases:** `h`=hug, `pu`=punch, `hp`=headpat, `sl`=slap, `hf`=highfive");
+
   return lines.join("\n");
+}
+
+/* ================================================================
+ * TARGET RESOLUTION
+ * ================================================================ */
+
+function resolveTarget(
+  message: Message,
+  parts: string[],
+): string | null {
+  // 1. Explicit Discord mention
+  if (message.mentions.users.size > 0) {
+    const mentioned = message.mentions.users.first();
+    if (mentioned) return mentioned.id;
+  }
+
+  // 2. Reply-based targeting
+  if (message.reference?.messageId) {
+    try {
+      const repliedTo = message.channel.messages.cache.get(message.reference.messageId);
+      if (repliedTo && repliedTo.author.id !== message.author.id) {
+        return repliedTo.author.id;
+      }
+    } catch {
+      // Ignore cache miss
+    }
+  }
+
+  // 3. Raw Discord user ID (safe validation)
+  if (parts[1]) {
+    const idMatch = parts[1].match(/^<?@?!?(\d{17,20})>?$/);
+    if (idMatch) {
+      return idMatch[1];
+    }
+    if (/^\d{17,20}$/.test(parts[1])) {
+      return parts[1];
+    }
+  }
+
+  return null;
 }
 
 /* ================================================================
@@ -89,24 +173,27 @@ export async function handleAnimeAction(
     return true;
   }
 
-  const botId = client.user?.id ?? "";
-  let targetId: string | null = null;
-
-  if (message.mentions.users.size > 0) {
-    const mentioned = message.mentions.users.first();
-    if (mentioned) targetId = mentioned.id;
-  } else if (parts[1]) {
-    const idMatch = parts[1].match(/^<?@?!?(\d{17,20})>?$/);
-    if (idMatch) {
-      targetId = idMatch[1];
-    } else if (/^\d{17,20}$/.test(parts[1])) {
-      targetId = parts[1];
-    }
+  const cooldown = checkCooldown(message.author.id, action.name, action.cooldownMs);
+  if (!cooldown.allowed) {
+    const retrySeconds = Math.ceil((cooldown.retryAfterMs ?? 1000) / 1000);
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
+    await message.reply(
+      `${emoteStr} \`${action.name}\` is on cooldown. Try again in ${retrySeconds}s.`
+    ).catch(() => {});
+    return true;
   }
 
+  const botId = client.user?.id ?? "";
+  let targetId = resolveTarget(message, parts);
+
   if (action.targetRequired && !targetId) {
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
     await message.reply(
-      `${action.emoji} Who should ${actionName}? Usage: \`ash ${actionName} @user\``
+      `${emoteStr} Who should ${actionName}? Usage: \`ash ${actionName} @user\``
     ).catch(() => {});
     return true;
   }
@@ -116,15 +203,21 @@ export async function handleAnimeAction(
   }
 
   if (targetId === message.author.id && !action.selfTargetAllowed) {
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
     await message.reply(
-      `${action.emoji} You can't use \`${actionName}\` on yourself!`
+      `${emoteStr} You can't use \`${actionName}\` on yourself!`
     ).catch(() => {});
     return true;
   }
 
   if (targetId === botId && !action.botTargetAllowed) {
+    const emoteStr = action.emoteName
+      ? animeEmote(action.emoteName as AnimeEmoteName)
+      : action.emoji;
     await message.reply(
-      `${action.emoji} AshenAI refuses to be a target for that!`
+      `${emoteStr} AshenAI refuses to be a target for that!`
     ).catch(() => {});
     return true;
   }

@@ -132,9 +132,9 @@ function runSuite(suite: TestSuite): boolean {
     return true;
   } catch (error: any) {
     const duration = Date.now() - start;
-    const stderr = error.stderr?.toString() || "";
-    const stdout = error.stdout?.toString() || "";
-    const output = stderr || stdout;
+    const stderr = error.stderr?.toString() ?? "";
+    const stdout = error.stdout?.toString() ?? "";
+    const output = [stdout, stderr].filter(Boolean).join("\n");
 
     // Extract pass/fail counts from output
     const passMatch = output.match(/(?:Passed|passed):\s*(\d+)/) || output.match(/(\d+)\s+passed/);
@@ -143,9 +143,9 @@ function runSuite(suite: TestSuite): boolean {
     const failCount = failMatch ? parseInt(failMatch[1]) : 0;
 
     console.log(`  ❌ FAIL: ${suite.name} (${duration}ms) — ${failCount} failures`);
-    if (failCount > 0) {
+    if (failCount > 0 || failMatch === null) {
       // Show last few lines of output for context
-      const lines = output.split("\n").filter(l => l.trim()).slice(-5);
+      const lines = output.split("\n").filter(l => l.trim()).slice(-10);
       for (const line of lines) {
         console.log(`     ${line}`);
       }
