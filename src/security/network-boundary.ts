@@ -288,4 +288,3 @@ export function validateRedirectTarget(
   }
   return { valid: true, url: resolved.toString() };
 }
-
