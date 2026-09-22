@@ -406,7 +406,7 @@ function classify(reports: PathReport[], probeMB: number): string[] {
   if (anyTmpfs.length > 0) {
     lines.push(
       `NOTE: tmpfs-backed paths detected (${anyTmpfs.map((r) => r.mountPoint ?? r.resolved).join(", ")}). ` +
-        `Playwright/npm temp extraction can use /tmp; a small tmpfs yields ENOSPC despite large disk free space.`,
+        `npm temp extraction can use /tmp; a small tmpfs yields ENOSPC despite large disk free space.`,
     );
   }
   if (anyOverlay.length > 0) {
@@ -417,7 +417,7 @@ function classify(reports: PathReport[], probeMB: number): string[] {
   if (anyUnwritable.length > 0) {
     lines.push(
       `NOTE: not writable by this process: ${anyUnwritable.map((r) => r.resolved).join(", ")}. ` +
-        `Playwright may fall back elsewhere; EACCES/EROFS is distinct from ENOSPC.`,
+        `processes may fall back elsewhere; EACCES/EROFS is distinct from ENOSPC.`,
     );
   }
 
@@ -446,15 +446,12 @@ function main(): void {
   }
 
   const appDir = process.cwd();
-  const browsersPath =
-    const npmCachePath = npmCache || path.join(os.homedir(), ".npm");
   const npmCache =
     sh("npm config get cache") || process.env.npm_config_cache || path.join(os.homedir(), ".npm");
   const tmpDir = process.env.TMPDIR || os.tmpdir() || "/tmp";
 
   const targets: Array<[string, string]> = [
     ["app runtime data (cwd)", appDir],
-    ["Playwright browser cache", browsersPath],
     ["npm cache", npmCache],
     ["TMPDIR temp downloads", tmpDir],
     ["/tmp (system temp)", "/tmp"],

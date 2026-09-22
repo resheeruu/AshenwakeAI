@@ -2,7 +2,7 @@
   "name": "ashenai",
   "version": "1.0.0",
   "description": "AshenAI Discord AI assistant",
-  "main": "index.js",
+  "main": "dist/index.js",
   "bin": {
     "ashen": "dist/cli.js"
   },

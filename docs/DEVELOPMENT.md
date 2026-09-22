@@ -30,7 +30,6 @@ output equals the hosting account quota:
 ```bash
 npm run diagnose:disk                  # read-only path inventory (no writes)
 npm run diagnose:disk -- --probe=220   # bounded 220 MB write probe per path
-npm run diagnose:playwright            # Playwright availability + per-path storage
 ```
 
 These distinguish physical device storage, host machine storage,

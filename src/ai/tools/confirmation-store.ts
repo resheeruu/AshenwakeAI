@@ -78,7 +78,7 @@ export function verifyPlan(
   if (channelId && plan.channelId && plan.channelId !== channelId) {
     return { valid: false, reason: "CONFIRMATION_INVALID" };
   }
-  // Session binding: for browser operations, session must match
+  // Session binding: session must match
   if (sessionId && plan.sessionId && plan.sessionId !== sessionId) {
     return { valid: false, reason: "CONFIRMATION_INVALID" };
   }

@@ -72,13 +72,7 @@ async function main(): Promise<void> {
     assert(false, `tool registry: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // 5. Browser tools removed (Playwright/Chromium removed from production)
-  console.log("\n━━━ Browser Tools ━━━");
-  // Browser tools have been removed from the production architecture.
-  // Web retrieval now uses lightweight HTTP only.
-  assert(true, "Browser tools removed (Playwright/Chromium removed from production architecture)");
-
-  // 6. AI router initializes
+  // 5. AI router initializes
   console.log("\n━━━ AI Router ━━━");
   try {
     const { providers } = await import("../src/ai/providers");
@@ -111,13 +105,7 @@ async function main(): Promise<void> {
     assert(false, `web pipeline: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // 9. Browser capability detection (removed)
-  console.log("\n━━━ Browser Capability Detection ━━━");
-  // Browser/Chromium/Playwright removed from production architecture.
-  // Web retrieval uses lightweight HTTP only.
-  assert(true, "Browser capability detection removed (Playwright/Chromium removed from production)");
-
-  // 10. Audit system initializes
+  // 8. Audit system initializes
   console.log("\n━━━ Audit System ━━━");
   try {
     const { recordAudit } = await import("../src/security/audit");

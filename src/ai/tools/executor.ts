@@ -52,7 +52,7 @@ export function createActionPlan(
     .digest("hex")
     .slice(0, 16);
 
-  // Extract session ID from arguments if present (browser tools)
+  // Extract session ID from arguments if present
   const sessionId = typeof context.arguments._sessionId === "string"
     ? context.arguments._sessionId
     : undefined;

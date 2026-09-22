@@ -393,10 +393,10 @@ test("advisor with MIGRATE_FROM (live)", "LIVE VERIFIED", () => {
   assert.ok(out.includes("Migration: termux -> docker"));
 });
 
-test("Dockerfile: start.sh CMD, node:22, FFmpeg, no .env, no Java", "LIVE VERIFIED", () => {
+test("Dockerfile: start.sh CMD, node:22, no .env, no Java, no FFmpeg", "LIVE VERIFIED", () => {
   const c = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
-  assert.ok(c.includes('scripts/start.sh')); assert.ok(c.includes("node:22-slim"));
-  assert.ok(c.includes("ffmpeg"));
+  assert.ok(c.includes("scripts/start.sh"));
+  assert.ok(!c.includes("ffmpeg"));
   assert.ok(!c.includes("COPY .env"));
   assert.ok(!c.includes("temurin") && !c.includes("openjdk"), "Must not install Java");
 });

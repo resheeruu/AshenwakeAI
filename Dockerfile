@@ -1,10 +1,5 @@
 FROM node:22-slim
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      curl ca-certificates ffmpeg && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -16,6 +11,6 @@ COPY scripts/ scripts/
 
 RUN npm run build
 
-EXPOSE ${PORT:-3000}
+EXPOSE ${PORT}
 
 CMD ["bash", "scripts/start.sh"]

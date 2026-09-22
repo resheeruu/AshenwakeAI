@@ -561,9 +561,10 @@ test("start.sh does not contain render-specific logic in core path", () => {
 // ============================================================
 console.log("\n===== PHASE 8: LOCAL HOSTING LIVE TEST =====");
 
-test("start.sh logs correct PORT variable", () => {
+test("start.sh requires PORT environment variable", () => {
   const content = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(content.includes("PORT=\"${PORT:-3000}\""), "Must default PORT to 3000");
+  assert.ok(content.includes('if [ -z "${PORT:-}" ]'), "Must check PORT is set");
+  assert.ok(content.includes('ERROR: PORT environment variable is required'), "Must error if PORT not set");
 });
 
 test("web server binds to 0.0.0.0 (not localhost)", () => {
@@ -640,10 +641,10 @@ if (dockerAvailable) {
     assert.ok(content.includes('scripts/start.sh'), "CMD must use start.sh");
     assert.ok(!content.includes('render-start.sh'), "Must not use render-start.sh in CMD");
   });
-  test("Dockerfile installs FFmpeg", () => {
-    const content = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
-    assert.ok(content.includes('ffmpeg'), "Must install FFmpeg");
-  });
+  test("Dockerfile does not install FFmpeg (not used by application)", () => {
+      const content = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+      assert.ok(!content.includes("ffmpeg"), "Must not install FFmpeg");
+    });
   test("Dockerfile is Node-only (no Java)", () => {
     const content = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
     assert.ok(!content.includes('temurin') && !content.includes('openjdk'), "Must not install Java");

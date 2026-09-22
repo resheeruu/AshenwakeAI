@@ -134,7 +134,7 @@ export interface ActionPlan {
   requiresConfirmation: boolean;
   createdAt: number;
   expiresAt: number;
-  /** Session identifier for browser operations — binds confirmation to exact session */
+  /** Session identifier — binds confirmation to exact session */
   sessionId?: string;
   /** SHA-256 hash of the serialized arguments for tamper detection */
   argumentsHash?: string;

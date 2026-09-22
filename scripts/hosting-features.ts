@@ -65,14 +65,14 @@ export function getMigrationSteps(from: string, to: string): MigrationStep[] {
     steps.push({ category: "storage", description: "Fly volumes for data/", effort: "medium" });
   }
   if (from === "render" && to === "generic-vps") {
-    steps.push({ category: "deployment", description: "Install Node.js 22+, FFmpeg", effort: "medium" });
+    steps.push({ category: "deployment", description: "Install Node.js 22+", effort: "medium" });
     steps.push({ category: "process", description: "Use systemd or pm2", effort: "medium" });
   }
   if (from === "termux" && to === "docker") {
     steps.push({ category: "deployment", description: "Docker bundles everything", effort: "low" });
   }
   if (from === "docker" && to === "generic-vps") {
-    steps.push({ category: "deployment", description: "Install Node.js 22+, FFmpeg", effort: "medium" });
+    steps.push({ category: "deployment", description: "Install Node.js 22+", effort: "medium" });
     steps.push({ category: "process", description: "Use systemd", effort: "medium" });
   }
   if (from !== to) {
@@ -91,10 +91,10 @@ export function validateDeploymentConfig(): Array<{ severity: "error" | "warning
   if (process.env.NODE_ENV === "production") {
     issues.push(has("SESSION_SECRET") ? { severity: "info", name: "SESSION_SECRET", status: "present", message: "OK" } : { severity: "error", name: "SESSION_SECRET", status: "missing", message: "Required in production" });
   }
-  for (const [name, msg] of [["PORT", "Defaults to 3000"], ["AUTH_BASE_URL", "OAuth/password reset"]] as const) {
+  for (const [name, msg] of [["PORT", "Required in production"], ["AUTH_BASE_URL", "OAuth/password reset"]] as const) {
     issues.push(has(name) ? { severity: "info", name, status: "present", message: "OK" } : { severity: "warning", name, status: "not set", message: msg });
   }
-  const port = parseInt(process.env.PORT || "3000", 10);
+  const port = parseInt(process.env.PORT || "", 10);
   if (isNaN(port) || port < 1 || port > 65535) issues.push({ severity: "error", name: "PORT", status: "malformed", message: `Invalid: ${process.env.PORT}` });
   if (has("DISCORD_OAUTH_CLIENT_ID") && !has("DISCORD_CLIENT_SECRET")) issues.push({ severity: "warning", name: "DISCORD_CLIENT_SECRET", status: "missing", message: "OAuth configured but secret missing" });
   return issues;
