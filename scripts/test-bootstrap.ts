@@ -147,11 +147,16 @@ check(".env.example documents SESSION_SECRET as auto-generated", () => {
   );
 });
 
-check(".env.example documents owner credentials as auto-generated", () => {
-  const content = fs.readFileSync(ENV_EXAMPLE, "utf-8");
+check("ensureOwnerAccount does not generate a lost password", () => {
+  const setupContent = fs.readFileSync(path.join(ROOT, "scripts", "setup.ts"), "utf-8");
+  //ensureOwnerAccount must not generate a random password that the user cannot recover
   assert.ok(
-    content.includes("Auto-generated") || content.includes("auto-generated") || content.includes("npm run setup"),
-    ".env.example should indicate owner credentials are auto-generated"
+    !setupContent.includes("generateSecret(16)") || !setupContent.includes(".slice(0, 16)"),
+    "ensureOwnerAccount must not generate a random password via generateSecret+slice"
+  );
+  assert.ok(
+    !setupContent.includes("generatedPassword") || setupContent.includes("return {}"),
+    "ensureOwnerAccount must not return a generatedPassword, or must return {} when no owner exists"
   );
 });
 
@@ -187,12 +192,12 @@ check("setup.ts never logs secret values", () => {
   assert.ok(!setupContent.includes("console.log(password)"), "Must not log password directly");
 });
 
-check("setup.ts generates password but logs it clearly as temporary", () => {
+check("setup.ts does not log plaintext passwords", () => {
   const setupContent = fs.readFileSync(path.join(ROOT, "scripts", "setup.ts"), "utf-8");
-  // The generated password should be logged with a save warning
+  // Never log plaintext passwords or generated secrets
   assert.ok(
-    setupContent.includes("Save this password") || setupContent.includes("cannot be recovered"),
-    "setup.ts must warn about saving the generated password"
+    !setupContent.includes("console.log(password)") && !setupContent.includes("console.log(credential)") && !setupContent.includes("console.log(secret)"),
+    "setup.ts must not log plaintext passwords or secrets"
   );
 });
 

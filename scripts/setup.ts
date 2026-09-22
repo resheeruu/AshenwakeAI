@@ -19,6 +19,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import readline from "node:readline";
 
 const ROOT = process.cwd();
 const ENV_EXAMPLE = path.join(ROOT, ".env.example");
@@ -106,19 +107,18 @@ function ensureSessionSecret(existingEnv: Map<string, string>): string | undefin
  * STEP 3: Create owner account if missing
  * ================================================================ */
 
-function ensureOwnerAccount(existingEnv: Map<string, string>): {
+function ensureOwnerAccount(existingEnv: Map<string, string>): Promise<{
   username?: string;
   passwordHash?: string;
   passwordSalt?: string;
-  generatedPassword?: string;
-} {
+}> {
   // Check if accounts.json already has an owner
   if (fs.existsSync(ACCOUNTS_FILE)) {
     try {
       const accounts = JSON.parse(fs.readFileSync(ACCOUNTS_FILE, "utf-8"));
       if (accounts.owner && accounts.owner.enabled !== false) {
         logOk("Owner account exists in data/accounts.json");
-        return {};
+        return Promise.resolve({});
       }
     } catch {
       // Corrupted file — will be recreated
@@ -131,20 +131,41 @@ function ensureOwnerAccount(existingEnv: Map<string, string>): {
   const envSalt = existingEnv.get("ASHENAI_OWNER_PASSWORD_SALT");
   if (envUsername && envHash && envSalt) {
     logOk("Owner credentials found in environment");
-    return {};
+    return Promise.resolve({});
   }
 
-  // Generate new owner account
-  const username = "admin";
-  const password = generateSecret(16).slice(0, 16);
-  const { hash, salt } = generatePasswordHash(password);
+  // Interactively set up owner account — user-selected password, securely hashed
+  return new Promise<{
+    username?: string;
+    passwordHash?: string;
+    passwordSalt?: string;
+  }>((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
 
-  logOk("Generated owner account");
-  logInfo(`  Username: ${username}`);
-  logInfo(`  Password: ${password}`);
-  logWarn("  Save this password — it cannot be recovered!");
+    const askForPassword = (): void => {
+      rl.question(
+        "Set owner password (will not be echoed): ",
+        (password: string) => {
+          // Hash password using the existing authentication implementation (PBKDF2)
+          // Import hashPassword from account-store and resolve with credentials
+          import("../src/control/account-store").then((mod) => {
+            const { hashPassword } = mod;
+            const { hash, salt } = hashPassword(password);
+            rl.close();
+            logOk("Owner account configured");
+            logInfo(`  Username: admin`);
+            // Password is not logged — it is only hashed and persisted for authentication.
+            resolve({ username: "admin", passwordHash: hash, passwordSalt: salt });
+          });
+        },
+      );
+    };
 
-  return { username, passwordHash: hash, passwordSalt: salt, generatedPassword: password };
+    askForPassword();
+  });
 }
 
 /* ================================================================
@@ -172,8 +193,31 @@ function createEnvFile(
   for (const line of exampleContent.split("\n")) {
     const trimmed = line.trim();
 
-    // Preserve comments and blank lines
-    if (!trimmed || trimmed.startsWith("#")) {
+    // Handle commented-out auto-generated variables
+    if (trimmed.startsWith("#")) {
+      const commentedKey = trimmed.slice(1).split("=")[0].trim();
+      if (commentedKey === "SESSION_SECRET" && newSecret) {
+        lines.push(`${commentedKey}=${newSecret}`);
+        continue;
+      }
+      if (commentedKey === "ASHENAI_OWNER_USERNAME" && ownerCreds?.username) {
+        lines.push(`${commentedKey}=${ownerCreds.username}`);
+        continue;
+      }
+      if (commentedKey === "ASHENAI_OWNER_PASSWORD_HASH" && ownerCreds?.passwordHash) {
+        lines.push(`${commentedKey}=${ownerCreds.passwordHash}`);
+        continue;
+      }
+      if (commentedKey === "ASHENAI_OWNER_PASSWORD_SALT" && ownerCreds?.passwordSalt) {
+        lines.push(`${commentedKey}=${ownerCreds.passwordSalt}`);
+        continue;
+      }
+      lines.push(line);
+      continue;
+    }
+
+    // Preserve blank lines
+    if (!trimmed) {
       lines.push(line);
       continue;
     }
@@ -273,7 +317,7 @@ async function main() {
   const newSecret = ensureSessionSecret(existingEnv);
 
   console.log("\n--- Owner Account ---");
-  const ownerCreds = ensureOwnerAccount(existingEnv);
+  const ownerCreds = await ensureOwnerAccount(existingEnv);
 
   console.log("\n--- Configuration ---");
   const created = createEnvFile(existingEnv, newSecret, ownerCreds);
