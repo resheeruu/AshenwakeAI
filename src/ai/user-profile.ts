@@ -33,12 +33,16 @@ export class UserProfileMemory {
   private readonly profiles = new Map<string, UserProfile>();
   private dirty = false;
   private saveTimer: ReturnType<typeof setInterval> | null = null;
+  private pruneTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.load();
     // Batch saves: write at most once per 60s instead of on every upsert
     this.saveTimer = setInterval(() => this.flush(), 60_000);
     this.saveTimer.unref();
+    // Daily stale pruning (runs once per 24h)
+    this.pruneTimer = setInterval(() => this.pruneStale(), 24 * 60 * 60 * 1000);
+    this.pruneTimer.unref();
   }
 
   private load(): void {

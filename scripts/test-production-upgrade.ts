@@ -391,22 +391,19 @@ try {
     "utf8"
   );
 
-  if (!serverContent.includes("discordHealth")) {
-    throw new Error("health endpoint missing discordHealth");
+  if (!serverContent.includes("discord:")) {
+    throw new Error("health endpoint missing discord field");
   }
-  if (!serverContent.includes("updateStatus")) {
-    throw new Error("health endpoint missing updateStatus");
+  if (!serverContent.includes("providers:")) {
+    throw new Error("health endpoint missing providers field");
   }
-  if (!serverContent.includes("reconnectCount")) {
-    throw new Error("health endpoint missing reconnectCount");
-  }
-  if (!serverContent.includes("gatewayLatency")) {
-    throw new Error("health endpoint missing gatewayLatency");
+  if (!serverContent.includes("ok, name: \"AshenAI\"")) {
+    throw new Error("health endpoint missing ok/name fields");
   }
 
-  pass("health endpoint: includes Discord and update fields");
+  pass("health endpoint: sanitized response with discord/providers/ok fields");
 } catch (e) {
-  fail("health endpoint: includes Discord and update fields", e);
+  fail("health endpoint: sanitized response with discord/providers/ok fields", e);
 }
 
 /* ================================================================

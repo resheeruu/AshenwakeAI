@@ -2331,6 +2331,13 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 
   try {
+    userProfiles.flush();
+    logger.info("👤 User profiles flushed.");
+  } catch {
+    // Best effort
+  }
+
+  try {
     closeDatabase();
     logger.info("📦 Database closed.");
   } catch {
@@ -2340,6 +2347,17 @@ async function gracefulShutdown(signal: string): Promise<void> {
   try {
     client.destroy();
     logger.info("🔌 Discord disconnected.");
+  } catch {
+    // Best effort
+  }
+
+  try {
+    const { getHttpServer } = await import("./web/server");
+    const srv = getHttpServer();
+    if (srv) {
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+      logger.info("🌐 HTTP server closed.");
+    }
   } catch {
     // Best effort
   }
