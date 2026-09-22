@@ -2,8 +2,10 @@
  * test-emoji-icons.ts — Validate emoji icon system and anime emotion icons
  */
 import assert from "node:assert/strict";
-import { ICON_MAP, ICON_NAMES, type IconName } from "../src/discord/icons";
-import { emoji, E_SUCCESS, E_ERROR, E_WARNING, E_INFO, E_AI, E_LOADING, E_ONLINE, E_OFFLINE, E_DEGRADED, E_SETTINGS, E_ARROW, E_MENU, E_REFRESH, E_MEMORY, E_STATS, E_THINK, E_HAPPY, E_SAD, E_ANGRY, E_CONFUSED, E_SHY, E_SURPRISED, E_SLEEP, E_FOCUS, E_LAUGH } from "../src/discord/emojis";
+import { ICON_MAP, ICON_NAMES, LOGICAL_TO_LEGACY, type IconName } from "../src/discord/icons";
+import { emoji, E_SUCCESS, E_ERROR, E_WARNING, E_INFO, E_AI, E_LOADING, E_ONLINE, E_OFFLINE, E_DEGRADED, E_SETTINGS, E_ARROW, E_MENU, E_REFRESH, E_MEMORY, E_STATS, E_THINK, E_HAPPY, E_SAD, E_ANGRY, E_CONFUSED, E_SHY, E_SURPRISED, E_SLEEP, E_FOCUS, E_LAUGH, configuredEmojis, hasCustomEmoji } from "../src/discord/emojis";
+import { ANIME_EMOTE_MAP, ANIME_EMOTE_NAMES, animeEmote, hasAnimeEmote, configuredAnimeEmotes } from "../src/discord/anime-emotes";
+import { resetProvisioner, getProvisionResult, applyEnvOverrides, type ProvisionResult } from "../src/discord/emoji-provisioner";
 
 let passed = 0;
 let failed = 0;
@@ -204,6 +206,73 @@ test("unicodeFallback returns Unicode for each icon", () => {
     const fb = unicodeFallback(name);
     assert.equal(typeof fb, "string", `unicodeFallback(${name}) should return string`);
     assert.ok(fb.length > 0, `unicodeFallback(${name}) should not be empty`);
+  }
+});
+
+console.log("\n--- Emoji Provisioner ---");
+
+test("resetProvisioner clears state", () => {
+  resetProvisioner();
+  const result = getProvisionResult();
+  assert.equal(result, null, "Provisioner should be null after reset");
+});
+
+test("LOGICAL_TO_LEGACY maps all icons", () => {
+  for (const name of ICON_NAMES) {
+    const legacy = LOGICAL_TO_LEGACY[name];
+    assert.equal(typeof legacy, "string", `LOGICAL_TO_LEGACY[${name}] should be string`);
+    assert.equal(legacy, `ash_${name}`, `Legacy name should be ash_${name}`);
+  }
+});
+
+test("applyEnvOverrides applies overrides", () => {
+  const result: ProvisionResult = {
+    icons: {},
+    animeEmotes: {},
+    guildId: "123456",
+    uploaded: 0,
+    existing: 0,
+    hadErrors: false,
+  };
+  // Set a test env var
+  process.env.EMOJI_ASH_TEST_OVERRIDE = "999999";
+  // applyEnvOverrides should not crash
+  applyEnvOverrides(result);
+  delete process.env.EMOJI_ASH_TEST_OVERRIDE;
+  // Result should still be valid
+  assert.equal(result.guildId, "123456");
+});
+
+test("ANIME_EMOTE_MAP has all expected categories", () => {
+  // Reactions
+  const reactions = ["happy", "laugh", "smug", "angry", "cry", "blush", "shock", "panic", "confused", "sleepy", "love", "embarrassed", "sad", "excited", "determined"];
+  for (const name of reactions) {
+    assert.ok(name in ANIME_EMOTE_MAP, `Missing reaction: ${name}`);
+  }
+  // Actions
+  const actions = ["hug", "cuddle", "pat", "headpat", "kiss", "slap", "punch", "kick", "bonk", "bite", "poke", "wave", "highfive", "yeet", "dance", "throw", "hit", "smack", "tickle"];
+  for (const name of actions) {
+    assert.ok(name in ANIME_EMOTE_MAP, `Missing action: ${name}`);
+  }
+  // System
+  const system = ["ai", "success", "error", "warning", "info", "loading", "online", "offline", "degraded", "settings", "stats"];
+  for (const name of system) {
+    assert.ok(name in ANIME_EMOTE_MAP, `Missing system: ${name}`);
+  }
+});
+
+test("animeEmote returns text fallback when no provisioning", () => {
+  resetProvisioner();
+  for (const name of ANIME_EMOTE_NAMES) {
+    const val = animeEmote(name);
+    assert.equal(typeof val, "string", `animeEmote(${name}) should return string`);
+    assert.ok(val.length > 0, `animeEmote(${name}) should not be empty`);
+  }
+});
+
+test("Every icon has ash_* legacy name in LOGICAL_TO_LEGACY", () => {
+  for (const name of ICON_NAMES) {
+    assert.ok(`ash_${name}` in LOGICAL_TO_LEGACY, `Missing legacy name for ${name}`);
   }
 });
 

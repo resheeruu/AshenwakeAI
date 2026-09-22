@@ -46,6 +46,7 @@ import {
 } from "./discord/conversational-agent";
 import { closeDatabase, getDatabaseStats } from "./database";
 import { isAnimeActionPrefix, handleAnimeAction } from "./games/anime-actions";
+import { provisionEmojis } from "./discord/emoji-provisioner";
 
 import { providers } from "./ai/providers";
 import { AIRouter } from "./ai/router";
@@ -404,6 +405,22 @@ client.once(
     logger.info(
       `✅ Logged in as ${readyClient.user.tag}`
     );
+
+    // Auto-provision custom emojis (upload missing, discover existing)
+    // Non-fatal: bot runs with fallbacks if this fails
+    try {
+      const guild = readyClient.guilds.cache.first();
+      if (guild) {
+        const result = await provisionEmojis(guild);
+        logger.info(
+          `🎨 Emoji provisioning: ${result.existing} existing, ${result.uploaded} uploaded`
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        `Emoji provisioning failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
 
     try {
       /*
