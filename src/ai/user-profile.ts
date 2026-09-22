@@ -26,12 +26,19 @@ type StoredProfiles = Record<string, UserProfile>;
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const PROFILE_FILE = path.join(DATA_DIR, "user-profiles.json");
+const MAX_PROFILES = 10_000;
+const STALE_DAYS = 90;
 
 export class UserProfileMemory {
   private readonly profiles = new Map<string, UserProfile>();
+  private dirty = false;
+  private saveTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.load();
+    // Batch saves: write at most once per 60s instead of on every upsert
+    this.saveTimer = setInterval(() => this.flush(), 60_000);
+    this.saveTimer.unref();
   }
 
   private load(): void {
@@ -58,6 +65,9 @@ export class UserProfileMemory {
         this.profiles.set(userId, profile);
       }
 
+      // Prune stale profiles on load
+      this.pruneStale();
+
       logger.info(
         `👤 User profiles loaded: ${this.profiles.size} profile(s).`,
       );
@@ -69,7 +79,28 @@ export class UserProfileMemory {
     }
   }
 
+  private pruneStale(): void {
+    const cutoff = Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000;
+    let pruned = 0;
+    for (const [userId, profile] of this.profiles) {
+      if (profile.lastSeen < cutoff) {
+        this.profiles.delete(userId);
+        pruned++;
+      }
+    }
+    if (pruned > 0) {
+      logger.info(`👤 Pruned ${pruned} stale user profiles (>${STALE_DAYS} days inactive).`);
+      this.dirty = true;
+    }
+  }
+
   private save(): void {
+    this.dirty = true;
+  }
+
+  flush(): void {
+    if (!this.dirty) return;
+    this.dirty = false;
     try {
       fs.mkdirSync(DATA_DIR, {
         recursive: true,
@@ -108,6 +139,19 @@ export class UserProfileMemory {
   ): UserProfile {
     const existing = this.profiles.get(userId);
     const now = Date.now();
+
+    // Evict oldest profile if at capacity
+    if (!existing && this.profiles.size >= MAX_PROFILES) {
+      let oldestKey = "";
+      let oldestSeen = Infinity;
+      for (const [key, p] of this.profiles) {
+        if (p.lastSeen < oldestSeen) {
+          oldestSeen = p.lastSeen;
+          oldestKey = key;
+        }
+      }
+      if (oldestKey) this.profiles.delete(oldestKey);
+    }
 
     const profile: UserProfile = {
       userId,

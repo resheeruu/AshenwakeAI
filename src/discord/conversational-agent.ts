@@ -195,6 +195,7 @@ export interface ConversationState {
 
 const conversationStates = new Map<string, ConversationState>();
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_CONVERSATION_STATES = 5_000;
 
 function getStateKey(userId: string, guildId: string): string {
   return `${userId}:${guildId}`;
@@ -205,6 +206,19 @@ function getOrCreateState(userId: string, guildId: string, channelId: string): C
   let state = conversationStates.get(key);
 
   if (!state || Date.now() - state.lastStateFetchedAt > STATE_TTL_MS) {
+    // Evict oldest if at capacity
+    if (!state && conversationStates.size >= MAX_CONVERSATION_STATES) {
+      let oldestKey = "";
+      let oldestTime = Infinity;
+      for (const [k, s] of conversationStates) {
+        if (s.lastStateFetchedAt < oldestTime) {
+          oldestTime = s.lastStateFetchedAt;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey) conversationStates.delete(oldestKey);
+    }
+
     state = {
       userId,
       guildId,

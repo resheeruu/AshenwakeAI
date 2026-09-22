@@ -38,21 +38,41 @@ export function createBackup(description: string, type: "manual" | "auto" = "man
   const backedUp: string[] = [];
   for (const file of filesToBackup) {
     const src = path.join(dataDir, file);
-    if (fs.existsSync(src)) {
-      const dest = path.join(backupDir, file);
-      if (fs.statSync(src).isDirectory()) {
-        fs.cpSync(src, dest, { recursive: true });
-      } else {
-        fs.copyFileSync(src, dest);
+    try {
+      if (fs.existsSync(src)) {
+        const dest = path.join(backupDir, file);
+        if (fs.statSync(src).isDirectory()) {
+          fs.cpSync(src, dest, { recursive: true });
+        } else {
+          fs.copyFileSync(src, dest);
+        }
+        backedUp.push(file);
       }
-      backedUp.push(file);
+    } catch (err) {
+      logger.warn(`⚠️ Backup: failed to copy ${file}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  // If no files were backed up, remove the empty backup directory
+  if (backedUp.length === 0) {
+    try { fs.rmSync(backupDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    logger.warn("⚠️ Backup: no files copied, backup discarded.");
+    return { id, timestamp: Date.now(), type, description, files: [] };
   }
 
   const entry: BackupEntry = { id, timestamp: Date.now(), type, description, files: backedUp };
   const index = getBackupIndex();
   index.push(entry);
-  if (index.length > 50) index.splice(0, index.length - 50);
+
+  // Prune old backups: keep max 50, and clean up orphaned directories
+  if (index.length > 50) {
+    const removed = index.splice(0, index.length - 50);
+    for (const old of removed) {
+      const oldDir = path.join(BACKUPS_DIR, old.id);
+      try { fs.rmSync(oldDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    }
+  }
+
   saveBackupIndex(index);
 
   logger.info(`💾 Backup created: ${id} (${backedUp.length} files)`);

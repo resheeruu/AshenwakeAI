@@ -154,6 +154,7 @@ app.use((req, res, next) => {
 const apiRequestCounts = new Map<string, number[]>();
 const API_RATE_WINDOW_MS = 60_000;
 const API_RATE_MAX = 120;
+const API_RATE_MAX_IPS = 10_000;
 
 function globalRateLimit(req: Request, res: Response, next: () => void) {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
@@ -165,6 +166,20 @@ function globalRateLimit(req: Request, res: Response, next: () => void) {
   }
   hits.push(now);
   apiRequestCounts.set(ip, hits);
+
+  // Evict oldest IPs if map grows too large
+  if (apiRequestCounts.size > API_RATE_MAX_IPS) {
+    const sorted = [...apiRequestCounts.entries()].sort((a, b) => {
+      const aMin = Math.min(...a[1]);
+      const bMin = Math.min(...b[1]);
+      return aMin - bMin;
+    });
+    const toRemove = sorted.slice(0, sorted.length - API_RATE_MAX_IPS);
+    for (const [key] of toRemove) {
+      apiRequestCounts.delete(key);
+    }
+  }
+
   next();
 }
 

@@ -550,6 +550,7 @@ client.once(Events.ClientReady, () => {
       }
     }
   }, 30_000);
+  watchdog.unref();
 
   logger.info(
     "Discord gateway watchdog active: checking every 30s, stale threshold 5m"
