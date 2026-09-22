@@ -83,8 +83,8 @@ export const providerService = {
     const def = providerRepo.getById(id);
     if (!def) throw new Error("Provider not found");
 
-    const apiKeyEncrypted = getCredential(id, "api_key");
-    return testProviderConnection(def.protocol, def.endpoint, apiKeyEncrypted, def.timeoutMs);
+    const apiKey = getCredential(id, "api_key");
+    return testProviderConnection(def.protocol, def.endpoint, apiKey, def.timeoutMs);
   },
 
   async testConnectionRaw(
@@ -105,8 +105,8 @@ export const providerService = {
     const def = providerRepo.getById(id);
     if (!def) throw new Error("Provider not found");
 
-    const apiKeyEncrypted = getCredential(def.id, "api_key");
-    const result = await discoverModels(def.protocol, def.endpoint, apiKeyEncrypted, def.timeoutMs);
+    const apiKey = getCredential(def.id, "api_key");
+    const result = await discoverModels(def.protocol, def.endpoint, apiKey, def.timeoutMs);
 
     if (result.success && result.models.length > 0) {
       providerRuntimeManager.refreshFromRepository();

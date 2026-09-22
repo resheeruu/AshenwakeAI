@@ -380,8 +380,8 @@ export class ProviderRuntimeManager {
     const runtime = this.runtimes.get(id);
     if (!runtime) throw new Error("Runtime not initialized");
 
-    const apiKeyEncrypted = getCredential(id, "api_key");
-    const result = await testProviderConnection(def.protocol, def.endpoint, apiKeyEncrypted, def.timeoutMs);
+    const apiKey = getCredential(id, "api_key");
+    const result = await testProviderConnection(def.protocol, def.endpoint, apiKey, def.timeoutMs);
 
     // Update runtime health state based on result
     if (result.success) {
