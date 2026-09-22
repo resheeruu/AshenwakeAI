@@ -26,7 +26,9 @@
     "upload:emojis": "tsx scripts/upload-emojis.ts",
     "icons:check": "tsx scripts/icons.ts check",
     "icons:update": "tsx scripts/icons.ts update",
-    "icons:validate": "tsx scripts/icons.ts validate"
+    "icons:validate": "tsx scripts/icons.ts validate",
+    "test:no-unicode-emoji": "tsx scripts/test-no-unicode-emojis.ts",
+    "release:check": "bash scripts/release-check.sh"
   },
   "license": "MIT",
   "keywords": [

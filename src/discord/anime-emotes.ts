@@ -263,23 +263,24 @@ export function allAnimeEmoteNames(): AnimeEmoteName[] {
  * Get emote names by category prefix.
  */
 export function getAnimeEmotesByPrefix(prefix: "reaction" | "action" | "system"): AnimeEmoteName[] {
-  const reactionNames: AnimeReactionName[] = [
-    "happy", "laugh", "smug", "angry", "cry", "blush", "shock", "panic",
-    "confused", "sleepy", "love", "embarrassed", "sad", "excited", "determined",
-  ];
-  const actionNames: AnimeActionName[] = [
-    "hug", "cuddle", "pat", "headpat", "kiss", "slap", "punch", "kick",
-    "bonk", "bite", "poke", "wave", "highfive", "yeet", "dance", "cry",
-    "blush", "throw", "hit", "smack", "tickle",
-  ];
-  const systemNames: AnimeSystemName[] = [
-    "ai", "success", "error", "warning", "info", "loading",
-    "online", "offline", "degraded", "settings", "stats",
-  ];
-
-  switch (prefix) {
-    case "reaction": return reactionNames;
-    case "action": return actionNames;
-    case "system": return systemNames;
+  const results: AnimeEmoteName[] = [];
+  for (const [name, _config] of Object.entries(ANIME_EMOTE_MAP)) {
+    const emoteName = name as AnimeEmoteName;
+    if (prefix === "reaction" && isReactionName(emoteName)) results.push(emoteName);
+    else if (prefix === "action" && isActionName(emoteName)) results.push(emoteName);
+    else if (prefix === "system" && isSystemName(emoteName)) results.push(emoteName);
   }
+  return results;
+}
+
+function isReactionName(name: string): name is AnimeReactionName {
+  return ["happy","laugh","smug","angry","cry","blush","shock","panic","confused","sleepy","love","embarrassed","sad","excited","determined"].includes(name);
+}
+
+function isActionName(name: string): name is AnimeActionName {
+  return ["hug","cuddle","pat","headpat","kiss","slap","punch","kick","bonk","bite","poke","wave","highfive","yeet","dance","cry","blush","throw","hit","smack","tickle"].includes(name);
+}
+
+function isSystemName(name: string): name is AnimeSystemName {
+  return ["ai","success","error","warning","info","loading","online","offline","degraded","settings","stats"].includes(name);
 }
