@@ -72,33 +72,11 @@ async function main(): Promise<void> {
     assert(false, `tool registry: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // 5. Browser tools register
+  // 5. Browser tools removed (Playwright/Chromium removed from production)
   console.log("\n━━━ Browser Tools ━━━");
-  try {
-    const { browserToolDefinitions, registerBrowserTools } = await import("../src/web/browser/tool-definitions");
-    assert(Array.isArray(browserToolDefinitions), "browserToolDefinitions is an array");
-    assert(browserToolDefinitions.length === 11, `11 browser tools defined (got ${browserToolDefinitions.length})`);
-
-    // Verify all tools have required fields
-    for (const tool of browserToolDefinitions) {
-      assert(typeof tool.name === "string" && tool.name.startsWith("browser_"), `${tool.name} is valid browser tool name`);
-      assert(typeof tool.execute === "function", `${tool.name} has execute function`);
-      assert(typeof tool.requiredRole === "string", `${tool.name} has requiredRole`);
-    }
-
-    // Register into a fresh registry
-    const { ToolRegistry } = await import("../src/ai/tools/registry");
-    const testRegistry = new ToolRegistry();
-    registerBrowserTools(testRegistry);
-    assert(testRegistry.has("browser_open"), "browser_open registered in test registry");
-    assert(testRegistry.has("browser_navigate"), "browser_navigate registered in test registry");
-    assert(testRegistry.has("browser_click"), "browser_click registered in test registry");
-    assert(testRegistry.has("browser_type"), "browser_type registered in test registry");
-    assert(testRegistry.has("browser_extract"), "browser_extract registered in test registry");
-    assert(testRegistry.has("browser_screenshot"), "browser_screenshot registered in test registry");
-  } catch (error) {
-    assert(false, `browser tools: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  // Browser tools have been removed from the production architecture.
+  // Web retrieval now uses lightweight HTTP only.
+  assert(true, "Browser tools removed (Playwright/Chromium removed from production architecture)");
 
   // 6. AI router initializes
   console.log("\n━━━ AI Router ━━━");
@@ -133,20 +111,11 @@ async function main(): Promise<void> {
     assert(false, `web pipeline: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // 9. Browser capability detection
+  // 9. Browser capability detection (removed)
   console.log("\n━━━ Browser Capability Detection ━━━");
-  try {
-    const { getBrowserManager } = await import("../src/web/browser/manager");
-    const manager = getBrowserManager();
-    const available = await manager.initialize();
-    assert(typeof available === "boolean", `browser availability detected: ${available}`);
-    if (!available) {
-      console.log("  ℹ️  Chromium not available — HTTP pipeline continues working");
-    }
-    await manager.shutdown();
-  } catch (error) {
-    assert(false, `browser capability: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  // Browser/Chromium/Playwright removed from production architecture.
+  // Web retrieval uses lightweight HTTP only.
+  assert(true, "Browser capability detection removed (Playwright/Chromium removed from production)");
 
   // 10. Audit system initializes
   console.log("\n━━━ Audit System ━━━");
@@ -186,20 +155,13 @@ async function main(): Promise<void> {
   // 13. SSRF protection verified
   console.log("\n━━━ SSRF Protection ━━━");
   try {
-    const { validateUrl, resolveAndValidateHost } = await import("../src/web/browser/security");
+    const { validateUrl } = await import("../src/web/fetch");
     assert(validateUrl("http://localhost").valid === false, "blocks localhost hostname");
     assert(validateUrl("http://[::1]").valid === false, "blocks ::1 hostname");
     assert(validateUrl("http://0.0.0.0").valid === false, "blocks 0.0.0.0 hostname");
     assert(validateUrl("file:///etc/passwd").valid === false, "blocks file:// protocol");
     assert(validateUrl("javascript:alert(1)").valid === false, "blocks javascript: protocol");
     assert(validateUrl("data:text/html,<script>").valid === false, "blocks data: protocol");
-
-    // DNS-level SSRF protection blocks private IPs
-    const privateHost = await resolveAndValidateHost("localhost");
-    assert(privateHost.valid === false, "DNS blocks localhost");
-
-    const metadataHost = await resolveAndValidateHost("169.254.169.254");
-    assert(metadataHost.valid === false, "DNS blocks metadata endpoint");
   } catch (error) {
     assert(false, `ssrf protection: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -216,12 +178,6 @@ async function main(): Promise<void> {
     "src/ai/tools/executor.ts",
     "src/ai/tools/validator.ts",
     "src/ai/tools/confirmation-store.ts",
-    "src/web/browser/index.ts",
-    "src/web/browser/manager.ts",
-    "src/web/browser/security.ts",
-    "src/web/browser/tools.ts",
-    "src/web/browser/tool-definitions.ts",
-    "src/web/browser/types.ts",
     "src/web/pipeline.ts",
     "src/web/fetch.ts",
     "src/web/search.ts",

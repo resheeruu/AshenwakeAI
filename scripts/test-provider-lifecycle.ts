@@ -39,7 +39,7 @@ import {
   restoreHealthStateFromLegacyJson,
 } from "../src/ai/router";
 import { AIProvider, AIRequest, AIResponse, HealthState } from "../src/ai/types";
-import { BrowserManager } from "../src/web/browser/manager";
+
 import { setCacheEnabled } from "../src/ai/response-cache";
 
 setCacheEnabled(false);
@@ -914,105 +914,6 @@ function testLegacyPersistedFileEndToEnd(): void {
 }
 
 /* ================================================================
- * 10. MISSING PLAYWRIGHT CHROMIUM REMAINS OPTIONAL
- * ================================================================ */
-
-function hasPlayableChromium(): boolean {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { chromium } = require("playwright") as {
-      chromium: { executablePath(): string };
-    };
-    const executable = chromium.executablePath();
-    return typeof executable === "string" && fs.existsSync(executable);
-  } catch {
-    return false;
-  }
-}
-
-async function testMissingChromiumIsOptional(): Promise<void> {
-  section("missing Playwright Chromium never exits the process");
-
-  const manager = new BrowserManager({
-    executablePath: "/nonexistent/ashenai-missing-chromium",
-  });
-
-  let resolved: boolean | undefined;
-  try {
-    resolved = await manager.initialize();
-  } catch (error) {
-    resolved = undefined;
-    assert(
-      false,
-      `initialize() threw instead of degrading gracefully: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-
-  if (resolved === undefined) {
-    return;
-  }
-
-  assert(
-    typeof resolved === "boolean",
-    "initialize() resolves to a boolean instead of throwing/exiting",
-  );
-  assert(
-    manager.isAvailable() === resolved,
-    "isAvailable() matches the initialize() result",
-  );
-  assert(process.pid > 0, "the process is still alive after browser init");
-
-  if (!hasPlayableChromium()) {
-    assert(
-      resolved === false,
-      "with no Chromium binary on the host, browser features degrade to unavailable",
-    );
-  } else {
-    console.log(
-      "  ℹ️ Chromium binary is installed on this host; strict 'unavailable' assertion skipped.",
-    );
-  }
-}
-
-async function testBrowserCheckIsOptionalInPreflight(): Promise<void> {
-  section("preflight — browser check is optional and can never block startup");
-
-  const report = await runPreflight(null, { logLevel: "quiet" });
-  const browser = report.checks.find((c) => c.name === "browser");
-  assert(browser !== undefined, "browser check discovered");
-  assert(
-    browser!.status === "OPTIONAL",
-    `browser check status is OPTIONAL (got ${browser!.status})`,
-  );
-  assert(
-    browser!.required === false,
-    "browser check is not required — missing Chromium cannot block startup",
-  );
-
-  // index.ts must keep browser failures isolated (no process exit path).
-  const indexSource = fs.readFileSync(
-    path.resolve(__dirname, "..", "src", "index.ts"),
-    "utf8",
-  );
-  assert(
-    indexSource.includes("Browser agent disabled (Chromium unavailable)") ||
-      indexSource.includes("Browser agent disabled"),
-    "startup logs a graceful degradation message when Chromium is missing",
-  );
-  const startBrowserBody = indexSource.slice(
-    indexSource.indexOf("async function startBrowser"),
-    indexSource.indexOf("async function startBrowser") + 1400,
-  );
-  assert(
-    startBrowserBody.includes("try {") &&
-      startBrowserBody.includes("catch (error)"),
-    "startBrowser() wraps browser initialisation in try/catch",
-  );
-}
-
-/* ================================================================
  * TEST RUNNER
  * ================================================================ */
 
@@ -1072,13 +973,6 @@ async function main(): Promise<void> {
   );
   await runTest("supervisor recovery during grace", async () =>
     testSupervisorRecoversDuringGrace(),
-  );
-
-  await runTest("missing chromium is optional", async () =>
-    testMissingChromiumIsOptional(),
-  );
-  await runTest("browser check optional in preflight", async () =>
-    testBrowserCheckIsOptionalInPreflight(),
   );
 
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

@@ -3,9 +3,8 @@
  * DISK / ENOSPC DIAGNOSTIC (hosting-aware, read-only by default)
  *
  * PURPOSE
- * Diagnose "ENOSPC: no space left on device" during the Playwright
- * ~184 MB Chromium download without assuming that `df -h` output
- * represents the hosting account's allocated storage.
+ * Diagnose "ENOSPC: no space left on device" without assuming that
+ * `df -h` output represents the hosting account's allocated storage.
  *
  * It distinguishes five DIFFERENT things that are commonly conflated:
  *   1. Physical device storage   (datacenter disk hardware)
@@ -21,7 +20,6 @@
  *                                   per-directory quotas, cgroup limits)
  *
  * It probes ONLY the filesystems actually used by:
- *   - Playwright cache (PLAYWRIGHT_BROWSERS_PATH)
  *   - npm cache       (npm config get cache)
  *   - temp downloads  (TMPDIR, /tmp)
  *   - application runtime data (APP_DIR, HOME)
@@ -310,7 +308,6 @@ function envSignals(): string[] {
     "HEROKU_APP_NAME",
     "TERMUX_VERSION",
     "TMPDIR",
-    "PLAYWRIGHT_BROWSERS_PATH",
     "npm_config_cache",
     "HOME",
   ];
@@ -396,10 +393,10 @@ function classify(reports: PathReport[], probeMB: number): string[] {
   } else {
     lines.push(
       probeMB > 0
-        ? `NO EVIDENCE of ENOSPC at a ${probeMB} MB probe size on the probed paths. A ~184 MB Chromium download may still hit ` +
+        ? `NO EVIDENCE of ENOSPC at a ${probeMB} MB probe size on the probed paths. A large write may still hit ` +
             `a limit that only appears at larger sizes (account quota, writable layer, or provider-injected limits).`
         : `NO WRITE PROBE RUN (probe size 0; pass --probe[=MB] to attempt reproducible bounded writes). ` +
-            `df free space alone cannot prove that a ~184 MB Chromium download will succeed.`,
+            `df free space alone cannot prove that a large write will succeed.`,
     );
   }
 
@@ -450,7 +447,7 @@ function main(): void {
 
   const appDir = process.cwd();
   const browsersPath =
-    process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(os.homedir(), ".cache", "ms-playwright");
+    const npmCachePath = npmCache || path.join(os.homedir(), ".npm");
   const npmCache =
     sh("npm config get cache") || process.env.npm_config_cache || path.join(os.homedir(), ".npm");
   const tmpDir = process.env.TMPDIR || os.tmpdir() || "/tmp";
@@ -495,7 +492,7 @@ function main(): void {
   }
 
   if (!json) {
-    console.log("── Paths used by the Chromium download pipeline ──────────────");
+    console.log("── Paths probed by the diagnostic ──────────────");
     for (const r of reports) {
       console.log("");
       console.log(`  ${r.label}`);
@@ -567,11 +564,11 @@ function main(): void {
   console.log("── Next steps (run on the Wispbyte server / control panel) ────");
   console.log("  1. Check the host panel for the account's REAL disk quota/usage (df cannot show it).");
   console.log("  2. Re-run: npx tsx scripts/diagnose-disk-enospc.ts --probe=220");
-  console.log("     to reproduce a Chromium-sized (184 MB+) write on each pipeline path.");
+  console.log("     to reproduce a large write (184 MB+) on each pipeline path.");
   console.log("  3. If the probe fails while df shows free space, the binding limit is");
   console.log("     the account quota, the container writable layer, or a provider limit.");
   console.log("  4. Then free space through the host panel (or raise the plan quota) and set");
-  console.log("     ASHENAI_PLAYWRIGHT_BOOTSTRAP_FORCE=1 to retry the Chromium install.");
+  console.log("     Retry with a larger --probe value to test larger writes.");
   console.log("");
 }
 

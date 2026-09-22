@@ -1,6 +1,6 @@
 # AshenAI
 
-AI-powered Discord bot with browser automation, server management, and multi-provider AI routing.
+AI-powered Discord bot with server management, multi-provider AI routing, and lightweight HTTP web retrieval.
 
 ## Quick Start
 
@@ -22,8 +22,7 @@ Discord Request
           → execution → audit/tracing → response
 
 Web Research
-  → search → HTTP fetch → extraction → browser escalation (when needed)
-    → extraction → redaction → evidence → AI response
+  → search → HTTP fetch → extraction → redaction → evidence → AI response
 ```
 
 **Key subsystems:**
@@ -34,15 +33,14 @@ Web Research
 - Full tool framework: registry, validator, executor, rate limiter, confirmation store
 - Governance: policy engine, drift detection, templates, remediation
 - Security: role hierarchy, SSRF protection, audit chain (HMAC-SHA256), output guard
-- Browser agent: Playwright-based with session isolation, redirect validation, and resource budgets
-- Web pipeline: Brave Search → HTTP fetch → Readability/Cheerio → SPA detection → browser escalation
+- Web pipeline: Brave Search → HTTP fetch → Readability/Cheerio → markdown conversion
 - Web dashboard: Express server with auth, MFA, OAuth, CSRF protection
 
 ## AI Providers
 
 16+ provider adapters with automatic fallback and circuit breaker:
 
-Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, OpenAI-compatible (any provid[...]
+Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, OpenAI-compatible (any provider)
 
 ## Commands
 
@@ -50,23 +48,12 @@ Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cer
 |---------|-------------|
 | `npm start` | Start bot (uses `scripts/start.sh`) |
 | `npm run bot` | Start directly via `tsx src/index.ts` |
-| `npm test` | Run mandatory test suite (35 suites, 2000+ assertions) |
+| `npm test` | Run mandatory test suite (36 suites, 2000+ assertions) |
 | `npm run test:smoke` | Production smoke test |
 | `npm run test:all` | Run all tests including optional suites |
 | `npm run typecheck` | TypeScript type check |
 | `npm run build` | Compile TypeScript + copy static assets |
 | `npm run check` | Lint check + tests |
-
-## Browser Agent
-
-Browser automation via Playwright with:
-- **11 tools**: open, navigate, click, type, scroll, wait, extract, screenshot, back, forward, close
-- **Session isolation**: separate BrowserContext per user/guild session
-- **SSRF protection**: protocol validation, DNS resolution, redirect validation, private IP blocking
-- **Resource budgets**: per-session limits on navigations, clicks, types, scrolls, screenshots, extracted bytes
-- **Graceful degradation**: disabled when Chromium unavailable; HTTP pipeline continues working
-
-Browser tools require moderator role for write operations (open, navigate, click, type). Read operations (extract, screenshot, scroll) require member role. Click and type require confirmation.
 
 ## Security
 
@@ -92,8 +79,8 @@ See `.env.example` for full configuration options.
 ## Testing
 
 ```bash
-npm test                    # 35 mandatory suites (~2000+ assertions)
-npm run test:smoke          # Production smoke test (103 assertions)
+npm test                    # 36 mandatory suites (~2000+ assertions)
+npm run test:smoke          # Production smoke test
 npm run test:all            # All suites including optional
 npm run typecheck           # TypeScript check
 npm run build               # Build
@@ -101,16 +88,15 @@ npm run build               # Build
 
 ## Deployment
 
-- **Termux ARM64**: Works with graceful browser degradation (HTTP-only when Chromium unavailable)
-- **Wispbyte/Linux**: Full browser support when Chromium is installed
+- **Termux ARM64**: Works (lightweight HTTP web retrieval, no browser required)
+- **Wispbyte/Linux**: Recommended — lightweight, fits within 1 GB quota
 - **Docker**: `Dockerfile` included, uses `scripts/start.sh`
 - **Render**: Built-in recovery manager with health watchdog
 
 ### Storage / ENOSPC diagnostics (hosting-aware)
 
-`ENOSPC: no space left on device` during the Playwright ~184 MB Chromium download
-is **not** proof that the hosting account has too little storage, and a large
-`df -h` value is **not** proof that it has enough. These are different layers:
+A large `df -h` value is **not** proof that the hosting account has enough storage.
+These are different layers:
 
 1. physical device storage
 2. host machine storage
@@ -122,17 +108,18 @@ is **not** proof that the hosting account has too little storage, and a large
 ```bash
 npm run diagnose:disk                 # read-only inventory of every pipeline path
 npm run diagnose:disk -- --probe=220  # bounded 220 MB write probe per path
-npm run diagnose:playwright           # Playwright env + per-path storage report
 ```
 
-Both diagnostics report `Actual Wispbyte storage quota could not be verified from
+Diagnostics report `Actual Wispbyte storage quota could not be verified from
 inside the container.` and never delete files to "fix" ENOSPC. Startup scripts do
-the same (`scripts/check-resources.sh`, `scripts/ensure-playwright.sh`).
+the same (`scripts/check-resources.sh`).
 
+See `docs/DEPLOYMENT.md` for Wispbyte deployment guide.
 See `docs/DEVELOPMENT.md` for development setup.
 
 ## Documentation
 
+- `docs/DEPLOYMENT.md` — Wispbyte deployment guide
 - `docs/ARCHITECTURE.md` — Detailed architecture
 - `docs/DEVELOPMENT.md` — Development guide
 - `docs/ADMIN-MODERATOR-MANUAL.md` — Admin/moderator usage
@@ -140,6 +127,5 @@ See `docs/DEVELOPMENT.md` for development setup.
 
 ## Known Limitations
 
-- **Browser automation**: Requires Chromium installed; degrades to HTTP-only mode when unavailable (e.g., Termux ARM64)
 - **Native modules**: `better-sqlite3` requires native compilation; may need build tools on some platforms
 - **Music system**: Removed — no audio playback functionality

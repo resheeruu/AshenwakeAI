@@ -131,7 +131,6 @@ export function detectHosting(): HostingDetection {
 export function detectCapabilities(): CapabilityCheck[] {
   const v = process.version;
   const major = parseInt(v.replace("v", "").split(".")[0], 10);
-  const java = checkCmd("java -version 2>&1");
   const ffmpeg = checkCmd("ffmpeg -version 2>&1");
   const npm = checkCmd("npm --version");
 

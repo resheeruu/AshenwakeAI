@@ -1,15 +1,13 @@
 /* ================================================================
  * RESOURCE MONITOR & STARTUP INTEGRATION TESTS
  *
- * Tests resource monitoring logic, Playwright disk protection,
- * and startup script structure without downloading Chromium
- * or depending on Wispbyte-specific paths.
+ * Tests resource monitoring logic and startup script structure
+ * without depending on removed browser/Playwright infrastructure.
  * ================================================================ */
 
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import os from "node:os";
 
 let passed = 0;
 let failed = 0;
@@ -147,11 +145,6 @@ async function main(): Promise<void> {
 
   section("Disk Classification Logic");
 
-  // Test the classification thresholds by reading the logic
-  // classify_disk: CRITICAL if free_mb < DISK_CRITICAL_MB OR free_pct < DISK_CRITICAL_PCT
-  // classify_disk: WARN if free_mb < DISK_WARN_MB OR free_pct < DISK_WARN_PCT
-  // classify_disk: OK otherwise
-
   assert(
     checkResources.includes("DISK_CRITICAL_MB") && checkResources.includes("DISK_CRITICAL_PCT"),
     "Disk classification checks both absolute MB and percentage thresholds",
@@ -162,7 +155,6 @@ async function main(): Promise<void> {
     "Disk warning checks both absolute MB and percentage thresholds",
   );
 
-  // Verify the classify_disk function returns valid states
   assert(
     checkResources.includes('"CRITICAL"') && checkResources.includes('"WARN"') && checkResources.includes('"OK"'),
     "classify_disk returns CRITICAL, WARN, or OK",
@@ -179,7 +171,6 @@ async function main(): Promise<void> {
     "RAM classification checks both warning and critical thresholds",
   );
 
-  // Verify RAM checks multiple sources
   assert(
     checkResources.includes("/proc/meminfo"),
     "check-resources.sh tries /proc/meminfo (Linux standard)",
@@ -217,88 +208,6 @@ async function main(): Promise<void> {
   );
 
   /* ================================================================
-   * ENSURE-PLAYWRIGHT.SH DISK PROTECTION
-   * ================================================================ */
-
-  section("ensure-playwright.sh Disk Protection");
-
-  const ensurePlaywright = readFile("scripts/ensure-playwright.sh");
-
-  assert(
-    ensurePlaywright.includes("ASHENAI_RESOURCE_DISK_STATE"),
-    "ensure-playwright.sh checks ASHENAI_RESOURCE_DISK_STATE",
-  );
-
-  assert(
-    ensurePlaywright.includes("ASHENAI_RESOURCE_DISK_FREE_MB"),
-    "ensure-playwright.sh checks ASHENAI_RESOURCE_DISK_FREE_MB",
-  );
-
-  assert(
-    ensurePlaywright.includes("CRITICAL"),
-    "ensure-playwright.sh handles CRITICAL disk state",
-  );
-
-  assert(
-    ensurePlaywright.includes("DISK_CRITICAL_MB"),
-    "ensure-playwright.sh defines DISK_CRITICAL_MB threshold",
-  );
-
-  assert(
-    ensurePlaywright.includes("MIN_FREE_MB"),
-    "ensure-playwright.sh uses MIN_FREE_MB for recommended minimum",
-  );
-
-  assert(
-    ensurePlaywright.includes("Chromium bootstrap skipped"),
-    "ensure-playwright.sh logs when bootstrap is skipped due to disk",
-  );
-
-  assert(
-    ensurePlaywright.includes("Browser features disabled"),
-    "ensure-playwright.sh logs graceful degradation on disk critical",
-  );
-
-  // Verify disk protection blocks installation when critical
-  assert(
-    ensurePlaywright.includes('"failed"') && ensurePlaywright.includes("CRITICAL"),
-    "ensure-playwright.sh writes 'failed' state when disk is critical",
-  );
-
-  // Verify it still allows installation when disk is OK
-  assert(
-    ensurePlaywright.includes("Installing Chromium"),
-    "ensure-playwright.sh installs Chromium when disk is sufficient",
-  );
-
-  /* ================================================================
-   * ENSURE-PLAYWRIGHT.SH STATE MACHINE
-   * ================================================================ */
-
-  section("ensure-playwright.sh State Machine");
-
-  assert(
-    ensurePlaywright.includes('"none"') && ensurePlaywright.includes('"installing"') &&
-    ensurePlaywright.includes('"ready"') && ensurePlaywright.includes('"failed"'),
-    "ensure-playwright.sh has complete state machine: none/installing/ready/failed",
-  );
-
-  assert(
-    ensurePlaywright.includes("bootstrap-state") && ensurePlaywright.includes("BOOTSTRAP_STATE_DIR"),
-    "ensure-playwright.sh uses bootstrap-state file in BOOTSTRAP_STATE_DIR (~/.ashenai)",
-  );
-
-  assert(
-    ensurePlaywright.includes("mkdir") && ensurePlaywright.includes("LOCK_DIR"),
-    "ensure-playwright.sh uses atomic lock via mkdir",
-  );
-
-  assert(
-    ensurePlaywright.includes("npx --no-install playwright install chromium --no-shell --no-remove"),
-    "ensure-playwright.sh uses npx --no-install with --no-shell --no-remove",
-  );
-
-  /* ================================================================
    * START.SH INTEGRATION
    * ================================================================ */
 
@@ -306,30 +215,16 @@ async function main(): Promise<void> {
 
   const startScript = readFile("scripts/start.sh");
 
-  // Verify start.sh runs check-resources.sh BEFORE ensure-playwright.sh.
-  // start.sh SOURCES check-resources.sh (`. "scripts/check-resources.sh"`)
-  // so ASHENAI_RESOURCE_* exports propagate — indexOf("check-resources.sh")
-  // alone is not sufficient since the filename appears inside the
-  // shellcheck comment too. Match the actual invocation lines instead.
+  // Verify start.sh runs check-resources.sh
   const resourceCallIdx = Math.max(
     startScript.indexOf('bash "$APP_DIR/scripts/check-resources.sh"'),
     startScript.indexOf(". \"$APP_DIR/scripts/check-resources.sh\""),
     startScript.indexOf("scripts/check-resources.sh\" || true"),
   );
-  const playwrightIdx = Math.max(
-    startScript.indexOf('bash "$APP_DIR/scripts/ensure-playwright.sh"'),
-    startScript.indexOf(". \"$APP_DIR/scripts/ensure-playwright.sh\""),
-    startScript.indexOf("scripts/ensure-playwright.sh\""),
-  );
 
   assert(
-    resourceCallIdx >= 0 && playwrightIdx >= 0,
-    "start.sh calls both check-resources.sh and ensure-playwright.sh",
-  );
-
-  assert(
-    resourceCallIdx < playwrightIdx,
-    "start.sh calls check-resources.sh BEFORE ensure-playwright.sh",
+    resourceCallIdx >= 0,
+    "start.sh calls check-resources.sh",
   );
 
   assert(
@@ -344,25 +239,25 @@ async function main(): Promise<void> {
     "start.sh handles resource check failure gracefully (|| true)",
   );
 
-  assert(
-    startScript.includes('PLAYWRIGHT_BROWSERS_PATH'),
-    "start.sh exports PLAYWRIGHT_BROWSERS_PATH",
-  );
-
-  assert(
-    startScript.includes('PLAYWRIGHT_SKIP_BROWSER_GC'),
-    "start.sh exports PLAYWRIGHT_SKIP_BROWSER_GC",
-  );
-
-  // Verify no duplicate Chromium installer
+  // Verify no Playwright/browsers in startup
   assert(
     !startScript.includes("npx playwright install chromium"),
-    "start.sh does NOT contain unconditional 'npx playwright install chromium'",
+    "start.sh does NOT contain 'npx playwright install chromium'",
   );
 
   assert(
     !startScript.includes("ensure_chromium"),
     "start.sh does not contain old ensure_chromium() function",
+  );
+
+  assert(
+    !startScript.includes("ensure-playwright"),
+    "start.sh does not reference ensure-playwright.sh",
+  );
+
+  assert(
+    !startScript.includes("PLAYWRIGHT_BROWSERS_PATH"),
+    "start.sh does not export PLAYWRIGHT_BROWSERS_PATH",
   );
 
   /* ================================================================
@@ -371,8 +266,6 @@ async function main(): Promise<void> {
 
   section("Resource Threshold Defaults");
 
-  // Verify reasonable default thresholds
-  // These are the defaults from check-resources.sh
   assert(
     checkResources.includes('DISK_WARN_MB="${ASHENAI_RESOURCE_DISK_WARN_MB:-100}"'),
     "Disk warn default is 100 MB",
@@ -408,68 +301,11 @@ async function main(): Promise<void> {
     "CPU warn load default is 4",
   );
 
-  assert(
-    ensurePlaywright.includes('MIN_FREE_MB="${ASHENAI_PLAYWRIGHT_MIN_FREE_MB:-500}"'),
-    "Playwright min free MB default is 500",
-  );
-
   /* ================================================================
    * ENOSPC PROTECTION
    * ================================================================ */
 
   section("ENOSPC Protection");
-
-  assert(
-    ensurePlaywright.includes("ENOSPC"),
-    "ensure-playwright.sh detects ENOSPC errors",
-  );
-
-  assert(
-    ensurePlaywright.includes("no space left on device"),
-    "ensure-playwright.sh detects 'no space left on device' errors",
-  );
-
-  assert(
-    ensurePlaywright.includes("FORCE"),
-    "ensure-playwright.sh supports ASHENAI_PLAYWRIGHT_BOOTSTRAP_FORCE for retry",
-  );
-
-  assert(
-    ensurePlaywright.includes("Actual Wispbyte storage quota could not be verified from inside the container."),
-    "ensure-playwright.sh states the Wispbyte quota cannot be verified in-container",
-  );
-
-  assert(
-    ensurePlaywright.includes("container-visible") || ensurePlaywright.includes("container-visible capacity"),
-    "ensure-playwright.sh labels df values as container-visible, not quota",
-  );
-
-  assert(
-    ensurePlaywright.includes("inode") || ensurePlaywright.includes("df -i"),
-    "ensure-playwright.sh lists inode exhaustion as an ENOSPC cause",
-  );
-
-  assert(
-    ensurePlaywright.includes("npm_cache_dir") || ensurePlaywright.includes("npm config get cache"),
-    "ensure-playwright.sh probes the npm cache filesystem",
-  );
-
-  assert(
-    ensurePlaywright.includes("TMPDIR") && ensurePlaywright.includes("/tmp"),
-    "ensure-playwright.sh probes TMPDIR and /tmp filesystems",
-  );
-
-  assert(
-    ensurePlaywright.includes("PLAYWRIGHT_BROWSERS_PATH") && ensurePlaywright.includes("min_disk_space_mb"),
-    "ensure-playwright.sh classifies on the minimum across pipeline paths",
-  );
-
-  // Must never "fix" ENOSPC by deleting arbitrary files.
-  assert(
-    !ensurePlaywright.match(/rm\s+-rf\s+(?!\"\$LOCK_DIR\")\S/m) ||
-      !ensurePlaywright.includes("rm -rf $HOME/.cache"),
-    "ensure-playwright.sh never deletes cache dirs to fix ENOSPC (only lock dir)",
-  );
 
   assert(
     checkResources.includes("Actual Wispbyte storage quota could not be verified from inside the container."),
@@ -503,7 +339,6 @@ async function main(): Promise<void> {
     "diagnostic states the Wispbyte quota cannot be verified in-container",
   );
 
-  // Must distinguish the five storage layers rather than treating df as quota.
   assert(
     diag.includes("physical device storage") &&
       diag.includes("host machine storage") &&
@@ -563,17 +398,7 @@ async function main(): Promise<void> {
 
   section("Graceful Degradation");
 
-  // All scripts should degrade gracefully
-  assert(
-    ensurePlaywright.includes("return 0"),
-    "ensure-playwright.sh returns 0 on all failure paths",
-  );
-
-  assert(
-    !ensurePlaywright.includes("exit 1"),
-    "ensure-playwright.sh never exits with code 1",
-  );
-
+  // check-resources.sh should never crash startup
   assert(
     !checkResources.includes("exit 1"),
     "check-resources.sh never exits with code 1",
@@ -588,16 +413,6 @@ async function main(): Promise<void> {
   assert(
     !checkResources.includes("API_KEY"),
     "check-resources.sh does not log API keys",
-  );
-
-  assert(
-    !ensurePlaywright.includes("DISCORD_TOKEN"),
-    "ensure-playwright.sh does not log Discord tokens",
-  );
-
-  assert(
-    !ensurePlaywright.includes("API_KEY"),
-    "ensure-playwright.sh does not log API keys",
   );
 
   /* ================================================================
@@ -644,23 +459,19 @@ async function main(): Promise<void> {
   );
 
   assert(
-    envExample.includes("ASHENAI_PLAYWRIGHT_MIN_FREE_MB"),
-    ".env.example documents ASHENAI_PLAYWRIGHT_MIN_FREE_MB",
-  );
-
-  assert(
-    envExample.includes("ASHENAI_PLAYWRIGHT_BOOTSTRAP"),
-    ".env.example documents ASHENAI_PLAYWRIGHT_BOOTSTRAP",
-  );
-
-  assert(
-    envExample.includes("ASHENAI_PLAYWRIGHT_BOOTSTRAP_FORCE"),
-    ".env.example documents ASHENAI_PLAYWRIGHT_BOOTSTRAP_FORCE",
-  );
-
-  assert(
     envExample.includes("Actual Wispbyte storage quota could not be verified"),
     ".env.example states the Wispbyte quota cannot be verified in-container",
+  );
+
+  // Verify no Playwright variables in .env.example
+  assert(
+    !envExample.includes("ASHENAI_PLAYWRIGHT_MIN_FREE_MB"),
+    ".env.example does not contain ASHENAI_PLAYWRIGHT_MIN_FREE_MB",
+  );
+
+  assert(
+    !envExample.includes("ASHENAI_PLAYWRIGHT_BOOTSTRAP"),
+    ".env.example does not contain ASHENAI_PLAYWRIGHT_BOOTSTRAP",
   );
 
   /* ================================================================
@@ -669,7 +480,6 @@ async function main(): Promise<void> {
 
   section("No Discord/User-Facing Resource Output");
 
-  // Verify resource monitoring stays in console only
   assert(
     !startScript.includes("/settings"),
     "start.sh does not reference /settings",
@@ -685,9 +495,20 @@ async function main(): Promise<void> {
     "check-resources.sh does not reference Discord",
   );
 
+  /* ================================================================
+   * NO PLAYWRIGHT/BROWSER IN STARTUP
+   * ================================================================ */
+
+  section("No Playwright/Browser in Startup");
+
   assert(
-    !ensurePlaywright.includes("discord"),
-    "ensure-playwright.sh does not reference Discord",
+    !startScript.includes("playwright"),
+    "start.sh does not reference playwright",
+  );
+
+  assert(
+    !startScript.includes("chromium"),
+    "start.sh does not reference chromium",
   );
 
   /* ================================================================
@@ -701,13 +522,6 @@ async function main(): Promise<void> {
     assert(true, "check-resources.sh passes bash -n syntax check");
   } catch {
     assert(false, "check-resources.sh fails bash -n syntax check");
-  }
-
-  try {
-    execSync("bash -n scripts/ensure-playwright.sh", { encoding: "utf-8" });
-    assert(true, "ensure-playwright.sh passes bash -n syntax check");
-  } catch {
-    assert(false, "ensure-playwright.sh fails bash -n syntax check");
   }
 
   try {

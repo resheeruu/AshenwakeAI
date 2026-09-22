@@ -41,13 +41,3 @@ jobs:
 
       - name: Audit dependencies (informational)
         run: npm audit --omit=dev 2>&1 | head -30 || true
-
-      - name: Verify browser graceful degradation
-        run: node ./node_modules/.bin/tsx -e "
-          import { getBrowserManager } from './src/web/browser';
-          const m = getBrowserManager();
-          const available = await m.initialize();
-          console.log('Browser available:', available);
-          console.log('HTTP pipeline: always available');
-          process.exit(0);
-        "

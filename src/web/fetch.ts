@@ -61,6 +61,37 @@ function isPrivateIP(ip: string): boolean {
 }
 
 /**
+ * Validate a URL for SSRF safety before DNS resolution.
+ * Blocks dangerous protocols and hostnames.
+ */
+export function validateUrl(url: string): { valid: boolean; reason?: string } {
+  try {
+    const parsed = new URL(url);
+
+    // Block dangerous protocols
+    const blockedProtocols = ["file:", "ftp:", "javascript:", "data:", "about:", "blob:"];
+    if (blockedProtocols.includes(parsed.protocol)) {
+      return { valid: false, reason: `Blocked protocol: ${parsed.protocol}` };
+    }
+
+    // Block localhost and special hostnames
+    const hostname = parsed.hostname.toLowerCase();
+    const blockedHostnames = ["localhost", "0.0.0.0", "::1", "[::1]", "metadata.google.internal", "169.254.169.254"];
+    if (blockedHostnames.includes(hostname)) {
+      return { valid: false, reason: `Blocked hostname: ${hostname}` };
+    }
+
+    if (hostname.endsWith(".local") || hostname.endsWith(".internal") || hostname.endsWith(".localhost")) {
+      return { valid: false, reason: `Blocked internal hostname: ${hostname}` };
+    }
+
+    return { valid: true };
+  } catch {
+    return { valid: false, reason: "Invalid URL" };
+  }
+}
+
+/**
  * Resolve hostname and verify it does not point to a private/reserved IP.
  * Checks ALL resolved addresses to prevent DNS rebinding / multi-address SSRF.
  * Prevents SSRF against internal infrastructure.

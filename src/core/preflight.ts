@@ -14,7 +14,6 @@ import { logger } from "../logger";
    - providers from ProviderRegistry
    - commands from the runtime command list
    - database from existing migration/schema
-   - browser from BrowserManager
    - tools from ToolRegistry
    - all other systems through existing interfaces
    ===================================================== */
@@ -693,41 +692,7 @@ function checkTools(): PreflightCheck[] {
   return checks;
 }
 
-/**
- * Auto-discover browser status.
- */
-function checkBrowser(): PreflightCheck[] {
-  const t0 = Date.now();
-  const checks: PreflightCheck[] = [];
 
-  try {
-    const { getBrowserManager } = require("../web/browser");
-    const manager = getBrowserManager();
-
-    // Browser availability is async but we check synchronously at startup
-    // The actual availability is determined during startBrowser()
-    checks.push({
-      name: "browser",
-      category: "browser",
-      status: "OPTIONAL",
-      required: false,
-      details: "Chromium availability checked at runtime",
-      durationMs: Date.now() - t0,
-      lastChecked: Date.now(),
-    });
-  } catch {
-    checks.push({
-      name: "browser",
-      category: "browser",
-      status: "OPTIONAL",
-      required: false,
-      details: "Browser module not available",
-      lastChecked: Date.now(),
-    });
-  }
-
-  return checks;
-}
 
 /**
  * Auto-discover agent/task system status.
@@ -1187,7 +1152,6 @@ export async function runPreflight(
   const memoryChecks = checkMemory();
   const tracingChecks = checkTracing();
   const cacheChecks = checkResponseCache();
-  const browserChecks = checkBrowser();
   const webChecks = checkWebServer();
 
   allChecks.push(
@@ -1197,7 +1161,6 @@ export async function runPreflight(
     ...memoryChecks,
     ...tracingChecks,
     ...cacheChecks,
-    ...browserChecks,
     ...webChecks,
   );
 
@@ -1277,7 +1240,6 @@ function buildSummary(
     "security",
     "memory",
     "observability",
-    "browser",
     "web",
     "architecture",
   ];

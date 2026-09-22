@@ -17,7 +17,6 @@ export type AIFeature =
   | "incident_investigate"
   | "tts"
   | "passive_awareness"
-  | "browser_use"
   | "ai_to_ai";
 
 export interface CreditCosts {

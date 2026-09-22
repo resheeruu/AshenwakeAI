@@ -26,7 +26,6 @@
 #   "Actual Wispbyte storage quota could not be verified from inside the container."
 #
 # This script only identifies the filesystem(s) actually used by:
-#   - Playwright browser cache (PLAYWRIGHT_BROWSERS_PATH)
 #   - npm cache (npm config get cache)
 #   - temporary downloads (TMPDIR / /tmp)
 #   - application runtime data (APP_DIR / HOME)
@@ -179,7 +178,6 @@ probe_disk_path() {
 
 check_disk() {
   local target_path="${APP_DIR:-.}"
-  local browsers_path="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
   local npm_cache_path=""
   if command -v npm >/dev/null 2>&1; then
     npm_cache_path=$(npm config get cache 2>/dev/null | tr -d '\r\n' || true)
@@ -187,7 +185,6 @@ check_disk() {
   local tmp_path="${TMPDIR:-/tmp}"
   local home_path="${HOME:-$target_path}"
   local cands="$target_path
-$browsers_path
 $tmp_path
 $home_path"
   if [ -n "$npm_cache_path" ]; then cands="$cands

@@ -177,7 +177,10 @@ setInterval(() => {
   }
 }, API_RATE_WINDOW_MS).unref();
 
-const PORT = Number(process.env.PORT || process.env.WEB_PORT || 3000);
+const PORT = Number(process.env.PORT);
+if (!Number.isFinite(PORT) || PORT <= 0) {
+  throw new Error("PORT environment variable is required and must be a valid positive number");
+}
 
 let router: AIRouter;
 let usageManager: UsageManager;

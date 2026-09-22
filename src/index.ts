@@ -229,37 +229,6 @@ commands.push(createHelpCommand(commands));
 commandHandler.registerMany(commands);
 
 /* =====================================================
-   BROWSER AGENT STARTUP
-   ===================================================== */
-
-import { getBrowserManager, registerBrowserTools } from "./web/browser";
-import { toolRegistry } from "./ai/tools/registry";
-import { createDiscordTools } from "./ai/tools/discord";
-
-// Register all Discord tools in the global ToolRegistry.
-// This enables executeTool(), checkFullAuthorization(), and the confirmation handler
-// to look up tools by name. Without this, every Discord tool lookup returns undefined.
-toolRegistry.registerAll(createDiscordTools(() => client));
-
-async function startBrowser(): Promise<void> {
-  try {
-    const manager = getBrowserManager();
-    const available = await manager.initialize();
-    if (available) {
-      // Register browser tools in the tool registry for executeTool pipeline
-      registerBrowserTools(toolRegistry);
-      logger.info("🌐 Browser agent is online.");
-    } else {
-      logger.info("ℹ️ Browser agent disabled (Chromium unavailable). HTTP pipeline remains active.");
-    }
-  } catch (error) {
-    logger.warn(
-      `⚠️ Browser agent startup failed: ${error instanceof Error ? error.message : String(error)}. HTTP pipeline remains active.`
-    );
-  }
-}
-
-/* =====================================================
    AGENT STARTUP
    ===================================================== */
 
@@ -449,16 +418,11 @@ client.once(
         `✅ Slash commands synchronized: ${commands.length}`
       );
 
-      /*
-       * Start the browser agent (optional — degrades gracefully if Chromium unavailable).
-       */
-      await startBrowser();
-
-      /*
-       * Start the interactive Discord conversation
-       * system after the core agent is online.
-       */
-      await startAgent();
+/*
+ * Start the interactive Discord conversation
+ * system after the core agent is online.
+ */
+await startAgent();
 
       logger.info(
         "🧠 Interactive mention/reply system ready."
@@ -2358,14 +2322,6 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 
   try {
-    const bm = getBrowserManager();
-    await bm.shutdown();
-    logger.info("🌐 Browser stopped.");
-  } catch {
-    // Browser is optional
-  }
-
-  try {
     stopSupportAutomation();
     stopConversationCleanup();
     logger.info("🎫 Support automation stopped.");
@@ -2396,7 +2352,7 @@ process.on("uncaughtException", (error) => {
   logger.error("❌ UNCAUGHT EXCEPTION:", error.stack || error.message || String(error));
   try { internalSupervisor.stop(); } catch {}
   try { agentManager.stop().catch(() => {}); } catch {}
-  try { getBrowserManager().shutdown().catch(() => {}); } catch {}
+  
   try { closeDatabase(); } catch {}
   try { client.destroy(); } catch {}
   process.exit(1);
@@ -2406,7 +2362,7 @@ process.on("unhandledRejection", (reason) => {
   logger.error("❌ UNHANDLED REJECTION:", reason instanceof Error ? (reason.stack || reason.message) : String(reason));
   try { internalSupervisor.stop(); } catch {}
   try { agentManager.stop().catch(() => {}); } catch {}
-  try { getBrowserManager().shutdown().catch(() => {}); } catch {}
+  
   try { closeDatabase(); } catch {}
   try { client.destroy(); } catch {}
   process.exit(1);

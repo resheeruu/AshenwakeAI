@@ -5,12 +5,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 export NODE_ENV="${NODE_ENV:-production}"
-export PORT="${PORT:-3000}"
 
 echo "[start] AshenAI Generic Startup"
 echo "[start] NODE_ENV=${NODE_ENV}"
-echo "[start] PORT=${PORT}"
 echo "[start] ROOT=${ROOT_DIR}"
+
+if [ -z "${PORT:-}" ]; then
+    echo "[start] ERROR: PORT environment variable is required but not set."
+    exit 1
+fi
+echo "[start] PORT=${PORT}"
 
 command -v node >/dev/null 2>&1 || {
     echo "[start] ERROR: Node.js is not installed."
@@ -31,13 +35,11 @@ if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
     exit 1
 fi
 
-if [[ -x "${ROOT_DIR}/scripts/resource-monitor.sh" ]]; then
-    bash "${ROOT_DIR}/scripts/resource-monitor.sh" || \
-        echo "[start] Resource monitor returned non-zero; continuing."
+# Resource check: disk, RAM, CPU. Never crashes startup.
+export APP_DIR="${ROOT_DIR}"
+if [[ -f "${ROOT_DIR}/scripts/check-resources.sh" ]]; then
+    . "$APP_DIR/scripts/check-resources.sh" || true
 fi
-
-echo "[PLAYWRIGHT] Automatic Chromium installation disabled."
-echo "[PLAYWRIGHT] Browser features will be disabled if Chromium is unavailable."
 
 echo "[start] Starting AshenAI on port ${PORT}..."
 

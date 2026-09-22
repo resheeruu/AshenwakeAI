@@ -231,6 +231,8 @@ export function getResourceStatus(): {
   pressure: ResourcePressure;
   health: ResourceHealth;
   heapMB: number;
+  hostingQuota: "unknown";
+  filesystemCapacity: "unknown";
   rssMB: number;
   freeMemMB: number;
   uptime: number;
@@ -247,6 +249,8 @@ export function getResourceStatus(): {
     uptime: snap.process.uptimeSeconds,
     dataDirMB: Math.round(snap.disk.dataDirSizeKB / 1024),
     recommendations: snap.recommendations,
+    hostingQuota: "unknown" as const,
+    filesystemCapacity: "unknown" as const,
   };
 }
 

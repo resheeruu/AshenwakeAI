@@ -5,7 +5,6 @@ import { webSearch, type SearchResult } from "./search";
 import { fetchPage, type FetchedPage } from "./fetch";
 import { extractContent, normalizeContent } from "./extract";
 import { htmlToMarkdown, isNearDuplicate, termOverlapScore, deduplicateBy } from "./text-utils";
-import { getBrowserManager } from "./browser";
 
 export interface WebSource {
   title: string;
@@ -247,132 +246,7 @@ async function fetchAndExtract(
   }
 }
 
-/* ================================================================
- * BROWSER ESCALATION
- *
- * When HTTP extraction returns insufficient content (SPA shells,
- * JavaScript-rendered pages, dynamic content), escalate to Playwright
- * browser for rendering and extraction.
- * ================================================================ */
-
-const SPA_INDICATORS = [
-  /<div\s+id=["']?root["']?\s*>/i,
-  /<div\s+id=["']?app["']?\s*>/i,
-  /<div\s+id=["']?__next["']?\s*>/i,
-  /<noscript>/i,
-  /<script\s+type=["']?module["']?\s*>/i,
-  /react|vue|angular|svelte/i,
-];
-
 const MINIMAL_CONTENT_THRESHOLD = 200;
-
-function looksLikeSpaShell(html: string): boolean {
-  const textOnly = html.replace(/<[^>]+>/g, "").trim();
-  if (textOnly.length < MINIMAL_CONTENT_THRESHOLD) {
-    return true;
-  }
-  return SPA_INDICATORS.some((p) => p.test(html)) && textOnly.length < 500;
-}
-
-async function browserEscalate(
-  url: string,
-  options: { maxContentLength?: number; timeoutMs?: number } = {},
-): Promise<{ content: string; title: string } | null> {
-  const manager = getBrowserManager();
-  if (!manager.isAvailable()) {
-    return null;
-  }
-
-  const userId = "__pipeline__";
-  const guildId = "__pipeline__";
-
-  // Create isolated session
-  const { sessionId, available } = await manager.createSession(userId, guildId);
-  if (!available || !sessionId) {
-    return null;
-  }
-
-  try {
-    // Navigate
-    const nav = await manager.navigate(sessionId, url);
-    if (!nav.success) {
-      return null;
-    }
-
-    // Wait a bit for JavaScript to render
-    const page = manager.getPage(sessionId);
-    if (!page) return null;
-
-    await page.waitForTimeout(2000).catch(() => {});
-
-    // Extract content
-    const extracted = await manager.extractContent(sessionId);
-    if (!extracted.success || !extracted.text) {
-      return null;
-    }
-
-    const maxLen = options.maxContentLength || 8000;
-    const content = extracted.text.length > maxLen
-      ? extracted.text.slice(0, maxLen) + "..."
-      : extracted.text;
-
-    return { content, title: extracted.title || nav.title || "" };
-  } finally {
-    await manager.closeSession(sessionId);
-  }
-}
-
-async function fetchAndExtractWithBrowser(
-  url: string,
-  options: {
-    maxContentLength?: number;
-    timeoutMs?: number;
-  },
-): Promise<{ content: string; isArticle: boolean; markdown?: string } | null> {
-  // First try normal HTTP extraction
-  const normalResult = await fetchAndExtract(url, options);
-
-  // If normal extraction succeeded with sufficient content, return it
-  if (normalResult && normalResult.content.length >= MINIMAL_CONTENT_THRESHOLD) {
-    return normalResult;
-  }
-
-  // Check if the page looks like an SPA shell
-  try {
-    const page = await fetchPage(url, {
-      timeoutMs: options.timeoutMs || 10_000,
-      maxRetries: 0,
-      useCache: false,
-      respectRobots: false,
-    });
-
-    if (looksLikeSpaShell(page.html)) {
-      logger.debug(`🌐 SPA detected, escalating to browser: ${url}`);
-      const browserResult = await browserEscalate(url, options);
-      if (browserResult && browserResult.content.length > MINIMAL_CONTENT_THRESHOLD) {
-        return {
-          content: browserResult.content,
-          isArticle: false,
-          markdown: browserResult.content,
-        };
-      }
-    }
-  } catch {
-    // If we can't even fetch the page, try browser directly
-    logger.debug(`🌐 HTTP fetch failed, trying browser: ${url}`);
-    const browserResult = await browserEscalate(url, options);
-    if (browserResult && browserResult.content.length > MINIMAL_CONTENT_THRESHOLD) {
-      return {
-        content: browserResult.content,
-        isArticle: false,
-        markdown: browserResult.content,
-      };
-    }
-  }
-
-  // Return whatever normal extraction gave us (may be null or minimal)
-  return normalResult;
-}
 
 export async function webPipeline(
   query: string,
@@ -417,7 +291,7 @@ export async function webPipeline(
           };
         }
 
-        const extracted = await fetchAndExtractWithBrowser(result.url, {
+        const extracted = await fetchAndExtract(result.url, {
           maxContentLength,
           timeoutMs,
         });

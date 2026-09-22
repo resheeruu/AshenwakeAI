@@ -15,7 +15,7 @@ import path from "node:path";
 interface TestSuite {
   name: string;
   file: string;
-  category: "core" | "security" | "browser" | "tool" | "web" | "integration";
+  category: "core" | "security" | "tool" | "web" | "integration";
   optional?: boolean;
   reason?: string;
 }
@@ -45,9 +45,6 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Auth Upgrade", file: "scripts/test-auth-upgrade.ts", category: "security" },
   { name: "Ask Command", file: "scripts/test-ask-command.ts", category: "security" },
   { name: "Conversation Wrapper", file: "scripts/test-conversation-wrapper.ts", category: "security" },
-
-  // Browser
-  { name: "Browser", file: "scripts/test-browser.ts", category: "browser" },
 
   // Tool Registry
   { name: "Tool Registry", file: "scripts/test-tool-registry.ts", category: "tool" },
@@ -81,7 +78,7 @@ const MANDATORY_SUITES: TestSuite[] = [
 
   // Resource / hosting storage (disk, RAM, Playwright bootstrap, ENOSPC)
   { name: "Resource Startup", file: "scripts/test-resource-startup.ts", category: "integration" },
-  { name: "Playwright Install", file: "scripts/test-playwright-install.ts", category: "integration" },
+
 ];
 
 const OPTIONAL_SUITES: TestSuite[] = [
