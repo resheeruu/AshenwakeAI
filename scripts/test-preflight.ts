@@ -10,7 +10,12 @@
  * - Integration with existing systems
  * ================================================================ */
 
-import { runPreflight, createSupervisorChecks } from "../src/core/preflight";
+import {
+  runPreflight,
+  createSupervisorChecks,
+  classifyProviderStatus,
+} from "../src/core/preflight";
+import { HealthState } from "../src/ai/types";
 
 let passed = 0;
 let failed = 0;
@@ -29,6 +34,41 @@ function assert(condition: boolean, message: string): void {
 
 function assertIncludes(haystack: string, needle: string, message: string): void {
   assert(haystack.includes(needle), message);
+}
+
+/* ================================================================
+ * OFFLINE ROUTER — CREDENTIAL-FREE, DETERMINISTIC
+ *
+ * Builds a router from the REAL provider registry with persisted
+ * health disabled. This mirrors the clean CI environment: no
+ * provider API keys, no .env values, no production secrets, no
+ * network, and no local data/provider-health.json state.
+ *
+ * persistentHealth:false is the same construction used by the other
+ * provider suites (scripts/test-router.ts, scripts/test-provider-health.ts).
+ * ================================================================ */
+
+interface OfflineRouterContext {
+  router: any;
+  /** Names of every provider registered in the real registry (discovery). */
+  registryNames: string[];
+  /** Names of registered providers whose credentials are available now. */
+  availableNames: string[];
+}
+
+async function createOfflineRouter(): Promise<OfflineRouterContext> {
+  const { providers } = await import("../src/ai/providers");
+  const { AIRouter } = await import("../src/ai/router");
+
+  const router = new AIRouter(providers, { persistentHealth: false });
+
+  return {
+    router,
+    registryNames: providers.map((p) => p.name.toLowerCase()),
+    availableNames: providers
+      .filter((p) => p.isAvailable())
+      .map((p) => p.name.toLowerCase()),
+  };
 }
 
 async function main(): Promise<void> {
@@ -141,10 +181,9 @@ async function main(): Promise<void> {
   console.log("\n━━━ Auto-Discovery: AI Systems ━━━");
 
   try {
-    // Import the actual router for testing
-    const { providers } = await import("../src/ai/providers");
-    const { AIRouter } = await import("../src/ai/router");
-    const testRouter = new AIRouter(providers);
+    // Real provider registry + offline router (no credentials, no persisted state).
+    // Provider discovery must work in a credential-free CI environment.
+    const { router: testRouter, registryNames, availableNames } = await createOfflineRouter();
 
     const report = await runPreflight(testRouter, { logLevel: "quiet" });
 
@@ -163,6 +202,41 @@ async function main(): Promise<void> {
     // Provider names should match the registry
     const providerNames = providerChecks.map(c => c.name.replace("provider:", ""));
     assert(providerNames.includes("groq") || providerNames.includes("gemini"), "known providers found");
+
+    // Assertion A — registry completeness. Discovery is registry-driven and
+    // must therefore be identical with or without credentials: every provider
+    // registered in the real registry is enumerated, and nothing else is.
+    const discovered = providerNames.map(name => name.toLowerCase());
+    assert(
+      registryNames.length > 0,
+      `provider registry has entries (got ${registryNames.length})`
+    );
+    assert(
+      registryNames.every(name => discovered.includes(name)),
+      `every registered provider is discovered (${discovered.length}/${registryNames.length})`
+    );
+    assert(
+      discovered.length === registryNames.length,
+      `discovery matches registry size (discovered ${discovered.length}, registry ${registryNames.length})`
+    );
+
+    // Assertion B — credential honesty. A registered provider without
+    // credentials must be reported NOT_CONFIGURED. It must never inherit a
+    // stale persisted HEALTHY/CONFIGURED/DEGRADED state, and it is never
+    // reported as carrying health data it cannot have.
+    const unconfigured = new Set(registryNames.filter(name => !availableNames.includes(name)));
+    const unconfiguredChecks = providerChecks.filter(c =>
+      unconfigured.has(c.name.replace("provider:", "").toLowerCase())
+    );
+    const misclassified = unconfiguredChecks.filter(c => c.status !== "NOT_CONFIGURED");
+    assert(
+      misclassified.length === 0,
+      `unconfigured providers are NOT_CONFIGURED (${misclassified.map(c => `${c.name}=${c.status}`).join(", ") || "none"})`
+    );
+    assert(
+      unconfiguredChecks.every(c => c.details === "API key not configured"),
+      `unconfigured providers report missing credentials, not health data (${unconfiguredChecks.length} checked)`
+    );
   } catch (error) {
     assert(false, `AI checks failed: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -395,9 +469,8 @@ async function main(): Promise<void> {
   console.log("\n━━━ Provider Error Classification ━━━");
 
   try {
-    const { providers } = await import("../src/ai/providers");
-    const { AIRouter } = await import("../src/ai/router");
-    const testRouter = new AIRouter(providers);
+    // Deterministic provider status without credentials (no persisted health)
+    const { router: testRouter } = await createOfflineRouter();
 
     const report = await runPreflight(testRouter, { logLevel: "quiet" });
 
@@ -417,6 +490,104 @@ async function main(): Promise<void> {
     }
   } catch (error) {
     assert(false, `Provider error classification failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  // ========== CREDENTIAL-FIRST CLASSIFICATION / STALE HEALTH PROTECTION ==========
+
+  console.log("\n━━━ Credential-First Classification ━━━");
+
+  try {
+    const baseline = {
+      successes: 42,
+      failures: 0,
+      successRate: 100,
+      averageLatencyMs: 120,
+      score: 100,
+      lastError: null as string | null,
+    };
+
+    // A provider with no credentials must never be classified from health state,
+    // so stale persisted health cannot outlive a removed credential.
+    const staleHealthy = classifyProviderStatus({
+      ...baseline,
+      configured: false,
+      quarantined: false,
+      healthState: HealthState.HEALTHY,
+    });
+    assert(
+      staleHealthy.status === "NOT_CONFIGURED",
+      `missing credentials + stale HEALTHY => NOT_CONFIGURED (got ${staleHealthy.status})`
+    );
+    assert(
+      staleHealthy.details === "API key not configured",
+      "missing credentials never reports health data"
+    );
+
+    const staleQuarantined = classifyProviderStatus({
+      ...baseline,
+      configured: false,
+      quarantined: true,
+      healthState: HealthState.QUARANTINED,
+    });
+    assert(
+      staleQuarantined.status === "NOT_CONFIGURED",
+      `missing credentials + persisted quarantine => NOT_CONFIGURED (got ${staleQuarantined.status})`
+    );
+
+    // Configured providers keep full health classification.
+    const configuredHealthy = classifyProviderStatus({
+      ...baseline,
+      configured: true,
+      quarantined: false,
+      healthState: HealthState.HEALTHY,
+    });
+    assert(
+      configuredHealthy.status === "HEALTHY",
+      `configured + healthy => HEALTHY (got ${configuredHealthy.status})`
+    );
+
+    const configuredQuarantined = classifyProviderStatus({
+      ...baseline,
+      configured: true,
+      quarantined: true,
+      healthState: HealthState.HEALTHY,
+    });
+    assert(
+      configuredQuarantined.status === "QUARANTINED",
+      `configured + quarantined => QUARANTINED (got ${configuredQuarantined.status})`
+    );
+
+    const configuredUntested = classifyProviderStatus({
+      configured: true,
+      quarantined: false,
+      healthState: HealthState.CONFIGURED,
+      successes: 0,
+      failures: 0,
+      successRate: null,
+      averageLatencyMs: null,
+      score: 100,
+      lastError: null,
+    });
+    assert(
+      configuredUntested.status === "CONFIGURED",
+      `configured + untested => CONFIGURED, never faked healthy (got ${configuredUntested.status})`
+    );
+
+    const credentialFailure = classifyProviderStatus({
+      ...baseline,
+      configured: true,
+      quarantined: false,
+      healthState: HealthState.AUTH_FAILED,
+      successes: 0,
+      failures: 3,
+      successRate: 0,
+    });
+    assert(
+      credentialFailure.status === "FAILED",
+      `configured + auth_failed => FAILED, never faked healthy (got ${credentialFailure.status})`
+    );
+  } catch (error) {
+    assert(false, `Credential-first classification failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   // ========== SUMMARY ==========
