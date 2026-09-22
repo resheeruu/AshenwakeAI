@@ -10,6 +10,33 @@ echo "[start] AshenAI Generic Startup"
 echo "[start] NODE_ENV=${NODE_ENV}"
 echo "[start] ROOT=${ROOT_DIR}"
 
+# First-run detection: if .env is missing, run setup
+if [[ ! -f "${ROOT_DIR}/.env" ]]; then
+    echo ""
+    echo "╔══════════════════════════════════════════╗"
+    echo "║         AshenAI First Run Detected       ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo ""
+    echo "  No .env file found. Running setup..."
+    echo ""
+
+    if [[ -f "${ROOT_DIR}/node_modules/.bin/tsx" ]]; then
+        node ./node_modules/.bin/tsx scripts/setup.ts
+    elif command -v npx >/dev/null 2>&1; then
+        npx tsx scripts/setup.ts
+    else
+        echo "  ERROR: Cannot run setup — tsx not available."
+        echo "  Run: npm run setup"
+        exit 1
+    fi
+
+    # setup.ts owns the summary and next-step messaging.
+    # If it succeeds, proceed to startup. If it fails, exit non-zero.
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
+fi
+
 if [ -z "${PORT:-}" ]; then
     echo "[start] ERROR: PORT environment variable is required but not set."
     exit 1
