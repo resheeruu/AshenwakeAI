@@ -2,13 +2,11 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
+import { hashPassword, verifyPassword } from "../utils/password-hash";
+export { hashPassword, verifyPassword };
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const ACCOUNTS_FILE = path.join(DATA_DIR, "accounts.json");
-
-const ITERATIONS = 100_000;
-const KEY_LENGTH = 64;
-const DIGEST = "sha512";
 
 export interface Account {
   id: string;
@@ -89,20 +87,6 @@ function saveAccounts(): void {
 }
 
 loadAccounts();
-
-export function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
-  const useSalt = salt || crypto.randomBytes(32).toString("hex");
-  const hash = crypto.pbkdf2Sync(password, useSalt, ITERATIONS, KEY_LENGTH, DIGEST).toString("hex");
-  return { hash, salt: useSalt };
-}
-
-export function verifyPassword(password: string, hash: string, salt: string): boolean {
-  const { hash: computed } = hashPassword(password, salt);
-  const hashBuf = Buffer.from(computed, "hex");
-  const expectedBuf = Buffer.from(hash, "hex");
-  if (hashBuf.length !== expectedBuf.length) return false;
-  return crypto.timingSafeEqual(hashBuf, expectedBuf);
-}
 
 export function generateId(): string {
   return crypto.randomBytes(16).toString("hex");

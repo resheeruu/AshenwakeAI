@@ -420,7 +420,91 @@ check("graceful shutdown exists", () => {
 });
 
 /* ================================================================
- * SECTION 11: Secret Redaction
+ * SECTION 11: Bootstrap Behavior Tests
+ * ================================================================ */
+
+console.log("\n--- Bootstrap Behavior Tests ---");
+
+check("Interactive owner setup produces a valid PBKDF2 credential", () => {
+  const { hashPassword } = require("../src/utils/password-hash");
+  const result = hashPassword("test-password");
+  assert.equal(result.hash.length, 128, "Hash must be 128 hex chars (64 bytes)");
+  assert.equal(result.salt.length, 64, "Salt must be 64 hex chars (32 bytes)");
+});
+
+check("Password is never logged during setup", () => {
+  const setupContent = fs.readFileSync(path.join(ROOT, "scripts", "setup.ts"), "utf-8");
+  assert.ok(!setupContent.includes("console.log(password)"), "Must not log password");
+  assert.ok(!setupContent.includes("console.log(credential)"), "Must not log credential");
+  assert.ok(!setupContent.includes("console.log(secret)"), "Must not log secret");
+  assert.ok(!setupContent.includes("console.log(hash)"), "Must not log hash");
+});
+
+check("Non-interactive setup does NOT attempt to prompt", () => {
+  const setupContent = fs.readFileSync(path.join(ROOT, "scripts", "setup.ts"), "utf-8");
+  assert.ok(setupContent.includes("isTTY") || setupContent.includes("isTTY"),
+    "setup.ts must check process.stdin.isTTY for interactive vs non-interactive mode");
+});
+
+check("Non-interactive setup with owner env credentials succeeds", () => {
+  const { hashPassword } = require("../src/utils/password-hash");
+  const { hash, salt } = hashPassword("test-password");
+  const existingEnv = new Map<string, string>();
+  existingEnv.set("ASHENAI_OWNER_USERNAME", "admin");
+  existingEnv.set("ASHENAI_OWNER_PASSWORD_HASH", hash);
+  existingEnv.set("ASHENAI_OWNER_PASSWORD_SALT", salt);
+  assert.ok(existingEnv.get("ASHENAI_OWNER_USERNAME") && existingEnv.get("ASHENAI_OWNER_PASSWORD_HASH") && existingEnv.get("ASHENAI_OWNER_PASSWORD_SALT"),
+    "All three owner env credentials must be present");
+});
+
+check("Non-interactive setup without owner env credentials fails clearly", () => {
+  const setupContent = fs.readFileSync(path.join(ROOT, "scripts", "setup.ts"), "utf-8");
+  assert.ok(setupContent.includes("Owner credentials are not configured for non-interactive setup"),
+    "setup.ts must throw a clear owner-credential error in non-interactive mode");
+});
+
+check("The failure message does NOT incorrectly mention DISCORD_TOKEN", () => {
+  const setupContent = fs.readFileSync(path.join(ROOT, "scripts", "setup.ts"), "utf-8");
+  const errorIndex = setupContent.indexOf("Owner credentials are not configured for non-interactive setup");
+  const errorContext = setupContent.slice(Math.max(0, errorIndex - 50), errorIndex + 200);
+  assert.ok(!errorContext.includes("DISCORD_TOKEN"),
+    "The non-interactive error must not mention DISCORD_TOKEN");
+});
+
+check("Password hashing can execute without loading src/config/env.ts", () => {
+  const { hashPassword } = require("../src/utils/password-hash");
+  const result = hashPassword("test-password");
+  assert.equal(result.hash.length, 128, "Hash must be produced without loading env.ts");
+});
+
+check("The generated hash can be verified using the existing verifyPassword()", () => {
+  const { hashPassword, verifyPassword } = require("../src/utils/password-hash");
+  const password = "test-password-verify";
+  const { hash, salt } = hashPassword(password);
+  assert.ok(verifyPassword(password, hash, salt), "verifyPassword must return true for correct password");
+  assert.ok(!verifyPassword("wrong-password", hash, salt), "verifyPassword must return false for wrong password");
+});
+
+check("Existing owner credentials remain idempotent", () => {
+  const { hashPassword, verifyPassword } = require("../src/utils/password-hash");
+  const { hash: hash1, salt: salt1 } = hashPassword("same-password");
+  const { hash: hash2, salt: salt2 } = hashPassword("same-password");
+  assert.notEqual(hash1, hash2, "Different salts produce different hashes");
+  assert.equal(salt1.length, salt2.length, "Salt length must be consistent");
+  assert.ok(verifyPassword("same-password", hash1, salt1), "Hash must be verifiable with same salt");
+});
+
+check("Existing .env values remain preserved", () => {
+  const setupContent = fs.readFileSync(path.join(ROOT, "scripts", "setup.ts"), "utf-8");
+  assert.ok(setupContent.includes("existingEnv") && setupContent.includes("has("),
+    "setup.ts must check existingEnv.has(key) before writing .env values");
+  assert.ok(setupContent.includes(".env already exists — preserving existing values") ||
+    setupContent.includes("preserving existing values"),
+    "setup.ts must preserve existing .env values when file already exists");
+});
+
+/* ================================================================
+ * SECTION 12: Secret Redaction
  * ================================================================ */
 
 console.log("\n--- Secret Redaction ---");

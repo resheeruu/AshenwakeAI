@@ -16,9 +16,13 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Guild } from "discord.js";
-import { logger } from "../logger";
 import { ICON_MAP, ICON_NAMES, LOGICAL_TO_LEGACY, type IconName } from "./icons";
 import { ANIME_EMOTE_MAP, ANIME_EMOTE_NAMES, type AnimeEmoteName } from "./anime-emotes";
+
+function getLogger() {
+  const { logger } = require("../logger");
+  return logger;
+}
 
 /* ================================================================
  * TYPES
@@ -72,7 +76,7 @@ export async function provisionEmojis(guild: Guild): Promise<ProvisionResult> {
   try {
     // 1. Fetch existing guild emojis
     const existingEmojis = await guild.emojis.fetch();
-    logger.info(`Emoji provisioner: found ${existingEmojis.size} existing emojis in guild ${guild.name}`);
+    getLogger().info(`Emoji provisioner: found ${existingEmojis.size} existing emojis in guild ${guild.name}`);
 
     // Build a name -> ID lookup (use legacy "ash_*" names for matching)
     const existingByName = new Map<string, string>();
@@ -106,7 +110,7 @@ export async function provisionEmojis(guild: Guild): Promise<ProvisionResult> {
           result.hadErrors = true;
         }
       } else {
-        logger.debug(`Emoji provisioner: PNG not found for ${legacyName}, skipping upload`);
+        getLogger().debug(`Emoji provisioner: PNG not found for ${legacyName}, skipping upload`);
       }
     }
 
@@ -135,12 +139,12 @@ export async function provisionEmojis(guild: Guild): Promise<ProvisionResult> {
       // Anime emotes that don't have PNGs simply get no ID — text fallback is used
     }
 
-    logger.info(
+    getLogger().info(
       `Emoji provisioner: ${result.existing} existing, ${result.uploaded} uploaded, ` +
       `${result.hadErrors ? "some errors" : "no errors"}`
     );
   } catch (error) {
-    logger.warn(`Emoji provisioner failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`);
+    getLogger().warn(`Emoji provisioner failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`);
     result.hadErrors = true;
   }
 
@@ -203,10 +207,10 @@ async function uploadEmojiToGuild(
       name: name,
     });
 
-    logger.info(`Emoji provisioner: uploaded ${name} → ID: ${response.id}`);
+    getLogger().info(`Emoji provisioner: uploaded ${name} → ID: ${response.id}`);
     return response.id;
   } catch (error) {
-    logger.warn(`Emoji provisioner: failed to upload ${name}: ${error instanceof Error ? error.message : String(error)}`);
+    getLogger().warn(`Emoji provisioner: failed to upload ${name}: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }

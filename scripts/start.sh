@@ -20,6 +20,9 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
     echo "  No .env file found. Running setup..."
     echo ""
 
+    # Run setup with set +e so we can capture the exit code
+    # (set -e would exit the script before we can check)
+    set +e
     if [[ -f "${ROOT_DIR}/node_modules/.bin/tsx" ]]; then
         node ./node_modules/.bin/tsx scripts/setup.ts
     elif command -v npx >/dev/null 2>&1; then
@@ -29,10 +32,9 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
         echo "  Run: npm run setup"
         exit 1
     fi
-
-    # setup.ts owns the summary and next-step messaging.
-    # If it succeeds, proceed to startup. If it fails, exit non-zero.
-    if [ $? -ne 0 ]; then
+    SETUP_EXIT=$?
+    set -e
+    if [ $SETUP_EXIT -ne 0 ]; then
         exit 1
     fi
 fi

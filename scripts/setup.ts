@@ -20,6 +20,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { hashPassword } from "../src/utils/password-hash";
 
 const ROOT = process.cwd();
 const ENV_EXAMPLE = path.join(ROOT, ".env.example");
@@ -50,12 +51,6 @@ function logInfo(msg: string) {
 
 function generateSecret(length = 48): string {
   return crypto.randomBytes(length).toString("hex");
-}
-
-function generatePasswordHash(password: string, salt?: string): { hash: string; salt: string } {
-  const actualSalt = salt || crypto.randomBytes(16).toString("hex");
-  const hash = crypto.pbkdf2Sync(password, actualSalt, 100000, 64, "sha512").toString("hex");
-  return { hash, salt: actualSalt };
 }
 
 function parseEnvFile(content: string): Map<string, string> {
@@ -125,16 +120,27 @@ function ensureOwnerAccount(existingEnv: Map<string, string>): Promise<{
     }
   }
 
-  // Check if env vars provide owner
-  const envUsername = existingEnv.get("ASHENAI_OWNER_USERNAME");
-  const envHash = existingEnv.get("ASHENAI_OWNER_PASSWORD_HASH");
-  const envSalt = existingEnv.get("ASHENAI_OWNER_PASSWORD_SALT");
+  // Check if env vars provide owner (from .env file or process.env for managed hosts)
+  const envUsername = existingEnv.get("ASHENAI_OWNER_USERNAME") || process.env.ASHENAI_OWNER_USERNAME?.trim();
+  const envHash = existingEnv.get("ASHENAI_OWNER_PASSWORD_HASH") || process.env.ASHENAI_OWNER_PASSWORD_HASH?.trim();
+  const envSalt = existingEnv.get("ASHENAI_OWNER_PASSWORD_SALT") || process.env.ASHENAI_OWNER_PASSWORD_SALT?.trim();
   if (envUsername && envHash && envSalt) {
     logOk("Owner credentials found in environment");
-    return Promise.resolve({});
+    return Promise.resolve({ username: envUsername, passwordHash: envHash, passwordSalt: envSalt });
   }
 
-  // Interactively set up owner account — user-selected password, securely hashed
+  // Headless/non-interactive mode: never prompt, fail clearly
+  if (process.stdin.isTTY !== true) {
+    const missing: string[] = [];
+    if (!envUsername) missing.push("ASHENAI_OWNER_USERNAME");
+    if (!envHash) missing.push("ASHENAI_OWNER_PASSWORD_HASH");
+    if (!envSalt) missing.push("ASHENAI_OWNER_PASSWORD_SALT");
+    throw new Error(
+      `Owner credentials are not configured for non-interactive setup. Set ${missing.join(", ")}, or run npm run setup interactively.`
+    );
+  }
+
+  // Interactive mode: prompt for password, hash with PBKDF2
   return new Promise<{
     username?: string;
     passwordHash?: string;
@@ -149,17 +155,11 @@ function ensureOwnerAccount(existingEnv: Map<string, string>): Promise<{
       rl.question(
         "Set owner password (will not be echoed): ",
         (password: string) => {
-          // Hash password using the existing authentication implementation (PBKDF2)
-          // Import hashPassword from account-store and resolve with credentials
-          import("../src/control/account-store").then((mod) => {
-            const { hashPassword } = mod;
-            const { hash, salt } = hashPassword(password);
-            rl.close();
-            logOk("Owner account configured");
-            logInfo(`  Username: admin`);
-            // Password is not logged — it is only hashed and persisted for authentication.
-            resolve({ username: "admin", passwordHash: hash, passwordSalt: salt });
-          });
+          const { hash, salt } = hashPassword(password);
+          rl.close();
+          logOk("Owner account configured");
+          logInfo(`  Username: admin`);
+          resolve({ username: "admin", passwordHash: hash, passwordSalt: salt });
         },
       );
     };
