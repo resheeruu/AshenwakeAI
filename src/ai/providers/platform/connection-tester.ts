@@ -24,11 +24,21 @@ function isSafeEndpoint(urlStr: string): boolean {
   try {
     const url = new URL(urlStr);
     if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-    const hostname = url.hostname.toLowerCase();
-    if (BLOCKED_HOSTS.has(hostname)) return false;
-    if (hostname.endsWith(".local") || hostname.endsWith(".internal") || hostname.endsWith(".localhost")) return false;
+    let hostname = url.hostname.toLowerCase();
+    // Strip brackets from IPv6 addresses for pattern matching
+    const cleanHostname = hostname.replace(/^\[(.*)\]$/, "$1").toLowerCase();
+    if (BLOCKED_HOSTS.has(hostname) || BLOCKED_HOSTS.has(cleanHostname)) return false;
+    if (
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".localhost") ||
+      cleanHostname.endsWith(".local") ||
+      cleanHostname.endsWith(".internal") ||
+      cleanHostname.endsWith(".localhost")
+    )
+      return false;
     for (const pattern of PRIVATE_IP_PATTERNS) {
-      if (pattern.test(hostname)) return false;
+      if (pattern.test(hostname) || pattern.test(cleanHostname)) return false;
     }
     return true;
   } catch {
@@ -40,7 +50,17 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...options, signal: controller.signal, redirect: "manual" });
+    /*
+     * SSRF protection: prevent redirects to private/internal addresses.
+     * validate the response URL after the request to ensure no redirect
+     * bypassed the endpoint validation.
+     */
+    const responseUrl = response.url;
+    if (responseUrl && responseUrl !== url && !isSafeEndpoint(responseUrl)) {
+      throw new Error(`Redirect blocked: ${responseUrl} is not a safe endpoint`);
+    }
+    return response;
   } finally {
     clearTimeout(timer);
   }
