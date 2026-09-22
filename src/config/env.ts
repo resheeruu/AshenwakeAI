@@ -100,8 +100,8 @@ function loadRuntimeConfig(): RuntimeConfig {
 
 export const config = {
   discord: {
-    token: required("DISCORD_TOKEN"),
-    clientId: required("DISCORD_CLIENT_ID"),
+    token: optional("DISCORD_TOKEN"),
+    clientId: optional("DISCORD_CLIENT_ID"),
     clientSecret: optional("DISCORD_CLIENT_SECRET"),
     redirectUri: optional("DISCORD_REDIRECT_URI"),
     guildId: optional("DISCORD_GUILD_ID"),
@@ -154,8 +154,8 @@ export const config = {
     "info",
 } as {
   discord: {
-    token: string;
-    clientId: string;
+    token: string | undefined;
+    clientId: string | undefined;
     clientSecret?: string;
     redirectUri?: string;
     guildId?: string;
@@ -231,6 +231,38 @@ export class ConfigManager {
 
 export const configManager =
   new ConfigManager();
+
+/* ================================================================
+ * RUNTIME VALIDATION
+ *
+ * Called at application startup to verify required environment
+ * variables are present. This separates module import from
+ * runtime validation, allowing tests to import modules that
+ * depend on env.ts without requiring production credentials.
+ * ================================================================ */
+
+export function validateRuntime(): void {
+  const missing: string[] = [];
+
+  if (!process.env.DISCORD_TOKEN?.trim()) {
+    missing.push("DISCORD_TOKEN");
+  }
+  if (!process.env.DISCORD_CLIENT_ID?.trim()) {
+    missing.push("DISCORD_CLIENT_ID");
+  }
+  if (!process.env.DISCORD_CLIENT_SECRET?.trim()) {
+    missing.push("DISCORD_CLIENT_SECRET");
+  }
+  if (!process.env.DISCORD_REDIRECT_URI?.trim()) {
+    missing.push("DISCORD_REDIRECT_URI");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(", ")}`,
+    );
+  }
+}
 
 /* ================================================================
  * U10: SECURITY CONFIGURATION VALIDATION

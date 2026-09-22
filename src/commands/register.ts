@@ -23,7 +23,7 @@ export async function syncCommands(
   const rest = new REST({
     version: "10",
   }).setToken(
-    config.discord.token,
+    config.discord.token!,
   );
 
   const commandData = commands.map(
@@ -37,7 +37,7 @@ export async function syncCommands(
   try {
     await rest.put(
       Routes.applicationCommands(
-        config.discord.clientId,
+        config.discord.clientId!,
       ),
       {
         body: commandData,

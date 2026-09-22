@@ -304,8 +304,8 @@ async function main(): Promise<void> {
     const report = await runPreflight(null, { logLevel: "quiet" });
     const reportStr = JSON.stringify(report);
 
-    assert(!reportStr.includes(process.env.DISCORD_TOKEN ?? "NEVER_MATCH"), "no Discord token in report");
-    assert(!reportStr.includes(process.env.GROQ_API_KEY ?? "NEVER_MATCH"), "no API key in report");
+    assert(!reportStr.includes(process.env.DISCORD_TOKEN || "NEVER_MATCH"), "no Discord token in report");
+    assert(!reportStr.includes(process.env.GROQ_API_KEY || "NEVER_MATCH"), "no API key in report");
     assert(!reportStr.includes("Bearer "), "no Bearer token in report");
     assert(!reportStr.includes("sk-"), "no OpenAI key in report");
   } catch (error) {

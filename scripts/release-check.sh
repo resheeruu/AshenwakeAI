@@ -1,29 +1,62 @@
 #!/usr/bin/env bash
 # ================================================================
 # RELEASE CHECK — Full production readiness verification
+#
+# Check classification:
+#   MANDATORY     — failure blocks release
+#   INFORMATIONAL — reports status, does not block
+#   ENVIRONMENT-DEPENDENT — may fail due to missing tools
 # ================================================================
 set -Eeuo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 PASSED=0
 FAILED=0
-BLOCKED=0
+INFO=0
+WARN=0
 
 step() {
   local name="$1"
-  shift
-  echo -e "\n${YELLOW}▶ $name${NC}"
+  local classification="${2:-MANDATORY}"
+  shift 2
+  echo -e "\n${YELLOW}▶ $name${NC} ${CYAN}[$classification]${NC}"
   if "$@"; then
     echo -e "${GREEN}  ✓ PASSED${NC}"
     PASSED=$((PASSED + 1))
   else
     echo -e "${RED}  ✗ FAILED${NC}"
     FAILED=$((FAILED + 1))
-    BLOCKED=1
+  fi
+}
+
+info_step() {
+  local name="$1"
+  shift
+  echo -e "\n${YELLOW}▶ $name${NC} ${CYAN}[INFORMATIONAL]${NC}"
+  if "$@"; then
+    echo -e "${GREEN}  ✓ PASSED${NC}"
+    INFO=$((INFO + 1))
+  else
+    echo -e "${YELLOW}  ⚠ WARN${NC}"
+    WARN=$((WARN + 1))
+  fi
+}
+
+env_step() {
+  local name="$1"
+  shift
+  echo -e "\n${YELLOW}▶ $name${NC} ${CYAN}[ENVIRONMENT-DEPENDENT]${NC}"
+  if "$@"; then
+    echo -e "${GREEN}  ✓ PASSED${NC}"
+    INFO=$((INFO + 1))
+  else
+    echo -e "${YELLOW}  ⚠ SKIPPED (environment-dependent)${NC}"
+    WARN=$((WARN + 1))
   fi
 }
 
@@ -31,52 +64,51 @@ echo "╔═══════════════════════�
 echo "║     ASHENAI RELEASE CHECK                        ║"
 echo "╚══════════════════════════════════════════════════╝"
 
-# 1. Repository hygiene
-step "Repository hygiene" bash -c 'cd ~/AshenAI && git status --porcelain | grep -v "^??" | head -1 | grep -q . && exit 1 || true'
+# MANDATORY: Repository hygiene
+step "Repository hygiene" MANDATORY bash -c 'cd ~/AshenAI && git status --porcelain | grep -v "^??" | head -1 | grep -q . && exit 1 || true'
 
-# 2. Dependency installation
-step "Dependency install (npm ci)" bash -c 'cd ~/AshenAI && npm ci 2>&1 | tail -3'
+# MANDATORY: Dependency installation
+step "Dependency install (npm ci)" MANDATORY bash -c 'cd ~/AshenAI && npm ci 2>&1 | tail -3'
 
-# 3. npm audit
-step "npm audit" bash -c 'cd ~/AshenAI && npm audit --audit-level=high 2>&1 | tail -3'
+# MANDATORY: TypeScript typecheck
+step "Typecheck" MANDATORY bash -c 'cd ~/AshenAI && npx tsc --noEmit 2>&1'
 
-# 4. TypeScript typecheck
-step "Typecheck" bash -c 'cd ~/AshenAI && npx tsc --noEmit 2>&1'
+# MANDATORY: Mandatory tests
+step "Mandatory tests" MANDATORY bash -c 'cd ~/AshenAI && npx tsx scripts/run-all-tests.ts 2>&1 | tail -15'
 
-# 5. Mandatory tests
-step "Mandatory tests (36 suites)" bash -c 'cd ~/AshenAI && npx tsx scripts/run-all-tests.ts 2>&1 | tail -15'
+# MANDATORY: Build
+step "Build" MANDATORY bash -c 'cd ~/AshenAI && npm run build 2>&1 | tail -3'
 
-# 6. Anime action tests
-step "Anime action tests" bash -c 'cd ~/AshenAI && npx tsx scripts/test-anime-actions.ts 2>&1 | tail -5'
+# INFORMATIONAL: npm audit
+info_step "npm audit" bash -c 'cd ~/AshenAI && npm audit --audit-level=high 2>&1 | tail -3'
 
-# 7. No-Unicode-emoji test
-step "No-Unicode-emoji regression" bash -c 'cd ~/AshenAI && npx tsx scripts/test-no-unicode-emojis.ts 2>&1 | tail -5'
+# ENVIRONMENT-DEPENDENT: Docker validation
+env_step "Docker build" bash -c 'cd ~/AshenAI && docker build -t ashenai-release-check . 2>&1 | tail -5'
 
-# 8. Build
-step "Build" bash -c 'cd ~/AshenAI && npm run build 2>&1 | tail -3'
+# MANDATORY: Check for hardcoded secrets
+step "No hardcoded secrets" MANDATORY bash -c 'cd ~/AshenAI && grep -rn "sk-\|token\s*=\s*["\x27]AI\|DISCORD_TOKEN\s*=" src/ --include="*.ts" | grep -v ".example" | grep -v "test" | head -1 | grep -q . && exit 1 || true'
 
-# 9. Icon validation
-step "Icon validation" bash -c 'cd ~/AshenAI && npm run icons:validate 2>&1 | tail -5 || true'
+# MANDATORY: Check for TODO/FIXME
+step "No TODO/FIXME in src" MANDATORY bash -c 'cd ~/AshenAI && grep -rn "TODO\|FIXME\|HACK" src/ --include="*.ts" | head -1 | grep -q . && exit 1 || true'
 
-# 10. Docker validation
-step "Docker build" bash -c 'cd ~/AshenAI && docker build -t ashenai-release-check . 2>&1 | tail -5 || true'
-
-# 11. Check for hardcoded secrets
-step "No hardcoded secrets" bash -c 'cd ~/AshenAI && grep -rn "sk-\|token\s*=\s*["\x27]AI\|DISCORD_TOKEN\s*=" src/ --include="*.ts" | grep -v ".example" | grep -v "test" | head -1 | grep -q . && exit 1 || true'
-
-# 12. Check for TODO/FIXME
-step "No TODO/FIXME in src" bash -c 'cd ~/AshenAI && grep -rn "TODO\|FIXME\|HACK" src/ --include="*.ts" | head -1 | grep -q . && exit 1 || true'
+# INFORMATIONAL: Icon validation
+info_step "Icon validation" bash -c 'cd ~/AshenAI && npm run icons:validate 2>&1 | tail -5'
 
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
-if [ $BLOCKED -eq 0 ]; then
+if [ $FAILED -eq 0 ]; then
   echo -e "║  ${GREEN}RELEASE READY${NC}                                  ║"
 else
-  echo -e "║  ${RED}RELEASE BLOCKED${NC} — $FAILED step(s) failed           ║"
+  echo -e "║  ${RED}RELEASE BLOCKED${NC} — $FAILED mandatory step(s) failed           ║"
 fi
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 echo "  Passed: $PASSED"
 echo "  Failed: $FAILED"
+echo "  Informational: $INFO"
+echo "  Warnings: $WARN"
 
-exit $BLOCKED
+if [ $FAILED -gt 0 ]; then
+  exit 1
+fi
+exit 0

@@ -1,8 +1,9 @@
 import "dotenv/config";
 
 // U10: Validate security configuration before any other initialization
-import { validateSecurityConfig } from "./config/env";
+import { validateSecurityConfig, validateRuntime } from "./config/env";
 validateSecurityConfig();
+validateRuntime();
 
 // Migrate owner credentials from environment to accounts.json if needed
 import { setOwnerFromEnv } from "./control/account-store";

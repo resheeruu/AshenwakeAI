@@ -22,22 +22,42 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
 
+      # --- STAGE: Dependencies ---
       - name: Install dependencies
         run: npm ci
 
+      # --- STAGE: Typecheck ---
       - name: TypeScript typecheck
         run: npm run typecheck
 
+      # --- STAGE: Build ---
       - name: Build
         run: npm run build
 
+      # --- STAGE: Mandatory Tests ---
       - name: Run mandatory test suite
         run: npm test
 
+      # --- STAGE: Quality Gates ---
       - name: Dependency check
         run: |
           set -o pipefail
           npm ls --depth=0 2>&1 | head -50
 
-      - name: Audit dependencies (informational)
-        run: npm audit --omit=dev 2>&1 | head -30 || true
+      # --- STAGE: Informational Security ---
+      - name: npm audit (informational)
+        run: |
+          set +e
+          AUDIT_OUTPUT=$(npm audit --omit=dev 2>&1)
+          echo "$AUDIT_OUTPUT" | head -30
+          echo "⚠️ npm audit completed — review any high/critical vulnerabilities above"
+          echo "ℹ️ This check is informational; it does not fail CI"
+        continue-on-error: true
+
+      # --- STAGE: Optional Checks ---
+      - name: Icon validation
+        run: |
+          set +e
+          npm run icons:validate 2>&1 | tail -5
+          echo "ℹ️ Icon validation completed — review any warnings above"
+        continue-on-error: true
