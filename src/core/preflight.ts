@@ -2,6 +2,7 @@ import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../logger";
+import type { HealthState } from "../ai/types";
 
 /* =====================================================
    UNIFIED PREFLIGHT — Aggregation Layer
@@ -503,6 +504,96 @@ export function assessProviderLifecycle(
   };
 }
 
+/* =====================================================
+   PROVIDER CLASSIFICATION — CREDENTIAL-FIRST
+   =====================================================
+   Discovery and credential availability are distinct concerns:
+
+     registered  -> the provider exists in the ProviderRegistry (discovery)
+     configured  -> credential/API key availability at runtime
+     available   -> the provider could serve a live request right now
+     healthy     -> the provider completed a real request successfully
+
+   Per-provider preflight checks are therefore emitted for EVERY
+   registered provider, independently of credentials, while the
+   classification order stays:
+
+     1. credential availability -> NOT_CONFIGURED when credentials are absent
+     2. quarantine state
+     3. persisted/runtime health state
+
+   Invariant: when `configured` is false the persisted health state is
+   never consulted, so stale persisted health can never outlive a removed
+   credential or be reported as HEALTHY/CONFIGURED/DEGRADED.
+
+   Pure function: no credential synthesis, no probing, no I/O.
+   ===================================================== */
+
+export interface ProviderClassificationInput {
+  configured: boolean;
+  quarantined: boolean;
+  healthState: HealthState;
+  successes: number;
+  failures: number;
+  successRate: number | null;
+  averageLatencyMs: number | null;
+  score: number;
+  lastError: string | null;
+}
+
+/**
+ * Classify one registered provider into a PreflightStatus.
+ *
+ * Order: 1) credential availability, 2) quarantine, 3) persisted health.
+ */
+export function classifyProviderStatus(
+  p: ProviderClassificationInput,
+): { status: PreflightStatus; details: string } {
+  // 1) Credential availability — evaluated BEFORE any health state so a
+  //    credential-less provider can never inherit stale persisted health.
+  if (!p.configured) {
+    return { status: "NOT_CONFIGURED", details: "API key not configured" };
+  }
+
+  // 2) Quarantine state.
+  if (p.quarantined) {
+    return {
+      status: "QUARANTINED",
+      details: formatProviderDetails(p, "quarantined"),
+    };
+  }
+
+  // 3) Persisted/runtime health state.
+  switch (p.healthState) {
+    case "healthy":
+      return { status: "HEALTHY", details: formatProviderDetails(p, "healthy") };
+    case "degraded":
+      return { status: "DEGRADED", details: formatProviderDetails(p, "degraded") };
+    case "rate_limited":
+      return { status: "DEGRADED", details: formatProviderDetails(p, "rate limited") };
+    case "auth_failed":
+      return { status: "FAILED", details: formatProviderDetails(p, "auth failed") };
+    case "no_credits":
+      return { status: "DEGRADED", details: formatProviderDetails(p, "no credits") };
+    case "timeout":
+      return { status: "DEGRADED", details: formatProviderDetails(p, "timeout") };
+    case "network_error":
+      return { status: "DEGRADED", details: formatProviderDetails(p, "network error") };
+    case "not_configured":
+      // Configured now, but persisted state predates the credential.
+      return { status: "NOT_CONFIGURED", details: "API key not configured" };
+    case "configured":
+      return {
+        status: p.successes === 0 && p.failures === 0 ? "CONFIGURED" : "UNVERIFIED",
+        details: formatProviderDetails(p, "configured (untested)"),
+      };
+    case "recovering":
+      return { status: "RECOVERING", details: formatProviderDetails(p, "recovering") };
+    default:
+      return { status: "UNVERIFIED", details: formatProviderDetails(p, "unknown state") };
+  }
+}
+
 /**
  * Auto-discover AI provider status from existing ProviderRegistry + AIRouter.
  * This is the key integration point — it queries the actual router health.
@@ -569,65 +660,14 @@ function checkAIProviders(router: any): PreflightCheck[] {
     lastChecked: Date.now(),
   });
 
-  // Individual provider details — auto-discovered from registry
-  // Uses HealthState enum for accurate error classification
+  // Individual provider details — discovered from the registry.
+  //
+  // Discovery is registry-driven and therefore independent of credentials:
+  // every registered provider is enumerated, including providers whose API
+  // key is absent (they report NOT_CONFIGURED). Per-provider checks remain
+  // required:false, so a missing key never blocks startup readiness.
   for (const p of report.providers) {
-    if (!p.configured) continue;
-
-    let status: PreflightStatus;
-    let details: string;
-
-    if (p.quarantined) {
-      status = "QUARANTINED";
-      details = formatProviderDetails(p, "quarantined");
-    } else {
-      // Map HealthState to PreflightStatus for accurate classification
-      switch (p.healthState) {
-        case "healthy":
-          status = "HEALTHY";
-          details = formatProviderDetails(p, "healthy");
-          break;
-        case "degraded":
-          status = "DEGRADED";
-          details = formatProviderDetails(p, "degraded");
-          break;
-        case "rate_limited":
-          status = "DEGRADED";
-          details = formatProviderDetails(p, "rate limited");
-          break;
-        case "auth_failed":
-          status = "FAILED";
-          details = formatProviderDetails(p, "auth failed");
-          break;
-        case "no_credits":
-          status = "DEGRADED";
-          details = formatProviderDetails(p, "no credits");
-          break;
-        case "timeout":
-          status = "DEGRADED";
-          details = formatProviderDetails(p, "timeout");
-          break;
-        case "network_error":
-          status = "DEGRADED";
-          details = formatProviderDetails(p, "network error");
-          break;
-        case "not_configured":
-          status = "NOT_CONFIGURED";
-          details = "API key not configured";
-          break;
-        case "configured":
-          status = p.successes === 0 && p.failures === 0 ? "CONFIGURED" : "UNVERIFIED";
-          details = formatProviderDetails(p, "configured (untested)");
-          break;
-        case "recovering":
-          status = "RECOVERING";
-          details = formatProviderDetails(p, "recovering");
-          break;
-        default:
-          status = "UNVERIFIED";
-          details = formatProviderDetails(p, "unknown state");
-      }
-    }
+    const { status, details } = classifyProviderStatus(p);
 
     checks.push({
       name: `provider:${p.name}`,
