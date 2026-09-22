@@ -12,6 +12,7 @@
     "agent": "tsx src/agent/index.ts",
     "cli": "tsx src/cli.ts",
     "test": "node ./node_modules/.bin/tsx scripts/run-all-tests.ts",
+    "test:diagnostic": "node ./node_modules/.bin/tsx scripts/run-all-tests.ts --diagnostic",
     "test:smoke": "node ./node_modules/.bin/tsx scripts/test-smoke.ts",
     "test:all": "node ./node_modules/.bin/tsx scripts/run-all-tests.ts --all",
     "check": "tsx scripts/check.ts && npm test",
