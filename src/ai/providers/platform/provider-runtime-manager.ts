@@ -22,6 +22,33 @@ export type ProviderRuntimeState =
   | "quarantined"
   | "disabled";
 
+/**
+ * Authoritative runtime state machine. Illegal transitions are rejected.
+ * Transitions mirror the documented lifecycle:
+ *   idle → starting → running | quarantined
+ *   running → quarantined | disabled | starting (re-verify)
+ *   quarantined → starting | disabled
+ *   disabled → starting (enable)
+ *   any → disabled (disable/delete)
+ */
+const VALID_STATE_TRANSITIONS: Record<ProviderRuntimeState, ProviderRuntimeState[]> = {
+  idle: ["starting", "disabled"],
+  starting: ["running", "quarantined", "idle", "disabled"],
+  running: ["starting", "quarantined", "disabled"],
+  quarantined: ["starting", "disabled", "idle"],
+  disabled: ["starting", "idle"],
+};
+
+export function canTransitionState(
+  from: ProviderRuntimeState,
+  to: ProviderRuntimeState,
+): boolean {
+  if (from === to) return true;
+  return (VALID_STATE_TRANSITIONS[from] ?? []).includes(to);
+}
+
+const QUARANTINE_FAILURE_THRESHOLD = 5;
+
 export interface ProviderRuntime {
   definition: ProviderDefinition;
   credential: string | undefined;
@@ -82,6 +109,17 @@ function initialState(): ProviderRuntime {
 
 export class ProviderRuntimeManager {
   private runtimes = new Map<string, ProviderRuntime>();
+
+  private transitionState(runtime: ProviderRuntime, next: ProviderRuntimeState): boolean {
+    if (!canTransitionState(runtime.state, next)) {
+      logger.warn(
+        `⚠️ Invalid provider runtime transition: ${runtime.state} → ${next} (${runtime.definition.id})`,
+      );
+      return false;
+    }
+    runtime.state = next;
+    return true;
+  }
 
   getRuntime(id: string): ProviderRuntime | undefined {
     return this.runtimes.get(id);
@@ -146,11 +184,20 @@ export class ProviderRuntimeManager {
     runtime.state = "idle";
     this.runtimes.set(def.id, runtime);
 
-    // 5. Verify: test connection with provided credential
+    // 5. Verify: transition idle → starting → running/quarantined
     try {
+      this.transitionState(runtime, "starting");
       await this.verifyProvider(def.id);
+      const after = this.runtimes.get(def.id);
+      if (after && after.state === "starting") {
+        this.transitionState(after, after.healthState === "HEALTHY" ? "running" : "quarantined");
+      }
     } catch {
       // Verification failure does not block creation, but marks as unconfigured
+      const after = this.runtimes.get(def.id);
+      if (after && after.state === "starting") {
+        this.transitionState(after, "quarantined");
+      }
     }
 
     // 6. Audit
@@ -266,14 +313,32 @@ export class ProviderRuntimeManager {
     // Update repo enabled state (repository handles updatedAt)
     providerRepo.update(id, { enabled: true });
 
+    // Transition idle/disabled/quarantined → starting before verify
+    const existingRuntime = this.runtimes.get(id);
+    if (existingRuntime) {
+      if (existingRuntime.state !== "starting") {
+        // Allow enable from disabled/idle/quarantined via starting
+        if (!canTransitionState(existingRuntime.state, "starting")) {
+          existingRuntime.state = "idle";
+        }
+        this.transitionState(existingRuntime, "starting");
+      }
+    }
+
     // Create runtime provider instance
     const provider = createDynamicProvider({ ...def, enabled: true });
 
     // Register in registry
     providerRegistry.register(provider, def.priority);
 
-    // Test connection and update health
+    // Test connection and update health, then finalize state
     await this.verifyProvider(id);
+    const runtime = this.runtimes.get(id);
+    if (runtime && runtime.state === "starting") {
+      this.transitionState(runtime, runtime.healthState === "HEALTHY" ? "running" : "quarantined");
+    } else if (runtime && runtime.state === "quarantined" && runtime.healthState === "HEALTHY") {
+      this.transitionState(runtime, "running");
+    }
 
     // Audit
     recordAudit({
@@ -305,7 +370,10 @@ export class ProviderRuntimeManager {
     // Invalidate runtime instance
     const runtime = this.runtimes.get(id);
     if (runtime) {
-      runtime.state = "disabled";
+      if (!canTransitionState(runtime.state, "disabled")) {
+        runtime.state = "running"; // normalize then transition
+      }
+      this.transitionState(runtime, "disabled");
       runtime.healthState = "NOT_CONFIGURED";
       runtime.credential = undefined;
       runtime.successes = 0;
@@ -395,6 +463,13 @@ export class ProviderRuntimeManager {
         ? (runtime.averageLatencyMs + result.latencyMs) / 2
         : result.latencyMs;
       runtime.lastLatencyMs = result.latencyMs;
+      // Healthy providers leave quarantine and become running when enabled
+      if (def.enabled && (runtime.state === "quarantined" || runtime.state === "starting")) {
+        this.transitionState(runtime, "running");
+      } else if (def.enabled && runtime.state === "idle") {
+        this.transitionState(runtime, "starting");
+        this.transitionState(runtime, "running");
+      }
     } else {
       runtime.healthState = "DEGRADED";
       runtime.consecutiveFailures++;
@@ -402,6 +477,15 @@ export class ProviderRuntimeManager {
       // Set cooldown based on failure type
       runtime.cooldownUntil = Date.now() + 30000; // 30s cooldown
       runtime.failures++;
+      // Quarantine after sustained failures
+      if (runtime.consecutiveFailures >= QUARANTINE_FAILURE_THRESHOLD && def.enabled) {
+        runtime.healthState = "QUARANTINED";
+        if (runtime.state === "running" || runtime.state === "starting") {
+          this.transitionState(runtime, "quarantined");
+        }
+      } else if (runtime.state === "starting") {
+        this.transitionState(runtime, "quarantined");
+      }
     }
 
     runtime.lastHealthCheck = Date.now();

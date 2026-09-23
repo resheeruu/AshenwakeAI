@@ -27,5 +27,7 @@ export {
   testProviderConnection,
   discoverModels,
   isSafeEndpoint,
+  isSafeEndpointForProtocol,
 } from "./connection-tester";
 export { createDynamicProvider, loadAllDynamicProviders } from "./provider-adapter";
+export { canTransitionState } from "./provider-runtime-manager";

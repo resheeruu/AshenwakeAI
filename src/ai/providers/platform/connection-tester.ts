@@ -1,6 +1,6 @@
 import type { TestConnectionResult, DiscoverModelsResult, ProviderProtocol } from "./types";
 import { logger } from "../../../logger";
-import { validateOutboundUrl } from "../../../security/network-boundary";
+import { validateOutboundUrl, validateTrustedLocalProviderUrl, validateRedirectTarget, MAX_REDIRECTS } from "../../../security/network-boundary";
 
 /*
  * Provider endpoints must never target private, loopback, link-local,
@@ -16,21 +16,57 @@ function isSafeEndpoint(urlStr: string): boolean {
   return validateOutboundUrl(urlStr).valid;
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+/**
+ * Protocol-aware endpoint policy:
+ * - ollama (local LLM): trusted-local policy (loopback/RFC1918 allowed,
+ *   metadata/link-local/non-HTTP still blocked).
+ * - all other protocols: authoritative public-only validateOutboundUrl.
+ */
+function isSafeEndpointForProtocol(urlStr: string, protocol: ProviderProtocol): boolean {
+  if (protocol === "ollama") {
+    return validateTrustedLocalProviderUrl(urlStr).valid;
+  }
+  return validateOutboundUrl(urlStr).valid;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+  protocol: ProviderProtocol = "openai_compatible",
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal, redirect: "manual" });
-    /*
-     * SSRF protection: prevent redirects to private/internal addresses.
-     * validate the response URL after the request to ensure no redirect
-     * bypassed the endpoint validation.
-     */
-    const responseUrl = response.url;
-    if (responseUrl && responseUrl !== url && !isSafeEndpoint(responseUrl)) {
-      throw new Error(`Redirect blocked: ${responseUrl} is not a safe endpoint`);
+    let currentUrl = url;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const response = await fetch(currentUrl, {
+        ...options,
+        signal: controller.signal,
+        redirect: "manual",
+      });
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location) return response;
+        const check = validateRedirectTarget(location, currentUrl);
+        if (!check.valid || !check.url) {
+          throw new Error(`Redirect blocked: ${check.reason ?? location}`);
+        }
+        if (!isSafeEndpointForProtocol(check.url, protocol)) {
+          throw new Error(`Redirect blocked: ${check.url} is not a safe endpoint`);
+        }
+        currentUrl = check.url;
+        continue;
+      }
+
+      const responseUrl = response.url;
+      if (responseUrl && responseUrl !== currentUrl && !isSafeEndpointForProtocol(responseUrl, protocol)) {
+        throw new Error(`Redirect blocked: ${responseUrl} is not a safe endpoint`);
+      }
+      return response;
     }
-    return response;
+    throw new Error(`Redirect blocked: exceeded ${MAX_REDIRECTS} redirects`);
   } finally {
     clearTimeout(timer);
   }
@@ -52,7 +88,7 @@ async function testOpenAICompatible(
     const modelsResponse = await fetchWithTimeout(`${base}/models`, {
       method: "GET",
       headers,
-    }, timeoutMs);
+    }, timeoutMs, "openai_compatible");
 
     const latencyMs = Date.now() - started;
 
@@ -99,7 +135,7 @@ async function testAnthropic(
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
-    }, timeoutMs);
+    }, timeoutMs, "anthropic");
 
     const latencyMs = Date.now() - started;
 
@@ -137,7 +173,8 @@ async function testGemini(
     const response = await fetchWithTimeout(
       `${endpoint}/v1beta/models?key=${apiKey}`,
       { method: "GET" },
-      timeoutMs
+      timeoutMs,
+      "gemini",
     );
 
     const latencyMs = Date.now() - started;
@@ -176,7 +213,7 @@ async function testOllama(
   try {
     const response = await fetchWithTimeout(`${endpoint}/api/tags`, {
       method: "GET",
-    }, timeoutMs);
+    }, timeoutMs, "ollama");
 
     const latencyMs = Date.now() - started;
 
@@ -209,11 +246,14 @@ export async function testProviderConnection(
   const providerName = protocol;
   const effectiveApiKey = apiKey || "";
 
-  if (endpoint && !isSafeEndpoint(endpoint)) {
+  if (endpoint && !isSafeEndpointForProtocol(endpoint, protocol)) {
+    const message = protocol === "ollama"
+      ? "Endpoint blocked: metadata/link-local/non-HTTP targets are not allowed for local providers"
+      : "Endpoint blocked: private/internal network addresses are not allowed";
     return {
       success: false, latencyMs: 0, providerName,
       modelsDiscovered: 0, modelIds: [],
-      error: "Endpoint blocked: private/internal network addresses are not allowed",
+      error: message,
     };
   }
 
@@ -289,4 +329,4 @@ function getDefaultEndpoint(protocol: ProviderProtocol): string | undefined {
   }
 }
 
-export { isSafeEndpoint };
+export { isSafeEndpoint, isSafeEndpointForProtocol };
