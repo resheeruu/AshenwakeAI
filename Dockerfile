@@ -32,6 +32,9 @@ RUN mkdir -p data backups && chown -R ashenu:ashenu /app
 
 USER ashenu
 
+# Host may override with -e PORT=...; default matches EXPOSE/HEALTHCHECK below.
+ENV PORT=9002
+
 EXPOSE 9002
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

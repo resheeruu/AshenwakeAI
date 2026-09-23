@@ -153,6 +153,6 @@ Providers are classified by pricing class:
 Supported targets: Render, Docker, Wispbyte, VPS, Termux
 
 - `npm start` — Production startup via `scripts/start.sh`
-- `PORT` environment variable required
+- `PORT` — host-provided when set; defaults to **8080** if unset (Wispbyte recommended: `PORT=8080`)
 - `.env` file for configuration (never tracked)
-- Startup is non-interactive, fails safely when mandatory secrets are missing
+- Startup is non-fatal on missing optional secrets, fails safely when mandatory secrets are missing

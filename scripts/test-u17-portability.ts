@@ -561,10 +561,17 @@ test("start.sh does not contain render-specific logic in core path", () => {
 // ============================================================
 console.log("\n===== PHASE 8: LOCAL HOSTING LIVE TEST =====");
 
-test("start.sh requires PORT environment variable", () => {
+test("start.sh defaults PORT when unset and preserves host PORT", () => {
   const content = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf8");
-  assert.ok(content.includes('if [ -z "${PORT:-}" ]'), "Must check PORT is set");
-  assert.ok(content.includes('ERROR: PORT environment variable is required'), "Must error if PORT not set");
+  assert.ok(content.includes('if [ -z "${PORT:-}" ]'), "Must check whether PORT is set");
+  assert.ok(
+    content.includes("export PORT=8080") || content.includes('PORT="${PORT:-8080}"'),
+    "Must default PORT to 8080 when unset",
+  );
+  assert.ok(
+    content.includes("${PORT}") && content.includes("PORT="),
+    "Must preserve/propagate host-provided PORT",
+  );
 });
 
 test("web server binds to 0.0.0.0 (not localhost)", () => {
@@ -575,6 +582,7 @@ test("web server binds to 0.0.0.0 (not localhost)", () => {
 test("PORT respected in web server config", () => {
   const content = fs.readFileSync(path.join(ROOT, "src/web/server.ts"), "utf8");
   assert.ok(content.includes('process.env.PORT'), "Must read PORT from env");
+  assert.ok(content.includes("DEFAULT_PORT") || content.includes("8080"), "Must define safe default port");
 });
 
 test("SIGTERM handler exists in index.ts", () => {

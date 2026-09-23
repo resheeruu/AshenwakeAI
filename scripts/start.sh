@@ -39,8 +39,14 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
     fi
 fi
 
+# PORT: host-provided value always wins (Wispbyte/Render/Docker -e PORT=...).
+# Safe production default 8080 when the platform does not inject PORT.
 if [ -z "${PORT:-}" ]; then
-    echo "[start] ERROR: PORT environment variable is required but not set."
+    export PORT=8080
+    echo "[start] PORT not set — using default ${PORT}"
+fi
+if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || [ "${PORT}" -lt 1 ] || [ "${PORT}" -gt 65535 ]; then
+    echo "[start] ERROR: PORT must be an integer between 1 and 65535 (got '${PORT}')."
     exit 1
 fi
 echo "[start] PORT=${PORT}"

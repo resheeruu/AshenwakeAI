@@ -60,13 +60,15 @@ npm start
 ```
 
 The application uses `process.env.PORT` for the web server port.
-If Wispbyte sets `PORT=9002`, AshenAI will listen on port 9002.
+If the host sets `PORT`, that value is used. If `PORT` is unset, AshenAI
+defaults to **8080** and binds `0.0.0.0` (container-safe).
+Example: if Wispbyte sets `PORT=9002`, AshenAI listens on port 9002.
 
 ### 6. Verify
 
 ```bash
-# Check health endpoint
-curl http://localhost:$PORT/api/health
+# Check health endpoint (use host PORT; default 8080 if unset)
+curl http://localhost:${PORT:-8080}/api/health
 
 # Check Discord connection in logs
 # Should see: "✅ Logged in as YourBot#1234"
@@ -86,7 +88,7 @@ curl http://localhost:$PORT/api/health
 
 | Variable | Description |
 |----------|-------------|
-| `PORT` | Web server port (defaults to 3000 if not set by hosting) |
+| `PORT` | Web server port (host-provided; defaults to **8080** if not set) |
 | `NODE_ENV` | Set to `production` for production deployment |
 | `AI provider keys` | See `.env.example` for full list |
 | `ASHENAI_OWNER_USERNAME` | Dashboard owner username |
@@ -96,7 +98,7 @@ curl http://localhost:$PORT/api/health
 
 ```env
 NODE_ENV=production
-PORT=9002          # or whatever Wispbyte assigns
+PORT=8080           # recommended; host-injected PORT also works
 SESSION_SECRET=<random_secret>
 DISCORD_TOKEN=<your_token>
 DISCORD_CLIENT_ID=<your_client_id>

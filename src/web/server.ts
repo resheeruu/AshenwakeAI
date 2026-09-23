@@ -195,9 +195,15 @@ setInterval(() => {
   }
 }, API_RATE_WINDOW_MS).unref();
 
-const PORT = Number(process.env.PORT);
-if (!Number.isFinite(PORT) || PORT <= 0) {
-  throw new Error("PORT environment variable is required and must be a valid positive number");
+const DEFAULT_PORT = 8080;
+const rawPort = process.env.PORT?.trim();
+const PORT = rawPort === undefined || rawPort === ""
+  ? DEFAULT_PORT
+  : Number(rawPort);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error(
+    "PORT must be an integer between 1 and 65535 when set (default 8080 if unset)",
+  );
 }
 
 let router: AIRouter;
