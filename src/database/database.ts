@@ -467,6 +467,28 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
         CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_models_unique ON provider_models(provider_id, model_id);
       `,
     },
+    {
+      version: 17,
+      description: "Dashboard automation rules (persistent)",
+      sql: `
+        CREATE TABLE IF NOT EXISTS automation_rules (
+          id TEXT PRIMARY KEY,
+          guild_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          trigger_type TEXT NOT NULL,
+          trigger_config_json TEXT NOT NULL DEFAULT '{}',
+          conditions_json TEXT NOT NULL DEFAULT '[]',
+          actions_json TEXT NOT NULL DEFAULT '[]',
+          created_by TEXT,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+        );
+        CREATE INDEX IF NOT EXISTS idx_automation_rules_guild ON automation_rules(guild_id);
+        CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled);
+      `,
+    },
   ];
 }
 

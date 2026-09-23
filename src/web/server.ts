@@ -225,6 +225,60 @@ app.use(express.json({ limit: "64kb" }));
 app.use(globalRateLimit);
 app.use(express.static(path.join(__dirname, "public")));
 
+/* ==================== MUTATION INPUT VALIDATION HELPERS ==================== */
+
+const VALID_PROVIDER_PROTOCOLS = new Set(["openai_compatible", "anthropic", "gemini", "ollama"]);
+const VALID_PROVIDER_TYPES = new Set(["builtin", "custom", "local"]);
+const VALID_ADMIN_ACTIONS = new Set([
+  "restart", "stop", "reload_config", "clear_memory", "reset_usage",
+  "run_diagnostics", "backup", "provider_disable", "provider_enable",
+]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalBoundedString(
+  value: unknown,
+  field: string,
+  maxLength: number,
+): { ok: true; value?: string } | { ok: false; error: string } {
+  if (value === undefined || value === null) return { ok: true, value: undefined };
+  if (typeof value !== "string") return { ok: false, error: `${field} must be a string` };
+  if (value.length > maxLength) return { ok: false, error: `${field} must be at most ${maxLength} characters` };
+  return { ok: true, value };
+}
+
+function optionalBoundedNumber(
+  value: unknown,
+  field: string,
+  min: number,
+  max: number,
+  integerOnly = false,
+): { ok: true; value?: number } | { ok: false; error: string } {
+  if (value === undefined || value === null) return { ok: true, value: undefined };
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return { ok: false, error: `${field} must be a finite number` };
+  }
+  if (integerOnly && !Number.isInteger(value)) {
+    return { ok: false, error: `${field} must be an integer` };
+  }
+  if (value < min || value > max) {
+    return { ok: false, error: `${field} must be between ${min} and ${max}` };
+  }
+  return { ok: true, value };
+}
+
+function providerErrorStatus(err: unknown): number {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg === "Provider not found") return 404;
+  return 400;
+}
+
+function sendValidationError(res: Response, message: string): void {
+  res.status(400).json({ ok: false, error: message });
+}
+
 /* ==================== PUBLIC ==================== */
 
 app.get("/api/health", (_req: Request, res: Response) => {
@@ -653,75 +707,163 @@ app.get("/api/providers/manage/:id", requireAuth, requireRole("admin"), (req: Re
 app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const body = req.body as Record<string, unknown> || {};
-    const name = body.name as string;
-    const displayName = body.displayName as string;
-    const providerType = body.providerType as string;
-    const protocol = body.protocol as string;
-    if (!name || !displayName || !providerType || !protocol) {
-      return res.status(400).json({ ok: false, error: "Missing required fields: name, displayName, providerType, protocol" });
+    const body = isPlainObject(req.body) ? req.body : {};
+    const { name, displayName, providerType, protocol, endpoint, apiKey, defaultModel, priority, timeoutMs, retryMaxAttempts, metadata } = body;
+
+    if (name === undefined || displayName === undefined || providerType === undefined || protocol === undefined) {
+      return sendValidationError(res, "Missing required fields: name, displayName, providerType, protocol");
     }
     if (typeof name !== "string" || !/^[a-z0-9_-]{1,64}$/.test(name)) {
-      return res.status(400).json({ ok: false, error: "Name must be 1-64 characters, lowercase alphanumeric with hyphens/underscores" });
+      return sendValidationError(res, "Name must be 1-64 characters, lowercase alphanumeric with hyphens/underscores");
     }
-    if (!["builtin", "custom", "local"].includes(providerType)) {
-      return res.status(400).json({ ok: false, error: "Invalid providerType" });
+    if (typeof displayName !== "string" || displayName.trim().length < 1 || displayName.length > 128) {
+      return sendValidationError(res, "displayName must be a non-empty string (max 128 characters)");
     }
-    if (!["openai_compatible", "anthropic", "gemini", "ollama"].includes(protocol)) {
-      return res.status(400).json({ ok: false, error: "Invalid protocol" });
+    if (typeof providerType !== "string" || !VALID_PROVIDER_TYPES.has(providerType)) {
+      return sendValidationError(res, "Invalid providerType");
     }
+    if (typeof protocol !== "string" || !VALID_PROVIDER_PROTOCOLS.has(protocol)) {
+      return sendValidationError(res, "Invalid protocol");
+    }
+
+    const ep = optionalBoundedString(endpoint, "endpoint", 2048);
+    if (!ep.ok) return sendValidationError(res, ep.error);
+    if (ep.value !== undefined) {
+      try {
+        const parsed = new URL(ep.value);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          return sendValidationError(res, "endpoint must be http or https");
+        }
+        if (parsed.username || parsed.password) {
+          return sendValidationError(res, "endpoint must not include credentials");
+        }
+      } catch {
+        return sendValidationError(res, "endpoint must be a valid absolute URL");
+      }
+    }
+
+    const key = optionalBoundedString(apiKey, "apiKey", 4096);
+    if (!key.ok) return sendValidationError(res, key.error);
+    const model = optionalBoundedString(defaultModel, "defaultModel", 256);
+    if (!model.ok) return sendValidationError(res, model.error);
+
+    const pri = optionalBoundedNumber(priority, "priority", 0, 1000);
+    if (!pri.ok) return sendValidationError(res, pri.error);
+    const tmo = optionalBoundedNumber(timeoutMs, "timeoutMs", 1000, 120000);
+    if (!tmo.ok) return sendValidationError(res, tmo.error);
+    const ret = optionalBoundedNumber(retryMaxAttempts, "retryMaxAttempts", 0, 10, true);
+    if (!ret.ok) return sendValidationError(res, ret.error);
+
+    let meta: Record<string, unknown> = {};
+    if (metadata !== undefined && metadata !== null) {
+      if (!isPlainObject(metadata)) {
+        return sendValidationError(res, "metadata must be a plain object");
+      }
+      meta = metadata;
+    }
+
     const provider = await providerService.createProvider({
-      name, displayName, providerType: providerType as any, protocol: protocol as any,
-      endpoint: body.endpoint as string | undefined,
-      apiKey: body.apiKey as string | undefined,
-      defaultModel: body.defaultModel as string | undefined,
-      priority: typeof body.priority === "number" ? body.priority : 100,
-      timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : 15000,
-      retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : 2,
-      metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : {},
+      name,
+      displayName: displayName.trim(),
+      providerType: providerType as any,
+      protocol: protocol as any,
+      endpoint: ep.value,
+      apiKey: key.value,
+      defaultModel: model.value,
+      priority: pri.value ?? 100,
+      timeoutMs: tmo.value ?? 15000,
+      retryMaxAttempts: ret.value ?? 2,
+      metadata: meta,
     }, authReq.accountId!, authReq.username!);
     res.status(201).json({ ok: true, provider: providerService.getProvider(provider.id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Failed to create provider:", msg);
-    res.status(400).json({ ok: false, error: msg });
+    res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
   }
 });
 
-app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
-    const body = req.body as Record<string, unknown> || {};
-    providerService.updateProvider(id, {
-      displayName: body.displayName as string | undefined,
-      endpoint: body.endpoint as string | undefined,
-      apiKey: body.apiKey as string | undefined,
-      defaultModel: body.defaultModel as string | undefined,
+    const body = isPlainObject(req.body) ? req.body : {};
+
+    const displayName = optionalBoundedString(body.displayName, "displayName", 128);
+    if (!displayName.ok) return sendValidationError(res, displayName.error);
+    if (displayName.value !== undefined && displayName.value.trim().length < 1) {
+      return sendValidationError(res, "displayName must be a non-empty string");
+    }
+
+    const endpoint = optionalBoundedString(body.endpoint, "endpoint", 2048);
+    if (!endpoint.ok) return sendValidationError(res, endpoint.error);
+    if (endpoint.value !== undefined) {
+      try {
+        const parsed = new URL(endpoint.value);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          return sendValidationError(res, "endpoint must be http or https");
+        }
+        if (parsed.username || parsed.password) {
+          return sendValidationError(res, "endpoint must not include credentials");
+        }
+      } catch {
+        return sendValidationError(res, "endpoint must be a valid absolute URL");
+      }
+    }
+
+    const apiKey = optionalBoundedString(body.apiKey, "apiKey", 4096);
+    if (!apiKey.ok) return sendValidationError(res, apiKey.error);
+    const defaultModel = optionalBoundedString(body.defaultModel, "defaultModel", 256);
+    if (!defaultModel.ok) return sendValidationError(res, defaultModel.error);
+
+    const priority = optionalBoundedNumber(body.priority, "priority", 0, 1000);
+    if (!priority.ok) return sendValidationError(res, priority.error);
+    const timeoutMs = optionalBoundedNumber(body.timeoutMs, "timeoutMs", 1000, 120000);
+    if (!timeoutMs.ok) return sendValidationError(res, timeoutMs.error);
+    const retryMaxAttempts = optionalBoundedNumber(body.retryMaxAttempts, "retryMaxAttempts", 0, 10, true);
+    if (!retryMaxAttempts.ok) return sendValidationError(res, retryMaxAttempts.error);
+
+    if (body.enabled !== undefined && typeof body.enabled !== "boolean") {
+      return sendValidationError(res, "enabled must be a boolean");
+    }
+
+    let metadata: Record<string, unknown> | undefined;
+    if (body.metadata !== undefined && body.metadata !== null) {
+      if (!isPlainObject(body.metadata)) {
+        return sendValidationError(res, "metadata must be a plain object");
+      }
+      metadata = body.metadata;
+    }
+
+    await providerService.updateProvider(id, {
+      displayName: displayName.value !== undefined ? displayName.value.trim() : undefined,
+      endpoint: endpoint.value,
+      apiKey: apiKey.value,
+      defaultModel: defaultModel.value,
       enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
-      priority: typeof body.priority === "number" ? body.priority : undefined,
-      timeoutMs: typeof body.timeoutMs === "number" ? body.timeoutMs : undefined,
-      retryMaxAttempts: typeof body.retryMaxAttempts === "number" ? body.retryMaxAttempts : undefined,
-      metadata: typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : undefined,
+      priority: priority.value,
+      timeoutMs: timeoutMs.value,
+      retryMaxAttempts: retryMaxAttempts.value,
+      metadata,
     }, authReq.accountId!, authReq.username!);
     res.json({ ok: true, provider: providerService.getProvider(id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Failed to update provider:", msg);
-    res.status(400).json({ ok: false, error: msg });
+    res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
   }
 });
 
-app.delete("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.delete("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
-    providerService.deleteProvider(id, authReq.accountId!, authReq.username!);
+    await providerService.deleteProvider(id, authReq.accountId!, authReq.username!);
     res.json({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Failed to delete provider:", msg);
-    res.status(400).json({ ok: false, error: msg });
+    res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
   }
 });
 
@@ -733,7 +875,7 @@ app.post("/api/providers/manage/:id/test", requireAuth, requireRole("admin"), re
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Failed to test provider:", msg);
-    res.status(400).json({ ok: false, error: msg });
+    res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
   }
 });
 
@@ -745,25 +887,25 @@ app.post("/api/providers/manage/:id/discover-models", requireAuth, requireRole("
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Failed to discover models:", msg);
-    res.status(400).json({ ok: false, error: msg });
+    res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
   }
 });
 
-app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
-    const body = req.body as Record<string, unknown> || {};
+    const body = isPlainObject(req.body) ? req.body : {};
     const enabled = body.enabled;
     if (typeof enabled !== "boolean") {
       return res.status(400).json({ ok: false, error: "enabled must be a boolean" });
     }
-    providerService.toggleProvider(id, enabled, authReq.accountId!, authReq.username!);
+    await providerService.toggleProvider(id, enabled, authReq.accountId!, authReq.username!);
     res.json({ ok: true, provider: providerService.getProvider(id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Failed to toggle provider:", msg);
-    res.status(400).json({ ok: false, error: msg });
+    res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
   }
 });
 
@@ -771,17 +913,20 @@ app.put("/api/providers/manage/:id/default-model", requireAuth, requireRole("own
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
-    const body = req.body as Record<string, unknown> || {};
+    const body = isPlainObject(req.body) ? req.body : {};
     const modelId = body.modelId;
-    if (typeof modelId !== "string") {
-      return res.status(400).json({ ok: false, error: "modelId must be a string" });
+    if (typeof modelId !== "string" || modelId.length < 1 || modelId.length > 256) {
+      return res.status(400).json({ ok: false, error: "modelId must be a non-empty string (max 256 characters)" });
+    }
+    if (!/^[\w./:@+-]{1,256}$/.test(modelId)) {
+      return res.status(400).json({ ok: false, error: "modelId contains invalid characters" });
     }
     providerService.setDefaultModel(id, modelId, authReq.accountId!, authReq.username!);
     res.json({ ok: true, provider: providerService.getProvider(id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Failed to set default model:", msg);
-    res.status(400).json({ ok: false, error: msg });
+    res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
   }
 });
 
@@ -849,7 +994,8 @@ app.get("/api/seraph/status", requireAuth, requireRole("admin"), (_req: Request,
   res.json({ ok: true, seraph: getSeraphStatus() });
 });
 
-app.get("/api/seraph/doctor", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+// POST only: runDoctor records audit (state mutation) — must not be CSRF-free GET.
+app.post("/api/seraph/doctor", requireAuth, requireRole("admin"), requireCsrf, (_req: Request, res: Response) => {
   res.json({ ok: true, doctor: runSeraphDoctor() });
 });
 
@@ -873,6 +1019,9 @@ app.get("/api/seraph/system", requireAuth, requireRole("admin"), (_req: Request,
 
 app.put("/api/guilds/:guildId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "Request body must be a JSON object");
+  }
   const result = updateGuildConfig(guildId, req.body);
   if (result.success) {
     res.json({ ok: true, message: result.message });
@@ -882,29 +1031,74 @@ app.put("/api/guilds/:guildId", requireAuth, requireRole("owner"), requireCsrf, 
 });
 
 app.post("/api/actions/confirm", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
-  const { action, target } = req.body || {};
-  if (!action) {
-    res.status(400).json({ ok: false, error: "Action required." });
-    return;
+  const body = isPlainObject(req.body) ? req.body : {};
+  const action = body.action;
+  const target = body.target;
+  if (!action || typeof action !== "string" || !VALID_ADMIN_ACTIONS.has(action)) {
+    return sendValidationError(res, "Valid action required.");
   }
-  const confirmation = confirmAction({ action, target });
+  if (target !== undefined && typeof target !== "string") {
+    return sendValidationError(res, "target must be a string");
+  }
+  const confirmation = confirmAction({ action: action as any, target });
   res.json({ ok: true, confirmation });
 });
 
-app.post("/api/actions/execute", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.post("/api/actions/execute", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
-  const { action, target, reason, confirmed } = req.body || {};
-  if (!action) {
-    res.status(400).json({ ok: false, error: "Action required." });
-    return;
+  const body = isPlainObject(req.body) ? req.body : {};
+  const { action, target, reason, confirmed } = body;
+
+  if (!action || typeof action !== "string" || !VALID_ADMIN_ACTIONS.has(action)) {
+    return sendValidationError(res, "Valid action required.");
   }
-  const result = executeAction(
-    { action, target, reason, confirmed },
+  if (target !== undefined && target !== null && typeof target !== "string") {
+    return sendValidationError(res, "target must be a string");
+  }
+  if (reason !== undefined && reason !== null && typeof reason !== "string") {
+    return sendValidationError(res, "reason must be a string");
+  }
+
+  // Provider enable/disable must perform the real platform mutation (no fake success).
+  if (action === "provider_enable" || action === "provider_disable") {
+    if (!target) {
+      return sendValidationError(res, "Provider target required.");
+    }
+    if (!confirmed) {
+      const confirmation = confirmAction({ action: action as any, target });
+      return res.status(409).json({ ok: false, error: confirmation.message, confirmation });
+    }
+    try {
+      const providers = providerService.listProviders();
+      const match = providers.find((p) => p.id === target || p.name === target);
+      if (!match) {
+        return res.status(404).json({ ok: false, error: "Provider not found" });
+      }
+      const enable = action === "provider_enable";
+      await providerService.toggleProvider(match.id, enable, authReq.accountId!, authReq.username!);
+      recordAudit({
+        who: authReq.accountId!,
+        whoName: authReq.username!,
+        what: `${enable ? "Enabled" : "Disabled"} provider via action: ${match.displayName}`,
+        where: "control",
+        result: "success",
+        details: `action=${action} target=${match.id}`,
+      });
+      return res.json({ ok: true, message: `Provider "${match.displayName}" ${enable ? "enabled" : "disabled"}.` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("Provider action failed:", msg);
+      return res.status(providerErrorStatus(err)).json({ ok: false, error: msg });
+    }
+  }
+
+  const result = await executeAction(
+    { action: action as any, target: typeof target === "string" ? target : undefined, reason: typeof reason === "string" ? reason : undefined, confirmed: confirmed === true },
     authReq.accountId!,
     authReq.username!,
   );
   if (result.success) {
-    res.json({ ok: true, message: result.message });
+    res.json({ ok: true, message: result.message, details: result.details });
   } else {
     res.status(400).json({ ok: false, error: result.message });
   }
@@ -982,13 +1176,16 @@ app.get("/api/account/sessions", requireAuth, (req: Request, res: Response) => {
 app.post("/api/account/sessions/:id/revoke", requireAuth, requireCsrf, (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
   const sessionId = typeof req.params.id === "string" ? req.params.id : "";
+  if (!sessionId || sessionId.length < 8) {
+    return sendValidationError(res, "Session id required (minimum 8 characters).");
+  }
 
-  // For security, we need the full session ID - but we only sent prefix to frontend
-  // This endpoint revokes ALL other sessions
+  // Frontend only receives an 8-char prefix; match by prefix against own sessions only.
   const sessions = listSessionsForAccount(authReq.accountId!);
   let revoked = 0;
   for (const s of sessions) {
-    if (s.sessionId !== authReq.sessionId) {
+    if (s.sessionId === authReq.sessionId) continue;
+    if (s.sessionId === sessionId || s.sessionId.startsWith(sessionId)) {
       if (revokeSession(s.sessionId, authReq.accountId!)) {
         revoked++;
       }
@@ -997,10 +1194,10 @@ app.post("/api/account/sessions/:id/revoke", requireAuth, requireCsrf, (req: Req
 
   recordAudit({
     who: authReq.username!,
-    what: "Sessions revoked",
+    what: "Session revoked",
     where: "web-auth",
     result: "success",
-    details: `Revoked ${revoked} sessions`,
+    details: `Revoked ${revoked} matching session(s)`,
   });
 
   res.json({ ok: true, revoked });
@@ -1421,7 +1618,18 @@ app.post("/api/accounts", requireAuth, requireRole("owner"), requireCsrf, (req: 
 app.put("/api/accounts/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
   const id = String(req.params.id || "");
-  const { username, role, enabled } = req.body || {};
+  const body = isPlainObject(req.body) ? req.body : {};
+  const { username, role, enabled } = body;
+
+  if (username !== undefined && typeof username !== "string") {
+    return sendValidationError(res, "username must be a string");
+  }
+  if (role !== undefined && (typeof role !== "string" || !["owner", "admin", "user"].includes(role))) {
+    return sendValidationError(res, "role must be one of: owner, admin, user");
+  }
+  if (enabled !== undefined && typeof enabled !== "boolean") {
+    return sendValidationError(res, "enabled must be a boolean");
+  }
 
   const updates: Record<string, unknown> = {};
   if (username !== undefined) updates.username = username;
@@ -1440,7 +1648,7 @@ app.put("/api/accounts/:id", requireAuth, requireRole("owner"), requireCsrf, (re
     });
     res.json({ ok: true, account: result.account });
   } else {
-    res.status(400).json({ ok: false, error: result.error });
+    res.status(result.error === "Account not found." ? 404 : 400).json({ ok: false, error: result.error });
   }
 });
 
@@ -1516,31 +1724,37 @@ app.get("/{*splat}", (_req: Request, res: Response) => {
 // Provider connection test
 app.post("/api/providers/test-connection", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
   try {
-    const body = req.body as Record<string, unknown> || {};
-    const { protocol, endpoint, apiKey, timeout } = body as { protocol?: string; endpoint?: string; apiKey?: string; timeout?: number };
-    if (!protocol) {
-      return res.status(400).json({ ok: false, error: "Protocol required." });
+    const body = isPlainObject(req.body) ? req.body : {};
+    const { protocol, endpoint, apiKey, timeout } = body as { protocol?: unknown; endpoint?: unknown; apiKey?: unknown; timeout?: unknown };
+    if (!protocol || typeof protocol !== "string" || !VALID_PROVIDER_PROTOCOLS.has(protocol)) {
+      return sendValidationError(res, "Protocol must be one of: openai_compatible, anthropic, gemini, ollama.");
     }
-    const apiKeyStr = apiKey || "";
-    const timeoutMs = timeout || 15000;
-    const result = await testProviderConnection(protocol as any, endpoint, apiKeyStr, timeoutMs);
+    if (endpoint !== undefined && endpoint !== null && typeof endpoint !== "string") {
+      return sendValidationError(res, "endpoint must be a string");
+    }
+    if (endpoint && endpoint.length > 2048) {
+      return sendValidationError(res, "endpoint must be at most 2048 characters");
+    }
+    if (apiKey !== undefined && apiKey !== null && typeof apiKey !== "string") {
+      return sendValidationError(res, "apiKey must be a string");
+    }
+    if (apiKey && apiKey.length > 4096) {
+      return sendValidationError(res, "apiKey must be at most 4096 characters");
+    }
+    let timeoutMs = 15000;
+    if (timeout !== undefined && timeout !== null) {
+      if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout < 1000 || timeout > 120000) {
+        return sendValidationError(res, "timeout must be a number between 1000 and 120000");
+      }
+      timeoutMs = timeout;
+    }
+    const apiKeyStr = typeof apiKey === "string" ? apiKey : "";
+    const endpointStr = typeof endpoint === "string" ? endpoint : undefined;
+    const result = await testProviderConnection(protocol as any, endpointStr, apiKeyStr, timeoutMs);
     res.json({ ok: true, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error("Connection test failed:", msg);
-    res.status(400).json({ ok: false, error: msg });
-  }
-});
-
-// Provider connection test (existing endpoint for individual provider)
-app.post("/api/providers/manage/:id/test", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
-  try {
-    const id = String(req.params.id);
-    const result = await providerService.testConnection(id);
-    res.json({ ok: true, result });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error("Failed to test provider:", msg);
     res.status(400).json({ ok: false, error: msg });
   }
 });
@@ -1554,6 +1768,9 @@ app.get("/api/guilds/:guildId/settings", requireAuth, requireRole("admin"), requ
 
 app.put("/api/guilds/:guildId/settings", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "Request body must be a JSON object");
+  }
   const result = updateGuildConfig(guildId, req.body);
   if (result.success) {
     res.json({ ok: true, message: result.message });
@@ -1571,8 +1788,10 @@ app.get("/api/guilds/:guildId/personality", requireAuth, requireGuildAuth, (req:
 
 app.put("/api/guilds/:guildId/personality", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const personality = req.body;
-  const result = updateGuildConfig(guildId, { personality });
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "Personality body must be a JSON object");
+  }
+  const result = updateGuildConfig(guildId, { personality: req.body as any });
   if (result.success) {
     res.json({ ok: true, message: "Personality updated." });
   } else {
@@ -1589,8 +1808,10 @@ app.get("/api/guilds/:guildId/moderation", requireAuth, requireGuildAuth, (req: 
 
 app.put("/api/guilds/:guildId/moderation", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const moderation = req.body;
-  const result = updateGuildConfig(guildId, { moderation });
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "Moderation body must be a JSON object");
+  }
+  const result = updateGuildConfig(guildId, { moderation: req.body as any });
   if (result.success) {
     res.json({ ok: true, message: "Moderation settings updated." });
   } else {
@@ -1650,7 +1871,10 @@ app.get("/api/guilds/:guildId/ai", requireAuth, requireGuildAuth, (req: Request,
 
 app.put("/api/guilds/:guildId/ai", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const result = updateGuildConfig(guildId, { ai: req.body });
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "AI body must be a JSON object");
+  }
+  const result = updateGuildConfig(guildId, { ai: req.body as any });
   if (result.success) {
     res.json({ ok: true, message: "AI configuration updated." });
   } else {
@@ -1666,7 +1890,10 @@ app.get("/api/guilds/:guildId/ai/routing", requireAuth, requireGuildAuth, (req: 
 
 app.put("/api/guilds/:guildId/ai/routing", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const result = updateGuildConfig(guildId, { routing: req.body });
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "Routing body must be a JSON object");
+  }
+  const result = updateGuildConfig(guildId, { routing: req.body as any });
   if (result.success) {
     res.json({ ok: true, message: "Routing configuration updated." });
   } else {
@@ -1682,7 +1909,10 @@ app.get("/api/guilds/:guildId/ai/limits", requireAuth, requireGuildAuth, (req: R
 
 app.put("/api/guilds/:guildId/ai/limits", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const result = updateGuildConfig(guildId, { limits: req.body });
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "Limits body must be a JSON object");
+  }
+  const result = updateGuildConfig(guildId, { limits: req.body as any });
   if (result.success) {
     res.json({ ok: true, message: "Usage limits updated." });
   } else {
@@ -1695,21 +1925,15 @@ app.put("/api/guilds/:guildId/ai/limits", requireAuth, requireRole("owner"), req
 app.get("/api/guilds/:guildId/models", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const config = getGuildConfig(guildId);
-  const allModels = providerRegistry.getAll().flatMap(p => {
-    const runtime = { enabled: true, models: [] };
-    return (runtime.models || []).map((m: any) => ({
-      modelId: m,
-      provider: p.name,
-      enabled: true,
-      capabilities: ["chat"],
-      contextLength: 4096,
-    }));
-  });
+  const allModels = providerService.getAllDiscoveredModels();
   res.json({ ok: true, models: allModels, configured: config.models || [] });
 });
 
 app.put("/api/guilds/:guildId/models", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  if (!Array.isArray(req.body)) {
+    return sendValidationError(res, "models body must be a JSON array");
+  }
   const result = updateGuildConfig(guildId, { models: req.body });
   if (result.success) {
     res.json({ ok: true, message: "Model configuration updated." });
@@ -1735,14 +1959,26 @@ app.get("/api/security/sessions", requireAuth, (req: Request, res: Response) => 
 
 app.post("/api/security/sessions/:id/revoke", requireAuth, requireCsrf, (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
+  const sessionId = typeof req.params.id === "string" ? req.params.id : "";
+  if (!sessionId || sessionId.length < 8) {
+    return sendValidationError(res, "Session id required (minimum 8 characters).");
+  }
   const { listSessionsForAccount, revokeSession } = require("../control/session-store");
   const sessions = listSessionsForAccount(authReq.accountId!);
   let revoked = 0;
   for (const s of sessions) {
-    if (s.sessionId !== authReq.sessionId) {
+    if (s.sessionId === authReq.sessionId) continue;
+    if (s.sessionId === sessionId || s.sessionId.startsWith(sessionId)) {
       if (revokeSession(s.sessionId, authReq.accountId!)) revoked++;
     }
   }
+  recordAudit({
+    who: authReq.username || "unknown",
+    what: "Session revoked",
+    where: "web-auth",
+    result: "success",
+    details: `Revoked ${revoked} matching session(s)`,
+  });
   res.json({ ok: true, revoked });
 });
 
@@ -1750,6 +1986,13 @@ app.post("/api/security/sessions/revoke-all", requireAuth, requireCsrf, (req: Re
   const authReq = req as AuthenticatedRequest;
   const { destroyAllSessionsForAccount } = require("../control/session-store");
   const count = destroyAllSessionsForAccount(authReq.accountId!);
+  recordAudit({
+    who: authReq.username || "unknown",
+    what: "All sessions revoked",
+    where: "web-auth",
+    result: "success",
+    details: `Revoked ${count} sessions`,
+  });
   res.json({ ok: true, revoked: count });
 });
 
@@ -1772,28 +2015,92 @@ app.get("/api/security/credentials", requireAuth, requireRole("owner"), (req: Re
 
 /* ==================== SUPPORT ==================== */
 
-app.get("/api/guilds/:guildId/support", requireAuth, requireGuildAuth, async (req: Request, res: Response) => {
+app.get("/api/guilds/:guildId/support", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   try {
     const { getSupportCaseManager } = require("../support");
     const manager = getSupportCaseManager();
-    const cases = manager.getCases ? manager.getCases(guildId) : [];
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const cases = manager.getGuildCases(
+      guildId,
+      status as any,
+      undefined,
+      100,
+    );
     res.json({ ok: true, cases, guildId });
   } catch (err) {
-    res.json({ ok: true, cases: [], guildId });
+    logger.error("Failed to list support cases:", err);
+    res.status(500).json({ ok: false, error: "Failed to load support cases" });
   }
 });
 
-app.put("/api/guilds/:guildId/support/:caseId", requireAuth, requireGuildAuth, async (req: Request, res: Response) => {
+app.get("/api/guilds/:guildId/support/:caseId", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const caseId = typeof req.params.caseId === "string" ? req.params.caseId : "";
   try {
     const { getSupportCaseManager } = require("../support");
     const manager = getSupportCaseManager();
-    const result = manager.updateCaseStatus ? await manager.updateCaseStatus(caseId, req.body.status, req.body.note) : { ok: true };
-    res.json({ ok: true, result });
+    const supportCase = manager.getCase(caseId);
+    if (!supportCase || supportCase.guildId !== guildId) {
+      return res.status(404).json({ ok: false, error: "Case not found" });
+    }
+    res.json({ ok: true, case: supportCase, messages: manager.getMessages(caseId) });
   } catch (err) {
-    res.json({ ok: true });
+    logger.error("Failed to load support case:", err);
+    res.status(500).json({ ok: false, error: "Failed to load support case" });
+  }
+});
+
+app.put("/api/guilds/:guildId/support/:caseId", requireAuth, requireRole("admin"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const caseId = typeof req.params.caseId === "string" ? req.params.caseId : "";
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { getSupportCaseManager } = require("../support");
+    const { canTransition } = require("../support");
+    const manager = getSupportCaseManager();
+
+    const supportCase = manager.getCase(caseId);
+    if (!supportCase || supportCase.guildId !== guildId) {
+      return res.status(404).json({ ok: false, error: "Case not found" });
+    }
+
+    const body = (req.body || {}) as Record<string, unknown>;
+    const newStatus = body.status as string | undefined;
+    const note = typeof body.note === "string" ? body.note : undefined;
+
+    if (!newStatus || typeof newStatus !== "string") {
+      return res.status(400).json({ ok: false, error: "status is required" });
+    }
+    if (note !== undefined) {
+      if (note.length > 4000) {
+        return res.status(400).json({ ok: false, error: "note must be at most 4000 characters" });
+      }
+      if (note.length > 0 && note.trim().length === 0) {
+        return res.status(400).json({ ok: false, error: "note must not be blank" });
+      }
+    }
+
+    if (!canTransition(supportCase.status, newStatus as any)) {
+      return res.status(409).json({
+        ok: false,
+        error: `Invalid transition: ${supportCase.status} → ${newStatus}`,
+      });
+    }
+
+    const updated = manager.transitionCase(caseId, newStatus as any, authReq.accountId || "web");
+    if (!updated) {
+      return res.status(409).json({ ok: false, error: "Transition rejected (conflict or invalid)" });
+    }
+
+    if (note) {
+      manager.addMessage(caseId, authReq.accountId || "web", note, false);
+    }
+
+    res.json({ ok: true, case: updated });
+  } catch (err) {
+    logger.error("Failed to update support case:", err);
+    res.status(500).json({ ok: false, error: "Failed to update support case" });
   }
 });
 
@@ -1803,21 +2110,154 @@ app.get("/api/guilds/:guildId/automation/rules", requireAuth, requireGuildAuth, 
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   try {
     const { getAutomationRules } = require("../community/automation");
-    const rules = getAutomationRules ? getAutomationRules(guildId) : [];
+    const rules = getAutomationRules(guildId);
     res.json({ ok: true, rules });
-  } catch {
-    res.json({ ok: true, rules: [] });
+  } catch (err) {
+    logger.error("Failed to list automation rules:", err);
+    res.status(500).json({ ok: false, error: "Failed to load automation rules" });
   }
 });
 
 app.post("/api/guilds/:guildId/automation/rules", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const rule = req.body;
-  res.json({ ok: true, rule: { id: "automation_" + Date.now(), ...rule, guildId } });
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const body = isPlainObject(req.body) ? req.body : {};
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const triggerType = typeof body.triggerType === "string" ? body.triggerType.trim() : "";
+    if (!name || name.length > 120) {
+      return res.status(400).json({ ok: false, error: "name is required (max 120 chars)" });
+    }
+    if (!triggerType || triggerType.length > 64) {
+      return res.status(400).json({ ok: false, error: "triggerType is required (max 64 chars)" });
+    }
+    if (body.description !== undefined && body.description !== null) {
+      if (typeof body.description !== "string" || body.description.length > 500) {
+        return res.status(400).json({ ok: false, error: "description must be a string (max 500 chars)" });
+      }
+    }
+    if (body.enabled !== undefined && typeof body.enabled !== "boolean") {
+      return res.status(400).json({ ok: false, error: "enabled must be a boolean" });
+    }
+    if (body.triggerConfig !== undefined && body.triggerConfig !== null && !isPlainObject(body.triggerConfig)) {
+      return res.status(400).json({ ok: false, error: "triggerConfig must be a plain object" });
+    }
+    if (body.conditions !== undefined && !Array.isArray(body.conditions)) {
+      return res.status(400).json({ ok: false, error: "conditions must be an array" });
+    }
+    if (body.actions !== undefined && !Array.isArray(body.actions)) {
+      return res.status(400).json({ ok: false, error: "actions must be an array" });
+    }
+    if (Array.isArray(body.conditions) && body.conditions.length > 50) {
+      return res.status(400).json({ ok: false, error: "conditions must contain at most 50 entries" });
+    }
+    if (Array.isArray(body.actions) && body.actions.length > 50) {
+      return res.status(400).json({ ok: false, error: "actions must contain at most 50 entries" });
+    }
+
+    const { createAutomationRule } = require("../community/automation");
+    const rule = createAutomationRule({
+      guildId,
+      name,
+      description: typeof body.description === "string" ? body.description : undefined,
+      enabled: typeof body.enabled === "boolean" ? body.enabled : true,
+      triggerType,
+      triggerConfig: isPlainObject(body.triggerConfig) ? body.triggerConfig : {},
+      conditions: Array.isArray(body.conditions) ? body.conditions : [],
+      actions: Array.isArray(body.actions) ? body.actions : [],
+      createdBy: authReq.accountId,
+    }, authReq.accountId || "web", authReq.username || "web");
+
+    res.status(201).json({ ok: true, rule });
+  } catch (err) {
+    logger.error("Failed to create automation rule:", err);
+    res.status(500).json({ ok: false, error: "Failed to create automation rule" });
+  }
 });
 
-app.delete("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (_req: Request, res: Response) => {
-  res.json({ ok: true });
+app.put("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const ruleId = typeof req.params.ruleId === "string" ? req.params.ruleId : "";
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const body = isPlainObject(req.body) ? req.body : {};
+    const updates: Record<string, unknown> = {};
+    if (typeof body.name === "string") {
+      const name = body.name.trim();
+      if (!name || name.length > 120) {
+        return res.status(400).json({ ok: false, error: "name must be 1-120 characters" });
+      }
+      updates.name = name;
+    }
+    if (body.description !== undefined) {
+      if (typeof body.description !== "string" || body.description.length > 500) {
+        return res.status(400).json({ ok: false, error: "description must be a string (max 500 chars)" });
+      }
+      updates.description = body.description;
+    }
+    if (body.enabled !== undefined) {
+      if (typeof body.enabled !== "boolean") {
+        return res.status(400).json({ ok: false, error: "enabled must be a boolean" });
+      }
+      updates.enabled = body.enabled;
+    }
+    if (typeof body.triggerType === "string") {
+      const triggerType = body.triggerType.trim();
+      if (!triggerType || triggerType.length > 64) {
+        return res.status(400).json({ ok: false, error: "triggerType must be 1-64 characters" });
+      }
+      updates.triggerType = triggerType;
+    }
+    if (body.triggerConfig !== undefined) {
+      if (!isPlainObject(body.triggerConfig)) {
+        return res.status(400).json({ ok: false, error: "triggerConfig must be a plain object" });
+      }
+      updates.triggerConfig = body.triggerConfig;
+    }
+    if (Array.isArray(body.conditions)) {
+      if (body.conditions.length > 50) {
+        return res.status(400).json({ ok: false, error: "conditions must contain at most 50 entries" });
+      }
+      updates.conditions = body.conditions;
+    } else if (body.conditions !== undefined) {
+      return res.status(400).json({ ok: false, error: "conditions must be an array" });
+    }
+    if (Array.isArray(body.actions)) {
+      if (body.actions.length > 50) {
+        return res.status(400).json({ ok: false, error: "actions must contain at most 50 entries" });
+      }
+      updates.actions = body.actions;
+    } else if (body.actions !== undefined) {
+      return res.status(400).json({ ok: false, error: "actions must be an array" });
+    }
+
+    const { updateAutomationRule } = require("../community/automation");
+    const rule = updateAutomationRule(guildId, ruleId, updates as any, authReq.accountId || "web", authReq.username || "web");
+    if (!rule) {
+      return res.status(404).json({ ok: false, error: "Rule not found" });
+    }
+    res.json({ ok: true, rule });
+  } catch (err) {
+    logger.error("Failed to update automation rule:", err);
+    res.status(500).json({ ok: false, error: "Failed to update automation rule" });
+  }
+});
+
+app.delete("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const ruleId = typeof req.params.ruleId === "string" ? req.params.ruleId : "";
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { deleteAutomationRule } = require("../community/automation");
+    const ok = deleteAutomationRule(guildId, ruleId, authReq.accountId || "web", authReq.username || "web");
+    if (!ok) {
+      return res.status(404).json({ ok: false, error: "Rule not found" });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error("Failed to delete automation rule:", err);
+    res.status(500).json({ ok: false, error: "Failed to delete automation rule" });
+  }
 });
 
 /* ==================== SOCIAL ==================== */
@@ -1830,7 +2270,10 @@ app.get("/api/guilds/:guildId/social/config", requireAuth, requireGuildAuth, (re
 
 app.put("/api/guilds/:guildId/social/config", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const result = updateGuildConfig(guildId, { community: req.body });
+  if (!isPlainObject(req.body)) {
+    return sendValidationError(res, "Social config body must be a JSON object");
+  }
+  const result = updateGuildConfig(guildId, { community: req.body as any });
   if (result.success) {
     res.json({ ok: true, message: "Social configuration updated." });
   } else {
@@ -1856,15 +2299,19 @@ app.get("/api/guilds/:guildId/providers/health", requireAuth, requireGuildAuth, 
   res.json({ ok: true, health });
 });
 
-app.post("/api/providers/:id/health", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+app.post("/api/providers/:id/health", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
   const id = String(req.params.id);
   try {
+    if (!providerService.getProvider(id)) {
+      return res.status(404).json({ ok: false, error: "Provider not found" });
+    }
     const router = new (require("../ai/router").AIRouter)([]);
     const result = await router.probeProvider(id);
     res.json({ ok: true, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    res.json({ ok: false, error: msg });
+    const status = msg === "Provider not found" ? 404 : 502;
+    res.status(status).json({ ok: false, error: msg });
   }
 });
 

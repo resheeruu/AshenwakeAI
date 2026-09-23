@@ -396,7 +396,7 @@ export function confirmAction(request: ActionRequest): ActionConfirmation {
   };
 }
 
-export function executeAction(request: ActionRequest, operatorId: string, operatorName: string): ActionResult {
+export async function executeAction(request: ActionRequest, operatorId: string, operatorName: string): Promise<ActionResult> {
   if (!request.confirmed) {
     const confirmation = confirmAction(request);
     if (confirmation.required) {
@@ -434,14 +434,25 @@ export function executeAction(request: ActionRequest, operatorId: string, operat
 
       case "provider_disable": {
         if (!request.target) return { success: false, message: "Provider name required." };
-        recordAudit({ who: operatorId, whoName: operatorName, what: `Disabled provider: ${request.target}`, where: "control", result: "success" });
-        return { success: true, message: `Provider "${request.target}" disabled.` };
+        // Real platform mutation (lazy require avoids circular init issues)
+        const { providerService } = require("../ai/providers/platform/provider-service");
+        const providers = providerService.listProviders();
+        const match = providers.find((p: any) => p.id === request.target || p.name === request.target);
+        if (!match) return { success: false, message: "Provider not found." };
+        await providerService.toggleProvider(match.id, false, operatorId, operatorName);
+        recordAudit({ who: operatorId, whoName: operatorName, what: `Disabled provider: ${match.displayName}`, where: "control", result: "success" });
+        return { success: true, message: `Provider "${match.displayName}" disabled.` };
       }
 
       case "provider_enable": {
         if (!request.target) return { success: false, message: "Provider name required." };
-        recordAudit({ who: operatorId, whoName: operatorName, what: `Enabled provider: ${request.target}`, where: "control", result: "success" });
-        return { success: true, message: `Provider "${request.target}" enabled.` };
+        const { providerService } = require("../ai/providers/platform/provider-service");
+        const providers = providerService.listProviders();
+        const match = providers.find((p: any) => p.id === request.target || p.name === request.target);
+        if (!match) return { success: false, message: "Provider not found." };
+        await providerService.toggleProvider(match.id, true, operatorId, operatorName);
+        recordAudit({ who: operatorId, whoName: operatorName, what: `Enabled provider: ${match.displayName}`, where: "control", result: "success" });
+        return { success: true, message: `Provider "${match.displayName}" enabled.` };
       }
 
       case "restart": {

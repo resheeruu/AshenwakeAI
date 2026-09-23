@@ -44,15 +44,18 @@ jobs:
           set -o pipefail
           npm ls --depth=0 2>&1 | head -50
 
-      # --- STAGE: Informational Security ---
-      - name: npm audit (informational)
+      # --- STAGE: Security Gate (blocking) ---
+      - name: npm audit (high+)
         run: |
           set +e
-          AUDIT_OUTPUT=$(npm audit --omit=dev 2>&1)
-          echo "$AUDIT_OUTPUT" | head -30
-          echo "⚠️ npm audit completed — review any high/critical vulnerabilities above"
-          echo "ℹ️ This check is informational; it does not fail CI"
-        continue-on-error: true
+          npm audit --omit=dev --audit-level=high
+          AUDIT_EXIT=$?
+          set -e
+          if [ "$AUDIT_EXIT" -ne 0 ]; then
+            echo "❌ npm audit found high/critical vulnerabilities — failing CI"
+            exit 1
+          fi
+          echo "✅ npm audit passed (no high/critical vulnerabilities in production deps)"
 
       # --- STAGE: Optional Checks ---
       - name: Icon validation

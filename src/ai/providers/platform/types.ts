@@ -110,6 +110,15 @@ export interface ProviderStatusView {
   priority: number;
   defaultModel?: string;
   modelCount: number;
+  models?: Array<{
+    modelId: string;
+    displayName?: string;
+    enabled: boolean;
+    isDefault: boolean;
+    capabilities: string[];
+    contextLength?: number;
+    priority: number;
+  }>;
   health: ProviderHealthSnapshot;
   createdAt: number;
   updatedAt: number;
