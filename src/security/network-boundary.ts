@@ -267,6 +267,102 @@ export function validateOutboundUrl(
 }
 
 /**
+ * Explicit trusted-local policy for operator-declared local LLM providers
+ * (Ollama and similar). Unlike validateOutboundUrl, this permits loopback
+ * and RFC1918 targets — but still fails closed on cloud metadata, link-local,
+ * non-HTTP protocols, and credentials-in-URL.
+ *
+ * Only protocol === "ollama" (or providerType === "local") callers may use this.
+ */
+export function validateTrustedLocalProviderUrl(
+  rawUrl: string,
+): { valid: boolean; reason?: string; url?: URL } {
+  let parsed: URL;
+  try {
+    parsed = new URL(String(rawUrl ?? ""));
+  } catch {
+    return { valid: false, reason: "Invalid URL" };
+  }
+
+  if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
+    return { valid: false, reason: `Blocked protocol: ${parsed.protocol}` };
+  }
+  if (parsed.username || parsed.password) {
+    return { valid: false, reason: "Credentials in URL are not allowed" };
+  }
+
+  const hostname = normalizeHostname(parsed.hostname);
+  if (!hostname) {
+    return { valid: false, reason: "Missing hostname" };
+  }
+
+  // Always block cloud metadata and internal service-discovery names.
+  const alwaysBlockedHostnames = new Set([
+    "metadata.google.internal",
+    "metadata.goog",
+    "instance-data",
+    "instance-metadata",
+    "azure-metadata",
+    "dscloud.metadata",
+    "169.254.169.254",
+    "0.0.0.0",
+    "::",
+  ]);
+  if (alwaysBlockedHostnames.has(hostname)) {
+    return { valid: false, reason: `Blocked hostname: ${hostname}` };
+  }
+  if ([".internal", ".localhost", ".home.arpa"].some((s) => hostname.endsWith(s))) {
+    return { valid: false, reason: `Blocked internal hostname: ${hostname}` };
+  }
+
+  if (net.isIP(hostname) !== 0) {
+    const ip = hostname.replace(/^\[/, "").replace(/\]$/, "");
+    const version = net.isIP(ip);
+    // Block link-local / metadata range even for trusted-local (169.254.0.0/16, fe80::/10).
+    if (version === 4) {
+      const value = parseIPv4(ip);
+      if (value === null) return { valid: false, reason: `Blocked IP: ${ip}` };
+      if (ipv4InBlock(value, "169.254.0.0", 16)) {
+        return { valid: false, reason: `Blocked link-local IP: ${ip}` };
+      }
+      if (ipv4InBlock(value, "0.0.0.0", 8)) {
+        return { valid: false, reason: `Blocked unspecified IP: ${ip}` };
+      }
+      if (ipv4InBlock(value, "224.0.0.0", 4) || ipv4InBlock(value, "240.0.0.0", 4)) {
+        return { valid: false, reason: `Blocked reserved IP: ${ip}` };
+      }
+    } else if (version === 6) {
+      const groups = parseIPv6Groups(ip);
+      if (groups === null) return { valid: false, reason: `Blocked IP: ${ip}` };
+      const [g0, g1, g2, g3, g4, g5] = groups;
+      if (groups.every((g) => g === 0)) {
+        return { valid: false, reason: "Blocked unspecified IP" };
+      }
+      if ((g0 & 0xffc0) === 0xfe80) {
+        return { valid: false, reason: `Blocked link-local IP: ${ip}` };
+      }
+      if ((g0 & 0xff00) === 0xff00) {
+        return { valid: false, reason: `Blocked multicast IP: ${ip}` };
+      }
+      // IPv4-mapped: re-check embedded IPv4 for link-local/metadata.
+      if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0xffff) {
+        const hi = ((groups[6] << 16) | groups[7]) >>> 0;
+        const b1 = (hi >>> 24) & 0xff;
+        const b2 = (hi >>> 16) & 0xff;
+        if (b1 === 169 && b2 === 254) {
+          return { valid: false, reason: `Blocked link-local IP: ${ip}` };
+        }
+        if (b1 === 0) {
+          return { valid: false, reason: `Blocked unspecified IP: ${ip}` };
+        }
+      }
+    }
+  }
+
+  return { valid: true, url: parsed };
+}
+
+/**
  * Resolve and validate a redirect target relative to the URL that produced it.
  *
  * Used to validate EVERY redirect hop (with redirect: "manual") instead of

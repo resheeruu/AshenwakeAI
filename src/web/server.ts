@@ -688,12 +688,12 @@ app.post("/api/providers/manage", requireAuth, requireRole("owner"), requireCsrf
   }
 });
 
-app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
     const body = req.body as Record<string, unknown> || {};
-    providerService.updateProvider(id, {
+    await providerService.updateProvider(id, {
       displayName: body.displayName as string | undefined,
       endpoint: body.endpoint as string | undefined,
       apiKey: body.apiKey as string | undefined,
@@ -712,11 +712,11 @@ app.put("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireC
   }
 });
 
-app.delete("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.delete("/api/providers/manage/:id", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
-    providerService.deleteProvider(id, authReq.accountId!, authReq.username!);
+    await providerService.deleteProvider(id, authReq.accountId!, authReq.username!);
     res.json({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -749,7 +749,7 @@ app.post("/api/providers/manage/:id/discover-models", requireAuth, requireRole("
   }
 });
 
-app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), requireCsrf, (req: Request, res: Response) => {
+app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), requireCsrf, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const id = String(req.params.id);
@@ -758,7 +758,7 @@ app.post("/api/providers/manage/:id/toggle", requireAuth, requireRole("owner"), 
     if (typeof enabled !== "boolean") {
       return res.status(400).json({ ok: false, error: "enabled must be a boolean" });
     }
-    providerService.toggleProvider(id, enabled, authReq.accountId!, authReq.username!);
+    await providerService.toggleProvider(id, enabled, authReq.accountId!, authReq.username!);
     res.json({ ok: true, provider: providerService.getProvider(id) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1695,16 +1695,7 @@ app.put("/api/guilds/:guildId/ai/limits", requireAuth, requireRole("owner"), req
 app.get("/api/guilds/:guildId/models", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const config = getGuildConfig(guildId);
-  const allModels = providerRegistry.getAll().flatMap(p => {
-    const runtime = { enabled: true, models: [] };
-    return (runtime.models || []).map((m: any) => ({
-      modelId: m,
-      provider: p.name,
-      enabled: true,
-      capabilities: ["chat"],
-      contextLength: 4096,
-    }));
-  });
+  const allModels = providerService.getAllDiscoveredModels();
   res.json({ ok: true, models: allModels, configured: config.models || [] });
 });
 
@@ -1772,28 +1763,84 @@ app.get("/api/security/credentials", requireAuth, requireRole("owner"), (req: Re
 
 /* ==================== SUPPORT ==================== */
 
-app.get("/api/guilds/:guildId/support", requireAuth, requireGuildAuth, async (req: Request, res: Response) => {
+app.get("/api/guilds/:guildId/support", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   try {
     const { getSupportCaseManager } = require("../support");
     const manager = getSupportCaseManager();
-    const cases = manager.getCases ? manager.getCases(guildId) : [];
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const cases = manager.getGuildCases(
+      guildId,
+      status as any,
+      undefined,
+      100,
+    );
     res.json({ ok: true, cases, guildId });
   } catch (err) {
-    res.json({ ok: true, cases: [], guildId });
+    logger.error("Failed to list support cases:", err);
+    res.status(500).json({ ok: false, error: "Failed to load support cases" });
   }
 });
 
-app.put("/api/guilds/:guildId/support/:caseId", requireAuth, requireGuildAuth, async (req: Request, res: Response) => {
+app.get("/api/guilds/:guildId/support/:caseId", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const caseId = typeof req.params.caseId === "string" ? req.params.caseId : "";
   try {
     const { getSupportCaseManager } = require("../support");
     const manager = getSupportCaseManager();
-    const result = manager.updateCaseStatus ? await manager.updateCaseStatus(caseId, req.body.status, req.body.note) : { ok: true };
-    res.json({ ok: true, result });
+    const supportCase = manager.getCase(caseId);
+    if (!supportCase || supportCase.guildId !== guildId) {
+      return res.status(404).json({ ok: false, error: "Case not found" });
+    }
+    res.json({ ok: true, case: supportCase, messages: manager.getMessages(caseId) });
   } catch (err) {
-    res.json({ ok: true });
+    logger.error("Failed to load support case:", err);
+    res.status(500).json({ ok: false, error: "Failed to load support case" });
+  }
+});
+
+app.put("/api/guilds/:guildId/support/:caseId", requireAuth, requireRole("admin"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const caseId = typeof req.params.caseId === "string" ? req.params.caseId : "";
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { getSupportCaseManager } = require("../support");
+    const { canTransition } = require("../support");
+    const manager = getSupportCaseManager();
+
+    const supportCase = manager.getCase(caseId);
+    if (!supportCase || supportCase.guildId !== guildId) {
+      return res.status(404).json({ ok: false, error: "Case not found" });
+    }
+
+    const body = (req.body || {}) as Record<string, unknown>;
+    const newStatus = body.status as string | undefined;
+    const note = typeof body.note === "string" ? body.note : undefined;
+
+    if (!newStatus || typeof newStatus !== "string") {
+      return res.status(400).json({ ok: false, error: "status is required" });
+    }
+
+    if (!canTransition(supportCase.status, newStatus as any)) {
+      return res.status(409).json({
+        ok: false,
+        error: `Invalid transition: ${supportCase.status} → ${newStatus}`,
+      });
+    }
+
+    const updated = manager.transitionCase(caseId, newStatus as any, authReq.accountId || "web");
+    if (!updated) {
+      return res.status(409).json({ ok: false, error: "Transition rejected (conflict or invalid)" });
+    }
+
+    if (note) {
+      manager.addMessage(caseId, authReq.accountId || "web", note, false);
+    }
+
+    res.json({ ok: true, case: updated });
+  } catch (err) {
+    logger.error("Failed to update support case:", err);
+    res.status(500).json({ ok: false, error: "Failed to update support case" });
   }
 });
 
@@ -1803,21 +1850,92 @@ app.get("/api/guilds/:guildId/automation/rules", requireAuth, requireGuildAuth, 
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   try {
     const { getAutomationRules } = require("../community/automation");
-    const rules = getAutomationRules ? getAutomationRules(guildId) : [];
+    const rules = getAutomationRules(guildId);
     res.json({ ok: true, rules });
-  } catch {
-    res.json({ ok: true, rules: [] });
+  } catch (err) {
+    logger.error("Failed to list automation rules:", err);
+    res.status(500).json({ ok: false, error: "Failed to load automation rules" });
   }
 });
 
 app.post("/api/guilds/:guildId/automation/rules", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
-  const rule = req.body;
-  res.json({ ok: true, rule: { id: "automation_" + Date.now(), ...rule, guildId } });
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const body = (req.body || {}) as Record<string, unknown>;
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const triggerType = typeof body.triggerType === "string" ? body.triggerType.trim() : "";
+    if (!name || name.length > 120) {
+      return res.status(400).json({ ok: false, error: "name is required (max 120 chars)" });
+    }
+    if (!triggerType || triggerType.length > 64) {
+      return res.status(400).json({ ok: false, error: "triggerType is required (max 64 chars)" });
+    }
+
+    const { createAutomationRule } = require("../community/automation");
+    const rule = createAutomationRule({
+      guildId,
+      name,
+      description: typeof body.description === "string" ? body.description : undefined,
+      enabled: typeof body.enabled === "boolean" ? body.enabled : true,
+      triggerType,
+      triggerConfig: typeof body.triggerConfig === "object" && body.triggerConfig
+        ? body.triggerConfig as Record<string, unknown>
+        : {},
+      conditions: Array.isArray(body.conditions) ? body.conditions : [],
+      actions: Array.isArray(body.actions) ? body.actions : [],
+      createdBy: authReq.accountId,
+    }, authReq.accountId || "web", authReq.username || "web");
+
+    res.status(201).json({ ok: true, rule });
+  } catch (err) {
+    logger.error("Failed to create automation rule:", err);
+    res.status(500).json({ ok: false, error: "Failed to create automation rule" });
+  }
 });
 
-app.delete("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (_req: Request, res: Response) => {
-  res.json({ ok: true });
+app.put("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const ruleId = typeof req.params.ruleId === "string" ? req.params.ruleId : "";
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const body = (req.body || {}) as Record<string, unknown>;
+    const updates: Record<string, unknown> = {};
+    if (typeof body.name === "string") updates.name = body.name;
+    if (typeof body.description === "string") updates.description = body.description;
+    if (typeof body.enabled === "boolean") updates.enabled = body.enabled;
+    if (typeof body.triggerType === "string") updates.triggerType = body.triggerType;
+    if (body.triggerConfig && typeof body.triggerConfig === "object") updates.triggerConfig = body.triggerConfig;
+    if (Array.isArray(body.conditions)) updates.conditions = body.conditions;
+    if (Array.isArray(body.actions)) updates.actions = body.actions;
+
+    const { updateAutomationRule } = require("../community/automation");
+    const rule = updateAutomationRule(guildId, ruleId, updates as any, authReq.accountId || "web", authReq.username || "web");
+    if (!rule) {
+      return res.status(404).json({ ok: false, error: "Rule not found" });
+    }
+    res.json({ ok: true, rule });
+  } catch (err) {
+    logger.error("Failed to update automation rule:", err);
+    res.status(500).json({ ok: false, error: "Failed to update automation rule" });
+  }
+});
+
+app.delete("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const ruleId = typeof req.params.ruleId === "string" ? req.params.ruleId : "";
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { deleteAutomationRule } = require("../community/automation");
+    const ok = deleteAutomationRule(guildId, ruleId, authReq.accountId || "web", authReq.username || "web");
+    if (!ok) {
+      return res.status(404).json({ ok: false, error: "Rule not found" });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error("Failed to delete automation rule:", err);
+    res.status(500).json({ ok: false, error: "Failed to delete automation rule" });
+  }
 });
 
 /* ==================== SOCIAL ==================== */
@@ -1856,7 +1974,7 @@ app.get("/api/guilds/:guildId/providers/health", requireAuth, requireGuildAuth, 
   res.json({ ok: true, health });
 });
 
-app.post("/api/providers/:id/health", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+app.post("/api/providers/:id/health", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
   const id = String(req.params.id);
   try {
     const router = new (require("../ai/router").AIRouter)([]);

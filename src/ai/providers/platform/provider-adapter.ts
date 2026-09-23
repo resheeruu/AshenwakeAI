@@ -3,6 +3,46 @@ import type { ProviderDefinition, ProviderProtocol } from "./types";
 import { getCredential } from "./credential-store";
 import { providerRepo } from "./provider-repo";
 import { logger } from "../../../logger";
+import { validateOutboundUrl, validateTrustedLocalProviderUrl, validateRedirectTarget, MAX_REDIRECTS } from "../../../security/network-boundary";
+
+function assertSafeProviderEndpoint(endpoint: string, protocol: ProviderProtocol): string {
+  const check = protocol === "ollama"
+    ? validateTrustedLocalProviderUrl(endpoint)
+    : validateOutboundUrl(endpoint);
+  if (!check.valid || !check.url) {
+    throw new Error(`Provider endpoint blocked: ${check.reason ?? endpoint}`);
+  }
+  return check.url.toString().replace(/\/$/, "");
+}
+
+async function providerFetch(
+  url: string,
+  init: RequestInit,
+  protocol: ProviderProtocol,
+): Promise<Response> {
+  let currentUrl = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const response = await fetch(currentUrl, { ...init, redirect: "manual" });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) return response;
+      const check = validateRedirectTarget(location, currentUrl);
+      if (!check.valid || !check.url) {
+        throw new Error(`Redirect blocked: ${check.reason ?? location}`);
+      }
+      const recheck = protocol === "ollama"
+        ? validateTrustedLocalProviderUrl(check.url)
+        : validateOutboundUrl(check.url);
+      if (!recheck.valid) {
+        throw new Error(`Redirect blocked: ${check.url}`);
+      }
+      currentUrl = check.url;
+      continue;
+    }
+    return response;
+  }
+  throw new Error(`Redirect blocked: exceeded ${MAX_REDIRECTS} redirects`);
+}
 
 class DynamicOpenAICompatibleProvider implements AIProvider {
   readonly name: string;
@@ -22,10 +62,13 @@ class DynamicOpenAICompatibleProvider implements AIProvider {
   async generate(request: AIRequest): Promise<AIResponse> {
     if (!this.apiKey) throw new Error(`${this.name} API key is missing`);
     const model = request.model || this.def.defaultModel || "gpt-4o-mini";
-    const endpoint = this.def.endpoint?.replace(/\/$/, "") || "https://api.openai.com/v1";
+    const endpoint = assertSafeProviderEndpoint(
+      this.def.endpoint || "https://api.openai.com/v1",
+      "openai_compatible",
+    );
     const started = Date.now();
 
-    const response = await fetch(`${endpoint}/chat/completions`, {
+    const response = await providerFetch(`${endpoint}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -38,7 +81,7 @@ class DynamicOpenAICompatibleProvider implements AIProvider {
         temperature: request.temperature ?? 0.7,
         max_tokens: request.maxTokens ?? 1024,
       }),
-    });
+    }, "openai_compatible");
 
     if (!response.ok) throw new Error(`${this.name} HTTP ${response.status}`);
     const data = await response.json() as any;
@@ -75,13 +118,16 @@ class DynamicAnthropicProvider implements AIProvider {
   async generate(request: AIRequest): Promise<AIResponse> {
     if (!this.apiKey) throw new Error(`${this.name} API key is missing`);
     const model = request.model || this.def.defaultModel || "claude-3-5-haiku-latest";
-    const endpoint = this.def.endpoint?.replace(/\/$/, "") || "https://api.anthropic.com";
+    const endpoint = assertSafeProviderEndpoint(
+      this.def.endpoint || "https://api.anthropic.com",
+      "anthropic",
+    );
     const started = Date.now();
 
     const systemMsg = request.messages.find(m => m.role === "system");
     const nonSystemMsgs = request.messages.filter(m => m.role !== "system");
 
-    const response = await fetch(`${endpoint}/v1/messages`, {
+    const response = await providerFetch(`${endpoint}/v1/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -99,7 +145,7 @@ class DynamicAnthropicProvider implements AIProvider {
         max_tokens: request.maxTokens ?? 1024,
         temperature: request.temperature ?? 0.7,
       }),
-    });
+    }, "anthropic");
 
     if (!response.ok) throw new Error(`${this.name} HTTP ${response.status}`);
     const data = await response.json() as any;
@@ -136,7 +182,10 @@ class DynamicGeminiProvider implements AIProvider {
   async generate(request: AIRequest): Promise<AIResponse> {
     if (!this.apiKey) throw new Error(`${this.name} API key is missing`);
     const model = request.model || this.def.defaultModel || "gemini-3.6-flash";
-    const endpoint = this.def.endpoint?.replace(/\/$/, "") || "https://generativelanguage.googleapis.com";
+    const endpoint = assertSafeProviderEndpoint(
+      this.def.endpoint || "https://generativelanguage.googleapis.com",
+      "gemini",
+    );
     const started = Date.now();
 
     const contents = request.messages
@@ -159,14 +208,15 @@ class DynamicGeminiProvider implements AIProvider {
       body.systemInstruction = { parts: [{ text: systemMsg.content }] };
     }
 
-    const response = await fetch(
+    const response = await providerFetch(
       `${endpoint}/v1beta/models/${model}:generateContent?key=${this.apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: AbortSignal.timeout(this.def.timeoutMs),
         body: JSON.stringify(body),
-      }
+      },
+      "gemini",
     );
 
     if (!response.ok) throw new Error(`${this.name} HTTP ${response.status}`);
@@ -201,10 +251,13 @@ class DynamicOllamaProvider implements AIProvider {
 
   async generate(request: AIRequest): Promise<AIResponse> {
     const model = request.model || this.def.defaultModel || "llama3.2";
-    const endpoint = this.def.endpoint?.replace(/\/$/, "") || "http://localhost:11434";
+    const endpoint = assertSafeProviderEndpoint(
+      this.def.endpoint || "http://localhost:11434",
+      "ollama",
+    );
     const started = Date.now();
 
-    const response = await fetch(`${endpoint}/api/chat`, {
+    const response = await providerFetch(`${endpoint}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: AbortSignal.timeout(this.def.timeoutMs),
@@ -217,7 +270,7 @@ class DynamicOllamaProvider implements AIProvider {
           num_predict: request.maxTokens ?? 1024,
         },
       }),
-    });
+    }, "ollama");
 
     if (!response.ok) throw new Error(`${this.name} HTTP ${response.status}`);
     const data = await response.json() as any;

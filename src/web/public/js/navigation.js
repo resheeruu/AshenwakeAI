@@ -99,6 +99,7 @@ function loadSection(sectionId) {
     case 'moderation': loadModeration(); break;
     case 'social': loadSocial(); break;
     case 'automation': loadAutomation(); break;
+    case 'support': if (typeof loadSupport === 'function') loadSupport(); break;
     default: break;
   }
 }

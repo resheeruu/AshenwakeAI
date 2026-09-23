@@ -6,6 +6,7 @@ import { createDynamicProvider, loadAllDynamicProviders } from "./provider-adapt
 import { providerRegistry } from "../index";
 import type {
   ProviderDefinition,
+  ProviderModel,
   ProviderStatusView,
   CreateProviderInput,
   UpdateProviderInput,
@@ -16,7 +17,7 @@ import { logger } from "../../../logger";
 import { recordAudit } from "../../../security/audit";
 import { nanoid } from "nanoid";
 
-function toStatusView(def: ProviderDefinition, modelCount: number): ProviderStatusView {
+function toStatusView(def: ProviderDefinition, models: ProviderModel[]): ProviderStatusView {
   let endpointHostname: string | undefined;
   try {
     if (def.endpoint) endpointHostname = new URL(def.endpoint).hostname;
@@ -35,7 +36,16 @@ function toStatusView(def: ProviderDefinition, modelCount: number): ProviderStat
     enabled: def.enabled,
     priority: def.priority,
     defaultModel: def.defaultModel,
-    modelCount,
+    modelCount: models.length,
+    models: models.map(m => ({
+      modelId: m.modelId,
+      displayName: m.displayName,
+      enabled: m.enabled,
+      isDefault: m.isDefault,
+      capabilities: m.capabilities,
+      contextLength: m.contextLength,
+      priority: m.priority,
+    })),
     health: {
       available: def.enabled,
       successes: runtime?.successes ?? 0,
@@ -56,15 +66,57 @@ export const providerService = {
     const defs = providerRepo.getAll();
     return defs.map(def => {
       const models = providerRepo.getModels(def.id);
-      return toStatusView(def, models.length);
+      return toStatusView(def, models);
     });
+  },
+
+  /** Authoritative model discovery source for dashboard/API consumers. */
+  getAllDiscoveredModels(): Array<{
+    modelId: string;
+    displayName?: string;
+    provider: string;
+    providerId: string;
+    enabled: boolean;
+    capabilities: string[];
+    contextLength?: number;
+    isDefault: boolean;
+    priority: number;
+  }> {
+    const defs = providerRepo.getAll();
+    const out: Array<{
+      modelId: string;
+      displayName?: string;
+      provider: string;
+      providerId: string;
+      enabled: boolean;
+      capabilities: string[];
+      contextLength?: number;
+      isDefault: boolean;
+      priority: number;
+    }> = [];
+    for (const def of defs) {
+      for (const m of providerRepo.getModels(def.id)) {
+        out.push({
+          modelId: m.modelId,
+          displayName: m.displayName,
+          provider: def.name,
+          providerId: def.id,
+          enabled: m.enabled && def.enabled,
+          capabilities: m.capabilities,
+          contextLength: m.contextLength,
+          isDefault: m.isDefault,
+          priority: m.priority,
+        });
+      }
+    }
+    return out;
   },
 
   getProvider(id: string): ProviderStatusView | undefined {
     const def = providerRepo.getById(id);
     if (!def) return undefined;
     const models = providerRepo.getModels(def.id);
-    return toStatusView(def, models.length);
+    return toStatusView(def, models);
   },
 
   createProvider(input: CreateProviderInput, actorUserId: string, actorUserName: string): Promise<ProviderDefinition> {
@@ -155,8 +207,8 @@ export const providerService = {
     });
   },
 
-  toggleProvider(id: string, enabled: boolean, actorUserId: string, actorUserName: string): void {
-    providerRuntimeManager.toggleProvider(id, enabled, actorUserId, actorUserName);
+  async toggleProvider(id: string, enabled: boolean, actorUserId: string, actorUserName: string): Promise<void> {
+    await providerRuntimeManager.toggleProvider(id, enabled, actorUserId, actorUserName);
   },
 
   syncDynamicProviders(): void {
