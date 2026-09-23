@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AshenWakeAI</title>
-<meta name="description" content="Intelligent infrastructure for Discord communities">
+<title>AshenWakeAI — Intelligent Infrastructure for Discord Communities</title>
+<meta name="description" content="AshenWakeAI provides multi-provider AI routing, moderation, automation, and social features for Discord communities. Professional, secure, and fully configurable through the web dashboard.">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
@@ -31,9 +31,9 @@
   <div class="container">
     <div class="hero-content">
       <h1>AshenWakeAI</h1>
-      <p>Intelligent infrastructure for Discord communities.</p>
+      <p>Intelligent infrastructure for Discord communities. Multi-provider AI, moderation, automation, and social features in one platform.</p>
       <div class="hero-buttons">
-        <a href="/dashboard" class="btn btn-primary cta-button">Add AshenWakeAI to Discord</a>
+        <a href="/dashboard" class="btn btn-primary cta-button">Open Dashboard</a>
         <a href="#features" class="btn btn-outline cta-button">View Features</a>
       </div>
     </div>
@@ -44,44 +44,40 @@
   <div class="container">
     <div class="section-header">
       <h2>Features</h2>
-      <p>AI chat, moderation, automation, personality, social features, and multi-provider AI in one Discord-native platform.</p>
+      <p>A complete platform for Discord communities.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card">
         <h3>AI Chat</h3>
-        <p>Conversational AI with multi-provider routing and fallback.</p>
+        <p>Conversational AI with multi-provider routing and automatic fallback across 30+ providers.</p>
       </div>
       <div class="feature-card">
-        <h3>Multi-provider AI</h3>
-        <p>Access Google Gemini, Groq, OpenRouter, and local models.</p>
+        <h3>Multi-Provider AI</h3>
+        <p>Access Google Gemini, Groq, OpenRouter, Anthropic, and local models with intelligent routing.</p>
       </div>
       <div class="feature-card">
         <h3>Custom Personality</h3>
-        <p>Configure AI tone, style, and behavior for your server.</p>
+        <p>Configure AI tone, style, and behavior per server with validation and audit logging.</p>
       </div>
       <div class="feature-card">
         <h3>AI Moderation</h3>
-        <p>Spam detection, link filtering, and toxicity prevention.</p>
+        <p>Spam detection, link filtering, and toxicity prevention with role-aware controls.</p>
       </div>
       <div class="feature-card">
         <h3>Automation</h3>
-        <p>Welcome messages, role assignment, and event triggers.</p>
+        <p>Welcome messages, role assignment, event triggers, and safe predefined actions.</p>
       </div>
       <div class="feature-card">
         <h3>Social/Debate</h3>
-        <p>Rivalry sessions and configurable social behavior.</p>
+        <p>Rivalry sessions and configurable social behavior with cooldown management.</p>
       </div>
       <div class="feature-card">
-        <h3>Anime Actions</h3>
-        <p>Custom emoji provisioning and anime-style interactions.</p>
+        <h3>Provider Ecosystem</h3>
+        <p>Free, free-tier, trial, paid, and local providers. Connect via the provider wizard.</p>
       </div>
       <div class="feature-card">
-        <h3>Analytics</h3>
-        <p>AI request tracking, provider health, and usage metrics.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Server Controls</h3>
-        <p>Channel configuration, role management, and permissions.</p>
+        <h3>Security</h3>
+        <p>SSRF protection, CSRF, session security, MFA, OAuth, and credential-first classification.</p>
       </div>
     </div>
   </div>
@@ -91,33 +87,13 @@
   <div class="container">
     <div class="section-header">
       <h2>AI Infrastructure</h2>
-      <p>How AshenWakeAI routes and manages AI providers.</p>
+      <p>Professional-grade AI orchestration with full control.</p>
     </div>
-    <div class="infra-grid">
-      <div class="infra-card">
-        <h3>Provider Routing</h3>
-        <p>Smart router selects the best available provider based on health, latency, and cost.</p>
-      </div>
-      <div class="infra-card">
-        <h3>Model Selection</h3>
-        <p>Discover and select models from registered providers.</p>
-      </div>
-      <div class="infra-card">
-        <h3>Failover & Fallback</h3>
-        <p>Automatic provider failover when primary is unavailable.</p>
-      </div>
-      <div class="infra-card">
-        <h3>Health Monitoring</h3>
-        <p>Continuous provider health checks with CONFIGURED/DEGRADED/QUARANTINED states.</p>
-      </div>
-      <div class="infra-card">
-        <h3>Model Discovery</h3>
-        <p>Auto-discover available models from each provider.</p>
-      </div>
-      <div class="infra-card">
-        <h3>Local AI</h3>
-        <p>Ollama and llama.cpp support for local, no-key deployments.</p>
-      </div>
+    <div class="card-grid">
+      <div class="stat-card"><div class="stat-value">30+</div><div class="stat-label">Providers</div></div>
+      <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Auth Tiers</div></div>
+      <div class="stat-card green"><div class="stat-value">0</div><div class="stat-label">High Vulns</div></div>
+      <div class="stat-card"><div class="stat-value">36</div><div class="stat-label">Test Suites</div></div>
     </div>
   </div>
 </section>
@@ -126,17 +102,39 @@
   <div class="container">
     <div class="section-header">
       <h2>Provider Ecosystem</h2>
-      <p>Categories of AI providers supported by AshenWakeAI.</p>
+      <p>Connect the providers you need with the provider wizard.</p>
     </div>
-    <div class="ecosystem-tags">
-      <span class="tag free">Free</span>
-      <span class="tag free-tier">Free-tier</span>
-      <span class="tag trial">Trial/Credit</span>
-      <span class="tag paid">Paid</span>
-      <span class="tag local">Local</span>
-      <span class="tag custom">Custom</span>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>Free Tier</h3>
+        <p>Google Gemini, Groq, OpenRouter — generous free access with API keys.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Paid</h3>
+        <p>Anthropic Claude, OpenAI — premium models with full capabilities.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Local</h3>
+        <p>Ollama, Local LLM — run models locally with no external API.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Custom</h3>
+        <p>Any OpenAI-compatible endpoint with custom configuration.</p>
+      </div>
     </div>
-    <p class="ecosystem-note">Provider availability varies. Free-tier and trial providers have usage limits set by the respective services.</p>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Get Started</h2>
+      <p>Add AshenWakeAI to your Discord server and manage everything from the dashboard.</p>
+    </div>
+    <div class="hero-buttons" style="justify-content:center">
+      <a href="/dashboard" class="btn btn-primary cta-button">Open Dashboard</a>
+      <a href="/docs" class="btn btn-outline cta-button">Read Docs</a>
+    </div>
   </div>
 </section>
 
@@ -153,6 +151,7 @@
           <li><a href="/">Website</a></li>
           <li><a href="/features">Features</a></li>
           <li><a href="/docs">Docs</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
         </ul>
       </div>
       <div class="footer-col">

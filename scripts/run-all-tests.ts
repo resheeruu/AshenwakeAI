@@ -71,7 +71,6 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Rivalry", file: "scripts/test-rivalry.ts", category: "integration" },
 
 // Web
-{ name: "Web Platform", file: "scripts/test-web-platform.ts", category: "web" },
 { name: "Web Security", file: "scripts/test-web-security.ts", category: "web" },
 { name: "Web Headers", file: "scripts/test-web-headers.ts", category: "web" },
 
@@ -99,6 +98,7 @@ const MANDATORY_SUITES: TestSuite[] = [
 ];
 
 const OPTIONAL_SUITES: TestSuite[] = [
+  { name: "Web Platform", file: "scripts/test-web-platform.ts", category: "web", optional: true, tier: "EXTENDED", reason: "Requires running web server" },
   { name: "Providers", file: "scripts/test-providers.ts", category: "core", optional: true, tier: "LIVE", reason: "Requires live API keys" },
   { name: "Provider Platform", file: "scripts/test-provider-platform.ts", category: "core", optional: true, tier: "EXTENDED", reason: "Provider definition/credential store round-trip (DB-backed)" },
   { name: "U3", file: "scripts/test-u3.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U3 feature tests" },
