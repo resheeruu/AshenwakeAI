@@ -39,17 +39,33 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
     fi
 fi
 
-# PORT: host-provided value always wins (Wispbyte/Render/Docker -e PORT=...).
-# Safe production default 8080 when the platform does not inject PORT.
-if [ -z "${PORT:-}" ]; then
+# PORT resolution — the application (src/web/server.ts) reads
+# process.env.PORT, then .env via dotenv (dotenv never overwrites an
+# already-exported variable), then falls back to 8080.
+#
+#   1. Host/panel-provided PORT always wins (Wispbyte Startup env,
+#      Docker -e PORT=..., Render, plain `PORT=9002 npm start`).
+#   2. PORT from .env — only reachable when the shell does NOT export a
+#      default first, otherwise dotenv is shadowed and .env PORT is lost.
+#   3. Documented local fallback 8080, exported only when there is no
+#      .env that could supply a port.
+#
+# Wispbyte does NOT auto-inject PORT: the allocated port must be set in
+# Startup -> Environment Variables (e.g. PORT=9002). When it is absent
+# the app keeps its 8080 fallback and will not match the panel port.
+if [ -z "${PORT:-}" ] && [ ! -f "${ROOT_DIR}/.env" ]; then
     export PORT=8080
     echo "[start] PORT not set — using default ${PORT}"
 fi
-if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || [ "${PORT}" -lt 1 ] || [ "${PORT}" -gt 65535 ]; then
-    echo "[start] ERROR: PORT must be an integer between 1 and 65535 (got '${PORT}')."
-    exit 1
+if [ -n "${PORT:-}" ]; then
+    if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || [ "${PORT}" -lt 1 ] || [ "${PORT}" -gt 65535 ]; then
+        echo "[start] ERROR: PORT must be an integer between 1 and 65535 (got '${PORT}')."
+        exit 1
+    fi
+    echo "[start] PORT=${PORT}"
+else
+    echo "[start] PORT not set in environment — using .env PORT if present, otherwise fallback 8080"
 fi
-echo "[start] PORT=${PORT}"
 
 command -v node >/dev/null 2>&1 || {
     echo "[start] ERROR: Node.js is not installed."
@@ -87,16 +103,31 @@ if [[ -f "${ROOT_DIR}/scripts/check-resources.sh" ]]; then
     . "$APP_DIR/scripts/check-resources.sh" || true
 fi
 
-echo "[start] Starting AshenAI on port ${PORT}..."
+if [ -n "${PORT:-}" ]; then
+    echo "[start] Starting AshenAI on port ${PORT}..."
+else
+    echo "[start] Starting AshenAI (port from .env, else 8080)..."
+fi
 
 # Prefer the compiled production artifact when available.
-# This avoids requiring tsx (a devDependency) in production installs
-# where devDependencies are omitted (Wispbyte, Docker --omit=dev).
+# `npm start` already ran the `prestart` hook (scripts/ensure-dist.mjs),
+# which repairs an incomplete node_modules and compiles dist/ on a clean
+# checkout — so this is the normal, fast production path (no rebuild).
 if [[ -f "${ROOT_DIR}/dist/index.js" ]]; then
     exec node "${ROOT_DIR}/dist/index.js"
 fi
 
-# Fallback to tsx for development / when no build artifact exists.
+# Safety net for direct `bash scripts/start.sh` runs (Docker CMD, manual
+# invocation) where npm never executed `prestart`. Delegates to the same
+# deterministic build guard instead of hiding build logic in shell.
+echo "[start] dist/index.js not found — running scripts/ensure-dist.mjs..."
+if node "${ROOT_DIR}/scripts/ensure-dist.mjs" && [[ -f "${ROOT_DIR}/dist/index.js" ]]; then
+    echo "[start] Build succeeded — starting compiled application..."
+    exec node "${ROOT_DIR}/dist/index.js"
+fi
+echo "[start] Build unavailable — falling back to tsx"
+
+# Fallback to tsx for development / when build is not possible.
 if [[ -f "${ROOT_DIR}/node_modules/.bin/tsx" ]]; then
     exec node "${ROOT_DIR}/node_modules/.bin/tsx" src/index.ts
 fi

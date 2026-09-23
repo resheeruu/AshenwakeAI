@@ -26,8 +26,18 @@ git clone <your-repo-url> .
 ### 3. Install Dependencies
 
 ```bash
+# Full install (development)
 npm ci --no-fund --no-audit
+
+# Production install (Wispbyte / CI-prod equivalent) — also works:
+npm ci --omit=dev --no-fund --no-audit
 ```
+
+The **build toolchain is part of the runtime dependencies** (`typescript`,
+`tsx`, `@types/express`, `@types/better-sqlite3`, `@types/node`,
+`@types/turndown`), so a production install still has everything needed to
+compile `dist/` on first start. You do **not** need to pre-build `dist/`
+before deploying.
 
 ### 4. Configure Environment
 
@@ -60,9 +70,26 @@ npm start
 ```
 
 The application uses `process.env.PORT` for the web server port.
-If the host sets `PORT`, that value is used. If `PORT` is unset, AshenAI
-defaults to **8080** and binds `0.0.0.0` (container-safe).
-Example: if Wispbyte sets `PORT=9002`, AshenAI listens on port 9002.
+Resolution order: **process environment (host/panel) → `.env` → 8080 fallback**.
+AshenAI binds `0.0.0.0` (container-safe).
+
+**Wispbyte does not inject `PORT` automatically.** The allocated port is shown
+in Console → Address, and it must be supplied by you in Startup →
+Environment Variables:
+
+```env
+# Startup → Environment Variables
+PORT=9002              # must match Console → Address
+NODE_ENV=production
+```
+
+```text
+Startup Command: npm start
+```
+
+If `PORT` is missing from the environment the app keeps the **8080** fallback
+and will not match the port Wispbyte routes to. The 8080 fallback exists for
+local use only — set the panel value in production.
 
 ### 6. Verify
 
@@ -96,23 +123,42 @@ curl http://localhost:${PORT:-8080}/api/health
 
 ### Wispbyte Panel Variables
 
+Set these in **Startup → Environment Variables** (the panel does not inject
+them for you):
+
 ```env
 NODE_ENV=production
-PORT=8080           # recommended; host-injected PORT also works
+PORT=9002          # must match Console → Address; Wispbyte does NOT auto-inject PORT
 SESSION_SECRET=<random_secret>
 DISCORD_TOKEN=<your_token>
 DISCORD_CLIENT_ID=<your_client_id>
 ```
 
+Startup Command:
+
+```bash
+npm start
+```
+
 ## Startup Sequence
 
-1. `npm start` runs `scripts/start.sh`
-2. `start.sh` validates Node.js, checks `node_modules`
-3. Sources `check-resources.sh` for disk/RAM/CPU status
-4. Launches `src/index.ts` via tsx
-5. Application validates config, connects to Discord
-6. Web server starts on configured PORT
-7. Health endpoint available at `/api/health`
+1. `npm start` runs the **`prestart`** lifecycle hook → `scripts/ensure-dist.mjs`
+2. `ensure-dist.mjs` repairs an incomplete `node_modules` if a required runtime
+   package (`typescript`, `tsx`, `express`) is missing, then compiles `dist/`
+   when it is missing or older than `src/`
+   - runs at most one install and one build per start
+   - restarts with a fresh `dist/` skip the build entirely — no rebuild loop
+3. npm runs `scripts/start.sh`
+4. `start.sh` exports `NODE_ENV` (deterministic `production` default), resolves
+   `PORT` (environment → `.env` → 8080), validates Node.js/npm, checks
+   `node_modules`
+5. Sources `check-resources.sh` for disk/RAM/CPU status
+6. Launches `node dist/index.js` (fast production path). A direct
+   `bash scripts/start.sh` run (Docker CMD) falls back through
+   `ensure-dist.mjs`, then `tsx src/index.ts`
+7. Application validates config, connects to Discord
+8. Web server starts on configured PORT
+9. Health endpoint available at `/api/health`
 
 ## Graceful Shutdown
 
