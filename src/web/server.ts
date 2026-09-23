@@ -110,7 +110,8 @@ import { providerRegistry } from "../ai/providers";
 import { loadGuildConfig, getAllGuildConfigs } from "../core/guild-config";
 
 const app = express();
-app.set("trust proxy", 1);
+const trustProxySetting = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 1;
+app.set("trust proxy", trustProxySetting);
 
 /* ==================== SECURITY HEADERS ==================== */
 app.use((_req: Request, res: Response, next: () => void) => {
