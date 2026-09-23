@@ -35,36 +35,11 @@ async function savePlayersUnlocked(
   players: Record<string, GamePlayer>,
 ): Promise<void> {
   await ensureStore();
-
-  /*
-   * Unique temporary file per write.
-   *
-   * The old implementation used:
-   *
-   *   game-players.json.tmp
-   *
-   * Concurrent writes could overwrite/remove that file before another
-   * operation reached rename(), producing ENOENT.
-   */
-  const temporary = `${FILE}.${process.pid}.${Date.now()}.${Math.random()
-    .toString(36)
-    .slice(2)}.tmp`;
-
-  try {
-    await fs.promises.writeFile(
-      temporary,
-      JSON.stringify(players, null, 2),
-      "utf8",
-    );
-
-    await fs.promises.rename(temporary, FILE);
-  } finally {
-    try {
-      await fs.promises.unlink(temporary);
-    } catch {
-      // Temporary file may already have been renamed successfully.
-    }
-  }
+  await fs.promises.writeFile(
+    FILE,
+    JSON.stringify(players, null, 2),
+    "utf8",
+  );
 }
 
 export async function loadPlayers(): Promise<Record<string, GamePlayer>> {
