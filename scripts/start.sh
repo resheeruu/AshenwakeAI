@@ -80,20 +80,18 @@ command -v npm >/dev/null 2>&1 || {
 echo "[start] Node: $(node --version)"
 echo "[start] npm:  $(npm --version)"
 
-# Fresh Git clone has no node_modules. Install once, then reuse the cache
-# on subsequent restarts (do not re-run npm install every boot).
+# Runtime requires node_modules and pre-built dist/.
+# Both must be deployed with the application — npm ci is NOT run at startup.
 if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
-    echo "[start] node_modules missing — running npm ci (fresh clone)"
-    if [[ -f "${ROOT_DIR}/package-lock.json" ]]; then
-        npm ci --no-fund --no-audit
-    else
-        npm install --no-fund --no-audit
-    fi
+    echo "[start] ERROR: node_modules missing."
+    echo "[start] Run npm ci during deployment before starting."
+    exit 1
 fi
 
-if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
-    echo "[start] ERROR: node_modules missing after install."
-    echo "[start] Run npm ci before starting AshenAI."
+if [[ ! -f "${ROOT_DIR}/dist/index.js" ]]; then
+    echo "[start] ERROR: dist/index.js not found."
+    echo "[start] Build the project before starting with: npm run build"
+    echo "[start] Or ensure a pre-built dist/ artifact is deployed."
     exit 1
 fi
 
@@ -107,16 +105,6 @@ if [ -n "${PORT:-}" ]; then
     echo "[start] Starting AshenAI on port ${PORT}..."
 else
     echo "[start] Starting AshenAI (port from .env, else 8080)..."
-fi
-
-# Production startup requires a pre-built dist/ artifact.
-# Build it during the build phase with: npm ci && npm run build
-# Then start with: bash scripts/start.sh (or npm start — no prestart hook runs).
-if [[ ! -f "${ROOT_DIR}/dist/index.js" ]]; then
-    echo "[start] ERROR: dist/index.js not found."
-    echo "[start] Build the project before starting with: npm run build"
-    echo "[start] Or ensure a pre-built dist/ artifact is deployed."
-    exit 1
 fi
 
 exec node "${ROOT_DIR}/dist/index.js"

@@ -57,6 +57,15 @@ jobs:
           fi
           echo "✅ npm audit passed (no high/critical vulnerabilities in production deps)"
 
+      # --- STAGE: Verify Build Artifact ---
+      - name: Verify dist/ artifact exists
+        run: |
+          if [[ ! -f dist/index.js ]]; then
+            echo "❌ dist/index.js missing — build step did not produce it"
+            exit 1
+          fi
+          echo "✅ dist/index.js exists ($(wc -c < dist/index.js) bytes)"
+
       # --- STAGE: Optional Checks ---
       - name: Icon validation
         run: |
