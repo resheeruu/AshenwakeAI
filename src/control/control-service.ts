@@ -294,7 +294,9 @@ export function getConfigurationState(): ConfigurationState {
     },
     web: {
       running: true,
-      port: Number(process.env.PORT),
+      port: process.env.PORT?.trim()
+        ? Number(process.env.PORT)
+        : 8080,
     },
     aiProviders: {
       configured: providerNames.length,
