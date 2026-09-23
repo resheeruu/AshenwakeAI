@@ -24,6 +24,7 @@ import {
 } from "../src/security/network-boundary";
 import {
   closeOutboundAgents,
+  hardenedFetch,
   resolveAndValidateHost,
 } from "../src/security/outbound-fetch";
 import { resolveBackupDir } from "../src/core/backup-manager";
@@ -122,6 +123,21 @@ const OAUTH_KEYS = [
   "DISCORD_REDIRECT_URI",
   "GOOGLE_OAUTH_CLIENT_ID",
 ];
+
+/** Assert that hardenedFetch blocks a URL with a "Blocked" error. */
+async function assertMcpBlocked(url: string, label: string): Promise<void> {
+  try {
+    await hardenedFetch(url, { method: "POST", timeoutMs: 2000, policy: "public" });
+    fail(`${label} not blocked: ${url}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith("Blocked")) {
+      pass(`${label} blocked (${url})`);
+    } else {
+      fail(`${label} unexpected error: ${msg}`);
+    }
+  }
+}
 
 /* ================================================================
  * SECTION A: Outbound SSRF / network boundary
@@ -704,6 +720,30 @@ assertIncludes(
   'canUseTool("runCommand", "public")',
   "existing tests assert public role cannot runCommand",
 );
+
+/* ================================================================
+ * SECTION L: MCP outbound SSRF
+ * ================================================================ */
+console.log("\nSection L: MCP outbound SSRF");
+
+const mcpSrc = fs.readFileSync(path.join(ROOT, "src/ai/mcp-client.ts"), "utf-8");
+assertIncludes(mcpSrc, "hardenedFetch", "MCP client uses hardenedFetch");
+assertIncludes(mcpSrc, "policy: \"public\"", "MCP client uses public policy");
+assertIncludes(mcpSrc, "maxRedirects", "MCP client validates redirects");
+assertNotIncludes(mcpSrc, 'fetch(this.config.url', "MCP client has no raw fetch to config URL");
+
+// Verify the MCP client rejects blocked destinations via hardenedFetch
+await assertMcpBlocked("http://localhost", "MCP blocks localhost");
+await assertMcpBlocked("http://127.0.0.1", "MCP blocks loopback IPv4");
+await assertMcpBlocked("http://169.254.169.254", "MCP blocks metadata");
+await assertMcpBlocked("http://10.0.0.1", "MCP blocks private IPv4");
+await assertMcpBlocked("http://192.168.1.1", "MCP blocks RFC1918");
+await assertMcpBlocked("http://[::1]", "MCP blocks IPv6 loopback");
+await assertMcpBlocked("http://[fe80::1]", "MCP blocks IPv6 link-local");
+
+// Legitimate public MCP server should not be blocked by SSRF (DNS may fail, but SSRF check passes)
+const publicMcpCheck = validateOutboundUrl("https://mcp.example.com");
+assert(publicMcpCheck.valid, "Public MCP URL passes SSRF URL validation");
 
 /* ================================================================
  * Cleanup + summary
