@@ -89,4 +89,18 @@ fi
 
 echo "[start] Starting AshenAI on port ${PORT}..."
 
-exec node ./node_modules/.bin/tsx src/index.ts
+# Prefer the compiled production artifact when available.
+# This avoids requiring tsx (a devDependency) in production installs
+# where devDependencies are omitted (Wispbyte, Docker --omit=dev).
+if [[ -f "${ROOT_DIR}/dist/index.js" ]]; then
+    exec node "${ROOT_DIR}/dist/index.js"
+fi
+
+# Fallback to tsx for development / when no build artifact exists.
+if [[ -f "${ROOT_DIR}/node_modules/.bin/tsx" ]]; then
+    exec node "${ROOT_DIR}/node_modules/.bin/tsx" src/index.ts
+fi
+
+echo "[start] ERROR: Neither dist/index.js nor tsx is available."
+echo "[start] Run: npm run build"
+exit 1

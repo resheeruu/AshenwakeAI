@@ -749,7 +749,32 @@ assert(publicMcpCheck.valid, "Public MCP URL passes SSRF URL validation");
  * Cleanup + summary
  * ================================================================ */
 
-  closeOutboundAgents();
+  /* ================================================================
+   Section L+: Wispbyte PORT 9002 regression
+   ================================================================ */
+console.log("\nSection L+: Wispbyte PORT 9002");
+
+const startSh = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf-8");
+assertIncludes(startSh, "PORT", "start.sh reads PORT from environment");
+assertIncludes(startSh, 'node_modules/.bin/tsx', "start.sh has tsx fallback");
+assertIncludes(startSh, "dist/index.js", "start.sh prefers compiled dist/index.js");
+
+assertIncludes(serverSrc, "process.env.PORT", "server reads PORT from environment");
+
+const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf-8");
+assertIncludes(envExample, "PORT=9002", ".env.example documents Wispbyte PORT=9002");
+assertNotIncludes(envExample, "PORT=8080", ".env.example does not recommend 8080 for Wispbyte");
+
+const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf-8"));
+assertIncludes(pkg.dependencies?.tsx, "^4.23.12", "tsx is a runtime dependency (not devOnly)");
+assert(!pkg.devDependencies?.tsx, "tsx removed from devDependencies");
+
+console.log("  ✅ PORT 9002 is honored by start.sh");
+console.log("  ✅ server reads PORT from environment");
+console.log("  ✅ .env.example documents Wispbyte PORT=9002");
+console.log("  ✅ tsx is a runtime dependency");
+
+closeOutboundAgents();
 
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`Passed: ${passed}`);
