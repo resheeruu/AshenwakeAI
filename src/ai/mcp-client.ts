@@ -16,6 +16,10 @@
 
 import crypto from "crypto";
 import { logger } from "../logger";
+import {
+  hardenedFetch,
+  readLimitedText,
+} from "../security/outbound-fetch";
 
 /* ================================================================
  * CONSTANTS
@@ -281,7 +285,7 @@ export class McpClient {
       throw new Error(`MCP server "${this.config.name}" requires a URL for HTTP transport`);
     }
 
-    const response = await fetch(this.config.url, {
+    const { response } = await hardenedFetch(this.config.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -300,7 +304,9 @@ export class McpClient {
           },
         },
       }),
-      signal: AbortSignal.timeout(this.config.timeoutMs!),
+      timeoutMs: this.config.timeoutMs ?? MAX_TIMEOUT_MS,
+      maxRedirects: 3,
+      policy: "public",
     });
 
     if (!response.ok) {
@@ -383,14 +389,16 @@ export class McpClient {
     }
 
     if (this.config.transport === "http" && this.config.url) {
-      const response = await fetch(this.config.url, {
+      const { response } = await hardenedFetch(this.config.url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...this.config.headers,
         },
         body: JSON.stringify(request),
-        signal: AbortSignal.timeout(this.config.timeoutMs!),
+        timeoutMs: this.config.timeoutMs ?? MAX_TIMEOUT_MS,
+        maxRedirects: 3,
+        policy: "public",
       });
 
       if (!response.ok) {
