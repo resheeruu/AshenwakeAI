@@ -32,6 +32,8 @@ data.v4-backup/
 *.corrupted-backup
 *.final-backup*
 
+data/.test-rollback-repo/
+
 # --- Scratch / agent working dirs ---
 .agent/
 .aistart/
@@ -65,3 +67,6 @@ scripts/docs/
 
 # --- Legacy working file ---
 src/index.working.ts
+
+.gemini/
+gha-creds-*.json

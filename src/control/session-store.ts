@@ -23,6 +23,8 @@ export interface Session {
 }
 
 let sessionStore: Map<string, Session> = new Map();
+let pendingSave = false;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function ensureDataDir(): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -70,6 +72,16 @@ function saveSessions(): void {
       `⚠️ Could not save sessions: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+function debouncedSave(): void {
+  if (pendingSave) return;
+  pendingSave = true;
+  debounceTimer = setTimeout(() => {
+    pendingSave = false;
+    debounceTimer = null;
+    saveSessions();
+  }, 500);
 }
 
 function pruneExpired(): void {
@@ -138,7 +150,7 @@ export function touchSession(sessionId: string, ip: string): void {
   if (!session) return;
   session.lastSeenIp = ip;
   sessionStore.set(sessionId, session);
-  saveSessions();
+  debouncedSave();
 }
 
 export function rotateSession(sessionId: string): {

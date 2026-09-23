@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased] — 2026-09-22
 
+### Security (Production Hardening)
+- **Vision SSRF Fix**: `src/ai/vision.ts` now validates all image URLs through `validateOutboundUrl()` and `validateRedirectTarget()` from `src/security/network-boundary.ts`. Blocks localhost, loopback, private IPs, link-local, cloud metadata, credential-bearing URLs, and unsupported protocols. Enforces 10s timeout, 10MB max response size, image/* content-type, and redirect chain validation.
+- **Credential Encryption Fail-Closed**: `src/ai/providers/platform/credential-store.ts` removed hardcoded `ashenai-dev-credential-key-v1` development fallback. `getCredentialKey()` now throws in ALL environments if `SESSION_SECRET` is missing or too short.
+- **Debounced Session Persistence**: `src/control/session-store.ts` added `debouncedSave()` with 500ms batching window. `touchSession` uses debounced save instead of immediate disk write. `validateSession` only persists on expiration. Security-critical operations (`createSession`, `rotateSession`, `destroySession`, `revokeSession`) retain direct writes.
+- **Trust Proxy Configurability**: `src/web/server.ts` changed `app.set("trust proxy", 1)` to read from `TRUST_PROXY` environment variable with fallback to 1.
+- **Release Script Repository-Relative**: `scripts/release-check.sh` replaced hardcoded `~/AshenAI` with `ROOT_DIR` resolution. Changed `npm audit` from INFORMATIONAL to MANDATORY with `--omit=dev --audit-level=high`. Added `data/.test-rollback-repo/` to `.gitignore`.
+
 ### Added
 - Custom anime emote system with text fallback (zero Unicode emoji policy)
 - 32 anime actions across affection/combat/fun categories

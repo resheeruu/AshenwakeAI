@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # ================================================================
 # RELEASE CHECK — Full production readiness verification
 #
@@ -65,34 +66,34 @@ echo "║     ASHENAI RELEASE CHECK                        ║"
 echo "╚══════════════════════════════════════════════════╝"
 
 # MANDATORY: Repository hygiene
-step "Repository hygiene" MANDATORY bash -c 'cd ~/AshenAI && git status --porcelain | grep -v "^??" | head -1 | grep -q . && exit 1 || true'
+step "Repository hygiene" MANDATORY bash -c 'cd "$ROOT_DIR" && git status --porcelain | grep -v "^??" | head -1 | grep -q . && exit 1 || true'
 
 # MANDATORY: Dependency installation
-step "Dependency install (npm ci)" MANDATORY bash -c 'cd ~/AshenAI && npm ci 2>&1 | tail -3'
+step "Dependency install (npm ci)" MANDATORY bash -c 'cd "$ROOT_DIR" && npm ci 2>&1 | tail -3'
 
 # MANDATORY: TypeScript typecheck
-step "Typecheck" MANDATORY bash -c 'cd ~/AshenAI && npx tsc --noEmit 2>&1'
+step "Typecheck" MANDATORY bash -c 'cd "$ROOT_DIR" && npx tsc --noEmit 2>&1'
 
 # MANDATORY: Mandatory tests
-step "Mandatory tests" MANDATORY bash -c 'cd ~/AshenAI && npx tsx scripts/run-all-tests.ts 2>&1 | tail -15'
+step "Mandatory tests" MANDATORY bash -c 'cd "$ROOT_DIR" && npx tsx scripts/run-all-tests.ts 2>&1 | tail -15'
 
 # MANDATORY: Build
-step "Build" MANDATORY bash -c 'cd ~/AshenAI && npm run build 2>&1 | tail -3'
+step "Build" MANDATORY bash -c 'cd "$ROOT_DIR" && npm run build 2>&1 | tail -3'
 
 # INFORMATIONAL: npm audit
-info_step "npm audit" bash -c 'cd ~/AshenAI && npm audit --audit-level=high 2>&1 | tail -3'
+step "npm audit (blocking)" MANDATORY bash -c 'cd "$ROOT_DIR" && npm audit --omit=dev --audit-level=high 2>&1 | tail -3'
 
 # ENVIRONMENT-DEPENDENT: Docker validation
-env_step "Docker build" bash -c 'cd ~/AshenAI && docker build -t ashenai-release-check . 2>&1 | tail -5'
+env_step "Docker build" bash -c 'cd "$ROOT_DIR" && docker build -t ashenai-release-check . 2>&1 | tail -5'
 
 # MANDATORY: Check for hardcoded secrets
-step "No hardcoded secrets" MANDATORY bash -c 'cd ~/AshenAI && grep -rn "sk-\|token\s*=\s*["\x27]AI\|DISCORD_TOKEN\s*=" src/ --include="*.ts" | grep -v ".example" | grep -v "test" | head -1 | grep -q . && exit 1 || true'
+step "No hardcoded secrets" MANDATORY bash -c 'cd "$ROOT_DIR" && grep -rn "sk-\|token\s*=\s*["\x27]AI\|DISCORD_TOKEN\s*=" src/ --include="*.ts" | grep -v ".example" | grep -v "test" | head -1 | grep -q . && exit 1 || true'
 
 # MANDATORY: Check for TODO/FIXME
-step "No TODO/FIXME in src" MANDATORY bash -c 'cd ~/AshenAI && grep -rn "TODO\|FIXME\|HACK" src/ --include="*.ts" | head -1 | grep -q . && exit 1 || true'
+step "No TODO/FIXME in src" MANDATORY bash -c 'cd "$ROOT_DIR" && grep -rn "TODO\|FIXME\|HACK" src/ --include="*.ts" | head -1 | grep -q . && exit 1 || true'
 
 # INFORMATIONAL: Icon validation
-info_step "Icon validation" bash -c 'cd ~/AshenAI && npm run icons:validate 2>&1 | tail -5'
+info_step "Icon validation" bash -c 'cd "$ROOT_DIR" && npm run icons:validate 2>&1 | tail -5'
 
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
