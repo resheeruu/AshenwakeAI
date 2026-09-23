@@ -18,9 +18,25 @@ interface TestSuite {
   category: "core" | "security" | "tool" | "web" | "integration";
   optional?: boolean;
   reason?: string;
+  /**
+   * Test tier (see docs/TESTING.md):
+   *   CORE     — must pass on every PR (no credentials, deterministic)
+   *   EXTENDED — runs before a release (may be slower / stateful)
+   *   LIVE     — needs real provider/hosting/external infrastructure
+   * Mandatory suites are CORE unless stated otherwise.
+   */
+  tier?: "CORE" | "EXTENDED" | "LIVE";
 }
 
 const TSX = "node ./node_modules/.bin/tsx";
+
+/**
+ * Diagnostic mode: run every suite and report ALL failures instead of
+ * stopping at the first one (fail-fast remains the default).
+ * Enable with --diagnostic (npm run test:diagnostic).
+ */
+const DIAGNOSTIC = process.argv.includes("--diagnostic");
+const RUN_EXTENDED = process.argv.includes("--all");
 
 const MANDATORY_SUITES: TestSuite[] = [
   // Core
@@ -83,25 +99,26 @@ const MANDATORY_SUITES: TestSuite[] = [
 ];
 
 const OPTIONAL_SUITES: TestSuite[] = [
-  { name: "Providers", file: "scripts/test-providers.ts", category: "core", optional: true, reason: "Requires live API keys" },
-  { name: "U3", file: "scripts/test-u3.ts", category: "core", optional: true, reason: "U3 feature tests" },
-  { name: "U4", file: "scripts/test-u4.ts", category: "core", optional: true, reason: "U4 feature tests" },
-  { name: "U5", file: "scripts/test-u5.ts", category: "core", optional: true, reason: "U5 feature tests" },
-  { name: "U6", file: "scripts/test-u6.ts", category: "core", optional: true, reason: "U6 feature tests" },
-  { name: "U7", file: "scripts/test-u7.ts", category: "core", optional: true, reason: "U7 governance tests (pre-existing failures)" },
-  { name: "U8", file: "scripts/test-u8.ts", category: "core", optional: true, reason: "U8 feature tests (pre-existing failures)" },
-  { name: "U8 Enhancements", file: "scripts/test-u8-enhancements.ts", category: "core", optional: true, reason: "U8 deep enhancements (pre-existing failures)" },
-  { name: "U9", file: "scripts/test-u9.ts", category: "core", optional: true, reason: "U9 feature tests" },
-  { name: "U9 Security", file: "scripts/test-u9-security.ts", category: "security", optional: true, reason: "U9 security hardening" },
-  { name: "U10 Security", file: "scripts/test-u10-security.ts", category: "security", optional: true, reason: "U10 security features" },
-  { name: "U11 Security", file: "scripts/test-u11-security.ts", category: "security", optional: true, reason: "U11 security features" },
-  { name: "U12 Production", file: "scripts/test-u12-production.ts", category: "integration", optional: true, reason: "U12 production readiness" },
-  { name: "U13 Production", file: "scripts/test-u13-production.ts", category: "integration", optional: true, reason: "U13 production features" },
-  { name: "U14 Production", file: "scripts/test-u14-production.ts", category: "integration", optional: true, reason: "U14 Dockerfile validation" },
-  { name: "U16 Hosting", file: "scripts/test-u16-hosting.ts", category: "integration", optional: true, reason: "Hosting adaptivity tests" },
-  { name: "U17 Hosting", file: "scripts/test-u17-hosting.ts", category: "integration", optional: true, reason: "Hosting tests (pre-existing failures)" },
-  { name: "U17 Portability", file: "scripts/test-u17-portability.ts", category: "integration", optional: true, reason: "Portability validation" },
-  { name: "U19 Resource", file: "scripts/test-u19-resource-optimization.ts", category: "integration", optional: true, reason: "Resource optimization" },
+  { name: "Providers", file: "scripts/test-providers.ts", category: "core", optional: true, tier: "LIVE", reason: "Requires live API keys" },
+  { name: "Provider Platform", file: "scripts/test-provider-platform.ts", category: "core", optional: true, tier: "EXTENDED", reason: "Provider definition/credential store round-trip (DB-backed)" },
+  { name: "U3", file: "scripts/test-u3.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U3 feature tests" },
+  { name: "U4", file: "scripts/test-u4.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U4 feature tests" },
+  { name: "U5", file: "scripts/test-u5.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U5 feature tests" },
+  { name: "U6", file: "scripts/test-u6.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U6 feature tests" },
+  { name: "U7", file: "scripts/test-u7.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U7 governance tests (pre-existing failures)" },
+  { name: "U8", file: "scripts/test-u8.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U8 feature tests (pre-existing failures)" },
+  { name: "U8 Enhancements", file: "scripts/test-u8-enhancements.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U8 deep enhancements (pre-existing failures)" },
+  { name: "U9", file: "scripts/test-u9.ts", category: "core", optional: true, tier: "EXTENDED", reason: "U9 feature tests" },
+  { name: "U9 Security", file: "scripts/test-u9-security.ts", category: "security", optional: true, tier: "EXTENDED", reason: "U9 security hardening" },
+  { name: "U10 Security", file: "scripts/test-u10-security.ts", category: "security", optional: true, tier: "EXTENDED", reason: "U10 security features" },
+  { name: "U11 Security", file: "scripts/test-u11-security.ts", category: "security", optional: true, tier: "EXTENDED", reason: "U11 security features" },
+  { name: "U12 Production", file: "scripts/test-u12-production.ts", category: "integration", optional: true, tier: "EXTENDED", reason: "U12 production readiness" },
+  { name: "U13 Production", file: "scripts/test-u13-production.ts", category: "integration", optional: true, tier: "EXTENDED", reason: "U13 production features" },
+  { name: "U14 Production", file: "scripts/test-u14-production.ts", category: "integration", optional: true, tier: "EXTENDED", reason: "U14 Dockerfile validation" },
+  { name: "U16 Hosting", file: "scripts/test-u16-hosting.ts", category: "integration", optional: true, tier: "EXTENDED", reason: "Hosting adaptivity tests" },
+  { name: "U17 Hosting", file: "scripts/test-u17-hosting.ts", category: "integration", optional: true, tier: "LIVE", reason: "Hosting tests (pre-existing failures, environment-dependent)" },
+  { name: "U17 Portability", file: "scripts/test-u17-portability.ts", category: "integration", optional: true, tier: "EXTENDED", reason: "Portability validation" },
+  { name: "U19 Resource", file: "scripts/test-u19-resource-optimization.ts", category: "integration", optional: true, tier: "EXTENDED", reason: "Resource optimization" },
 ];
 
 let totalPassed = 0;
@@ -161,22 +178,30 @@ console.log("\n╔════════════════════�
 console.log("║   ASHENAI COMPREHENSIVE TEST SUITE          ║");
 console.log("╚══════════════════════════════════════════════╝\n");
 
-console.log(`Running ${MANDATORY_SUITES.length} mandatory suites...\n`);
+console.log(`\nRunning ${MANDATORY_SUITES.length} mandatory suites${DIAGNOSTIC ? " (diagnostic mode: no fail-fast)" : ""}...\n`);
 
 let allPassed = true;
+const failedSuites: string[] = [];
 
 for (const suite of MANDATORY_SUITES) {
   if (!runSuite(suite)) {
     allPassed = false;
-    console.log(`\n⛔ FATAL: ${suite.name} failed. Aborting remaining tests.`);
-    break;
+    failedSuites.push(suite.name);
+    if (!DIAGNOSTIC) {
+      console.log(`\n⛔ FATAL: ${suite.name} failed. Aborting remaining tests.`);
+      console.log(`   (use npm run test:diagnostic to run every suite and see all failures)`);
+      break;
+    }
+    // Diagnostic mode: keep going and report every failing suite below.
   }
 }
 
-if (allPassed && OPTIONAL_SUITES.length > 0 && process.argv.includes("--all")) {
-  console.log(`\nRunning ${OPTIONAL_SUITES.length} optional suites...\n`);
+if (allPassed && OPTIONAL_SUITES.length > 0 && RUN_EXTENDED) {
+  console.log(`\nRunning ${OPTIONAL_SUITES.length} extended/live suites...\n`);
   for (const suite of OPTIONAL_SUITES) {
-    runSuite(suite); // Don't abort on optional failures
+    if (!runSuite(suite)) {
+      failedSuites.push(suite.name);
+    } // Never abort: extended/live runs report everything.
   }
 }
 
@@ -195,6 +220,9 @@ for (const cat of categories) {
 }
 
 console.log(`\n  TOTAL: ${totalPassed} passed, ${totalFailed} failed, ${totalSkipped} skipped`);
+if (failedSuites.length > 0) {
+  console.log(`  FAILED SUITES: ${failedSuites.join(", ")}`);
+}
 console.log(`  ${totalFailed === 0 ? "🎉 ALL MANDATORY TESTS PASSED" : "❌ SOME TESTS FAILED"}\n`);
 
 if (totalFailed > 0) {

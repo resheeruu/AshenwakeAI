@@ -1,49 +1,19 @@
 import type { TestConnectionResult, DiscoverModelsResult, ProviderProtocol } from "./types";
 import { logger } from "../../../logger";
+import { validateOutboundUrl } from "../../../security/network-boundary";
 
-const PRIVATE_IP_PATTERNS = [
-  /^127\./,
-  /^10\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^169\.254\./,
-  /^0\./,
-  /^::1$/,
-  /^\[::1\]$/,
-  /^fc00:/i,
-  /^fd00:/i,
-  /^fe80:/i,
-];
-
-const BLOCKED_HOSTS = new Set([
-  "localhost", "0.0.0.0", "::1", "metadata.google.internal",
-  "169.254.169.254", "[::1]",
-]);
-
+/*
+ * Provider endpoints must never target private, loopback, link-local,
+ * metadata, or otherwise reserved infrastructure.
+ *
+ * The rule lives in src/security/network-boundary.ts (shared with web
+ * retrieval and media downloads). This function is exported and covered by
+ * the Provider Lifecycle and Provider Platform suites — its semantics
+ * (http/https only, no private/reserved targets, fail-closed on malformed
+ * input) are intentionally preserved.
+ */
 function isSafeEndpoint(urlStr: string): boolean {
-  try {
-    const url = new URL(urlStr);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-    let hostname = url.hostname.toLowerCase();
-    // Strip brackets from IPv6 addresses for pattern matching
-    const cleanHostname = hostname.replace(/^\[(.*)\]$/, "$1").toLowerCase();
-    if (BLOCKED_HOSTS.has(hostname) || BLOCKED_HOSTS.has(cleanHostname)) return false;
-    if (
-      hostname.endsWith(".local") ||
-      hostname.endsWith(".internal") ||
-      hostname.endsWith(".localhost") ||
-      cleanHostname.endsWith(".local") ||
-      cleanHostname.endsWith(".internal") ||
-      cleanHostname.endsWith(".localhost")
-    )
-      return false;
-    for (const pattern of PRIVATE_IP_PATTERNS) {
-      if (pattern.test(hostname) || pattern.test(cleanHostname)) return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
+  return validateOutboundUrl(urlStr).valid;
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
