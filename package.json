@@ -7,7 +7,6 @@
     "ashen": "dist/cli.js"
   },
   "scripts": {
-    "prestart": "node scripts/ensure-dist.mjs",
     "start": "bash scripts/start.sh",
     "setup": "tsx scripts/setup.ts",
     "agent": "tsx src/agent/index.ts",
@@ -18,7 +17,8 @@
     "test:all": "node ./node_modules/.bin/tsx scripts/run-all-tests.ts --all",
     "check": "tsx scripts/check.ts && npm test",
     "typecheck": "node ./node_modules/.bin/tsc --noEmit",
-    "build": "node ./node_modules/.bin/tsc && rm -rf dist/web/public && cp -r src/web/public dist/web/public",
+    "build": "node scripts/build-dist.cjs",
+    "build:tsc": "node ./node_modules/.bin/tsc && rm -rf dist/web/public && cp -r src/web/public dist/web/public",
     "bot": "tsx src/index.ts",
     "agents": "tsx scripts/check-coding-agents.ts",
     "test-agents": "tsx scripts/test-coding-agents.ts",
@@ -73,6 +73,7 @@
     "qrcode": "^1.5.4",
     "strip-ansi": "^7.2.0",
     "tsx": "^4.23.12",
+    "esbuild": "^0.28.2",
     "turndown": "^7.2.4",
     "typescript": "^5.9.3",
     "undici": "^8.10.1",

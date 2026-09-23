@@ -23,7 +23,7 @@ git clone <your-repo-url> .
 # or upload the repository files
 ```
 
-### 3. Install Dependencies
+### 3. Install Dependencies and Build
 
 ```bash
 # Full install (development)
@@ -33,11 +33,23 @@ npm ci --no-fund --no-audit
 npm ci --omit=dev --no-fund --no-audit
 ```
 
-The **build toolchain is part of the runtime dependencies** (`typescript`,
-`tsx`, `@types/express`, `@types/better-sqlite3`, `@types/node`,
-`@types/turndown`), so a production install still has everything needed to
-compile `dist/` on first start. You do **not** need to pre-build `dist/`
-before deploying.
+Then build once during the **build phase** (never at runtime):
+
+```bash
+npm run build
+```
+
+The **build toolchain is part of the runtime dependencies** (`esbuild`,
+`typescript`, `tsx`, `@types/express`, `@types/better-sqlite3`,
+`@types/node`, `@types/turndown`), so a production install still has
+everything needed to compile `dist/`. `npm run build` uses the low-memory
+esbuild transpile (~5 MB wrapper heap, ~1-2s for 321 files) instead of
+`tsc` emit, because `tsc` OOMs on memory-constrained hosts (Wispbyte Node
+22 exits 134 at ~294-303 MB heap). Full strict type safety is preserved
+via `npm run typecheck` (CI runs `tsc --noEmit` separately).
+
+`dist/` is rebuilt only when sources change — restarts reuse the existing
+`dist/` with zero compilation.
 
 ### 4. Configure Environment
 
@@ -142,23 +154,20 @@ npm start
 
 ## Startup Sequence
 
-1. `npm start` runs the **`prestart`** lifecycle hook → `scripts/ensure-dist.mjs`
-2. `ensure-dist.mjs` repairs an incomplete `node_modules` if a required runtime
-   package (`typescript`, `tsx`, `express`) is missing, then compiles `dist/`
-   when it is missing or older than `src/`
-   - runs at most one install and one build per start
-   - restarts with a fresh `dist/` skip the build entirely — no rebuild loop
-3. npm runs `scripts/start.sh`
-4. `start.sh` exports `NODE_ENV` (deterministic `production` default), resolves
+1. Wispbyte **build phase**: `npm ci` then `npm run build`
+   (`scripts/build-dist.cjs` — low-memory esbuild transpile + web-asset copy)
+2. Wispbyte **start phase**: `npm start` → `scripts/start.sh`
+   (no `prestart` hook — nothing compiles at runtime, so there is no
+   `tsc` OOM at ~294-303 MB heap / exit 134)
+3. `start.sh` exports `NODE_ENV` (deterministic `production` default), resolves
    `PORT` (environment → `.env` → 8080), validates Node.js/npm, checks
-   `node_modules`
-5. Sources `check-resources.sh` for disk/RAM/CPU status
-6. Launches `node dist/index.js` (fast production path). A direct
-   `bash scripts/start.sh` run (Docker CMD) falls back through
-   `ensure-dist.mjs`, then `tsx src/index.ts`
-7. Application validates config, connects to Discord
-8. Web server starts on configured PORT
-9. Health endpoint available at `/api/health`
+   `node_modules` and requires the pre-built `dist/index.js`
+4. Sources `check-resources.sh` for disk/RAM/CPU status
+5. Launches `node dist/index.js` (fast production path — zero compilation,
+   restarts never rebuild)
+6. Application validates config, connects to Discord
+7. Web server starts on configured PORT
+8. Health endpoint available at `/api/health`
 
 ## Graceful Shutdown
 

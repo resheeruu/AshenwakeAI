@@ -109,29 +109,14 @@ else
     echo "[start] Starting AshenAI (port from .env, else 8080)..."
 fi
 
-# Prefer the compiled production artifact when available.
-# `npm start` already ran the `prestart` hook (scripts/ensure-dist.mjs),
-# which repairs an incomplete node_modules and compiles dist/ on a clean
-# checkout — so this is the normal, fast production path (no rebuild).
-if [[ -f "${ROOT_DIR}/dist/index.js" ]]; then
-    exec node "${ROOT_DIR}/dist/index.js"
+# Production startup requires a pre-built dist/ artifact.
+# Build it during the build phase with: npm ci && npm run build
+# Then start with: bash scripts/start.sh (or npm start — no prestart hook runs).
+if [[ ! -f "${ROOT_DIR}/dist/index.js" ]]; then
+    echo "[start] ERROR: dist/index.js not found."
+    echo "[start] Build the project before starting with: npm run build"
+    echo "[start] Or ensure a pre-built dist/ artifact is deployed."
+    exit 1
 fi
 
-# Safety net for direct `bash scripts/start.sh` runs (Docker CMD, manual
-# invocation) where npm never executed `prestart`. Delegates to the same
-# deterministic build guard instead of hiding build logic in shell.
-echo "[start] dist/index.js not found — running scripts/ensure-dist.mjs..."
-if node "${ROOT_DIR}/scripts/ensure-dist.mjs" && [[ -f "${ROOT_DIR}/dist/index.js" ]]; then
-    echo "[start] Build succeeded — starting compiled application..."
-    exec node "${ROOT_DIR}/dist/index.js"
-fi
-echo "[start] Build unavailable — falling back to tsx"
-
-# Fallback to tsx for development / when build is not possible.
-if [[ -f "${ROOT_DIR}/node_modules/.bin/tsx" ]]; then
-    exec node "${ROOT_DIR}/node_modules/.bin/tsx" src/index.ts
-fi
-
-echo "[start] ERROR: Neither dist/index.js nor tsx is available."
-echo "[start] Run: npm run build"
-exit 1
+exec node "${ROOT_DIR}/dist/index.js"

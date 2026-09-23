@@ -1,23 +1,25 @@
 #!/usr/bin/env node
 /* ================================================================
- * ASHENAI PRODUCTION STARTUP BUILD GUARD
+ * ASHENAI BUILD GUARD (standalone build-phase tool — NOT a startup hook)
  *
- * Wired as the npm `prestart` lifecycle hook, so `npm start` works
- * from a clean repository checkout that has never been built and
- * whose dependencies were installed with `npm ci --omit=dev`.
+ * Run explicitly during the install/build phase:
+ *   node scripts/ensure-dist.mjs
+ *
+ * It is intentionally NOT wired to `prestart`: memory-constrained
+ * hosts (Wispbyte Node 22 exits 134 at ~294-303 MB heap while tsc
+ * runs) cannot compile on startup. `npm start` must only execute
+ * the pre-built `node dist/index.js` artifact.
  *
  * Responsibilities (in order, each attempted at most once):
  *   1. Repair the dependency tree when required *runtime* packages
- *      are missing (e.g. a `node_modules` created before `typescript`
+ *      are missing (e.g. a `node_modules` created before `esbuild`
  *      was promoted to a runtime dependency).
  *   2. Compile `dist/` when it is missing or older than the sources.
- *   3. Fail loudly (exit 1) if `dist/index.js` still does not exist,
- *      so npm aborts `prestart` instead of starting a broken app.
+ *   3. Fail loudly (exit 1) if `dist/index.js` still does not exist.
  *
  * Determinism / loop safety:
  *   - Runs at most ONE install and ONE build per invocation.
- *   - `npm run build` does not re-enter `prestart` (npm only fires
- *     `pre*` hooks for the script being run), so there is no
+ *   - `npm run build` does not re-enter this script, so there is no
  *     install -> build -> start -> build cycle.
  *   - Restarts with a fresh `dist/` skip both steps entirely, so a
  *     crash/restart loop cannot turn into a rebuild loop.
@@ -39,8 +41,8 @@ const LOCKFILE = path.join(ROOT, "package-lock.json");
 const NODE_MODULES = path.join(ROOT, "node_modules");
 
 /* Runtime packages that must exist for `npm ci --omit=dev` to be able
- * to build (typescript) and run (express) and first-run setup (tsx). */
-const REQUIRED_RUNTIME_PKGS = ["typescript", "tsx", "express"];
+ * to build (esbuild transpile) and run (express) and first-run setup (tsx). */
+const REQUIRED_RUNTIME_PKGS = ["esbuild", "tsx", "express"];
 
 const started = Date.now();
 
@@ -128,10 +130,10 @@ if (missing.length > 0) {
   log("dependencies ready");
 }
 
-if (!exists(path.join(NODE_MODULES, "typescript", "bin", "tsc"))) {
+if (!exists(path.join(NODE_MODULES, "esbuild", "package.json"))) {
   fail(
-    "typescript (runtime dependency) is not installed, so dist/ cannot be built. " +
-      "Check that `typescript` is listed under \"dependencies\" in package.json.",
+    "esbuild (runtime dependency) is not installed, so dist/ cannot be built. " +
+      "Check that `esbuild` is listed under \"dependencies\" in package.json.",
   );
 }
 
@@ -195,7 +197,7 @@ const buildStatus = runNpm(["run", "build"]);
 if (buildStatus !== 0) {
   fail(
     `production build failed (exit ${buildStatus}). ` +
-      "Fix the TypeScript errors reported above, or run `npm run build` locally to reproduce.",
+      "Run `npm run build` locally to reproduce, then `npm run typecheck` for type errors.",
   );
 }
 

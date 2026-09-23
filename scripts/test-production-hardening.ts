@@ -758,11 +758,10 @@ const startSh = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf-8");
 assertIncludes(startSh, "PORT", "start.sh reads PORT from environment");
 assertIncludes(startSh, 'if [ -z "${PORT:-}" ]', "start.sh only defaults PORT when PORT is genuinely absent");
 assertIncludes(startSh, "export PORT=8080", "start.sh keeps the documented 8080 fallback");
-assertIncludes(startSh, 'node_modules/.bin/tsx', "start.sh has tsx fallback");
-assertIncludes(startSh, "dist/index.js", "start.sh prefers compiled dist/index.js");
-assertIncludes(startSh, "scripts/ensure-dist.mjs", "start.sh delegates the missing-dist build to ensure-dist.mjs");
-assertIncludes(startSh, 'NODE_ENV="${NODE_ENV:-production}"', "start.sh pins NODE_ENV=production when unset");
+assertIncludes(startSh, "dist/index.js", "start.sh requires pre-built dist/index.js");
+assertNotIncludes(startSh, "scripts/ensure-dist.mjs", "start.sh does not compile at runtime (no tsc OOM on memory-limited hosts)");
 assertNotIncludes(startSh, "node_modules/.bin/tsc", "start.sh does not shell out to tsc directly");
+assertIncludes(startSh, 'NODE_ENV="${NODE_ENV:-production}"', "start.sh pins NODE_ENV=production when unset");
 
 assertIncludes(serverSrc, "process.env.PORT", "server reads PORT from environment");
 assertIncludes(serverSrc, "DEFAULT_PORT", "server defines a documented PORT fallback");
@@ -788,8 +787,17 @@ for (const typesPkg of ["@types/express", "@types/better-sqlite3", "@types/node"
   );
   assert(!pkg.devDependencies?.[typesPkg], `${typesPkg} removed from devDependencies`);
 }
-assertIncludes(pkg.scripts?.prestart, "ensure-dist.mjs", "npm prestart builds dist/ before start.sh runs");
-assertIncludes(pkg.scripts?.start, "start.sh", "npm start still runs scripts/start.sh");
+assertIncludes(pkg.scripts?.start, "start.sh", "npm start runs scripts/start.sh");
+assert(!pkg.scripts?.prestart, "no prestart hook compiles TypeScript at runtime (Wispbyte OOM guard)");
+
+const buildScript = String(pkg.scripts?.build ?? "");
+assertIncludes(buildScript, "build-dist", "npm run build uses the low-memory esbuild transpile");
+assertNotIncludes(buildScript, "./node_modules/.bin/tsc &&", "npm run build does not run tsc emit (typecheck stays separate)");
+
+const buildDist = fs.readFileSync(path.join(ROOT, "scripts/build-dist.cjs"), "utf-8");
+assertIncludes(buildDist, "esbuild", "build-dist.cjs transpiles with esbuild");
+assertIncludes(buildDist, "dist/index.js", "build-dist.cjs verifies dist/index.js was produced");
+assertIncludes(buildDist, "web/public", "build-dist.cjs copies web assets");
 
 const lock = JSON.parse(fs.readFileSync(path.join(ROOT, "package-lock.json"), "utf-8"));
 assertIncludes(lock.packages?.[""]?.dependencies?.tsx, "^4.23.12", "package-lock records tsx as a production dependency");
@@ -800,16 +808,18 @@ assert(!lock.packages?.["node_modules/typescript"]?.dev, "package-lock does not 
 const ensureDist = fs.readFileSync(path.join(ROOT, "scripts/ensure-dist.mjs"), "utf-8");
 assertIncludes(ensureDist, "npm run build", "ensure-dist.mjs runs the canonical build script");
 assertIncludes(ensureDist, "dist/index.js", "ensure-dist.mjs verifies dist/index.js was produced");
-assertIncludes(ensureDist, "typescript", "ensure-dist.mjs verifies the build toolchain is installed");
-assertIncludes(ensureDist, "process.exit(1)", "ensure-dist.mjs fails startup instead of starting without dist/");
+assertIncludes(ensureDist, "esbuild", "ensure-dist.mjs verifies the low-memory build toolchain is installed");
+assertIncludes(ensureDist, "NOT a startup hook", "ensure-dist.mjs documents it is not wired to prestart");
+assertIncludes(ensureDist, "process.exit(1)", "ensure-dist.mjs fails if dist/index.js is not produced");
 
 console.log("  ✅ PORT honored with documented 8080 fallback");
 console.log("  ✅ server reads PORT from environment");
 console.log("  ✅ .env.example documents Wispbyte PORT=9002");
 console.log("  ✅ tsx + typescript are runtime dependencies");
 console.log("  ✅ package-lock.json in sync (no dev:true for tsx/typescript)");
-console.log("  ✅ npm prestart builds dist/ via ensure-dist.mjs");
-console.log("  ✅ start.sh delegates missing-dist build to ensure-dist.mjs");
+console.log("  ✅ no prestart hook compiles TypeScript at runtime");
+console.log("  ✅ start.sh requires pre-built dist/index.js");
+console.log("  ✅ npm run build uses low-memory esbuild transpile");
 
 closeOutboundAgents();
 
