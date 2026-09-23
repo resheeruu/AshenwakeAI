@@ -10,7 +10,7 @@
  *  - OAuth linkToken removal / requiresLinking redirect shape
  *  - template confirmation sanitizeResultMessage-style message patterns
  *  - setup effective-config presence reporting
- *  - start.sh npm ci on missing node_modules
+ *  - start.sh deployment guard (no npm ci, tsc, tsx at runtime)
  */
 
 import fs from "node:fs";
@@ -657,23 +657,21 @@ assert(
 );
 
 /* ================================================================
- * SECTION I: start.sh npm ci for fresh clones (Wispbyte)
+ * SECTION I: start.sh deployment guard (Wispbyte — no npm ci at startup)
  * ================================================================ */
-console.log("\nSection I: start.sh npm ci for fresh clones");
+console.log("\nSection I: start.sh deployment guard (Wispbyte)");
 
 const startSrc = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf-8");
 assertIncludes(startSrc, "node_modules", "start.sh checks node_modules");
-assertIncludes(startSrc, "npm ci", "start.sh runs npm ci on missing node_modules");
-assertIncludes(startSrc, "package-lock.json", "start.sh prefers lockfile install");
-const installBlock = startSrc.slice(startSrc.indexOf("node_modules missing"));
-assert(
-  installBlock.includes("npm ci") && installBlock.indexOf("npm ci") < startSrc.length,
-  "npm ci runs before hard fail when node_modules missing",
-);
-// Ensure the missing-node_modules error is AFTER install attempt
-const missingIdx = startSrc.indexOf('if [[ ! -d "${ROOT_DIR}/node_modules" ]]');
-const errorIdx = startSrc.indexOf("node_modules missing after install");
-assert(missingIdx !== -1 && errorIdx !== -1 && missingIdx < errorIdx, "install attempt precedes hard error");
+assertIncludes(startSrc, "dist/index.js", "start.sh checks dist/index.js");
+assertNotIncludes(startSrc, "npm ci", "start.sh does NOT run npm ci at startup");
+assertIncludes(startSrc, "Install dependencies during deployment", "start.sh instructs deployment install, not runtime npm ci");
+// Ensure node_modules and dist checks come before the node exec
+const nodeModulesIdx = startSrc.indexOf('if [[ ! -d "${ROOT_DIR}/node_modules" ]]');
+const distIdx = startSrc.indexOf('if [[ ! -f "${ROOT_DIR}/dist/index.js" ]]');
+const execIdx = startSrc.indexOf('exec node "${ROOT_DIR}/dist/index.js"');
+assert(nodeModulesIdx !== -1 && distIdx !== -1 && execIdx !== -1, "start.sh has node_modules, dist, and exec checks");
+assert(nodeModulesIdx < execIdx && distIdx < execIdx, "guard checks precede node exec");
 
 /* ================================================================
  * SECTION J: Error sanitization smoke (existing tool)
@@ -798,6 +796,9 @@ const buildDist = fs.readFileSync(path.join(ROOT, "scripts/build-dist.cjs"), "ut
 assertIncludes(buildDist, "esbuild", "build-dist.cjs transpiles with esbuild");
 assertIncludes(buildDist, "dist/index.js", "build-dist.cjs verifies dist/index.js was produced");
 assertIncludes(buildDist, "web/public", "build-dist.cjs copies web assets");
+assertIncludes(buildDist, "node22", "build-dist.cjs targets node22");
+assertIncludes(buildDist, "format=cjs", "build-dist.cjs produces CommonJS output");
+assertIncludes(buildDist, "--outdir", "build-dist.cjs writes to dist/ outdir");
 
 const lock = JSON.parse(fs.readFileSync(path.join(ROOT, "package-lock.json"), "utf-8"));
 assertIncludes(lock.packages?.[""]?.dependencies?.tsx, "^4.23.12", "package-lock records tsx as a production dependency");
@@ -805,12 +806,22 @@ assertIncludes(lock.packages?.[""]?.dependencies?.typescript, "^5.9.3", "package
 assert(!lock.packages?.["node_modules/tsx"]?.dev, "package-lock does not mark tsx dev:true (npm ci --omit=dev would drop it)");
 assert(!lock.packages?.["node_modules/typescript"]?.dev, "package-lock does not mark typescript dev:true");
 
-const ensureDist = fs.readFileSync(path.join(ROOT, "scripts/ensure-dist.mjs"), "utf-8");
-assertIncludes(ensureDist, "npm run build", "ensure-dist.mjs runs the canonical build script");
-assertIncludes(ensureDist, "dist/index.js", "ensure-dist.mjs verifies dist/index.js was produced");
-assertIncludes(ensureDist, "esbuild", "ensure-dist.mjs verifies the low-memory build toolchain is installed");
-assertIncludes(ensureDist, "NOT a startup hook", "ensure-dist.mjs documents it is not wired to prestart");
-assertIncludes(ensureDist, "process.exit(1)", "ensure-dist.mjs fails if dist/index.js is not produced");
+/* Verify ensure-dist.mjs has been removed — the production build must not
+ * be triggered by the runtime startup path. The canonical build is now
+ * scripts/build-dist.cjs invoked by `npm run build`. */
+const ensureDistPath = path.join(ROOT, "scripts/ensure-dist.mjs");
+assert(!fs.existsSync(ensureDistPath), "scripts/ensure-dist.mjs has been removed (no runtime build guard)");
+
+/* Verify start.sh has no runtime install/build compilation. */
+assertNotIncludes(startSh, "npm ci", "start.sh does NOT run npm ci at startup");
+assertNotIncludes(startSh, "npm install", "start.sh does NOT run npm install at startup");
+assertNotIncludes(startSh, "tsc", "start.sh does NOT run tsc at runtime");
+assertNotIncludes(startSh, "ensure-dist", "start.sh does NOT call ensure-dist.mjs at runtime");
+assertNotIncludes(startSh, "node_modules/.bin/tsx", "start.sh does NOT fall back to tsx for production");
+assertNotIncludes(startSh, "src/index.ts", "start.sh does NOT compile src/index.ts at runtime");
+assertIncludes(startSh, "dist/index.js", "start.sh requires pre-built dist/index.js");
+assertIncludes(startSh, "npm run build", "start.sh gives clear build instruction when dist missing");
+assertIncludes(startSh, "pre-built dist", "start.sh documents pre-built dist requirement");
 
 console.log("  ✅ PORT honored with documented 8080 fallback");
 console.log("  ✅ server reads PORT from environment");
@@ -820,6 +831,8 @@ console.log("  ✅ package-lock.json in sync (no dev:true for tsx/typescript)");
 console.log("  ✅ no prestart hook compiles TypeScript at runtime");
 console.log("  ✅ start.sh requires pre-built dist/index.js");
 console.log("  ✅ npm run build uses low-memory esbuild transpile");
+console.log("  ✅ ensure-dist.mjs removed from runtime startup");
+console.log("  ✅ start.sh has no npm ci, npm install, tsc, or tsx runtime fallback");
 
 closeOutboundAgents();
 

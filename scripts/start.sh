@@ -23,15 +23,7 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
     # Run setup with set +e so we can capture the exit code
     # (set -e would exit the script before we can check)
     set +e
-    if [[ -f "${ROOT_DIR}/node_modules/.bin/tsx" ]]; then
-        node ./node_modules/.bin/tsx scripts/setup.ts
-    elif command -v npx >/dev/null 2>&1; then
-        npx tsx scripts/setup.ts
-    else
-        echo "  ERROR: Cannot run setup — tsx not available."
-        echo "  Run: npm run setup"
-        exit 1
-    fi
+    npx tsx scripts/setup.ts
     SETUP_EXIT=$?
     set -e
     if [ $SETUP_EXIT -ne 0 ]; then
@@ -81,10 +73,10 @@ echo "[start] Node: $(node --version)"
 echo "[start] npm:  $(npm --version)"
 
 # Runtime requires node_modules and pre-built dist/.
-# Both must be deployed with the application — npm ci is NOT run at startup.
+# Both must be deployed with the application — no install at startup.
 if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
     echo "[start] ERROR: node_modules missing."
-    echo "[start] Run npm ci during deployment before starting."
+    echo "[start] Install dependencies during deployment before starting."
     exit 1
 fi
 
