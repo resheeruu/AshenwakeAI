@@ -299,11 +299,16 @@ function testTrustedLocalPolicy(): void {
   assertEqual(validateTrustedLocalProviderUrl("http://[fe80::1]/").valid, false, "trusted-local blocks link-local IPv6");
   assertEqual(validateTrustedLocalProviderUrl("http://0.0.0.0:8080/").valid, false, "trusted-local blocks 0.0.0.0");
 
-  // Dynamic adapter validates endpoints
+  // Dynamic adapter validates endpoints and uses the canonical hardened outbound boundary
+  // (hardenedFetch issues redirect: "manual" and re-validates every redirect hop).
   const adapterSrc = fs.readFileSync(path.resolve("src/ai/providers/platform/provider-adapter.ts"), "utf8");
   assert(adapterSrc.includes("assertSafeProviderEndpoint"), "provider-adapter validates endpoints");
-  assert(adapterSrc.includes("redirect: \"manual\""), "provider-adapter uses redirect: manual");
+  assert(adapterSrc.includes("hardenedFetch"), "provider-adapter uses hardenedFetch (redirect: manual + hop validation)");
   assert(adapterSrc.includes("validateTrustedLocalProviderUrl"), "provider-adapter uses trusted-local for local providers");
+
+  const outboundSrc = fs.readFileSync(path.resolve("src/security/outbound-fetch.ts"), "utf8");
+  assert(outboundSrc.includes("redirect: \"manual\""), "outbound-fetch uses redirect: manual");
+  assert(outboundSrc.includes("validateRedirectTarget"), "outbound-fetch re-validates redirect hops");
 }
 
 /* ================================================================

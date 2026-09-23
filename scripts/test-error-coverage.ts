@@ -188,23 +188,32 @@ for (const { file, action } of infoToolFiles) {
 console.log("\nSection C: Confirmation Handler");
 
 const confirmContent = readFile("src/discord/interactions/confirmation-handler.ts");
+const sanitizeContentForConfirm = readFile("src/security/sanitize.ts");
 
-// C1: Generic message in editReply
-assertIncludes(confirmContent, "The issue has been logged", "confirmation-handler uses generic message");
+// C1: Generic sanitization path — static generic suffix lives in sanitizeToolError
+// (confirmation-handler delegates to sanitizeToolError/sanitizeResultMessage).
+assertIncludes(confirmContent, "sanitizeToolError", "confirmation-handler uses sanitizeToolError generic path");
+assertIncludes(
+  sanitizeContentForConfirm,
+  "The issue has been logged",
+  "sanitize.ts provides generic logged suffix for sanitizeToolError",
+);
 
 // C2: Does NOT leak msg variable in editReply
 assertNotIncludes(confirmContent, "`❌ Execution failed: ${msg}`", "confirmation-handler does not leak msg");
+assertNotIncludes(confirmContent, "content: error.message", "confirmation-handler does not echo raw error.message");
 
 // C3: Server-side logging preserved
-assertIncludes(confirmContent, "logger.error", "confirmation-handler preserves server-side logging");
+assertIncludes(confirmContent, "logger.error", "confirmation-handler preserves server-side error logging");
 
 // C4: Still has error handling structure
 assertIncludes(confirmContent, "} catch (error)", "confirmation-handler has catch block");
 assertIncludes(confirmContent, "removePendingPlan", "confirmation-handler cleans up plan");
 assertIncludes(confirmContent, "toolRateLimiter.release", "confirmation-handler releases rate limit");
 
-// C5: EditReply uses content field (not raw message)
-assertIncludes(confirmContent, 'content: `❌ Execution failed. The issue has been logged.`', "confirmation-handler uses correct content format");
+// C5: EditReply content is sanitized (not a raw executor/error message)
+assertIncludes(confirmContent, "content: sanitizeResultMessage", "confirmation-handler sanitizes result content");
+assertIncludes(confirmContent, "content: sanitizeToolError", "confirmation-handler sanitizes error content");
 
 /* ================================================================
  * SECTION D: Game, Task Commands (40+ assertions)
@@ -245,7 +254,12 @@ const allModifiedFiles = [
 
 for (const file of allModifiedFiles) {
   const content = readFile(file);
-  assertIncludes(content, "The issue has been logged", `${file} contains generic suffix`);
+  if (file === "src/discord/interactions/confirmation-handler.ts") {
+    // Delegates to sanitizeToolError — generic suffix is provided by sanitize.ts
+    assertIncludes(content, "sanitizeToolError", `${file} routes errors through sanitizeToolError`);
+  } else {
+    assertIncludes(content, "The issue has been logged", `${file} contains generic suffix`);
+  }
 }
 
 // E11-E20: Verify NO file contains raw error.message in user-facing return
