@@ -99,6 +99,7 @@ const MANDATORY_SUITES: TestSuite[] = [
 
 const OPTIONAL_SUITES: TestSuite[] = [
   { name: "Remediation", file: "scripts/test-remediation.ts", category: "security", optional: true, tier: "CORE", reason: "Final production remediation regressions (run explicitly in verification)" },
+  { name: "Dashboard Mutation Security", file: "scripts/test-dashboard-mutation-security.ts", category: "security", optional: true, tier: "CORE", reason: "Dashboard mutation security matrix (run explicitly in verification)" },
   { name: "Web Platform", file: "scripts/test-web-platform.ts", category: "web", optional: true, tier: "EXTENDED", reason: "Requires running web server" },
   { name: "Providers", file: "scripts/test-providers.ts", category: "core", optional: true, tier: "LIVE", reason: "Requires live API keys" },
   { name: "Provider Platform", file: "scripts/test-provider-platform.ts", category: "core", optional: true, tier: "EXTENDED", reason: "Provider definition/credential store round-trip (DB-backed)" },

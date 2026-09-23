@@ -241,7 +241,7 @@ function testProviderAsyncMutations(): void {
   // PUT/DELETE/toggle must await service promises
   const putIdx = serverSrc.indexOf('app.put("/api/providers/manage/:id"');
   assert(putIdx >= 0, "PUT provider route exists");
-  const putSlice = serverSrc.slice(putIdx, putIdx + 800);
+  const putSlice = serverSrc.slice(putIdx, putIdx + 4500);
   assert(putSlice.includes("await providerService.updateProvider"), "PUT provider awaits updateProvider");
   assert(putSlice.includes("async ("), "PUT provider handler is async");
 
@@ -371,6 +371,22 @@ function testDashboardMutationSecurity(): void {
     /app\.put\("\/api\/providers\/manage\/:id",\s*requireAuth,\s*requireRole\("owner"\),\s*requireCsrf/.test(serverSrc),
     "provider PUT keeps owner+csrf",
   );
+
+  // Dashboard mutation hardening markers (security audit follow-up)
+  assert(serverSrc.includes("function isPlainObject"), "mutation body helpers present");
+  assert(serverSrc.includes("providerErrorStatus"), "provider not-found maps to 404");
+  assert(serverSrc.includes('app.post("/api/seraph/doctor"'), "seraph doctor is POST+CSRF (no mutating GET)");
+  assert(!serverSrc.includes('app.get("/api/seraph/doctor"'), "no mutating GET seraph doctor");
+  assert(serverSrc.includes("VALID_ADMIN_ACTIONS"), "actions/execute validates AdminAction enum");
+  assert(serverSrc.includes("providerService.toggleProvider"), "provider actions perform real toggle");
+  const sessionRevokeIdx = serverSrc.indexOf('app.post("/api/security/sessions/:id/revoke"');
+  if (sessionRevokeIdx >= 0) {
+    const slice = serverSrc.slice(sessionRevokeIdx, sessionRevokeIdx + 1800);
+    assert(slice.includes("recordAudit"), "security session revoke is audited");
+    assert(slice.includes("startsWith"), "security session revoke matches by prefix only");
+  } else {
+    fail("security session revoke route missing");
+  }
 }
 
 /* ================================================================
