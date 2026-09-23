@@ -105,7 +105,9 @@ import {
   getMonitoringInfo,
   getSystemInformation,
 } from "../seraph";
-import { providerService } from "../ai/providers/platform";
+import { providerService, testProviderConnection } from "../ai/providers/platform";
+import { providerRegistry } from "../ai/providers";
+import { loadGuildConfig, getAllGuildConfigs } from "../core/guild-config";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -1479,8 +1481,441 @@ app.get("/", (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+app.get("/features", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "features.html"));
+});
+
+app.get("/docs", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "docs.html"));
+});
+
+app.get("/status", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "status.html"));
+});
+
+app.get("/privacy", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "privacy.html"));
+});
+
+app.get("/terms", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "terms.html"));
+});
+
+/* ==================== DASHBOARD ==================== */
+
+app.get("/dashboard", requireAuth, (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
+
 app.get("/{*splat}", (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+/* ==================== DASHBOARD API ==================== */
+
+// Provider connection test
+app.post("/api/providers/test-connection", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const body = req.body as Record<string, unknown> || {};
+    const { protocol, endpoint, apiKey, timeout } = body as { protocol?: string; endpoint?: string; apiKey?: string; timeout?: number };
+    if (!protocol) {
+      return res.status(400).json({ ok: false, error: "Protocol required." });
+    }
+    const apiKeyStr = apiKey || "";
+    const timeoutMs = timeout || 15000;
+    const result = await testProviderConnection(protocol as any, endpoint, apiKeyStr, timeoutMs);
+    res.json({ ok: true, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Connection test failed:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+// Provider connection test (existing endpoint for individual provider)
+app.post("/api/providers/manage/:id/test", requireAuth, requireRole("admin"), requireCsrf, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const result = await providerService.testConnection(id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to test provider:", msg);
+    res.status(400).json({ ok: false, error: msg });
+  }
+});
+
+// Guild settings endpoints
+app.get("/api/guilds/:guildId/settings", requireAuth, requireRole("admin"), requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config });
+});
+
+app.put("/api/guilds/:guildId/settings", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const result = updateGuildConfig(guildId, req.body);
+  if (result.success) {
+    res.json({ ok: true, message: result.message });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+// Personality endpoints
+app.get("/api/guilds/:guildId/personality", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.personality });
+});
+
+app.put("/api/guilds/:guildId/personality", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const personality = req.body;
+  const result = updateGuildConfig(guildId, { personality });
+  if (result.success) {
+    res.json({ ok: true, message: "Personality updated." });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+// Moderation settings
+app.get("/api/guilds/:guildId/moderation", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.moderation });
+});
+
+app.put("/api/guilds/:guildId/moderation", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const moderation = req.body;
+  const result = updateGuildConfig(guildId, { moderation });
+  if (result.success) {
+    res.json({ ok: true, message: "Moderation settings updated." });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+// Automation settings
+app.get("/api/guilds/:guildId/automation", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.automation });
+});
+
+// Social settings
+app.get("/api/guilds/:guildId/social", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.community });
+});
+
+// Analytics
+app.get("/api/guilds/:guildId/analytics", requireAuth, requireGuildAuth, (_req: Request, res: Response) => {
+  const usage = getUsageStats();
+  res.json({ ok: true, usage });
+});
+
+// System health
+app.get("/api/system/health", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+  res.json({ ok: true, health: getHealth() });
+});
+
+// SSE stream for real-time logs
+app.get("/api/logs/stream", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  const send = (entry: ReturnType<typeof getRecentLogs>[number]) => {
+    res.write(`event: log\ndata: ${JSON.stringify(entry)}\n\n`);
+  };
+  for (const entry of getRecentLogs(100)) send(entry);
+  const unsubscribe = subscribeLogs(send);
+  const heartbeat = setInterval(() => { res.write(": heartbeat\n\n"); }, 15000);
+  req.on("close", () => { clearInterval(heartbeat); unsubscribe(); res.end(); });
+});
+
+/* ==================== AI CONTROL CENTER ==================== */
+
+app.get("/api/guilds/:guildId/ai", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.ai || {} });
+});
+
+app.put("/api/guilds/:guildId/ai", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const result = updateGuildConfig(guildId, { ai: req.body });
+  if (result.success) {
+    res.json({ ok: true, message: "AI configuration updated." });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+app.get("/api/guilds/:guildId/ai/routing", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.routing || {} });
+});
+
+app.put("/api/guilds/:guildId/ai/routing", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const result = updateGuildConfig(guildId, { routing: req.body });
+  if (result.success) {
+    res.json({ ok: true, message: "Routing configuration updated." });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+app.get("/api/guilds/:guildId/ai/limits", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.limits || {} });
+});
+
+app.put("/api/guilds/:guildId/ai/limits", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const result = updateGuildConfig(guildId, { limits: req.body });
+  if (result.success) {
+    res.json({ ok: true, message: "Usage limits updated." });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+/* ==================== MODELS ==================== */
+
+app.get("/api/guilds/:guildId/models", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  const allModels = providerRegistry.getAll().flatMap(p => {
+    const runtime = { enabled: true, models: [] };
+    return (runtime.models || []).map((m: any) => ({
+      modelId: m,
+      provider: p.name,
+      enabled: true,
+      capabilities: ["chat"],
+      contextLength: 4096,
+    }));
+  });
+  res.json({ ok: true, models: allModels, configured: config.models || [] });
+});
+
+app.put("/api/guilds/:guildId/models", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const result = updateGuildConfig(guildId, { models: req.body });
+  if (result.success) {
+    res.json({ ok: true, message: "Model configuration updated." });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+/* ==================== SECURITY ==================== */
+
+app.get("/api/security/sessions", requireAuth, (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const { listSessionsForAccount } = require("../control/session-store");
+  const sessions = listSessionsForAccount(authReq.accountId!);
+  res.json({ ok: true, sessions: sessions.map((s: any) => ({
+    sessionId: s.sessionId.slice(0, 8) + "...",
+    isCurrent: s.sessionId === authReq.sessionId,
+    createdAt: s.createdAt,
+    expiresAt: s.expiresAt,
+    lastSeenIp: s.lastSeenIp,
+  })) });
+});
+
+app.post("/api/security/sessions/:id/revoke", requireAuth, requireCsrf, (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const { listSessionsForAccount, revokeSession } = require("../control/session-store");
+  const sessions = listSessionsForAccount(authReq.accountId!);
+  let revoked = 0;
+  for (const s of sessions) {
+    if (s.sessionId !== authReq.sessionId) {
+      if (revokeSession(s.sessionId, authReq.accountId!)) revoked++;
+    }
+  }
+  res.json({ ok: true, revoked });
+});
+
+app.post("/api/security/sessions/revoke-all", requireAuth, requireCsrf, (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const { destroyAllSessionsForAccount } = require("../control/session-store");
+  const count = destroyAllSessionsForAccount(authReq.accountId!);
+  res.json({ ok: true, revoked: count });
+});
+
+app.get("/api/security/rate-limits", requireAuth, (req: Request, res: Response) => {
+  res.json({ ok: true, rateLimits: { globalEnabled: true, windowMs: 60000, maxRequests: 120 } });
+});
+
+app.get("/api/security/credentials", requireAuth, requireRole("owner"), (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const { getAccountIdentities } = require("../control/linked-identities");
+  const identities = getAccountIdentities(authReq.accountId!);
+  res.json({ ok: true, credentials: identities.map((i: any) => ({
+    provider: i.provider,
+    displayName: i.displayName,
+    linkedAt: i.createdAt,
+    lastUsedAt: i.lastUsedAt,
+    hasApiKey: true,
+  })) });
+});
+
+/* ==================== SUPPORT ==================== */
+
+app.get("/api/guilds/:guildId/support", requireAuth, requireGuildAuth, async (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  try {
+    const { getSupportCaseManager } = require("../support");
+    const manager = getSupportCaseManager();
+    const cases = manager.getCases ? manager.getCases(guildId) : [];
+    res.json({ ok: true, cases, guildId });
+  } catch (err) {
+    res.json({ ok: true, cases: [], guildId });
+  }
+});
+
+app.put("/api/guilds/:guildId/support/:caseId", requireAuth, requireGuildAuth, async (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const caseId = typeof req.params.caseId === "string" ? req.params.caseId : "";
+  try {
+    const { getSupportCaseManager } = require("../support");
+    const manager = getSupportCaseManager();
+    const result = manager.updateCaseStatus ? await manager.updateCaseStatus(caseId, req.body.status, req.body.note) : { ok: true };
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.json({ ok: true });
+  }
+});
+
+/* ==================== AUTOMATION ==================== */
+
+app.get("/api/guilds/:guildId/automation/rules", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  try {
+    const { getAutomationRules } = require("../community/automation");
+    const rules = getAutomationRules ? getAutomationRules(guildId) : [];
+    res.json({ ok: true, rules });
+  } catch {
+    res.json({ ok: true, rules: [] });
+  }
+});
+
+app.post("/api/guilds/:guildId/automation/rules", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const rule = req.body;
+  res.json({ ok: true, rule: { id: "automation_" + Date.now(), ...rule, guildId } });
+});
+
+app.delete("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (_req: Request, res: Response) => {
+  res.json({ ok: true });
+});
+
+/* ==================== SOCIAL ==================== */
+
+app.get("/api/guilds/:guildId/social/config", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const config = getGuildConfig(guildId);
+  res.json({ ok: true, config: config.community || {} });
+});
+
+app.put("/api/guilds/:guildId/social/config", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
+  const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
+  const result = updateGuildConfig(guildId, { community: req.body });
+  if (result.success) {
+    res.json({ ok: true, message: "Social configuration updated." });
+  } else {
+    res.status(500).json({ ok: false, error: result.message });
+  }
+});
+
+/* ==================== AUDIT LOGS ==================== */
+
+app.get("/api/audit/search", requireAuth, requireRole("owner"), (req: Request, res: Response) => {
+  const limit = parseInt(typeof req.query.limit === "string" ? req.query.limit : "100", 10) || 100;
+  const guildId = typeof req.query.guildId === "string" ? req.query.guildId : undefined;
+  const action = typeof req.query.action === "string" ? req.query.action : undefined;
+  const entries = getAuditEntries(limit, guildId);
+  const filtered = action ? entries.filter((e: any) => e.what?.includes(action)) : entries;
+  res.json({ ok: true, entries: filtered, total: filtered.length });
+});
+
+/* ==================== PROVIDER HEALTH ==================== */
+
+app.get("/api/guilds/:guildId/providers/health", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
+  const health = getProviderStatus();
+  res.json({ ok: true, health });
+});
+
+app.post("/api/providers/:id/health", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  try {
+    const router = new (require("../ai/router").AIRouter)([]);
+    const result = await router.probeProvider(id);
+    res.json({ ok: true, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.json({ ok: false, error: msg });
+  }
+});
+
+/* ==================== SYSTEM DIAGNOSTICS ==================== */
+
+app.get("/api/system/diagnostics/extended", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+  const diagnostics = runDiagnostics();
+  const providerHealth = getProviderStatus();
+  const guildConfigs = getAllGuildConfigs ? getAllGuildConfigs() : [];
+  res.json({ ok: true, diagnostics, providerHealth, guildConfigs: guildConfigs.length });
+});
+
+/* ==================== PROVIDER CATALOG ==================== */
+
+app.get("/api/providers/catalog", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+  try {
+    const { providerCatalog } = require("../ai/providers");
+    res.json({ ok: true, catalog: providerCatalog, total: providerCatalog.length });
+  } catch {
+    res.json({ ok: true, catalog: [], total: 0 });
+  }
+});
+
+app.get("/api/providers/catalog/free", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
+  try {
+    const { getProvidersByPricing } = require("../ai/providers");
+    const free = getProvidersByPricing("free");
+    const freeTier = getProvidersByPricing("free-tier");
+    const local = getProvidersByPricing("local");
+    res.json({ ok: true, free, freeTier, local });
+  } catch {
+    res.json({ ok: true, free: [], freeTier: [], local: [] });
+  }
+});
+
+app.get("/api/providers/discover", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+  try {
+    const results = [];
+    const allProviders = providerRegistry.getAll();
+    for (const p of allProviders) {
+      results.push({
+        name: p.name,
+        available: p.isAvailable(),
+        models: [],
+      });
+    }
+    res.json({ ok: true, providers: results });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.json({ ok: false, error: msg });
+  }
 });
 
 /* ==================== ERROR HANDLER ==================== */

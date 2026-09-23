@@ -109,9 +109,39 @@ export interface GuildConfig {
       contextWindow: number;
       minActivityThreshold: number;
     }>;
+    animeActions: boolean;
+    customReactions: boolean;
+    customEmoji: boolean;
+    rivalryMode: boolean;
+    debateMode: boolean;
     globalCooldownMs: number;
     maxResponsesPerHour: number;
   };
+  ai?: {
+    enabled: boolean;
+    defaultModel?: string;
+    defaultProvider?: string;
+    responseMode?: string;
+    streaming: boolean;
+    contextSize: number;
+    maxOutput: number;
+  };
+  routing?: {
+    primaryProvider?: string;
+    fallbackProvider?: string;
+    fallbackOrder: string[];
+    timeoutMs: number;
+    retryPolicy: string;
+    mode: "automatic" | "fastest" | "lowest-cost" | "free-first" | "custom";
+  };
+  limits?: {
+    dailyLimit: number;
+    monthlyLimit: number;
+    perUserLimit: number;
+    perRoleLimit: number;
+    perChannelLimit: number;
+  };
+  models?: Array<{ modelId: string; enabled: boolean; priority: number; isDefault: boolean }>;
   createdAt: number;
   updatedAt: number;
 }

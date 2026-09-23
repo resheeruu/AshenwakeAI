@@ -20,6 +20,7 @@ export {
   confirmAction,
   executeAction,
   getAuditEntries,
+  getAllGuildConfigs,
 } from "./control-service";
 
 export {

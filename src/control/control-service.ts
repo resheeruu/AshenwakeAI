@@ -325,6 +325,8 @@ export function getGuildConfigs(): Array<{ guildId: string; guildName?: string; 
   }));
 }
 
+export { getAllGuildConfigs } from "../core/guild-config";
+
 export function getGuildConfig(guildId: string): GuildConfig {
   return loadGuildConfig(guildId);
 }

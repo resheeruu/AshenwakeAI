@@ -26,21 +26,21 @@ Web Research
 ```
 
 **Key subsystems:**
-- AI Router with 16+ provider adapters, fallback, and circuit breaker
+- AI Router with 30+ provider catalog entries (18+ registered adapters), fallback, and circuit breaker
 - Pattern Router for zero-token deterministic commands
 - Conversation memory with Ebbinghaus decay and context compression
 - SQLite-backed task persistence, traces, and response cache
 - Full tool framework: registry, validator, executor, rate limiter, confirmation store
 - Governance: policy engine, drift detection, templates, remediation
 - Security: role hierarchy, SSRF protection, audit chain (HMAC-SHA256), output guard
-- Web pipeline: Brave Search → HTTP fetch → Readability/Cheerio → markdown conversion
-- Web dashboard: Express server with auth, MFA, OAuth, CSRF protection
+- Web platform: Express server with auth, MFA, OAuth, CSRF protection, dashboard API
+- Provider catalog with free-tier classification, pricing metadata, and availability tracking
 
 ## AI Providers
 
-16+ provider adapters with automatic fallback and circuit breaker:
+30+ provider catalog entries with automatic fallback, circuit breaker, and free-tier classification:
 
-Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, OpenAI-compatible (any provider)
+Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, DeepInfra, Replicate, GitHub Models, Cloudflare Workers AI, Z.AI, MiniMax, Alibaba Qwen, AI21, Baseten, Amazon Bedrock, Hyperbolic, Custom OpenAI-Compatible
 
 ## Commands
 
@@ -48,7 +48,7 @@ Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cer
 |---------|-------------|
 | `npm start` | Start bot (uses `scripts/start.sh`) |
 | `npm run bot` | Start directly via `tsx src/index.ts` |
-| `npm test` | Run mandatory test suite (36 suites, 2000+ assertions) |
+| `npm test` | Run mandatory test suite (37+ suites, 2000+ assertions) |
 | `npm run test:smoke` | Production smoke test |
 | `npm run test:all` | Run all tests including optional suites |
 | `npm run typecheck` | TypeScript type check |

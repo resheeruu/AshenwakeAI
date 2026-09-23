@@ -1,5 +1,6 @@
 import { AIProvider } from "../types";
 import { ProviderRegistry } from "./registry";
+import { providerCatalog } from "./provider-catalog";
 
 import { GeminiProvider } from "./gemini";
 import { GroqProvider } from "./groq";
@@ -19,6 +20,7 @@ import { cerebrasProvider } from "./cerebras";
 import { sambanovaProvider } from "./sambanova";
 import { novitaProvider } from "./novita";
 import { LocalLLMProvider } from "./local-llm";
+import { OllamaProvider } from "./ollama";
 
 export const providerRegistry =
   new ProviderRegistry();
@@ -40,6 +42,12 @@ providerRegistry.register(cerebrasProvider, 140);
 providerRegistry.register(sambanovaProvider, 150);
 providerRegistry.register(novitaProvider, 160);
 
+// Ollama local provider
+const ollama = new OllamaProvider();
+if (ollama.isAvailable()) {
+  providerRegistry.register(ollama, 190);
+}
+
 // Optional local LLM provider (disabled unless LOCAL_LLM_ENABLED=true)
 const localLLM = new LocalLLMProvider();
 if (localLLM.isAvailable()) {
@@ -59,3 +67,6 @@ try {
 
 export const providers: AIProvider[] =
   providerRegistry.getAll();
+
+export { providerCatalog } from "./provider-catalog";
+export { getProviderCatalogEntry, getProvidersByPricing, getProvidersByCategory, getAllProviderNames, getProviderCount } from "./provider-catalog";

@@ -54,9 +54,10 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Update Rollback", file: "scripts/test-update-rollback.ts", category: "integration" },
   { name: "Rivalry", file: "scripts/test-rivalry.ts", category: "integration" },
 
-  // Web
-  { name: "Web Security", file: "scripts/test-web-security.ts", category: "web" },
-  { name: "Web Headers", file: "scripts/test-web-headers.ts", category: "web" },
+// Web
+{ name: "Web Platform", file: "scripts/test-web-platform.ts", category: "web" },
+{ name: "Web Security", file: "scripts/test-web-security.ts", category: "web" },
+{ name: "Web Headers", file: "scripts/test-web-headers.ts", category: "web" },
 
   // Error coverage
   { name: "Error Coverage", file: "scripts/test-error-coverage.ts", category: "integration" },
