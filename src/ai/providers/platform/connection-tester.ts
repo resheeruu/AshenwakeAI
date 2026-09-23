@@ -1,16 +1,22 @@
 import type { TestConnectionResult, DiscoverModelsResult, ProviderProtocol } from "./types";
 import { logger } from "../../../logger";
-import { validateOutboundUrl, validateTrustedLocalProviderUrl, validateRedirectTarget, MAX_REDIRECTS } from "../../../security/network-boundary";
+import {
+  validateOutboundUrl,
+  validateTrustedLocalProviderUrl,
+} from "../../../security/network-boundary";
+import {
+  hardenedFetch,
+  type OutboundPolicy,
+} from "../../../security/outbound-fetch";
 
 /*
  * Provider endpoints must never target private, loopback, link-local,
- * metadata, or otherwise reserved infrastructure.
+ * metadata, or otherwise reserved infrastructure — except trusted-local
+ * Ollama endpoints under validateTrustedLocalProviderUrl.
  *
- * The rule lives in src/security/network-boundary.ts (shared with web
- * retrieval and media downloads). This function is exported and covered by
- * the Provider Lifecycle and Provider Platform suites — its semantics
- * (http/https only, no private/reserved targets, fail-closed on malformed
- * input) are intentionally preserved.
+ * Actual HTTP goes through hardenedFetch (canonical outbound boundary):
+ * URL validation → DNS resolution → IP classification → redirect validation
+ * → timeout. URL-only checks alone are not sufficient (DNS rebinding).
  */
 function isSafeEndpoint(urlStr: string): boolean {
   return validateOutboundUrl(urlStr).valid;
@@ -29,46 +35,36 @@ function isSafeEndpointForProtocol(urlStr: string, protocol: ProviderProtocol): 
   return validateOutboundUrl(urlStr).valid;
 }
 
+function policyFor(protocol: ProviderProtocol): OutboundPolicy {
+  return protocol === "ollama" ? "trusted-local" : "public";
+}
+
 async function fetchWithTimeout(
   url: string,
-  options: RequestInit,
+  options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  },
   timeoutMs: number,
   protocol: ProviderProtocol = "openai_compatible",
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    let currentUrl = url;
-    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const response = await fetch(currentUrl, {
-        ...options,
-        signal: controller.signal,
-        redirect: "manual",
-      });
-
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get("location");
-        if (!location) return response;
-        const check = validateRedirectTarget(location, currentUrl);
-        if (!check.valid || !check.url) {
-          throw new Error(`Redirect blocked: ${check.reason ?? location}`);
-        }
-        if (!isSafeEndpointForProtocol(check.url, protocol)) {
-          throw new Error(`Redirect blocked: ${check.url} is not a safe endpoint`);
-        }
-        currentUrl = check.url;
-        continue;
-      }
-
-      const responseUrl = response.url;
-      if (responseUrl && responseUrl !== currentUrl && !isSafeEndpointForProtocol(responseUrl, protocol)) {
-        throw new Error(`Redirect blocked: ${responseUrl} is not a safe endpoint`);
-      }
-      return response;
+    const { response } = await hardenedFetch(url, {
+      method: options.method,
+      headers: options.headers,
+      body: options.body,
+      timeoutMs,
+      maxRedirects: 5,
+      policy: policyFor(protocol),
+    });
+    return response as unknown as Response;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("abort") || msg.includes("Timeout") || msg.includes("timeout")) {
+      throw new Error("Connection timeout");
     }
-    throw new Error(`Redirect blocked: exceeded ${MAX_REDIRECTS} redirects`);
-  } finally {
-    clearTimeout(timer);
+    throw err;
   }
 }
 
@@ -115,7 +111,7 @@ async function testOpenAICompatible(
   } catch (err) {
     const latencyMs = Date.now() - started;
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("abort")) {
+    if (msg.includes("abort") || msg.includes("timeout") || msg.includes("Timeout")) {
       return { success: false, latencyMs, models: [], error: "Connection timeout" };
     }
     return { success: false, latencyMs, models: [], error: msg.slice(0, 200) };
@@ -170,9 +166,15 @@ async function testGemini(
 ): Promise<{ success: boolean; latencyMs: number; models: string[]; error?: string }> {
   const started = Date.now();
   try {
+    // API key in header only — never query string (logs/proxies/telemetry).
     const response = await fetchWithTimeout(
-      `${endpoint}/v1beta/models?key=${apiKey}`,
-      { method: "GET" },
+      `${endpoint}/v1beta/models`,
+      {
+        method: "GET",
+        headers: {
+          "x-goog-api-key": apiKey,
+        },
+      },
       timeoutMs,
       "gemini",
     );
@@ -263,6 +265,15 @@ export async function testProviderConnection(
       success: false, latencyMs: 0, providerName,
       modelsDiscovered: 0, modelIds: [],
       error: "No endpoint configured",
+    };
+  }
+
+  // Re-validate default endpoints too (fail-closed).
+  if (!isSafeEndpointForProtocol(effectiveEndpoint, protocol)) {
+    return {
+      success: false, latencyMs: 0, providerName,
+      modelsDiscovered: 0, modelIds: [],
+      error: "Endpoint blocked: private/internal network addresses are not allowed",
     };
   }
 

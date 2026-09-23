@@ -58,8 +58,19 @@ command -v npm >/dev/null 2>&1 || {
 echo "[start] Node: $(node --version)"
 echo "[start] npm:  $(npm --version)"
 
+# Fresh Git clone has no node_modules. Install once, then reuse the cache
+# on subsequent restarts (do not re-run npm install every boot).
 if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
-    echo "[start] ERROR: node_modules missing."
+    echo "[start] node_modules missing — running npm ci (fresh clone)"
+    if [[ -f "${ROOT_DIR}/package-lock.json" ]]; then
+        npm ci --no-fund --no-audit
+    else
+        npm install --no-fund --no-audit
+    fi
+fi
+
+if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
+    echo "[start] ERROR: node_modules missing after install."
     echo "[start] Run npm ci before starting AshenAI."
     exit 1
 fi

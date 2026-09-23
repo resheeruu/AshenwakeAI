@@ -198,7 +198,11 @@ const usageStatsTimer = setInterval(
 
 usageStatsTimer.unref();
 
-const backupTimer = setInterval(() => autoBackup(), 6 * 60 * 60 * 1000);
+const backupTimer = setInterval(() => {
+  void autoBackup().catch((error) => {
+    logger.warn(`Auto backup failed: ${error instanceof Error ? error.message : String(error)}`);
+  });
+}, 6 * 60 * 60 * 1000);
 backupTimer.unref();
 
 const commandHandler = new CommandHandler([], usageStats);

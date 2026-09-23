@@ -7,6 +7,25 @@ import type {
   ProviderProtocol,
 } from "./types";
 
+function parseJsonField(raw: unknown, fallback: unknown, rowId: string, field: string): unknown {
+  if (raw === null || raw === undefined || raw === "") {
+    return fallback;
+  }
+  if (typeof raw === "object") {
+    return raw;
+  }
+  try {
+    return JSON.parse(String(raw));
+  } catch {
+    // Isolate corrupt metadata: never log credential values or raw payload.
+    const id = String(rowId ?? "unknown").slice(0, 64);
+    logger.warn(
+      `⚠️ providerRepo: corrupt ${field} for provider id=${id}; using empty fallback`,
+    );
+    return fallback;
+  }
+}
+
 function rowToProvider(row: any): ProviderDefinition {
   return {
     id: row.id,
@@ -20,7 +39,7 @@ function rowToProvider(row: any): ProviderDefinition {
     defaultModel: row.default_model || undefined,
     timeoutMs: row.timeout_ms,
     retryMaxAttempts: row.retry_max_attempts,
-    metadata: row.metadata_json ? JSON.parse(row.metadata_json) : {},
+    metadata: parseJsonField(row.metadata_json, {}, row.id, "metadata_json") as Record<string, unknown>,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -33,7 +52,7 @@ function rowToModel(row: any): ProviderModel {
     modelId: row.model_id,
     displayName: row.display_name || undefined,
     contextLength: row.context_length || undefined,
-    capabilities: row.capabilities_json ? JSON.parse(row.capabilities_json) : [],
+    capabilities: (parseJsonField(row.capabilities_json, [], row.id, "capabilities_json") as string[]) || [],
     enabled: Boolean(row.enabled),
     priority: row.priority,
     isDefault: Boolean(row.is_default),
@@ -41,12 +60,29 @@ function rowToModel(row: any): ProviderModel {
   };
 }
 
+/**
+ * Map rows while isolating corrupt individual records so one bad row
+ * cannot collapse the entire retrieval operation.
+ */
+function mapRowsSafely<T>(rows: any[], map: (row: any) => T, label: string): T[] {
+  const out: T[] = [];
+  for (const row of rows) {
+    try {
+      out.push(map(row));
+    } catch {
+      const id = String(row?.id ?? "unknown").slice(0, 64);
+      logger.warn(`⚠️ providerRepo: skipping corrupt ${label} row id=${id}`);
+    }
+  }
+  return out;
+}
+
 export const providerRepo = {
   getAll(): ProviderDefinition[] {
     const db = getDatabase();
     return safeDbOperation(() => {
       const rows = db.prepare("SELECT * FROM providers ORDER BY priority ASC").all();
-      return rows.map(rowToProvider);
+      return mapRowsSafely(rows, rowToProvider, "provider");
     }, [], "providerRepo.getAll");
   },
 
@@ -54,7 +90,13 @@ export const providerRepo = {
     const db = getDatabase();
     return safeDbOperation(() => {
       const row = db.prepare("SELECT * FROM providers WHERE id = ?").get(id);
-      return row ? rowToProvider(row) : undefined;
+      if (!row) return undefined;
+      try {
+        return rowToProvider(row);
+      } catch {
+        logger.warn(`⚠️ providerRepo: corrupt provider row id=${String(id).slice(0, 64)}`);
+        return undefined;
+      }
     }, undefined, "providerRepo.getById");
   },
 
@@ -62,7 +104,13 @@ export const providerRepo = {
     const db = getDatabase();
     return safeDbOperation(() => {
       const row = db.prepare("SELECT * FROM providers WHERE name = ?").get(name);
-      return row ? rowToProvider(row) : undefined;
+      if (!row) return undefined;
+      try {
+        return rowToProvider(row);
+      } catch {
+        logger.warn("⚠️ providerRepo: corrupt provider row for name lookup");
+        return undefined;
+      }
     }, undefined, "providerRepo.getByName");
   },
 
@@ -70,7 +118,7 @@ export const providerRepo = {
     const db = getDatabase();
     return safeDbOperation(() => {
       const rows = db.prepare("SELECT * FROM providers WHERE enabled = 1 ORDER BY priority ASC").all();
-      return rows.map(rowToProvider);
+      return mapRowsSafely(rows, rowToProvider, "provider");
     }, [], "providerRepo.getEnabled");
   },
 
@@ -137,7 +185,7 @@ export const providerRepo = {
     const db = getDatabase();
     return safeDbOperation(() => {
       const rows = db.prepare("SELECT * FROM provider_models WHERE provider_id = ? ORDER BY priority ASC").all(providerId);
-      return rows.map(rowToModel);
+      return mapRowsSafely(rows, rowToModel, "model");
     }, [], `providerRepo.getModels:${providerId}`);
   },
 
@@ -145,7 +193,13 @@ export const providerRepo = {
     const db = getDatabase();
     return safeDbOperation(() => {
       const row = db.prepare("SELECT * FROM provider_models WHERE provider_id = ? AND is_default = 1").get(providerId);
-      return row ? rowToModel(row) : undefined;
+      if (!row) return undefined;
+      try {
+        return rowToModel(row);
+      } catch {
+        logger.warn(`⚠️ providerRepo: corrupt default model for provider=${String(providerId).slice(0, 64)}`);
+        return undefined;
+      }
     }, undefined, `providerRepo.getDefaultModel:${providerId}`);
   },
 

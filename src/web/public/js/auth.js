@@ -103,7 +103,8 @@ function initOAuthButtons() {
   // Check for OAuth callbacks
   const params = new URLSearchParams(window.location.search);
   if (params.get('link_required')) {
-    showToast('Please link your account', 'info');
+    const msg = params.get('message') || 'Please link your account';
+    showToast(msg, 'error');
   }
 }
 

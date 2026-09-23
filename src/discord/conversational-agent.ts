@@ -29,7 +29,6 @@ import {
   recordUndo,
   type UndoAction,
 } from "../ai/tools/discord/undo-manager";
-import { createBackup } from "../core/backup-manager";
 import { isProtectedResource, isChannelProtected } from "../ai/tools/discord/protection";
 import type { ToolContext, ToolResult, ActionPlan } from "../ai/tools/types";
 import { config } from "../config/env";

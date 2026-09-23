@@ -1,6 +1,9 @@
 import { logger } from "../logger";
 import { UsageManager, AIFeature } from "./usage-manager";
-import { validateOutboundUrl, validateRedirectTarget } from "../security/network-boundary";
+import {
+  hardenedFetch,
+  readLimitedBytes,
+} from "../security/outbound-fetch";
 
 export interface VisionRequest {
   userId: string;
@@ -24,6 +27,9 @@ const VISION_COSTS: Record<string, number> = {
   moderate: 2,
   screenshot: 4,
 };
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const VISION_TIMEOUT_MS = 10_000;
 
 export class VisionHandler {
   private usageManager: UsageManager;
@@ -58,48 +64,49 @@ export class VisionHandler {
         credits: check.credits,
         success: false,
       });
-      return { success: false, error: error instanceof Error ? error.message : "Vision analysis failed", credits: 0 };
+      // Never surface raw error.message — may contain internal URLs/paths.
+      const message =
+        error instanceof Error ? error.message : "Vision analysis failed";
+      const safe =
+        message.startsWith("Blocked:") ||
+        message === "Could not fetch image" ||
+        message === "Invalid image content type" ||
+        message === "Image too large" ||
+        message.startsWith("Image URL validation failed");
+      return {
+        success: false,
+        error: safe ? message : "Vision analysis failed",
+        credits: 0,
+      };
     }
   }
 
   private async analyzeImage(request: VisionRequest): Promise<string> {
-    const urlCheck = validateOutboundUrl(request.imageUrl);
-    if (!urlCheck.valid) {
-        throw new Error("Image URL validation failed");
+    // Hardened outbound fetch: URL validation + DNS + IP classification +
+    // redirect validation + timeout + response-size limit (DNS rebinding safe).
+    const { response } = await hardenedFetch(request.imageUrl, {
+      timeoutMs: VISION_TIMEOUT_MS,
+      maxRedirects: 5,
+      maxResponseBytes: MAX_IMAGE_BYTES,
+      headers: { Accept: "image/*" },
+    });
+
+    if (!response.ok) throw new Error("Could not fetch image");
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.startsWith("image/")) {
+      throw new Error("Invalid image content type");
     }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    try {
-        let currentUrl = urlCheck.url!.toString();
-        const response = await fetch(currentUrl, {
-            signal: controller.signal,
-            redirect: "manual",
-            headers: { Accept: "image/*" }
-        });
-        if (!response.ok) throw new Error("Could not fetch image");
-        // Validate content type
-        const contentType = response.headers.get("content-type") || "";
-        if (!contentType.startsWith("image/")) {
-            throw new Error("Invalid image content type");
-        }
-        // Check content length (max 10MB)
-        const contentLength = response.headers.get("content-length");
-        if (contentLength && parseInt(contentLength, 10) > 10 * 1024 * 1024) {
-            throw new Error("Image too large");
-        }
-        // Handle redirects
-        if (response.status >= 300 && response.status < 400) {
-            const location = response.headers.get("location");
-            if (location) {
-                const redirectCheck = validateRedirectTarget(location, currentUrl);
-                if (!redirectCheck.valid || !redirectCheck.url) {
-                    throw new Error("Redirect blocked");
-                }
-                currentUrl = redirectCheck.url;
-            }
-        }
-    } finally {
-        clearTimeout(timer);
+
+    const contentLength = response.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_IMAGE_BYTES) {
+      throw new Error("Image too large");
+    }
+
+    // Consume body with hard cap (defends against missing/lying content-length).
+    const bytes = await readLimitedBytes(response, MAX_IMAGE_BYTES);
+    if (bytes.length === 0) {
+      throw new Error("Could not fetch image");
     }
 
     switch (request.feature) {

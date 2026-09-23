@@ -3,6 +3,7 @@ import { PermissionFlagsBits, ChannelType } from "discord.js";
 import { logger } from "../../logger";
 import { resolveRole } from "../../security/permissions";
 import { config } from "../../config/env";
+import { sanitizeToolError } from "../../security/sanitize";
 import {
   getPendingPlan,
   removePendingPlan,
@@ -142,14 +143,162 @@ async function executePlan(plan: ActionPlan): Promise<{ status: string; message:
  *
  * Executes a decomposed template plan by running each step through
  * the existing executePlan dispatcher with skipConfirmation.
- * Each step is a registered tool (create_role, create_category,
- * create_channel, etc.) executed individually.
+ * Each step is independently re-authorized (tool exists, arguments
+ * valid, identity/guild/channel/role/Discord perms, risk, protection)
+ * before execution — the original template plan is not trusted as
+ * sufficient authorization.
  * Stops on first failure to prevent partial application.
  * ================================================================ */
 
+interface TemplateStep {
+  toolName: string;
+  args: Record<string, unknown>;
+  description: string;
+}
+
+function sanitizeStepError(step: TemplateStep, error: unknown): string {
+  return sanitizeToolError(step.toolName, error);
+}
+
+function sanitizeResultMessage(toolName: string, message: string): string {
+  // Never forward raw executor messages that may embed error.message.
+  if (!message) return `❌ Tool "${toolName}" failed.`;
+  // Already user-safe fixed strings from executors are short and contain
+  // no paths/stack traces after sanitizeToolError-style checks.
+  if (/\/(?:home|var|etc|tmp|usr|data|src|dist|node_modules)\//.test(message)) {
+    return sanitizeToolError(toolName, message);
+  }
+  if (/(?:stack|at\s+\w+\s|\.ts:\d+|\.js:\d+|node_modules)/i.test(message)) {
+    return sanitizeToolError(toolName, message);
+  }
+  if (/(?:api[_-]?key|authorization|bearer\s|token=|secret)/i.test(message)) {
+    return sanitizeToolError(toolName, message);
+  }
+  return message.length > 400
+    ? sanitizeToolError(toolName, message)
+    : message;
+}
+
+/**
+ * Defense-in-depth: independently validate each template step before it runs.
+ * Returns null if allowed, or a denial reason string.
+ */
+function authorizeTemplateStep(
+  plan: ActionPlan,
+  step: TemplateStep,
+  requesterAshenRole: ReturnType<typeof resolveRole>,
+  guildConfig: ReturnType<typeof loadGuildAIConfig>,
+  guildOwnerId: string,
+  requesterMemberPermissions: { has: (perm: typeof PermissionFlagsBits.ManageChannels) => boolean },
+): { denied: true; reason: string; message: string } | { denied: false } {
+  // 1. Tool must exist in the registry
+  const tool = toolRegistry.get(step.toolName);
+  if (!tool) {
+    return {
+      denied: true,
+      reason: "TOOL_UNAVAILABLE",
+      message: `❌ Step tool unavailable: ${step.toolName}`,
+    };
+  }
+
+  // 2. Requester identity must match the confirmed plan
+  if (plan.requesterId !== step.args.requesterId && step.args.requesterId !== undefined) {
+    return {
+      denied: true,
+      reason: "IDENTITY_MISMATCH",
+      message: "❌ Step requester does not match the confirmed action.",
+    };
+  }
+
+  // 3. Guild scope — step must not escape the plan guild
+  const stepGuild = typeof step.args.guildId === "string" ? step.args.guildId : plan.guildId;
+  if (stepGuild !== plan.guildId) {
+    return {
+      denied: true,
+      reason: "GUILD_MISMATCH",
+      message: "❌ Step targets a different server.",
+    };
+  }
+
+  // 4. Full tool validation pipeline (args, role, channel scope, risk, rate limit skip)
+  const validation = validateToolRequest(
+    tool,
+    {
+      guildId: plan.guildId,
+      channelId: plan.channelId,
+      requesterId: plan.requesterId,
+      requesterName: "template-confirm",
+      requesterRole: requesterAshenRole,
+      arguments: step.args,
+      dryRun: false,
+    },
+    guildConfig,
+    false,
+    true, // skip rate limit — consumed at plan creation
+  );
+
+  if (!validation.allowed) {
+    return {
+      denied: true,
+      reason: validation.denialReason || "STEP_DENIED",
+      message: `❌ ${validation.message || "Step access denied."}`,
+    };
+  }
+
+  // 5. Discord permission (channel management tools)
+  const channelTools = new Set([
+    "create_channel", "create_category", "rename_channel", "move_channel",
+    "edit_channel", "delete_channel", "delete_category",
+    "manage_channel_permissions", "apply_channel_preset",
+    "protect_channel", "unprotect_channel", "protect_category", "unprotect_category",
+  ]);
+  if (channelTools.has(step.toolName) && !requesterMemberPermissions.has(PermissionFlagsBits.ManageChannels)) {
+    return {
+      denied: true,
+      reason: "MISSING_DISCORD_PERMISSION",
+      message: "❌ You no longer have ManageChannels permission.",
+    };
+  }
+
+  // 6. Protected-resource re-check at execution time
+  const toolsWithProtection = new Set([
+    "delete_channel", "delete_category", "rename_channel",
+    "move_channel", "edit_channel", "manage_channel_permissions",
+    "apply_channel_preset",
+  ]);
+  if (toolsWithProtection.has(step.toolName)) {
+    const targetId = String(step.args.channelId || step.args.categoryId || "").trim();
+    if (targetId) {
+      const isChannelTool = Boolean(step.args.channelId) && !step.args.categoryId;
+      const isProtected = isChannelTool
+        ? isChannelProtected(plan.guildId, targetId, undefined)
+        : isProtectedResource(plan.guildId, targetId);
+      if (isProtected) {
+        return {
+          denied: true,
+          reason: "PROTECTED_RESOURCE",
+          message: "❌ This resource is now protected.",
+        };
+      }
+    }
+  }
+
+  // 7. Tool must expose an execute handler (availability gate)
+  if (typeof tool.execute !== "function") {
+    return {
+      denied: true,
+      reason: "TOOL_UNAVAILABLE",
+      message: `❌ Tool no longer available: ${step.toolName}`,
+    };
+  }
+
+  void guildOwnerId;
+  return { denied: false };
+}
+
 async function handleTemplateConfirm(
   plan: ActionPlan,
-  steps: Array<{ toolName: string; args: Record<string, unknown>; description: string }>,
+  steps: TemplateStep[],
   interaction: ButtonInteraction,
   startTime: number,
   planId: string,
@@ -208,6 +357,18 @@ async function handleTemplateConfirm(
     return;
   }
 
+  // Defense-in-depth context for per-step authorization
+  const guildConfig = loadGuildAIConfig(plan.guildId);
+  const requesterAshenRole = resolveRole({
+    userId: interaction.user.id,
+    guildId: plan.guildId,
+    guildOwnerId: guild.ownerId,
+    ownerIds: config.admin.discordIds,
+    managementRoleIds: guildConfig.managementRoleIds,
+    userRoleIds: [...requesterMember.roles.cache.keys()],
+    trustedUserIds: guildConfig.trustedUserIds,
+  });
+
   // Defer reply (execution may take time for multi-step templates)
   await interaction.deferReply();
 
@@ -219,6 +380,33 @@ async function handleTemplateConfirm(
   const failedSteps: Array<{ step: string; error: string }> = [];
 
   for (const step of steps) {
+    // Independently authorize EVERY step — do not trust the original plan.
+    const auth = authorizeTemplateStep(
+      plan,
+      step,
+      requesterAshenRole,
+      guildConfig,
+      guild.ownerId,
+      requesterMember.permissions,
+    );
+
+    if (auth.denied) {
+      failedSteps.push({ step: step.description, error: auth.message });
+      recordToolAudit(
+        {
+          ...plan,
+          toolName: step.toolName,
+          channelId: plan.channelId,
+          requesterName: interaction.user.username,
+        } as any,
+        "denied",
+        auth.reason as any,
+        startTime,
+        false,
+      );
+      break;
+    }
+
     // Create a mini-plan for this step using the existing plan as base
     const stepPlan: ActionPlan = {
       id: `${planId}_step_${executedSteps.length + failedSteps.length}`,
@@ -244,14 +432,17 @@ async function handleTemplateConfirm(
       if (result.status === "success") {
         executedSteps.push(step.description);
       } else {
-        failedSteps.push({ step: step.description, error: result.message });
+        failedSteps.push({
+          step: step.description,
+          error: sanitizeResultMessage(step.toolName, result.message),
+        });
         // Stop on first failure to prevent partial template application
         break;
       }
     } catch (error) {
       failedSteps.push({
         step: step.description,
-        error: error instanceof Error ? error.message : String(error),
+        error: sanitizeStepError(step, error),
       });
       break;
     }
@@ -548,7 +739,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
       );
     } else {
       await interaction.editReply({
-        content: result.message || `❌ ${result.status}`,
+        content: sanitizeResultMessage(plan.toolName, result.message || `❌ ${result.status}`),
       });
       recordToolAudit(
         { ...plan, channelId: plan.channelId, requesterName: interaction.user.username } as any,
@@ -573,7 +764,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
 
     try {
       await interaction.editReply({
-        content: `❌ Execution failed. The issue has been logged.`,
+        content: sanitizeToolError(plan.toolName, error),
       });
     } catch {
       // Interaction may have been deleted

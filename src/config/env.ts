@@ -239,27 +239,80 @@ export const configManager =
  * variables are present. This separates module import from
  * runtime validation, allowing tests to import modules that
  * depend on env.ts without requiring production credentials.
+ *
+ * Configuration contract (OAuth is OPTIONAL):
+ *   A) DISCORD_TOKEN + DISCORD_CLIENT_ID only
+ *        → bot starts; OAuth disabled
+ *   B) A + complete OAuth (client secret + redirect URI)
+ *        → OAuth enabled
+ *   C) partial OAuth (any secret/redirect/oauth-specific var set
+ *        without the full set)
+ *        → clear configuration error (fail-closed, no broken flow)
  * ================================================================ */
+
+function hasEnv(name: string): boolean {
+  return Boolean(process.env[name]?.trim());
+}
+
+export interface DiscordOAuthStatus {
+  configured: boolean;
+  enabled: boolean;
+  missing: string[];
+}
+
+/**
+ * Resolve Discord OAuth configuration status without logging values.
+ * Uses the same fallback rules as src/control/oauth.ts getDiscordConfig().
+ */
+export function getDiscordOAuthStatus(): DiscordOAuthStatus {
+  const clientId = process.env.DISCORD_OAUTH_CLIENT_ID?.trim() || process.env.DISCORD_CLIENT_ID?.trim() || "";
+  const clientSecret = process.env.DISCORD_OAUTH_CLIENT_SECRET?.trim() || process.env.DISCORD_CLIENT_SECRET?.trim() || "";
+  const redirectUri = process.env.DISCORD_OAUTH_REDIRECT_URI?.trim() || process.env.DISCORD_REDIRECT_URI?.trim() || "";
+
+  const anyOAuthHint =
+    hasEnv("DISCORD_OAUTH_CLIENT_ID") ||
+    hasEnv("DISCORD_OAUTH_CLIENT_SECRET") ||
+    hasEnv("DISCORD_OAUTH_REDIRECT_URI") ||
+    hasEnv("DISCORD_CLIENT_SECRET") ||
+    hasEnv("DISCORD_REDIRECT_URI");
+
+  const missing: string[] = [];
+  // DISCORD_CLIENT_ID is required for the bot; OAuth needs secret + redirect.
+  if (!clientSecret) missing.push("DISCORD_CLIENT_SECRET (or DISCORD_OAUTH_CLIENT_SECRET)");
+  if (!redirectUri) missing.push("DISCORD_REDIRECT_URI (or DISCORD_OAUTH_REDIRECT_URI)");
+
+  const complete = Boolean(clientId && clientSecret && redirectUri);
+
+  if (anyOAuthHint && !complete) {
+    return { configured: true, enabled: false, missing, };
+  }
+
+  return { configured: complete, enabled: complete, missing: complete ? [] : missing };
+}
 
 export function validateRuntime(): void {
   const missing: string[] = [];
 
-  if (!process.env.DISCORD_TOKEN?.trim()) {
+  // Bot credentials — always required.
+  if (!hasEnv("DISCORD_TOKEN")) {
     missing.push("DISCORD_TOKEN");
   }
-  if (!process.env.DISCORD_CLIENT_ID?.trim()) {
+  if (!hasEnv("DISCORD_CLIENT_ID")) {
     missing.push("DISCORD_CLIENT_ID");
-  }
-  if (!process.env.DISCORD_CLIENT_SECRET?.trim()) {
-    missing.push("DISCORD_CLIENT_SECRET");
-  }
-  if (!process.env.DISCORD_REDIRECT_URI?.trim()) {
-    missing.push("DISCORD_REDIRECT_URI");
   }
 
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}`,
+    );
+  }
+
+  // OAuth is optional, but partial OAuth configuration must fail closed
+  // with a clear error rather than silently running a broken flow.
+  const oauth = getDiscordOAuthStatus();
+  if (oauth.configured && !oauth.enabled && oauth.missing.length > 0) {
+    throw new Error(
+      `Incomplete Discord OAuth configuration. OAuth is optional — remove partial OAuth variables, or provide all of: ${oauth.missing.join(", ")}`,
     );
   }
 }

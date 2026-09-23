@@ -67,6 +67,42 @@ function parseEnvFile(content: string): Map<string, string> {
   return map;
 }
 
+/**
+ * Effective configuration view for diagnostics:
+ *   process.env  >  .env file  >  defaults
+ *
+ * Hosts like Wispbyte inject env vars without a .env file.
+ * Never returns or prints secret values — only presence/absence.
+ */
+function buildEffectiveConfig(fileEnv: Map<string, string>): Map<string, string> {
+  const effective = new Map<string, string>();
+
+  // Defaults from .env.example keys (presence only)
+  if (fs.existsSync(ENV_EXAMPLE)) {
+    for (const [k, v] of parseEnvFile(fs.readFileSync(ENV_EXAMPLE, "utf-8"))) {
+      effective.set(k, v);
+    }
+  }
+
+  // .env overrides example
+  for (const [k, v] of fileEnv) {
+    effective.set(k, v);
+  }
+
+  // process.env wins (host-injected secrets)
+  for (const [k, v] of Object.entries(process.env)) {
+    if (typeof v === "string" && v.trim()) {
+      effective.set(k, v.trim());
+    }
+  }
+
+  return effective;
+}
+
+function isPresent(value: string | undefined): boolean {
+  return Boolean(value && value.trim());
+}
+
 /* ================================================================
  * STEP 1: Ensure directories
  * ================================================================ */
@@ -325,10 +361,14 @@ async function main() {
     logOk(".env file created with generated secrets");
   }
 
+  // Effective config: process.env > .env > .env.example defaults
+  const effectiveEnv = buildEffectiveConfig(existingEnv);
+
   console.log("\n--- Provider Detection ---");
   const configuredProviders: string[] = [];
-  for (const [key, value] of existingEnv) {
-    if (key.endsWith("_API_KEY") && value) {
+  for (const [key, value] of effectiveEnv) {
+    if (key.endsWith("_API_KEY") && isPresent(value)) {
+      // Report presence only — never print the key value.
       configuredProviders.push(key.replace("_API_KEY", ""));
     }
   }
@@ -353,12 +393,16 @@ async function main() {
   console.log("    ✓ .env file (if first run)");
 
   console.log("\n[Discord]");
-  const discordTokenConfigured = existingEnv.has("DISCORD_TOKEN")
-    && existingEnv.get("DISCORD_TOKEN")!.trim().length > 0;
-  const discordClientIdConfigured = existingEnv.has("DISCORD_CLIENT_ID")
-    && existingEnv.get("DISCORD_CLIENT_ID")!.trim().length > 0;
+  const discordTokenConfigured = isPresent(effectiveEnv.get("DISCORD_TOKEN"));
+  const discordClientIdConfigured = isPresent(effectiveEnv.get("DISCORD_CLIENT_ID"));
   console.log(`  DISCORD_TOKEN: ${discordTokenConfigured ? "Configured" : "Missing"}`);
   console.log(`  DISCORD_CLIENT_ID: ${discordClientIdConfigured ? "Configured" : "Missing"}`);
+
+  // OAuth status (optional) — presence only, no values
+  const oauthSecret = isPresent(effectiveEnv.get("DISCORD_CLIENT_SECRET") || effectiveEnv.get("DISCORD_OAUTH_CLIENT_SECRET"));
+  const oauthRedirect = isPresent(effectiveEnv.get("DISCORD_REDIRECT_URI") || effectiveEnv.get("DISCORD_OAUTH_REDIRECT_URI"));
+  const oauthPartial = (oauthSecret || oauthRedirect) && !(oauthSecret && oauthRedirect && discordClientIdConfigured);
+  console.log(`  Discord OAuth: ${oauthSecret && oauthRedirect && discordClientIdConfigured ? "Configured" : oauthPartial ? "PARTIAL (incomplete)" : "Not configured (optional)"}`);
 
   console.log("\n[AI Providers]");
   if (configuredProviders.length > 0) {
@@ -371,6 +415,7 @@ async function main() {
   const required: string[] = [];
   if (!discordTokenConfigured) required.push("DISCORD_TOKEN");
   if (!discordClientIdConfigured) required.push("DISCORD_CLIENT_ID");
+  if (oauthPartial) required.push("Complete Discord OAuth vars (or remove partial OAuth vars)");
   if (configuredProviders.length === 0) required.push("AI provider API key");
 
   if (required.length > 0) {
@@ -388,6 +433,9 @@ async function main() {
     }
     if (!discordClientIdConfigured) {
       console.log("  • Add your DISCORD_CLIENT_ID to .env");
+    }
+    if (oauthPartial) {
+      console.log("  • Complete or remove partial Discord OAuth configuration");
     }
     if (configuredProviders.length === 0) {
       console.log("  • Add at least one AI provider API key to .env (e.g., GEMINI_API_KEY)");

@@ -170,7 +170,6 @@ export interface OAuthLoginResult {
   accountId?: string;
   isNewAccount?: boolean;
   requiresLinking?: boolean;
-  linkToken?: string;
   error?: string;
 }
 
@@ -273,14 +272,21 @@ export async function handleDiscordCallback(
       );
 
       if (matchingAccount) {
-        // Email matches — require explicit linking confirmation
-        const linkToken = crypto.randomBytes(32).toString("hex");
+        // Email matches an existing account. The legacy linkToken redirect
+        // was never consumed (dead code that leaked account identifiers).
+        // Explicit linking uses the state-bound action:"link" OAuth flow only.
+        recordAudit({
+          who: matchingAccount.username,
+          what: "OAuth email match — explicit link required",
+          where: "oauth",
+          result: "denied",
+          details: `Provider: discord, IP: ${ip}`,
+        });
         return {
           success: false,
           requiresLinking: true,
-          linkToken,
-          accountId: matchingAccount.id,
-          username: matchingAccount.username,
+          error:
+            "An account with this email already exists. Sign in with your password, then link this provider from account settings.",
         };
       }
     }
@@ -539,13 +545,20 @@ export async function handleGoogleCallback(
       );
 
       if (matchingAccount) {
-        const linkToken = crypto.randomBytes(32).toString("hex");
+        // Same policy as Discord: no unconsumed link tokens, no account
+        // identifiers in redirect URLs. Explicit linking uses action:"link".
+        recordAudit({
+          who: matchingAccount.username,
+          what: "OAuth email match — explicit link required",
+          where: "oauth",
+          result: "denied",
+          details: `Provider: google, IP: ${ip}`,
+        });
         return {
           success: false,
           requiresLinking: true,
-          linkToken,
-          accountId: matchingAccount.id,
-          username: matchingAccount.username,
+          error:
+            "An account with this email already exists. Sign in with your password, then link this provider from account settings.",
         };
       }
     }

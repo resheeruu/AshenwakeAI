@@ -4,9 +4,16 @@
  * Validates externally supplied animation URLs before download.
  * Prevents SSRF, DNS rebinding, oversized downloads, and
  * content-type abuse. Fail-closed design.
+ *
+ * Actual network I/O goes through the canonical hardened outbound
+ * fetch (src/security/outbound-fetch.ts) — not raw fetch().
  * ================================================================ */
 
 import { validateOutboundUrl } from "../../security/network-boundary";
+import {
+  hardenedFetch,
+  readLimitedBytes,
+} from "../../security/outbound-fetch";
 
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/gif",
@@ -16,7 +23,6 @@ const ALLOWED_CONTENT_TYPES = new Set([
 ]);
 
 const MAX_MEDIA_SIZE = 8 * 1024 * 1024; // 8 MB — generous for animated GIFs
-const MAX_REDIRECTS = 5;
 const MEDIA_TIMEOUT_MS = 10_000;
 
 export interface MediaValidationResult {
@@ -81,9 +87,11 @@ export async function safeMediaFetch(
   if (!validation.ok) return null;
 
   try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
-      redirect: "manual",
+    const { response } = await hardenedFetch(url, {
+      timeoutMs: MEDIA_TIMEOUT_MS,
+      maxRedirects: 5,
+      maxResponseBytes: MAX_MEDIA_SIZE,
+      policy: "public",
     });
 
     if (!response.ok) return null;
@@ -93,14 +101,11 @@ export async function safeMediaFetch(
       return null;
     }
 
-    const contentLength = Number(response.headers.get("content-length") ?? "0");
-    if (contentLength > MAX_MEDIA_SIZE) return null;
-
-    const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength > MAX_MEDIA_SIZE) return null;
+    const buffer = await readLimitedBytes(response, MAX_MEDIA_SIZE);
+    if (buffer.byteLength > MAX_MEDIA_SIZE) return null;
 
     return {
-      buffer: Buffer.from(arrayBuffer),
+      buffer,
       contentType: contentType.split(";")[0].trim().toLowerCase(),
     };
   } catch {
@@ -111,35 +116,16 @@ export async function safeMediaFetch(
 export async function followRedirectsSafe(
   url: string,
 ): Promise<string | null> {
-  let current = url;
-  for (let i = 0; i < MAX_REDIRECTS; i++) {
-    const validation = validateMediaUrl(current);
-    if (!validation.ok) return null;
-
-    try {
-      const response = await fetch(current, {
-        method: "HEAD",
-        signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
-        redirect: "manual",
-      });
-
-      const location = response.headers.get("location");
-      if (!location) return current;
-
-      let nextUrl: string;
-      try {
-        nextUrl = new URL(location, current).toString();
-      } catch {
-        return null;
-      }
-
-      const nextValidation = validateMediaUrl(nextUrl);
-      if (!nextValidation.ok) return null;
-
-      current = nextUrl;
-    } catch {
-      return null;
-    }
+  try {
+    // hardenedFetch validates every hop (URL + DNS) before connecting.
+    const { finalUrl } = await hardenedFetch(url, {
+      method: "HEAD",
+      timeoutMs: MEDIA_TIMEOUT_MS,
+      maxRedirects: 5,
+      policy: "public",
+    });
+    return finalUrl;
+  } catch {
+    return null;
   }
-  return null; // too many redirects
 }

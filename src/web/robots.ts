@@ -1,5 +1,7 @@
 import { LRUCache } from "lru-cache";
 import { logger } from "../logger";
+import { hardenedFetch, readLimitedText } from "../security/outbound-fetch";
+import { validateOutboundUrl } from "../security/network-boundary";
 
 interface RobotsRule {
   userAgent: string;
@@ -123,40 +125,50 @@ function isAllowed(robots: ParsedRobots, url: string, userAgent = "*"): boolean 
   }
 }
 
+const MAX_ROBOTS_BYTES = 256 * 1024;
+const ROBOTS_TIMEOUT_MS = 5_000;
+
 async function fetchRobotsTxt(origin: string): Promise<ParsedRobots> {
   const cached = robotsCache.get(origin);
   if (cached) {
     return cached;
   }
 
+  const empty: ParsedRobots = { rules: [], sitemaps: [], fetchedAt: Date.now() };
+
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5_000);
-
-    try {
-      const response = await fetch(`${origin}/robots.txt`, {
-        headers: {
-          "User-Agent": "AshenAI/1.0 (https://github.com/AshenAI)",
-          Accept: "text/plain",
-        },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const empty: ParsedRobots = { rules: [], sitemaps: [], fetchedAt: Date.now() };
-        robotsCache.set(origin, empty);
-        return empty;
-      }
-
-      const content = await response.text();
-      const parsed = parseRobotsTxt(content);
-      robotsCache.set(origin, parsed);
-      return parsed;
-    } finally {
-      clearTimeout(timeout);
+    // Same canonical outbound boundary as page fetch: URL validation +
+    // DNS resolution + IP classification + redirect validation. Never a
+    // raw fetch() to a user-controlled origin.
+    const robotsUrl = `${origin.replace(/\/$/, "")}/robots.txt`;
+    const urlCheck = validateOutboundUrl(robotsUrl);
+    if (!urlCheck.valid) {
+      robotsCache.set(origin, empty);
+      return empty;
     }
+
+    const { response } = await hardenedFetch(robotsUrl, {
+      timeoutMs: ROBOTS_TIMEOUT_MS,
+      maxRedirects: 3,
+      maxResponseBytes: MAX_ROBOTS_BYTES,
+      headers: {
+        "User-Agent": "AshenAI/1.0 (https://github.com/AshenAI)",
+        Accept: "text/plain",
+      },
+    });
+
+    if (!response.ok) {
+      robotsCache.set(origin, empty);
+      return empty;
+    }
+
+    const content = await readLimitedText(response, MAX_ROBOTS_BYTES);
+    const parsed = parseRobotsTxt(content);
+    robotsCache.set(origin, parsed);
+    return parsed;
   } catch {
-    const empty: ParsedRobots = { rules: [], sitemaps: [], fetchedAt: Date.now() };
+    // Fail-closed for policy: on blocked/unreachable robots, treat as empty
+    // rules (no disallow) but never bypass the SSRF boundary.
     robotsCache.set(origin, empty);
     return empty;
   }

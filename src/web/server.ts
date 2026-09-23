@@ -416,7 +416,8 @@ app.get("/auth/discord/callback", async (req: Request, res: Response) => {
     setSessionCookie(res, result.sessionId, result.expiresAt!);
     res.redirect("/?login=success&provider=discord");
   } else if (result.requiresLinking) {
-    res.redirect(`/?link_required=true&provider=discord&linkToken=${result.linkToken}&accountId=${result.accountId}&username=${encodeURIComponent(result.username || "")}`);
+    // No linkToken / accountId / username in the URL — identifiers stay server-side.
+    res.redirect(`/?link_required=true&provider=discord&message=${encodeURIComponent(result.error || "Account linking required")}`);
   } else {
     res.redirect(`/?login=error&message=${encodeURIComponent(result.error || "OAuth failed")}`);
   }
@@ -449,7 +450,7 @@ app.get("/auth/google/callback", async (req: Request, res: Response) => {
     setSessionCookie(res, result.sessionId, result.expiresAt!);
     res.redirect("/?login=success&provider=google");
   } else if (result.requiresLinking) {
-    res.redirect(`/?link_required=true&provider=google&linkToken=${result.linkToken}&accountId=${result.accountId}&username=${encodeURIComponent(result.username || "")}`);
+    res.redirect(`/?link_required=true&provider=google&message=${encodeURIComponent(result.error || "Account linking required")}`);
   } else {
     res.redirect(`/?login=error&message=${encodeURIComponent(result.error || "OAuth failed")}`);
   }

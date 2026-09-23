@@ -12,6 +12,7 @@ import {
   validateOutboundUrl,
   validateRedirectTarget,
 } from "../security/network-boundary";
+import { resolveAndValidateHost as boundaryResolveAndValidate } from "../security/outbound-fetch";
 
 export interface FetchedPage {
   url: string;
@@ -53,35 +54,9 @@ export function validateUrl(url: string): { valid: boolean; reason?: string } {
  * Prevents SSRF against internal infrastructure.
  */
 async function resolveAndValidateHost(url: string): Promise<void> {
-  const parsed = new URL(url);
-  const hostname = parsed.hostname;
-
-  // Pre-block known dangerous hostnames before DNS lookup
-  if (isBlockedHostname(hostname)) {
-    throw new Error(`Blocked: ${hostname} is not a fetchable target`);
-  }
-
-  try {
-    const results = await dns.promises.lookup(hostname, { all: true });
-    if (!results || results.length === 0) {
-      throw new Error(`Blocked: DNS resolution returned no addresses for ${hostname}`);
-    }
-
-    for (const result of results) {
-      if (isPrivateOrReservedIP(result.address)) {
-        logger.warn(`🌐 SSRF blocked: ${hostname} has private/reserved address ${result.address}`);
-        throw new Error(`Blocked: ${hostname} resolves to a private/reserved IP address`);
-      }
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("Blocked")) {
-      throw error;
-    }
-    // DNS resolution failure — block for safety (fail-closed)
-    // Prevents TOCTOU: if DNS fails now but resolves to a private IP
-    // at the HTTP client level, the request would reach internal infrastructure.
-    throw new Error(`Blocked: DNS resolution failed for ${hostname}`);
-  }
+  // Delegates to the canonical outbound boundary (shared with robots,
+  // vision, providers, media) so there is one SSRF/DNS implementation.
+  await boundaryResolveAndValidate(url, "public");
 }
 
 /**
@@ -189,15 +164,21 @@ export async function fetchPage(
     }
   }
 
+  // SSRF protection FIRST: validate URL + resolve hostname before any
+  // network request — including the robots.txt fetch (which also uses the
+  // hardened outbound boundary).
+  const urlCheck = validateOutboundUrl(url);
+  if (!urlCheck.valid) {
+    throw new Error(`Blocked: ${urlCheck.reason}`);
+  }
+  await resolveAndValidateHost(url);
+
   if (respectRobots) {
     const allowed = await isUrlAllowedByRobots(url);
     if (!allowed) {
       throw new Error(`Blocked by robots.txt: ${url}`);
     }
   }
-
-  // SSRF protection: resolve hostname and block private/reserved IPs
-  await resolveAndValidateHost(url);
 
   const result = await pRetry(
     async () => {

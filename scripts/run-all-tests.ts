@@ -53,6 +53,7 @@ const MANDATORY_SUITES: TestSuite[] = [
   // Security
   { name: "Security", file: "scripts/test-security.ts", category: "security" },
   { name: "Hardening", file: "scripts/test-hardening.ts", category: "security" },
+  { name: "Production Hardening", file: "scripts/test-production-hardening.ts", category: "security" },
   { name: "Adversarial", file: "scripts/test-adversarial.ts", category: "security" },
   { name: "Security Patterns", file: "scripts/test-security-patterns.ts", category: "security" },
   { name: "Error Sanitization", file: "scripts/test-error-sanitization.ts", category: "security" },

@@ -3,7 +3,14 @@ import type { ProviderDefinition, ProviderProtocol } from "./types";
 import { getCredential } from "./credential-store";
 import { providerRepo } from "./provider-repo";
 import { logger } from "../../../logger";
-import { validateOutboundUrl, validateTrustedLocalProviderUrl, validateRedirectTarget, MAX_REDIRECTS } from "../../../security/network-boundary";
+import {
+  validateOutboundUrl,
+  validateTrustedLocalProviderUrl,
+} from "../../../security/network-boundary";
+import {
+  hardenedFetch,
+  type OutboundPolicy,
+} from "../../../security/outbound-fetch";
 
 function assertSafeProviderEndpoint(endpoint: string, protocol: ProviderProtocol): string {
   const check = protocol === "ollama"
@@ -15,33 +22,31 @@ function assertSafeProviderEndpoint(endpoint: string, protocol: ProviderProtocol
   return check.url.toString().replace(/\/$/, "");
 }
 
+function policyFor(protocol: ProviderProtocol): OutboundPolicy {
+  return protocol === "ollama" ? "trusted-local" : "public";
+}
+
 async function providerFetch(
   url: string,
-  init: RequestInit,
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
   protocol: ProviderProtocol,
 ): Promise<Response> {
-  let currentUrl = url;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const response = await fetch(currentUrl, { ...init, redirect: "manual" });
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location) return response;
-      const check = validateRedirectTarget(location, currentUrl);
-      if (!check.valid || !check.url) {
-        throw new Error(`Redirect blocked: ${check.reason ?? location}`);
-      }
-      const recheck = protocol === "ollama"
-        ? validateTrustedLocalProviderUrl(check.url)
-        : validateOutboundUrl(check.url);
-      if (!recheck.valid) {
-        throw new Error(`Redirect blocked: ${check.url}`);
-      }
-      currentUrl = check.url;
-      continue;
-    }
-    return response;
-  }
-  throw new Error(`Redirect blocked: exceeded ${MAX_REDIRECTS} redirects`);
+  const { response } = await hardenedFetch(url, {
+    method: init.method,
+    headers: init.headers,
+    body: init.body,
+    signal: init.signal,
+    timeoutMs: init.timeoutMs,
+    policy: policyFor(protocol),
+    maxRedirects: 5,
+  });
+  return response as unknown as Response;
 }
 
 class DynamicOpenAICompatibleProvider implements AIProvider {
@@ -208,11 +213,15 @@ class DynamicGeminiProvider implements AIProvider {
       body.systemInstruction = { parts: [{ text: systemMsg.content }] };
     }
 
+    // API key MUST travel in the header — never in the URL (logs/proxies/telemetry).
     const response = await providerFetch(
-      `${endpoint}/v1beta/models/${model}:generateContent?key=${this.apiKey}`,
+      `${endpoint}/v1beta/models/${model}:generateContent`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": this.apiKey,
+        },
         signal: AbortSignal.timeout(this.def.timeoutMs),
         body: JSON.stringify(body),
       },
