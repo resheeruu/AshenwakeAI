@@ -756,23 +756,60 @@ console.log("\nSection L+: Wispbyte PORT 9002");
 
 const startSh = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf-8");
 assertIncludes(startSh, "PORT", "start.sh reads PORT from environment");
+assertIncludes(startSh, 'if [ -z "${PORT:-}" ]', "start.sh only defaults PORT when PORT is genuinely absent");
+assertIncludes(startSh, "export PORT=8080", "start.sh keeps the documented 8080 fallback");
 assertIncludes(startSh, 'node_modules/.bin/tsx', "start.sh has tsx fallback");
 assertIncludes(startSh, "dist/index.js", "start.sh prefers compiled dist/index.js");
+assertIncludes(startSh, "scripts/ensure-dist.mjs", "start.sh delegates the missing-dist build to ensure-dist.mjs");
+assertIncludes(startSh, 'NODE_ENV="${NODE_ENV:-production}"', "start.sh pins NODE_ENV=production when unset");
+assertNotIncludes(startSh, "node_modules/.bin/tsc", "start.sh does not shell out to tsc directly");
 
 assertIncludes(serverSrc, "process.env.PORT", "server reads PORT from environment");
+assertIncludes(serverSrc, "DEFAULT_PORT", "server defines a documented PORT fallback");
 
 const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf-8");
 assertIncludes(envExample, "PORT=9002", ".env.example documents Wispbyte PORT=9002");
 assertNotIncludes(envExample, "PORT=8080", ".env.example does not recommend 8080 for Wispbyte");
+assertIncludes(envExample, "does NOT auto-inject", ".env.example states Wispbyte does not inject PORT");
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf-8"));
 assertIncludes(pkg.dependencies?.tsx, "^4.23.12", "tsx is a runtime dependency (not devOnly)");
 assert(!pkg.devDependencies?.tsx, "tsx removed from devDependencies");
+assertIncludes(pkg.dependencies?.typescript, "^5.9.3", "typescript is a runtime dependency so production installs can build");
+assert(!pkg.devDependencies?.typescript, "typescript removed from devDependencies");
+/* tsc --strict cannot compile without these declaration packages: a
+ * `npm ci --omit=dev` production build fails with TS7016/TS7006 if any
+ * of them live in devDependencies. */
+for (const typesPkg of ["@types/express", "@types/better-sqlite3", "@types/node", "@types/turndown"]) {
+  assertIncludes(
+    pkg.dependencies?.[typesPkg],
+    "^",
+    `${typesPkg} is a runtime dependency (npm ci --omit=dev must be able to build)`,
+  );
+  assert(!pkg.devDependencies?.[typesPkg], `${typesPkg} removed from devDependencies`);
+}
+assertIncludes(pkg.scripts?.prestart, "ensure-dist.mjs", "npm prestart builds dist/ before start.sh runs");
+assertIncludes(pkg.scripts?.start, "start.sh", "npm start still runs scripts/start.sh");
 
-console.log("  ✅ PORT 9002 is honored by start.sh");
+const lock = JSON.parse(fs.readFileSync(path.join(ROOT, "package-lock.json"), "utf-8"));
+assertIncludes(lock.packages?.[""]?.dependencies?.tsx, "^4.23.12", "package-lock records tsx as a production dependency");
+assertIncludes(lock.packages?.[""]?.dependencies?.typescript, "^5.9.3", "package-lock records typescript as a production dependency");
+assert(!lock.packages?.["node_modules/tsx"]?.dev, "package-lock does not mark tsx dev:true (npm ci --omit=dev would drop it)");
+assert(!lock.packages?.["node_modules/typescript"]?.dev, "package-lock does not mark typescript dev:true");
+
+const ensureDist = fs.readFileSync(path.join(ROOT, "scripts/ensure-dist.mjs"), "utf-8");
+assertIncludes(ensureDist, "npm run build", "ensure-dist.mjs runs the canonical build script");
+assertIncludes(ensureDist, "dist/index.js", "ensure-dist.mjs verifies dist/index.js was produced");
+assertIncludes(ensureDist, "typescript", "ensure-dist.mjs verifies the build toolchain is installed");
+assertIncludes(ensureDist, "process.exit(1)", "ensure-dist.mjs fails startup instead of starting without dist/");
+
+console.log("  ✅ PORT honored with documented 8080 fallback");
 console.log("  ✅ server reads PORT from environment");
 console.log("  ✅ .env.example documents Wispbyte PORT=9002");
-console.log("  ✅ tsx is a runtime dependency");
+console.log("  ✅ tsx + typescript are runtime dependencies");
+console.log("  ✅ package-lock.json in sync (no dev:true for tsx/typescript)");
+console.log("  ✅ npm prestart builds dist/ via ensure-dist.mjs");
+console.log("  ✅ start.sh delegates missing-dist build to ensure-dist.mjs");
 
 closeOutboundAgents();
 
