@@ -35,6 +35,6 @@ USER ashenu
 EXPOSE 9002
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:9002/health || exit 1
+  CMD curl -f http://localhost:9002/api/health || exit 1
 
 CMD ["bash", "scripts/start.sh"]

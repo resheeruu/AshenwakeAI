@@ -66,7 +66,7 @@ If Wispbyte sets `PORT=9002`, AshenAI will listen on port 9002.
 
 ```bash
 # Check health endpoint
-curl http://localhost:$PORT/health
+curl http://localhost:$PORT/api/health
 
 # Check Discord connection in logs
 # Should see: "✅ Logged in as YourBot#1234"
@@ -110,7 +110,7 @@ DISCORD_CLIENT_ID=<your_client_id>
 4. Launches `src/index.ts` via tsx
 5. Application validates config, connects to Discord
 6. Web server starts on configured PORT
-7. Health endpoint available at `/health`
+7. Health endpoint available at `/api/health`
 
 ## Graceful Shutdown
 
