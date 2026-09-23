@@ -1,0 +1,158 @@
+"use strict";
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var audit_integrity_exports = {};
+__export(audit_integrity_exports, {
+  getGenesisHash: () => getGenesisHash,
+  signEntry: () => signEntry,
+  verifyAuditChain: () => verifyAuditChain,
+  verifyEntry: () => verifyEntry
+});
+module.exports = __toCommonJS(audit_integrity_exports);
+var import_node_crypto = __toESM(require("node:crypto"));
+const INTEGRITY_CONTEXT = "ashenai-audit-integrity-v1";
+let integrityKey = null;
+let keyValidated = false;
+function validateKeyForProduction() {
+  if (keyValidated) return;
+  keyValidated = true;
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 16) {
+    const isProduction = process.env.NODE_ENV === "production";
+    if (isProduction) {
+      console.error(
+        "[FATAL] SESSION_SECRET is required in production (minimum 16 characters). Audit log integrity cannot be guaranteed without a strong secret."
+      );
+      process.exit(1);
+    } else {
+      console.warn(
+        "[WARN] SESSION_SECRET not set or too short \u2014 audit signatures use a weaker fallback key. Set SESSION_SECRET for production deployments."
+      );
+    }
+  }
+}
+function getIntegrityKey() {
+  if (integrityKey) return integrityKey;
+  validateKeyForProduction();
+  const secret = process.env.SESSION_SECRET;
+  if (secret && secret.length >= 16) {
+    integrityKey = import_node_crypto.default.createHmac("sha256", secret).update(INTEGRITY_CONTEXT).digest();
+  } else {
+    console.warn(
+      "[WARN] Audit integrity using ephemeral fallback key \u2014 signatures are valid only for this process lifetime."
+    );
+    integrityKey = import_node_crypto.default.randomBytes(32);
+  }
+  return integrityKey;
+}
+function computeSignature(entry) {
+  const key = getIntegrityKey();
+  const payload = [
+    entry.id,
+    entry.timestamp,
+    entry.who,
+    entry.whoName ?? "",
+    entry.what,
+    entry.where,
+    entry.guildId ?? "",
+    entry.reason ?? "",
+    entry.result,
+    entry.details ?? ""
+  ].join("|");
+  return import_node_crypto.default.createHmac("sha256", key).update(payload).digest("hex");
+}
+function signEntry(entry, previousSignature) {
+  const signature = computeSignature(entry);
+  const prevHash = previousSignature ? import_node_crypto.default.createHash("sha256").update(previousSignature).digest("hex") : "genesis";
+  return { signature, prevHash };
+}
+function verifyEntry(entry, expectedPrevHash) {
+  const expectedPrevHashComputed = entry.prevHash === expectedPrevHash;
+  if (!expectedPrevHashComputed) return false;
+  const { signature: _sig, prevHash: _prev, ...signable } = entry;
+  const expectedSignature = computeSignature(signable);
+  return import_node_crypto.default.timingSafeEqual(
+    Buffer.from(entry.signature, "hex"),
+    Buffer.from(expectedSignature, "hex")
+  );
+}
+function verifyAuditChain(entries) {
+  if (entries.length === 0) return { valid: true };
+  let lastSignature = null;
+  let firstSignedIndex = -1;
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (!entry.signature || !entry.prevHash) {
+      continue;
+    }
+    if (firstSignedIndex === -1) {
+      firstSignedIndex = i;
+      if (entry.prevHash !== "genesis") {
+        const signed2 = entry;
+        const { signature: _sig, prevHash: _prev, ...signable } = signed2;
+        const expectedSig = computeSignature(signable);
+        if (!import_node_crypto.default.timingSafeEqual(
+          Buffer.from(signed2.signature, "hex"),
+          Buffer.from(expectedSig, "hex")
+        )) {
+          return { valid: false, brokenAt: i };
+        }
+        lastSignature = signed2.signature;
+        continue;
+      }
+    }
+    const signed = entry;
+    if (lastSignature !== null) {
+      const expectedPrevHash = import_node_crypto.default.createHash("sha256").update(lastSignature).digest("hex");
+      if (!verifyEntry(signed, expectedPrevHash)) {
+        return { valid: false, brokenAt: i };
+      }
+    } else {
+      const { signature: _sig, prevHash: _prev, ...signable } = signed;
+      const expectedSig = computeSignature(signable);
+      if (!import_node_crypto.default.timingSafeEqual(
+        Buffer.from(signed.signature, "hex"),
+        Buffer.from(expectedSig, "hex")
+      )) {
+        return { valid: false, brokenAt: i };
+      }
+    }
+    lastSignature = signed.signature;
+  }
+  return { valid: true };
+}
+function getGenesisHash() {
+  return "genesis";
+}
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  getGenesisHash,
+  signEntry,
+  verifyAuditChain,
+  verifyEntry
+});

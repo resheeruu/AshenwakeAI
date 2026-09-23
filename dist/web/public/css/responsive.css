@@ -1,0 +1,30 @@
+/* ==================== RESPONSIVE STYLES ==================== */
+@media (max-width: 1024px) {
+  .nav-links { display: none; }
+  .hero { padding: 140px 20px 60px; }
+  .hero-content h1 { font-size: 36px; }
+  .section-header { margin-bottom: 40px; }
+  .section-header h2 { font-size: 28px; }
+}
+
+@media (max-width: 768px) {
+  .site-header { padding: 0 16px; }
+  .main-nav { height: 56px; }
+  .logo { font-size: 18px; }
+  .nav-links { display: none; }
+  .cta-button { padding: 10px 20px; font-size: 12px; }
+  .hero { padding: 120px 16px 40px; }
+  .hero-content h1 { font-size: 30px; }
+  .hero-content p { font-size: 16px; }
+  .hero-buttons { flex-direction: column; align-items: center; }
+  .hero-buttons .btn { width: 100%; }
+  .features-section { padding: 60px 16px; }
+  .ai-infrastructure { padding: 60px 16px; }
+  .provider-ecosystem { padding: 60px 16px; }
+  .footer-grid { grid-template-columns: 1fr; gap: 30px; }
+}
+
+@media (max-width: 480px) {
+  .section-header h2 { font-size: 24px; }
+  .tag { padding: 4px 8px; font-size: 10px; }
+}
