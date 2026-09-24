@@ -62,9 +62,9 @@ function isDataDirectoryAccessible(): boolean {
   }
 }
 
-export function getStatus(): SystemStatus {
+export async function getStatus(): Promise<SystemStatus> {
   const discordHealth = getDiscordHealth();
-  const updateStatus = getUpdateStatus();
+  const updateStatus = await getUpdateStatus();
 
   return {
     running: isRunning,

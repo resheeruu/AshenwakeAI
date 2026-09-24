@@ -370,13 +370,17 @@ export function createSettingsCommand(): AshenCommand {
               .setDescription("Settings category")
               .setRequired(true)
               .addChoices(
+                { name: "Overview", value: "overview" },
+                { name: "Moderation", value: "moderation" },
                 { name: "Support", value: "support" },
                 { name: "Reports", value: "reports" },
                 { name: "Appeals", value: "appeals" },
                 { name: "AI", value: "ai" },
+                { name: "Social", value: "social" },
+                { name: "Personality", value: "personality" },
                 { name: "Logging", value: "logging" },
                 { name: "Staff", value: "staff" },
-                { name: "Moderation", value: "moderation" },
+                { name: "Audit", value: "audit" },
               )
           )
           .addStringOption((opt) =>
@@ -473,10 +477,12 @@ export function createSettingsUpdateCommand(): AshenCommand {
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
       .addStringOption((opt) => opt.setName("category").setDescription("Settings category").setRequired(true)
         .addChoices(
+          { name: "Overview", value: "overview" }, { name: "Moderation", value: "moderation" },
           { name: "Support", value: "support" }, { name: "Reports", value: "reports" },
           { name: "Appeals", value: "appeals" }, { name: "AI", value: "ai" },
+          { name: "Social", value: "social" }, { name: "Personality", value: "personality" },
           { name: "Logging", value: "logging" }, { name: "Staff", value: "staff" },
-          { name: "Moderation", value: "moderation" },
+          { name: "Audit", value: "audit" },
         ))
       .addStringOption((opt) => opt.setName("setting").setDescription("Setting name to update").setRequired(true))
       .addStringOption((opt) => opt.setName("value").setDescription("New value (true/false, channel ID, role ID, or number)").setRequired(true)),

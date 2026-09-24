@@ -362,13 +362,17 @@ function createSettingsCommand() {
     data: new import_discord.SlashCommandBuilder().setName("settings").setDescription("Interactive server settings panel for AshenAI").setDefaultMemberPermissions(import_discord.PermissionFlagsBits.ManageGuild).addSubcommand(
       (sub) => sub.setName("update").setDescription("Update a specific setting (advanced/manual)").addStringOption(
         (opt) => opt.setName("category").setDescription("Settings category").setRequired(true).addChoices(
+          { name: "Overview", value: "overview" },
+          { name: "Moderation", value: "moderation" },
           { name: "Support", value: "support" },
           { name: "Reports", value: "reports" },
           { name: "Appeals", value: "appeals" },
           { name: "AI", value: "ai" },
+          { name: "Social", value: "social" },
+          { name: "Personality", value: "personality" },
           { name: "Logging", value: "logging" },
           { name: "Staff", value: "staff" },
-          { name: "Moderation", value: "moderation" }
+          { name: "Audit", value: "audit" }
         )
       ).addStringOption(
         (opt) => opt.setName("setting").setDescription("Setting name to update").setRequired(true)
@@ -496,13 +500,17 @@ function createSettingsCommand() {
 function createSettingsUpdateCommand() {
   return {
     data: new import_discord.SlashCommandBuilder().setName("settings-update").setDescription("Update a specific setting (advanced/manual)").setDefaultMemberPermissions(import_discord.PermissionFlagsBits.ManageGuild).addStringOption((opt) => opt.setName("category").setDescription("Settings category").setRequired(true).addChoices(
+      { name: "Overview", value: "overview" },
+      { name: "Moderation", value: "moderation" },
       { name: "Support", value: "support" },
       { name: "Reports", value: "reports" },
       { name: "Appeals", value: "appeals" },
       { name: "AI", value: "ai" },
+      { name: "Social", value: "social" },
+      { name: "Personality", value: "personality" },
       { name: "Logging", value: "logging" },
       { name: "Staff", value: "staff" },
-      { name: "Moderation", value: "moderation" }
+      { name: "Audit", value: "audit" }
     )).addStringOption((opt) => opt.setName("setting").setDescription("Setting name to update").setRequired(true)).addStringOption((opt) => opt.setName("value").setDescription("New value (true/false, channel ID, role ID, or number)").setRequired(true)),
     async execute(interaction) {
       try {

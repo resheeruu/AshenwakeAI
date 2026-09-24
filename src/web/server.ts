@@ -652,8 +652,8 @@ app.post("/auth/change-password", requireAuth, requireCsrf, (req: Request, res: 
 
 /* ==================== ADMIN ENDPOINTS (requireAuth + admin role) ==================== */
 
-app.get("/api/system/status", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
-  res.json({ ok: true, status: getStatus() });
+app.get("/api/system/status", requireAuth, requireRole("admin"), async (_req: Request, res: Response) => {
+  res.json({ ok: true, status: await getStatus() });
 });
 
 app.get("/api/system/health", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
@@ -998,8 +998,8 @@ app.get("/api/guilds/:guildId", requireAuth, requireRole("admin"), requireGuildA
   res.json({ ok: true, config: getGuildConfig(guildId) });
 });
 
-app.get("/api/seraph/status", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
-  res.json({ ok: true, seraph: getSeraphStatus() });
+app.get("/api/seraph/status", requireAuth, requireRole("admin"), async (_req: Request, res: Response) => {
+  res.json({ ok: true, seraph: await getSeraphStatus() });
 });
 
 // POST only: runDoctor records audit (state mutation) — must not be CSRF-free GET.

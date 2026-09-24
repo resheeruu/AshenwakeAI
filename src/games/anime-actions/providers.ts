@@ -137,9 +137,22 @@ class OtakuGifsProvider implements AnimeProvider {
  * PROVIDER CHAIN
  * ================================================================ */
 
+class TextOnlyProvider implements AnimeProvider {
+  name = "text";
+
+  async fetch(_action: string): Promise<AnimationResult | null> {
+    return null;
+  }
+}
+
+/* ================================================================
+ * PROVIDER CHAIN
+ * ================================================================ */
+
 const providers: AnimeProvider[] = [
   new GifukaiProvider(),
   new OtakuGifsProvider(),
+  new TextOnlyProvider(),
 ];
 
 export async function fetchAnimation(

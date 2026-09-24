@@ -96,9 +96,16 @@ class OtakuGifsProvider {
     }
   }
 }
+class TextOnlyProvider {
+  name = "text";
+  async fetch(_action) {
+    return null;
+  }
+}
 const providers = [
   new GifukaiProvider(),
-  new OtakuGifsProvider()
+  new OtakuGifsProvider(),
+  new TextOnlyProvider()
 ];
 async function fetchAnimation(action) {
   const cacheKey = `anime:${action}`;

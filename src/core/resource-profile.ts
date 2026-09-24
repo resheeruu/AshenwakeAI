@@ -107,10 +107,10 @@ export function buildResourceProfile(): ResourceProfile {
   if (fs.existsSync("node_modules/typescript")) capabilities.push("typescript/build");
 
   // Classification
-  const classification = classifyHost(totalMemMB, freeMemMB, rssMB, heapMB, usedPct);
+  const classification = classifyHost(totalMemMB, freeMemMB, rssMB, heapMB, usedPct, os.loadavg());
 
   // Recommendations
-  const recommendations = generateProfileRecommendations(classification, totalMemMB, freeMemMB, rssMB, heapMB, usedPct, dataDirMB);
+  const recommendations = generateProfileRecommendations(classification, totalMemMB, freeMemMB, rssMB, heapMB, usedPct, dataDirMB, os.loadavg());
 
   return {
     host,
@@ -120,7 +120,7 @@ export function buildResourceProfile(): ResourceProfile {
     disk: {
       totalGB, freeGB, usedPct, dataDirMB,
       quotaVerified: false,
-      quotaNote: "Actual Wispbyte storage quota could not be verified from inside the container.",
+      quotaNote: "Actual Wispbyte storage quota could not be verified from inside the container. Disk values are container-visible filesystem capacity, NOT hosting account quota.",
     },
     runtime: { nodeVersion: process.version, platform: os.platform(), uptime: Math.round(process.uptime()) },
     capabilities,
@@ -128,13 +128,16 @@ export function buildResourceProfile(): ResourceProfile {
   };
 }
 
-function classifyHost(totalMemMB: number, freeMemMB: number, rssMB: number, heapMB: number, diskUsedPct: number): HostClassification {
+function classifyHost(totalMemMB: number, freeMemMB: number, rssMB: number, heapMB: number, diskUsedPct: number, loadAvg: number[]): HostClassification {
+  const cores = os.cpus().length || 1;
+  const normalizedLoad = loadAvg[0] / cores;
+
   // Critical: severe resource pressure
-  if (diskUsedPct > 95 || freeMemMB < 100 || heapMB > 512) return "critical";
+  if (diskUsedPct > 95 || freeMemMB < 100 || heapMB > 512 || normalizedLoad > 3.0) return "critical";
   // Degraded: significant constraints
-  if (diskUsedPct > 90 || freeMemMB < 300 || heapMB > 256) return "degraded";
+  if (diskUsedPct > 90 || freeMemMB < 300 || heapMB > 256 || normalizedLoad > 2.0) return "degraded";
   // Constrained: moderate pressure
-  if (diskUsedPct > 80 || freeMemMB < 500 || totalMemMB < 1024) return "constrained";
+  if (diskUsedPct > 80 || freeMemMB < 500 || totalMemMB < 1024 || normalizedLoad > 1.5) return "constrained";
   // Healthy: normal operation
   if (totalMemMB > 0) return "healthy";
   return "unknown";
@@ -145,7 +148,10 @@ function generateProfileRecommendations(
   totalMemMB: number, freeMemMB: number,
   rssMB: number, heapMB: number,
   diskUsedPct: number, dataDirMB: number,
+  loadAvg: number[],
 ): string[] {
+  const cores = os.cpus().length || 1;
+  const normalizedLoad = loadAvg[0] / cores;
   const recs: string[] = [];
   if (classification === "critical") {
     recs.push("Host is in CRITICAL state. Protect core Discord/Web/AI. Stop nonessential work.");

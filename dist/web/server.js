@@ -476,8 +476,8 @@ app.post("/auth/change-password", import_roles.requireAuth, import_roles.require
   (0, import_auth.clearSessionCookie)(res);
   res.json({ ok: true, message: "Password changed. Please log in again." });
 });
-app.get("/api/system/status", import_roles.requireAuth, (0, import_roles.requireRole)("admin"), (_req, res) => {
-  res.json({ ok: true, status: (0, import_control.getStatus)() });
+app.get("/api/system/status", import_roles.requireAuth, (0, import_roles.requireRole)("admin"), async (_req, res) => {
+  res.json({ ok: true, status: await (0, import_control.getStatus)() });
 });
 app.get("/api/system/health", import_roles.requireAuth, (0, import_roles.requireRole)("admin"), (_req, res) => {
   res.json({ ok: true, health: (0, import_control.getHealth)() });
@@ -789,8 +789,8 @@ app.get("/api/guilds/:guildId", import_roles.requireAuth, (0, import_roles.requi
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   res.json({ ok: true, config: (0, import_control.getGuildConfig)(guildId) });
 });
-app.get("/api/seraph/status", import_roles.requireAuth, (0, import_roles.requireRole)("admin"), (_req, res) => {
-  res.json({ ok: true, seraph: (0, import_seraph.getStatus)() });
+app.get("/api/seraph/status", import_roles.requireAuth, (0, import_roles.requireRole)("admin"), async (_req, res) => {
+  res.json({ ok: true, seraph: await (0, import_seraph.getStatus)() });
 });
 app.post("/api/seraph/doctor", import_roles.requireAuth, (0, import_roles.requireRole)("admin"), import_roles.requireCsrf, (_req, res) => {
   res.json({ ok: true, doctor: (0, import_seraph.runDoctor)() });

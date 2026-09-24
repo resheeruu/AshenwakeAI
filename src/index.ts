@@ -2832,7 +2832,7 @@ async function startDiscord(): Promise<void> {
     logger.info("📡 Discord shard observability active.");
 
     if (process.env.ASHENAI_AUTO_UPDATE !== "off") {
-      startUpdateManager();
+      void startUpdateManager();
       logger.info("🔄 Update manager active.");
     }
 
