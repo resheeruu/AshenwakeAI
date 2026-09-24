@@ -250,7 +250,6 @@ async function buildInteractiveContext(message, content, botId, alreadyFetchedRe
 client.once(
   import_discord.Events.ClientReady,
   async (readyClient) => {
-    import_logger.logger.info("Starting AshenAI...");
     import_logger.logger.info(
       `\u2705 Logged in as ${readyClient.user.tag}`
     );

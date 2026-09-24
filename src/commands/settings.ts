@@ -63,7 +63,7 @@ function removeSession(guildId: string, userId: string): void {
   activeSessions.delete(sessionKey(guildId, userId));
 }
 
-const P = { cat: "as", tog: "at", ch: "ac", rl: "ar", num: "an" } as const;
+const P = { cat: "as", tog: "at", ch: "ac", rl: "ar", num: "an", str: "st" } as const;
 const BRAND = 0x7c3aed;
 
 function buildEmbed(category: SettingsCategory, guildId: string): EmbedBuilder {
@@ -165,6 +165,31 @@ function buildEmbed(category: SettingsCategory, guildId: string): EmbedBuilder {
         .addFields({ name: "Staff Roles", value: roleList })
         .setFooter({ text: "Use the role selector below to add/remove roles." });
     }
+    case "social": {
+      const s = config.social!;
+      return new EmbedBuilder().setTitle("\uD83D\uDCAC ASHENAI SETTINGS \u2014 SOCIAL").setColor(BRAND)
+        .setDescription("Configure AI Social autonomous behavior.")
+        .addFields(
+          { name: "Enabled", value: s.enabled ? "\u2705" : "\u274C", inline: true },
+          { name: "Global Cooldown", value: `${s.globalCooldownMs}ms`, inline: true },
+          { name: "Max Responses/Hour", value: `${s.maxResponsesPerHour}`, inline: true },
+          { name: "Anime Actions", value: s.animeActions ? "\u2705" : "\u274C", inline: true },
+          { name: "Custom Reactions", value: s.customReactions ? "\u2705" : "\u274C", inline: true },
+          { name: "Custom Emoji", value: s.customEmoji ? "\u2705" : "\u274C", inline: true },
+          { name: "Rivalry Mode", value: s.rivalryMode ? "\u2705" : "\u274C", inline: true },
+          { name: "Debate Mode", value: s.debateMode ? "\u2705" : "\u274C", inline: true },
+        ).setFooter({ text: "Use buttons to toggle, or select another category." });
+    }
+    case "personality": {
+      const p = config.personality;
+      return new EmbedBuilder().setTitle("\uD83C\uDFAD ASHENAI SETTINGS \u2014 PERSONALITY").setColor(BRAND)
+        .setDescription("Configure AshenAI's personality and tone.")
+        .addFields(
+          { name: "Bot Name", value: p.name || "AshenAI", inline: true },
+          { name: "Tone", value: p.tone || "friendly", inline: true },
+          { name: "Instructions", value: p.customInstructions || "None", inline: false },
+        ).setFooter({ text: "Use the number modal to edit name or tone." });
+    }
     case "audit": {
       const entries = getRecentAuditEntries(guildId, 10);
       const logs = getRecentLogEntries(10);
@@ -239,6 +264,16 @@ function buildNumberRows(settings: SettingDescriptor[]): ActionRowBuilder<Button
   return rows;
 }
 
+function buildStringRows(settings: SettingDescriptor[]): ActionRowBuilder<ButtonBuilder>[] {
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  for (const s of settings) {
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    row.addComponents(new ButtonBuilder().setCustomId(`${P.str}:${s.id}`).setLabel(`Set ${s.label}`).setStyle(ButtonStyle.Primary));
+    rows.push(row);
+  }
+  return rows;
+}
+
 function buildCategoryComponents(category: SettingsCategory): ActionRowBuilder<any>[] {
   if (category === "overview" || category === "audit") return [];
   const settings = getSettingsByCategory(category);
@@ -246,9 +281,11 @@ function buildCategoryComponents(category: SettingsCategory): ActionRowBuilder<a
   const booleans = settings.filter((s) => s.type === "boolean");
   const channels = settings.filter((s) => s.type === "channel");
   const numbers = settings.filter((s) => s.type === "number");
+  const strings = settings.filter((s) => s.type === "string");
   if (booleans.length > 0) components.push(...buildBooleanRows(booleans));
   if (channels.length > 0) components.push(...buildChannelRows(channels));
   if (numbers.length > 0) components.push(...buildNumberRows(numbers));
+  if (strings.length > 0) components.push(...buildStringRows(strings));
   if (category === "staff") components.push(...buildRoleRows());
   return components;
 }
@@ -265,6 +302,16 @@ function buildNumberModal(setting: SettingDescriptor, currentValue: unknown): Mo
     .setPlaceholder(`Current: ${formatValue(currentValue)}${setting.min !== undefined ? ` (${setting.min}-${setting.max})` : ""}`)
     .setRequired(true);
   if (setting.min !== undefined) { input.setMinLength(1); input.setMaxLength(10); }
+  modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+  return modal;
+}
+
+function buildStringModal(setting: SettingDescriptor, currentValue: unknown): ModalBuilder {
+  const modal = new ModalBuilder().setCustomId(`${P.str}:${setting.id}`).setTitle(`Set ${setting.label}`);
+  const input = new TextInputBuilder().setCustomId("value").setLabel(setting.description).setStyle(TextInputStyle.Short)
+    .setPlaceholder(`Current: ${formatValue(currentValue)}${setting.min !== undefined ? ` (${setting.min}-${setting.max} chars)` : ""}`)
+    .setRequired(true);
+  if (setting.min !== undefined) { input.setMinLength(1); input.setMaxLength(setting.max ?? 100); }
   modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
   return modal;
 }
@@ -335,6 +382,26 @@ async function handleRoleSelect(interaction: any, guildId: string): Promise<void
 }
 
 async function handleNumberModalSubmit(interaction: ModalSubmitInteraction, settingId: string, guildId: string): Promise<void> {
+  const session = getSession(guildId, interaction.user.id);
+  if (!session) { await interaction.reply({ content: "This panel has expired.", ephemeral: true }); return; }
+  const descriptor = getSettingById(settingId);
+  if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+  const rawValue = interaction.fields.getTextInputValue("value");
+  if (!rawValue) { await interaction.reply({ content: "No value provided.", ephemeral: true }); return; }
+  const validation = validateSettingValue(descriptor, rawValue, guildId);
+  if (!validation.valid) { await interaction.reply({ content: validation.error ?? "Invalid value.", ephemeral: true }); return; }
+  const config = loadGuildConfig(guildId);
+  ensureConfigSections(config);
+  const currentValue = applySettingValue(config, settingId);
+  applySettingValue(config, settingId, validation.normalized);
+  saveSettingChange(config, {
+    settingId, category: descriptor.category, path: descriptor.path, label: descriptor.label,
+    oldValue: currentValue, newValue: validation.normalized, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
+  }, interaction.user.id, interaction.user.tag);
+  await interaction.reply({ ...buildFullMessage(session.currentCategory, guildId), ephemeral: true });
+}
+
+async function handleStringModalSubmit(interaction: ModalSubmitInteraction, settingId: string, guildId: string): Promise<void> {
   const session = getSession(guildId, interaction.user.id);
   if (!session) { await interaction.reply({ content: "This panel has expired.", ephemeral: true }); return; }
   const descriptor = getSettingById(settingId);
@@ -451,6 +518,15 @@ export function createSettingsCommand(): AshenCommand {
               await i.showModal(buildNumberModal(descriptor, currentValue));
               return;
             }
+            if (customId.startsWith(`${P.str}:`)) {
+              const settingId = customId.slice(P.str.length + 1);
+              const descriptor = getSettingById(settingId);
+              if (!descriptor) { await i.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+              const config = loadGuildConfig(guildId);
+              const currentValue = applySettingValue(config, settingId);
+              await i.showModal(buildStringModal(descriptor, currentValue));
+              return;
+            }
           } catch (error) {
             logger.error("Settings panel error:", error instanceof Error ? error.message : String(error));
             try { if (!i.replied && !i.deferred) await i.reply({ content: "An error occurred.", ephemeral: true }); } catch {}
@@ -524,6 +600,13 @@ export function createSettingsUpdateCommand(): AshenCommand {
 export async function handleSettingsModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
   try {
     const customId = interaction.customId;
+    if (customId.startsWith(`${P.str}:`)) {
+      const settingId = customId.slice(P.str.length + 1);
+      const guildId = interaction.guildId;
+      if (!guildId) { await interaction.reply({ content: "Must be used in a server.", ephemeral: true }); return; }
+      await handleStringModalSubmit(interaction, settingId, guildId);
+      return;
+    }
     if (!customId.startsWith(`${P.num}:`)) return;
     const settingId = customId.slice(P.num.length + 1);
     const guildId = interaction.guildId;

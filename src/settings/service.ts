@@ -369,4 +369,17 @@ export function ensureConfigSections(config: GuildConfig): void {
   if (!config.staff) {
     config.staff = { roleIds: [] };
   }
+  if (!config.social) {
+    config.social = {
+      enabled: false,
+      channels: {},
+      animeActions: true,
+      customReactions: true,
+      customEmoji: true,
+      rivalryMode: false,
+      debateMode: false,
+      globalCooldownMs: 30000,
+      maxResponsesPerHour: 10,
+    };
+  }
 }

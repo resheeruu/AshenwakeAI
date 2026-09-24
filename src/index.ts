@@ -403,10 +403,9 @@ async function buildInteractiveContext(
    READY
    ===================================================== */
 
-client.once(
+  client.once(
   Events.ClientReady,
   async (readyClient) => {
-    logger.info("Starting AshenAI...");
     logger.info(
       `✅ Logged in as ${readyClient.user.tag}`
     );
