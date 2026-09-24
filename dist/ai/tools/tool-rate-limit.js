@@ -23,7 +23,7 @@ __export(tool_rate_limit_exports, {
 });
 module.exports = __toCommonJS(tool_rate_limit_exports);
 const ROLE_MULTIPLIERS = {
-  owner: Infinity,
+  owner: 2,
   admin: 2,
   moderator: 1,
   member: 0.5,
@@ -62,12 +62,8 @@ class ToolRateLimiter {
    * NEVER uses user-controlled tool arguments for the key.
    *
    * Returns { allowed: false } if over limit.
-   * Owner role always returns { allowed: true }.
-   * ============================================================== */
+      * ============================================================== */
   check(guildId, requesterId, role, toolName) {
-    if (role === "owner") {
-      return { allowed: true, remaining: Infinity, retryAfterMs: 0 };
-    }
     const now = Date.now();
     const globalResult = this.checkBucket(
       this.globalBuckets,
@@ -108,9 +104,6 @@ class ToolRateLimiter {
    * must not consume tokens (consumption happens in reserve/check).
    * ============================================================== */
   isLimited(guildId, requesterId, role, toolName) {
-    if (role === "owner") {
-      return { allowed: true, remaining: Infinity, retryAfterMs: 0 };
-    }
     const now = Date.now();
     const globalResult = this.peekBucket(
       this.globalBuckets,

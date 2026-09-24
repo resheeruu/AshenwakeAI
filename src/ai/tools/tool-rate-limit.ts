@@ -13,7 +13,7 @@ import { logger } from "../../logger";
  * at execution time without consuming another token.
  *
  * Priority escalation:
- *   owner   → bypass (always allowed)
+ *   owner   → 2× global limit (same as admin)
  *   admin   → 2× global limit
  *   moderator → 1× global limit
  *   member  → 0.5× global limit (rounded down, min 1)
@@ -46,7 +46,7 @@ interface ReservationEntry {
  * ================================================================ */
 
 const ROLE_MULTIPLIERS: Record<AshenRole, number> = {
-  owner: Infinity,
+  owner: 2,
   admin: 2,
   moderator: 1,
   member: 0.5,
@@ -102,8 +102,7 @@ export class ToolRateLimiter {
    * NEVER uses user-controlled tool arguments for the key.
    *
    * Returns { allowed: false } if over limit.
-   * Owner role always returns { allowed: true }.
-   * ============================================================== */
+      * ============================================================== */
 
   check(
     guildId: string,
@@ -111,11 +110,6 @@ export class ToolRateLimiter {
     role: AshenRole,
     toolName?: string,
   ): ToolRateLimitResult {
-    // Owner bypass — trusted role state, not spoofable via args
-    if (role === "owner") {
-      return { allowed: true, remaining: Infinity, retryAfterMs: 0 };
-    }
-
     const now = Date.now();
 
     // Check global limit
@@ -171,11 +165,6 @@ export class ToolRateLimiter {
     role: AshenRole,
     toolName?: string,
   ): ToolRateLimitResult {
-    // Owner bypass
-    if (role === "owner") {
-      return { allowed: true, remaining: Infinity, retryAfterMs: 0 };
-    }
-
     const now = Date.now();
 
     const globalResult = this.peekBucket(

@@ -51,6 +51,7 @@ var import_crypto = __toESM(require("crypto"));
 var import_fs = __toESM(require("fs"));
 var import_path = __toESM(require("path"));
 var import_logger = require("../logger");
+var import_encrypt = require("../security/encrypt");
 const DATA_DIR = import_path.default.join(process.cwd(), "data");
 const SESSIONS_FILE = import_path.default.join(DATA_DIR, "sessions.json");
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1e3;
@@ -60,6 +61,7 @@ const SESSION_COOKIE = "ashenai_owner_sid";
 let sessionStore = /* @__PURE__ */ new Map();
 let pendingSave = false;
 let debounceTimer = null;
+let encryptionWarningLogged = false;
 function ensureDataDir() {
   import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -77,9 +79,16 @@ function loadSessions() {
     }
     const now = Date.now();
     sessionStore = /* @__PURE__ */ new Map();
-    for (const s of parsed) {
-      if (s && typeof s.sessionId === "string" && typeof s.accountId === "string" && typeof s.expiresAt === "number" && s.expiresAt > now) {
-        sessionStore.set(s.sessionId, s);
+    for (const encryptedEntry of parsed) {
+      if (!encryptedEntry || typeof encryptedEntry !== "object") continue;
+      try {
+        const data = (0, import_encrypt.decrypt)(encryptedEntry.data);
+        const s = JSON.parse(data);
+        if (s && typeof s.sessionId === "string" && typeof s.accountId === "string" && typeof s.expiresAt === "number" && s.expiresAt > now) {
+          sessionStore.set(s.sessionId, s);
+        }
+      } catch {
+        continue;
       }
     }
   } catch {
@@ -90,8 +99,11 @@ function saveSessions() {
   try {
     ensureDataDir();
     const arr = Array.from(sessionStore.values());
+    const encryptedArr = arr.map((s) => ({
+      data: (0, import_encrypt.encrypt)(JSON.stringify(s))
+    }));
     const tmpPath = SESSIONS_FILE + ".tmp";
-    import_fs.default.writeFileSync(tmpPath, JSON.stringify(arr, null, 2), "utf8");
+    import_fs.default.writeFileSync(tmpPath, JSON.stringify(encryptedArr, null, 2), "utf8");
     import_fs.default.renameSync(tmpPath, SESSIONS_FILE);
   } catch (error) {
     import_logger.logger.warn(
@@ -124,6 +136,13 @@ function enforceMaxSessions() {
   for (const [id] of toRemove) {
     sessionStore.delete(id);
   }
+}
+if (!(0, import_encrypt.isEncryptionAvailable)()) {
+  import_logger.logger.warn(
+    "[SECURITY] Session encryption is not available. SESSION_SECRET must be set for production. Session secrets will be stored encrypted with an ephemeral key that does not survive restarts."
+  );
+} else if (process.env.NODE_ENV === "production") {
+  import_logger.logger.info("[SECURITY] Session secrets encrypted with AES-256-GCM using SESSION_SECRET.");
 }
 loadSessions();
 pruneExpired();

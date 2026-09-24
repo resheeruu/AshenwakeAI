@@ -35,7 +35,6 @@ export interface ResolvedUserContext {
   ashenRole: AshenRole;
   discordPermissions: bigint;
   isGuildOwner: boolean;
-  isBotOwner: boolean;
   roleIds: string[];
 }
 
@@ -73,7 +72,6 @@ export async function resolveUserContext(
     ashenRole,
     discordPermissions: member.permissions.bitfield,
     isGuildOwner: userId === guild.ownerId,
-    isBotOwner: botOwnerIds.includes(userId),
     roleIds: [...member.roles.cache.keys()],
   };
 }
@@ -305,7 +303,6 @@ export async function executeWithFullPipeline(
 
   // 3. Execute through the existing tool framework
   const result = await executeTool(toolName, context, {
-    isBotOwner: userContext.isBotOwner,
     ...executorOptions,
   });
 

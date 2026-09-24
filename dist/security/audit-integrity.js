@@ -102,49 +102,65 @@ function verifyEntry(entry, expectedPrevHash) {
   );
 }
 function verifyAuditChain(entries) {
-  if (entries.length === 0) return { valid: true };
+  const result = {
+    valid: true,
+    trustedFromIndex: null,
+    legacyEntries: 0,
+    firstInvalidIndex: null,
+    totalEntries: entries.length,
+    signedEntriesVerified: 0,
+    tamperingDetected: false
+  };
+  if (entries.length === 0) return result;
   let lastSignature = null;
   let firstSignedIndex = -1;
+  let expectedNextIndex = 0;
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (!entry.signature || !entry.prevHash) {
+      result.legacyEntries++;
       continue;
     }
+    const signed = entry;
+    const { signature: _sig, prevHash: _prev, ...signable } = signed;
     if (firstSignedIndex === -1) {
       firstSignedIndex = i;
+      result.trustedFromIndex = i;
       if (entry.prevHash !== "genesis") {
-        const signed2 = entry;
-        const { signature: _sig, prevHash: _prev, ...signable } = signed2;
         const expectedSig = computeSignature(signable);
         if (!import_node_crypto.default.timingSafeEqual(
-          Buffer.from(signed2.signature, "hex"),
+          Buffer.from(signed.signature, "hex"),
           Buffer.from(expectedSig, "hex")
         )) {
-          return { valid: false, brokenAt: i };
+          result.valid = false;
+          result.firstInvalidIndex = i;
+          result.tamperingDetected = true;
+          return result;
         }
-        lastSignature = signed2.signature;
-        continue;
       }
+      lastSignature = signed.signature;
+      result.signedEntriesVerified++;
+      continue;
     }
-    const signed = entry;
-    if (lastSignature !== null) {
-      const expectedPrevHash = import_node_crypto.default.createHash("sha256").update(lastSignature).digest("hex");
-      if (!verifyEntry(signed, expectedPrevHash)) {
-        return { valid: false, brokenAt: i };
-      }
-    } else {
-      const { signature: _sig, prevHash: _prev, ...signable } = signed;
-      const expectedSig = computeSignature(signable);
-      if (!import_node_crypto.default.timingSafeEqual(
-        Buffer.from(signed.signature, "hex"),
-        Buffer.from(expectedSig, "hex")
-      )) {
-        return { valid: false, brokenAt: i };
-      }
+    const expectedPrevHash = import_node_crypto.default.createHash("sha256").update(lastSignature).digest("hex");
+    if (!verifyEntry(signed, expectedPrevHash)) {
+      result.valid = false;
+      result.firstInvalidIndex = i;
+      result.tamperingDetected = true;
+      return result;
     }
+    if (i !== expectedNextIndex) {
+      result.tamperingDetected = true;
+    }
+    expectedNextIndex = i + 1;
     lastSignature = signed.signature;
+    result.signedEntriesVerified++;
   }
-  return { valid: true };
+  if (firstSignedIndex === -1) {
+    result.trustedFromIndex = null;
+    result.valid = false;
+  }
+  return result;
 }
 function getGenesisHash() {
   return "genesis";

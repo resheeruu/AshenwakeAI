@@ -66,7 +66,7 @@ echo "║     ASHENAI RELEASE CHECK                        ║"
 echo "╚══════════════════════════════════════════════════╝"
 
 # MANDATORY: Repository hygiene
-step "Repository hygiene" MANDATORY bash -c 'cd "$ROOT_DIR" && git status --porcelain | grep -v "^??" | head -1 | grep -q . && exit 1 || true'
+step "Repository hygiene" MANDATORY bash -c 'cd "$ROOT_DIR" && if git status --porcelain | grep -v "^??" | grep -q .; then echo "Working tree has uncommitted changes"; exit 1; fi'
 
 # MANDATORY: Dependency installation
 step "Dependency install (npm ci)" MANDATORY bash -c 'cd "$ROOT_DIR" && npm ci 2>&1 | tail -3'

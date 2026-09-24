@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 import { hashPassword, verifyPassword } from "../utils/password-hash";
+import { encrypt, decrypt, isEncryptionAvailable } from "../security/encrypt";
 export { hashPassword, verifyPassword };
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -68,6 +69,17 @@ function loadAccounts(): void {
         typeof a.passwordSalt === "string" &&
         ["owner", "admin", "user"].includes(a.role),
     );
+    accounts = accounts.map((a: Account) => {
+      if (a.mfaSecret && typeof a.mfaSecret === "string") {
+        try {
+          a.mfaSecret = decrypt(a.mfaSecret);
+        } catch {
+          logger.warn("Failed to decrypt MFA secret for account " + a.username);
+          a.mfaSecret = undefined;
+        }
+      }
+      return a;
+    });
   } catch {
     accounts = [];
   }
@@ -76,14 +88,25 @@ function loadAccounts(): void {
 function saveAccounts(): void {
   try {
     ensureDataDir();
+    const accountsToSave = accounts.map((a) => {
+      if (a.mfaSecret) {
+        return { ...a, mfaSecret: encrypt(a.mfaSecret) };
+      }
+      return a;
+    });
     const tmpPath = ACCOUNTS_FILE + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(accounts, null, 2), "utf8");
+    fs.writeFileSync(tmpPath, JSON.stringify(accountsToSave, null, 2), "utf8");
     fs.renameSync(tmpPath, ACCOUNTS_FILE);
   } catch (error) {
     logger.warn(
       `⚠️ Could not save accounts: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+if (!isEncryptionAvailable() && process.env.NODE_ENV === "production") {
+  logger.error("[FATAL] SESSION_SECRET is required for MFA secret encryption in production.");
+  process.exit(1);
 }
 
 loadAccounts();

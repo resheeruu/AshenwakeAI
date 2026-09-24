@@ -21,8 +21,6 @@ import type {
 export interface ExecutorOptions {
   /** If true, only produce a plan without executing */
   dryRun?: boolean;
-  /** Bot owner override (bypasses some risk checks) */
-  isBotOwner?: boolean;
   /** If true, skip rate limit check (used for confirmed executions) */
   skipRateLimit?: boolean;
   /** If true, skip confirmation prompt and execute immediately (used for pre-confirmed multi-step plans) */
@@ -97,7 +95,6 @@ export async function executeTool(
 ): Promise<ToolResult> {
   const startTime = Date.now();
   const dryRun = options.dryRun ?? false;
-  const isBotOwner = options.isBotOwner ?? false;
   const skipRateLimit = options.skipRateLimit ?? false;
 
   // 1. Look up tool
@@ -113,8 +110,9 @@ export async function executeTool(
   }
 
   // 2–5. Full validation (rate limit check included unless skipped)
+  // Authorization (role) + risk evaluation apply uniformly regardless of requester identity.
   const guildConfig = loadGuildAIConfig(context.guildId);
-  const validation = validateToolRequest(tool, context, guildConfig, isBotOwner, skipRateLimit);
+  const validation = validateToolRequest(tool, context, guildConfig, skipRateLimit);
 
   if (!validation.allowed) {
     const result: ToolResult = {
@@ -292,7 +290,6 @@ export interface BatchValidationResult {
 
 export function validateBatch(
   items: BatchValidationItem[],
-  isBotOwner = false,
 ): BatchValidationResult[] {
   return items.map(({ toolName, context }) => {
     const tool = toolRegistry.get(toolName);
@@ -306,7 +303,7 @@ export function validateBatch(
     }
 
     const guildConfig = loadGuildAIConfig(context.guildId);
-    const validation = validateToolRequest(tool, context, guildConfig, isBotOwner);
+    const validation = validateToolRequest(tool, context, guildConfig);
 
     return {
       toolName,

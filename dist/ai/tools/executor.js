@@ -59,7 +59,6 @@ function createActionPlan(context, riskLevel, changes, requiresConfirmation) {
 async function executeTool(toolName, context, options = {}) {
   const startTime = Date.now();
   const dryRun = options.dryRun ?? false;
-  const isBotOwner = options.isBotOwner ?? false;
   const skipRateLimit = options.skipRateLimit ?? false;
   const tool = import_registry.toolRegistry.get(toolName);
   if (!tool) {
@@ -72,7 +71,7 @@ async function executeTool(toolName, context, options = {}) {
     return result;
   }
   const guildConfig = (0, import_channel_scope.loadGuildAIConfig)(context.guildId);
-  const validation = (0, import_validator.validateToolRequest)(tool, context, guildConfig, isBotOwner, skipRateLimit);
+  const validation = (0, import_validator.validateToolRequest)(tool, context, guildConfig, skipRateLimit);
   if (!validation.allowed) {
     const result = {
       status: validation.denialReason === "RATE_LIMITED" ? "rate_limited" : "denied",
@@ -198,7 +197,7 @@ This action requires confirmation.`,
     };
   }
 }
-function validateBatch(items, isBotOwner = false) {
+function validateBatch(items) {
   return items.map(({ toolName, context }) => {
     const tool = import_registry.toolRegistry.get(toolName);
     if (!tool) {
@@ -210,7 +209,7 @@ function validateBatch(items, isBotOwner = false) {
       };
     }
     const guildConfig = (0, import_channel_scope.loadGuildAIConfig)(context.guildId);
-    const validation = (0, import_validator.validateToolRequest)(tool, context, guildConfig, isBotOwner);
+    const validation = (0, import_validator.validateToolRequest)(tool, context, guildConfig);
     return {
       toolName,
       allowed: validation.allowed,

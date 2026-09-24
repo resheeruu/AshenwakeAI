@@ -28,16 +28,7 @@ const MEDIUM_RISK_ACTIONS = new Set([
 export function assessRisk(
   action: string,
   targetName?: string,
-  isBotOwner = false,
 ): RiskAssessment {
-  if (isBotOwner) {
-    return {
-      level: "low",
-      requiresConfirmation: false,
-      reason: "Bot owner override",
-    };
-  }
-
   if (HIGH_RISK_ACTIONS.has(action)) {
     return {
       level: "critical",

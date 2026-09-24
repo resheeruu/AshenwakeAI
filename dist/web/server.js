@@ -56,10 +56,20 @@ const app = (0, import_express.default)();
 const trustProxySetting = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 1;
 app.set("trust proxy", trustProxySetting);
 app.use((_req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-  );
+  const cspNonce = import_node_crypto.default.randomBytes(16).toString("base64");
+  const cspHeader = [
+    "default-src 'self'",
+    "script-src 'self' 'nonce-' + cspNonce",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "font-src 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join("; ");
+  res.setHeader("Content-Security-Policy", cspHeader);
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -1076,8 +1086,15 @@ app.post("/auth/mfa/verify", import_roles.requireAuth, import_roles.requireCsrf,
   const authReq = req;
   const { code, enable } = req.body || {};
   const account = (0, import_account_store.getAccountById)(authReq.accountId);
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
   if (!account || !account.mfaSecret) {
     res.status(400).json({ ok: false, error: "MFA setup not initiated." });
+    return;
+  }
+  const mfaRateCheck = checkMFARateLimit(account.id, ip);
+  if (!mfaRateCheck.allowed) {
+    const retrySeconds = Math.ceil((mfaRateCheck.retryAfterMs || 0) / 1e3);
+    res.status(429).json({ ok: false, error: `Too many MFA attempts. Try again in ${retrySeconds}s.` });
     return;
   }
   if (!code || typeof code !== "string") {
@@ -1087,9 +1104,11 @@ app.post("/auth/mfa/verify", import_roles.requireAuth, import_roles.requireCsrf,
   const { authenticator } = require("otplib");
   const isValid = authenticator.verify({ token: code, secret: account.mfaSecret });
   if (!isValid) {
+    recordMFARefailure(account.id, ip);
     res.status(400).json({ ok: false, error: "Invalid verification code." });
     return;
   }
+  resetMFARateLimit(account.id, ip);
   if (enable) {
     const recoveryCodes = Array.from(
       { length: 10 },
@@ -1195,6 +1214,48 @@ app.post("/auth/mfa/recovery-codes", import_roles.requireAuth, import_roles.requ
   });
 });
 const mfaChallengeLimiter = (0, import_auth.createLoginRateLimiter)();
+const mfaVerifyLimiter = (0, import_auth.createLoginRateLimiter)();
+const mfaFailedAttempts = /* @__PURE__ */ new Map();
+const MFA_MAX_FAILED_ATTEMPTS = 5;
+const MFA_LOCKOUT_MS = 15 * 60 * 1e3;
+const MFA_WINDOW_MS = 5 * 60 * 1e3;
+function getMFARateLimitKey(accountId, ip) {
+  return `mfa:${accountId}:${ip}`;
+}
+function checkMFARateLimit(accountId, ip) {
+  const key = getMFARateLimitKey(accountId, ip);
+  const now = Date.now();
+  const attempts = mfaFailedAttempts.get(key) || [];
+  const recentAttempts = attempts.filter((t) => now - t < MFA_WINDOW_MS);
+  if (recentAttempts.length >= MFA_MAX_FAILED_ATTEMPTS) {
+    const oldestAttempt = Math.min(...recentAttempts);
+    const retryAfterMs = MFA_LOCKOUT_MS - (now - oldestAttempt);
+    return { allowed: false, retryAfterMs };
+  }
+  return { allowed: true };
+}
+function recordMFARefailure(accountId, ip) {
+  const key = getMFARateLimitKey(accountId, ip);
+  const now = Date.now();
+  const attempts = mfaFailedAttempts.get(key) || [];
+  attempts.push(now);
+  mfaFailedAttempts.set(key, attempts);
+  setTimeout(() => {
+    const current = mfaFailedAttempts.get(key);
+    if (current) {
+      const filtered = current.filter((t) => now - t < MFA_WINDOW_MS);
+      if (filtered.length === 0) {
+        mfaFailedAttempts.delete(key);
+      } else {
+        mfaFailedAttempts.set(key, filtered);
+      }
+    }
+  }, MFA_WINDOW_MS);
+}
+function resetMFARateLimit(accountId, ip) {
+  const key = getMFARateLimitKey(accountId, ip);
+  mfaFailedAttempts.delete(key);
+}
 app.post("/auth/mfa/challenge", (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   const { challengeToken, code, recoveryCode } = req.body || {};

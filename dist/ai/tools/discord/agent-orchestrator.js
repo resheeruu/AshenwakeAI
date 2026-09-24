@@ -55,7 +55,6 @@ async function resolveUserContext(guild, userId, botOwnerIds) {
     ashenRole,
     discordPermissions: member.permissions.bitfield,
     isGuildOwner: userId === guild.ownerId,
-    isBotOwner: botOwnerIds.includes(userId),
     roleIds: [...member.roles.cache.keys()]
   };
 }
@@ -189,7 +188,6 @@ async function executeWithFullPipeline(guild, userContext, toolName, args, chann
     dryRun: false
   };
   const result = await (0, import_executor.executeTool)(toolName, context, {
-    isBotOwner: userContext.isBotOwner,
     ...executorOptions
   });
   return result;

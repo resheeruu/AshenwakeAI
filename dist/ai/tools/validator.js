@@ -93,10 +93,7 @@ Current: ${channelScopes.join(", ")}`
   }
   return { allowed: true };
 }
-function validateRisk(tool, isBotOwner) {
-  if (isBotOwner) {
-    return { allowed: true };
-  }
+function validateRisk(tool) {
   if ((tool.riskLevel === "critical" || tool.riskLevel === "high") && tool.confirmationRequired) {
     return {
       allowed: false,
@@ -111,9 +108,6 @@ This action requires confirmation.`
   return { allowed: true };
 }
 function validateRateLimit(tool, context) {
-  if (context.requesterRole === "owner") {
-    return { allowed: true };
-  }
   const result = import_tool_rate_limit.toolRateLimiter.isLimited(
     context.guildId,
     context.requesterId,
@@ -131,7 +125,7 @@ Try again in ${retrySeconds} second${retrySeconds !== 1 ? "s" : ""}.`
   }
   return { allowed: true };
 }
-function validateToolRequest(tool, context, guildConfig, isBotOwner, skipRateLimit = false) {
+function validateToolRequest(tool, context, guildConfig, skipRateLimit = false) {
   const base = {
     tool,
     riskRequiresConfirmation: false
@@ -148,7 +142,7 @@ function validateToolRequest(tool, context, guildConfig, isBotOwner, skipRateLim
   if (!scopeCheck.allowed) {
     return { ...base, allowed: false, denialReason: scopeCheck.denialReason, message: scopeCheck.message };
   }
-  const riskCheck = validateRisk(tool, isBotOwner);
+  const riskCheck = validateRisk(tool);
   if (!riskCheck.allowed) {
     return {
       ...base,

@@ -122,16 +122,17 @@ export function validateChannelScope(
 
 /* ================================================================
  * RISK VALIDATION
+ * ================================================================
+ *
+ * Authorization (who can call) is handled separately via validateRole.
+ * Risk evaluation (what is safe to do) applies to ALL requesters
+ * uniformly regardless of owner status. No identity can bypass
+ * high/critical-risk confirmation requirements.
  * ================================================================ */
 
 export function validateRisk(
   tool: ToolDefinition,
-  isBotOwner: boolean,
 ): ValidationResult {
-  if (isBotOwner) {
-    return { allowed: true };
-  }
-
   if (
     (tool.riskLevel === "critical" || tool.riskLevel === "high") &&
     tool.confirmationRequired
@@ -162,11 +163,7 @@ export function validateRateLimit(
   tool: ToolDefinition,
   context: ToolContext,
 ): ValidationResult {
-  // Owner bypass — trusted role from context, not spoofable
-  if (context.requesterRole === "owner") {
-    return { allowed: true };
-  }
-
+  // All requesters are subject to rate limiting regardless of role.
   // isLimited() checks without consuming a token
   const result = toolRateLimiter.isLimited(
     context.guildId,
@@ -205,7 +202,6 @@ export function validateToolRequest(
   tool: ToolDefinition,
   context: ToolContext,
   guildConfig: GuildAIConfig,
-  isBotOwner: boolean,
   skipRateLimit = false,
 ): FullValidationResult {
   const base = {
@@ -231,8 +227,8 @@ export function validateToolRequest(
     return { ...base, allowed: false, denialReason: scopeCheck.denialReason, message: scopeCheck.message };
   }
 
-  // 4. Risk validation
-  const riskCheck = validateRisk(tool, isBotOwner);
+  // 4. Risk validation (owner status does NOT bypass risk confirmation)
+  const riskCheck = validateRisk(tool);
   if (!riskCheck.allowed) {
     return {
       ...base,

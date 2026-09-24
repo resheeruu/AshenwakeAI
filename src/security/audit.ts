@@ -87,7 +87,7 @@ export function getAuditLog(options: {
     const chainResult = verifyAuditChain(entries);
     if (!chainResult.valid) {
       logger.warn(
-        `⚠️ Audit log integrity check failed at entry index ${chainResult.brokenAt}. ` +
+        `⚠️ Audit log integrity check failed at entry index ${chainResult.firstInvalidIndex}. ` +
         `Entries may have been modified.`,
       );
     }

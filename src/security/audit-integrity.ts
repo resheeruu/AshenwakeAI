@@ -167,70 +167,122 @@ export function verifyEntry(
  *
  * @returns { valid: true } if chain is intact, or { valid: false, brokenAt: index }
  */
+/**
+ * Structured verification result for the audit chain.
+ */
+export interface AuditChainVerification {
+  /** Whether the chain is verified from the first trusted signed entry onward. */
+  valid: boolean;
+  /** Index of the first cryptographically verified entry. null if no signed entries exist. */
+  trustedFromIndex: number | null;
+  /** Number of legacy unsigned entries at the beginning of the chain. */
+  legacyEntries: number;
+  /** Index of the first invalid signed entry, or null if all signed entries are valid. */
+  firstInvalidIndex: number | null;
+  /** Total number of entries processed. */
+  totalEntries: number;
+  /** Number of signed entries verified. */
+  signedEntriesVerified: number;
+  /** Whether any tampering (insertion, deletion, reordering) was detected. */
+  tamperingDetected: boolean;
+}
+
+/**
+ * Verifies the integrity of an entire audit chain.
+ *
+ * Distinguishes cryptographically verified entries from legacy unsigned entries.
+ * Pre-U13 entries (without signature/prevHash) are treated as legacy and counted
+ * but NOT treated as cryptographically verified.
+ * Verification starts from the first signed entry and verifies prevHash continuity.
+ *
+ * Detects: modification, deletion, insertion, and reordering of signed records.
+ *
+ * @returns Structured verification information.
+ */
 export function verifyAuditChain(
   entries: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "signature" | "prevHash">>>,
-): { valid: boolean; brokenAt?: number } {
-  if (entries.length === 0) return { valid: true };
+): AuditChainVerification {
+  const result: AuditChainVerification = {
+    valid: true,
+    trustedFromIndex: null,
+    legacyEntries: 0,
+    firstInvalidIndex: null,
+    totalEntries: entries.length,
+    signedEntriesVerified: 0,
+    tamperingDetected: false,
+  };
+
+  if (entries.length === 0) return result;
 
   let lastSignature: string | null = null;
   let firstSignedIndex = -1;
+  let expectedNextIndex = 0;
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
 
-    // Skip pre-U13 entries (no signature field)
+    // Track legacy unsigned entries
     if (!entry.signature || !entry.prevHash) {
+      result.legacyEntries++;
       continue;
     }
 
-    // Track first signed entry for chain start
+    const signed = entry as SignedAuditEntry;
+    const { signature: _sig, prevHash: _prev, ...signable } = signed;
+
+    // First signed entry: prevHash should be "genesis"
     if (firstSignedIndex === -1) {
       firstSignedIndex = i;
-      // First signed entry: prevHash should be "genesis"
+      result.trustedFromIndex = i;
+
       if (entry.prevHash !== "genesis") {
-        // Allow entries that were signed with a non-genesis prevHash
-        // if they are the first signed entry — just check signature
-        const signed = entry as SignedAuditEntry;
-        const { signature: _sig, prevHash: _prev, ...signable } = signed;
+        // Non-genesis prevHash on first signed entry — signature-only check
         const expectedSig = computeSignature(signable);
         if (!crypto.timingSafeEqual(
           Buffer.from(signed.signature, "hex"),
           Buffer.from(expectedSig, "hex"),
         )) {
-          return { valid: false, brokenAt: i };
+          result.valid = false;
+          result.firstInvalidIndex = i;
+          result.tamperingDetected = true;
+          return result;
         }
-        lastSignature = signed.signature;
-        continue;
       }
+      lastSignature = signed.signature;
+      result.signedEntriesVerified++;
+      continue;
     }
 
-    // Verify chain link
-    const signed = entry as SignedAuditEntry;
-    if (lastSignature !== null) {
-      const expectedPrevHash = crypto
-        .createHash("sha256")
-        .update(lastSignature)
-        .digest("hex");
+    // Subsequent signed entries: verify prevHash chain continuity
+    const expectedPrevHash = crypto
+      .createHash("sha256")
+      .update(lastSignature!)
+      .digest("hex");
 
-      if (!verifyEntry(signed, expectedPrevHash)) {
-        return { valid: false, brokenAt: i };
-      }
-    } else {
-      // First signed entry — just verify signature
-      const { signature: _sig, prevHash: _prev, ...signable } = signed;
-      const expectedSig = computeSignature(signable);
-      if (!crypto.timingSafeEqual(
-        Buffer.from(signed.signature, "hex"),
-        Buffer.from(expectedSig, "hex"),
-      )) {
-        return { valid: false, brokenAt: i };
-      }
+    if (!verifyEntry(signed, expectedPrevHash)) {
+      result.valid = false;
+      result.firstInvalidIndex = i;
+      result.tamperingDetected = true;
+      return result;
     }
+
+    // Check for index discontinuity (potential insertion/deletion)
+    if (i !== expectedNextIndex) {
+      result.tamperingDetected = true;
+    }
+    expectedNextIndex = i + 1;
 
     lastSignature = signed.signature;
+    result.signedEntriesVerified++;
   }
 
-  return { valid: true };
+  // If no signed entries were found, chain is not cryptographically verified
+  if (firstSignedIndex === -1) {
+    result.trustedFromIndex = null;
+    result.valid = false;
+  }
+
+  return result;
 }
 
 /**

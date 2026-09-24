@@ -2,6 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
+import { encrypt, decrypt, isEncryptionAvailable } from "../security/encrypt";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
@@ -25,6 +26,7 @@ export interface Session {
 let sessionStore: Map<string, Session> = new Map();
 let pendingSave = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let encryptionWarningLogged = false;
 
 function ensureDataDir(): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -44,15 +46,22 @@ function loadSessions(): void {
     }
     const now = Date.now();
     sessionStore = new Map();
-    for (const s of parsed) {
-      if (
-        s &&
-        typeof s.sessionId === "string" &&
-        typeof s.accountId === "string" &&
-        typeof s.expiresAt === "number" &&
-        s.expiresAt > now
-      ) {
-        sessionStore.set(s.sessionId, s as Session);
+    for (const encryptedEntry of parsed) {
+      if (!encryptedEntry || typeof encryptedEntry !== "object") continue;
+      try {
+        const data = decrypt(encryptedEntry.data as string);
+        const s = JSON.parse(data) as Session;
+        if (
+          s &&
+          typeof s.sessionId === "string" &&
+          typeof s.accountId === "string" &&
+          typeof s.expiresAt === "number" &&
+          s.expiresAt > now
+        ) {
+          sessionStore.set(s.sessionId, s);
+        }
+      } catch {
+        continue;
       }
     }
   } catch {
@@ -64,8 +73,11 @@ function saveSessions(): void {
   try {
     ensureDataDir();
     const arr = Array.from(sessionStore.values());
+    const encryptedArr = arr.map((s) => ({
+      data: encrypt(JSON.stringify(s)),
+    }));
     const tmpPath = SESSIONS_FILE + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(arr, null, 2), "utf8");
+    fs.writeFileSync(tmpPath, JSON.stringify(encryptedArr, null, 2), "utf8");
     fs.renameSync(tmpPath, SESSIONS_FILE);
   } catch (error) {
     logger.warn(
@@ -101,6 +113,14 @@ function enforceMaxSessions(): void {
   for (const [id] of toRemove) {
     sessionStore.delete(id);
   }
+}
+
+if (!isEncryptionAvailable()) {
+  logger.warn(
+    "[SECURITY] Session encryption is not available. SESSION_SECRET must be set for production. Session secrets will be stored encrypted with an ephemeral key that does not survive restarts."
+  );
+} else if (process.env.NODE_ENV === "production") {
+  logger.info("[SECURITY] Session secrets encrypted with AES-256-GCM using SESSION_SECRET.");
 }
 
 loadSessions();
@@ -317,12 +337,14 @@ export function revokeSession(sessionId: string, accountId: string): boolean {
   return true;
 }
 
+export { SESSION_COOKIE };
+
 /* ================================================================
  * PRE-AUTH TOKENS (for MFA challenge flow)
  * Short-lived, restricted tokens that grant no access to protected routes
  * ================================================================ */
 
-const PREAUTH_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const PREAUTH_DURATION_MS = 5 * 60 * 1000;
 const MAX_PREAUTH_TOKENS = 100;
 
 interface PreAuthToken {
@@ -344,7 +366,6 @@ function prunePreAuthTokens(): void {
       preAuthTokens.delete(token);
     }
   }
-  // Enforce max
   if (preAuthTokens.size > MAX_PREAUTH_TOKENS) {
     const entries = Array.from(preAuthTokens.entries());
     entries.sort((a, b) => a[1].createdAt - b[1].createdAt);
@@ -381,9 +402,7 @@ export function createPreAuthToken(
 export function consumePreAuthToken(token: string): PreAuthToken | null {
   const record = preAuthTokens.get(token);
   if (!record) return null;
-  preAuthTokens.delete(token); // One-time use
+  preAuthTokens.delete(token);
   if (Date.now() > record.expiresAt) return null;
   return record;
 }
-
-export { SESSION_COOKIE };

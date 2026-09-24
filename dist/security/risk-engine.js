@@ -38,14 +38,7 @@ const MEDIUM_RISK_ACTIONS = /* @__PURE__ */ new Set([
   "unlock",
   "timeout"
 ]);
-function assessRisk(action, targetName, isBotOwner = false) {
-  if (isBotOwner) {
-    return {
-      level: "low",
-      requiresConfirmation: false,
-      reason: "Bot owner override"
-    };
-  }
+function assessRisk(action, targetName) {
   if (HIGH_RISK_ACTIONS.has(action)) {
     return {
       level: "critical",

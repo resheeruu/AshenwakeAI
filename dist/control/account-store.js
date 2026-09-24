@@ -54,6 +54,7 @@ var import_fs = __toESM(require("fs"));
 var import_path = __toESM(require("path"));
 var import_logger = require("../logger");
 var import_password_hash = require("../utils/password-hash");
+var import_encrypt = require("../security/encrypt");
 const DATA_DIR = import_path.default.join(process.cwd(), "data");
 const ACCOUNTS_FILE = import_path.default.join(DATA_DIR, "accounts.json");
 let accounts = [];
@@ -76,6 +77,17 @@ function loadAccounts() {
     accounts = parsed.filter(
       (a) => a && typeof a.id === "string" && typeof a.username === "string" && typeof a.passwordHash === "string" && typeof a.passwordSalt === "string" && ["owner", "admin", "user"].includes(a.role)
     );
+    accounts = accounts.map((a) => {
+      if (a.mfaSecret && typeof a.mfaSecret === "string") {
+        try {
+          a.mfaSecret = (0, import_encrypt.decrypt)(a.mfaSecret);
+        } catch {
+          import_logger.logger.warn("Failed to decrypt MFA secret for account " + a.username);
+          a.mfaSecret = void 0;
+        }
+      }
+      return a;
+    });
   } catch {
     accounts = [];
   }
@@ -83,14 +95,24 @@ function loadAccounts() {
 function saveAccounts() {
   try {
     ensureDataDir();
+    const accountsToSave = accounts.map((a) => {
+      if (a.mfaSecret) {
+        return { ...a, mfaSecret: (0, import_encrypt.encrypt)(a.mfaSecret) };
+      }
+      return a;
+    });
     const tmpPath = ACCOUNTS_FILE + ".tmp";
-    import_fs.default.writeFileSync(tmpPath, JSON.stringify(accounts, null, 2), "utf8");
+    import_fs.default.writeFileSync(tmpPath, JSON.stringify(accountsToSave, null, 2), "utf8");
     import_fs.default.renameSync(tmpPath, ACCOUNTS_FILE);
   } catch (error) {
     import_logger.logger.warn(
       `\u26A0\uFE0F Could not save accounts: ${error instanceof Error ? error.message : String(error)}`
     );
   }
+}
+if (!(0, import_encrypt.isEncryptionAvailable)() && process.env.NODE_ENV === "production") {
+  import_logger.logger.error("[FATAL] SESSION_SECRET is required for MFA secret encryption in production.");
+  process.exit(1);
 }
 loadAccounts();
 function generateId() {
