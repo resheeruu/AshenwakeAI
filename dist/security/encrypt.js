@@ -92,9 +92,11 @@ function getEncryptionKey(domain) {
     cachedKeys[domain] = import_node_crypto.default.createHash("sha256").update(stretched).update(KEY_DOMAINS[domain]).digest();
     return cachedKeys[domain];
   }
-  const rawKey = import_node_crypto.default.createHash("sha256").update(secret).digest();
-  const derived = import_node_crypto.default.createHmac("sha256", rawKey).update(KEY_DOMAINS[domain]).digest();
-  cachedKeys[domain] = derived;
+  const salt = import_node_crypto.default.createHash("sha256").update(secret).digest();
+  const info = Buffer.from(KEY_DOMAINS[domain], "utf8");
+  const derived = import_node_crypto.default.createHmac("sha256", salt).update(info).digest();
+  const okm = import_node_crypto.default.createHmac("sha256", derived).update(Buffer.concat([info, Buffer.alloc(32)])).digest();
+  cachedKeys[domain] = okm;
   return cachedKeys[domain];
 }
 function encrypt(plaintext) {

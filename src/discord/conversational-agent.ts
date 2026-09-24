@@ -6,7 +6,7 @@ import { resolveRole } from "../security/permissions";
 import type { AshenRole } from "../security/permissions";
 import { recordAudit } from "../security/audit";
 import { toolRegistry } from "../ai/tools/registry";
-import { executeTool } from "../ai/tools/executor";
+import { executeTool, INTERNAL_SKIP_CONFIRMATION } from "../ai/tools/executor";
 import { createActionPlan } from "../ai/tools/executor";
 import { storePendingPlan, getPendingPlan, verifyPlan, markPlanExecuted, removePendingPlan } from "../ai/tools/confirmation-store";
 import {
@@ -1411,7 +1411,7 @@ async function executeTemplateSteps(
   const executedSteps: string[] = [];
   const failedSteps: Array<{ step: string; error: string }> = [];
 
-  const executorOptions: ExecutorOptions = { skipConfirmation: true };
+  const executorOptions: ExecutorOptions = { [INTERNAL_SKIP_CONFIRMATION]: true };
 
   for (const step of steps) {
     logExecution(userContext.userId, guild.id, step.toolName, "starting", 0);
@@ -2512,7 +2512,7 @@ async function executeUnifiedPlan(
 
   const plan = state.unifiedPlan;
   const startTime = Date.now();
-  const executorOptions: ExecutorOptions = { skipConfirmation: true };
+  const executorOptions: ExecutorOptions = { [INTERNAL_SKIP_CONFIRMATION]: true };
 
   // Filter to actionable steps (create + fix + configure)
   const actionableSteps = plan.steps.filter(

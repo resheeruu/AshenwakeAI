@@ -38,6 +38,7 @@ __export(prompt_exports, {
   processBuilderMessage: () => processBuilderMessage
 });
 module.exports = __toCommonJS(prompt_exports);
+var import_executor = require("../ai/tools/executor");
 var import_discord = require("discord.js");
 var import_channel_scope = require("../ai/tools/channel-scope");
 var import_audit = require("../security/audit");
@@ -1258,7 +1259,7 @@ async function processBuilderMessage(client, thread, session, content, user) {
               thread.id,
               void 0,
               void 0,
-              { skipConfirmation: true }
+              { [import_executor.INTERNAL_SKIP_CONFIRMATION]: true }
             );
             if (result.status === "success") {
               executed.push(step.description);

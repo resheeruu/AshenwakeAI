@@ -37,6 +37,7 @@ var import_discord = require("discord.js");
 var import_logger = require("../logger");
 var import_channel_scope = require("../ai/tools/channel-scope");
 var import_audit = require("../security/audit");
+var import_executor = require("../ai/tools/executor");
 var import_executor2 = require("../ai/tools/executor");
 var import_confirmation_store = require("../ai/tools/confirmation-store");
 var import_agent_orchestrator = require("../ai/tools/discord/agent-orchestrator");
@@ -942,7 +943,7 @@ async function executeTemplateSteps(guild, userContext, state, planId, steps, ch
   const startTime = Date.now();
   const executedSteps = [];
   const failedSteps = [];
-  const executorOptions = { skipConfirmation: true };
+  const executorOptions = { [import_executor.INTERNAL_SKIP_CONFIRMATION]: true };
   for (const step of steps) {
     logExecution(userContext.userId, guild.id, step.toolName, "starting", 0);
     const result = await (0, import_agent_orchestrator.executeWithFullPipeline)(
@@ -1789,7 +1790,7 @@ async function executeUnifiedPlan(state, userContext, guild, message) {
   }
   const plan = state.unifiedPlan;
   const startTime = Date.now();
-  const executorOptions = { skipConfirmation: true };
+  const executorOptions = { [import_executor.INTERNAL_SKIP_CONFIRMATION]: true };
   const actionableSteps = plan.steps.filter(
     (s) => s.category === "create" || s.category === "fix" || s.category === "configure"
   );

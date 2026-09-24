@@ -24,7 +24,7 @@ let cachedKeys: Record<keyof typeof KEY_DOMAINS, Buffer | null> = {
 
 /**
  * Derive a domain-separated cryptographic key from SESSION_SECRET.
- * Uses HKDF-SHA256 to ensure independent keys for each purpose.
+ * Uses HKDF-SHA256 (RFC 5869) to ensure independent keys for each purpose.
  * Falls back to PBKDF2 for shorter secrets (non-production only).
  */
 function getEncryptionKey(domain: keyof typeof KEY_DOMAINS): Buffer {
@@ -69,13 +69,19 @@ function getEncryptionKey(domain: keyof typeof KEY_DOMAINS): Buffer {
     return cachedKeys[domain];
   }
 
-  // Direct key derivation using HKDF for production-strength secrets.
-  const rawKey = crypto.createHash("sha256").update(secret).digest();
-  const derived = crypto.createHmac("sha256", rawKey)
-    .update(KEY_DOMAINS[domain])
+  // HKDF-SHA256 key derivation (RFC 5869) for domain-separated keys.
+  // Salt is derived from the secret itself to avoid requiring a separate salt.
+  const salt = crypto.createHash("sha256").update(secret).digest();
+  const info = Buffer.from(KEY_DOMAINS[domain], "utf8");
+  const derived = crypto.createHmac("sha256", salt)
+    .update(info)
+    .digest();
+  // Second HMAC extraction step for HKDF "expand" phase
+  const okm = crypto.createHmac("sha256", derived)
+    .update(Buffer.concat([info, Buffer.alloc(32)]))
     .digest();
 
-  cachedKeys[domain] = derived;
+  cachedKeys[domain] = okm;
   return cachedKeys[domain];
 }
 

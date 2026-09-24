@@ -89,10 +89,18 @@ function verifyEntry(entry, expectedPrevHash) {
   if (!expectedPrevHashComputed) return false;
   const { signature: _sig, prevHash: _prev, ...signable } = entry;
   const expectedSignature = computeSignature(signable);
-  return import_node_crypto.default.timingSafeEqual(
-    Buffer.from(entry.signature, "hex"),
-    Buffer.from(expectedSignature, "hex")
-  );
+  let expectedBuf;
+  let actualBuf;
+  try {
+    expectedBuf = Buffer.from(expectedSignature, "hex");
+    actualBuf = Buffer.from(entry.signature, "hex");
+  } catch {
+    return false;
+  }
+  if (expectedBuf.length !== actualBuf.length) {
+    return false;
+  }
+  return import_node_crypto.default.timingSafeEqual(expectedBuf, actualBuf);
 }
 function verifyAuditChain(entries) {
   const result = {
@@ -112,7 +120,10 @@ function verifyAuditChain(entries) {
     const entry = entries[i];
     if (!entry.signature || !entry.prevHash) {
       result.legacyEntries++;
-      continue;
+      result.valid = false;
+      result.firstInvalidIndex = i;
+      result.tamperingDetected = true;
+      return result;
     }
     const signed = entry;
     const { signature: _sig, prevHash: _prev, ...signable } = signed;

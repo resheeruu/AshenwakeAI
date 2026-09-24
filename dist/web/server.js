@@ -53,14 +53,21 @@ var import_platform = require("../ai/providers/platform");
 var import_providers = require("../ai/providers");
 var import_guild_config = require("../core/guild-config");
 const app = (0, import_express.default)();
-const trustProxySetting = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 1;
+const TRUST_PROXY_MAX = 3;
+const trustProxySetting = (() => {
+  const raw = process.env.TRUST_PROXY;
+  if (!raw) return 0;
+  const parsed = parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 0 || parsed > TRUST_PROXY_MAX) return 0;
+  return parsed;
+})();
 app.set("trust proxy", trustProxySetting);
 app.use((_req, res, next) => {
   const cspNonce = import_node_crypto.default.randomBytes(16).toString("base64");
   const cspHeader = [
     "default-src 'self'",
     "script-src 'self' 'nonce-' + cspNonce",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'nonce-' + cspNonce",
     "img-src 'self' data:",
     "connect-src 'self'",
     "font-src 'self'",
@@ -431,34 +438,9 @@ app.get("/auth/reset-password/:accountId/:token", (req, res) => {
     res.status(400).send("Invalid or expired reset link.");
     return;
   }
-  const safeAccountId = JSON.stringify(accountId).replace(/<\/script/gi, "<\\/script");
-  const safeToken = JSON.stringify(token).replace(/<\/script/gi, "<\\/script");
-  res.send(`<!DOCTYPE html>
-<html><head><title>Reset Password - AshenAI</title>
-<style>body{font-family:system-ui;max-width:400px;margin:50px auto;padding:20px;background:#07070b;color:#f7f7fb}
-input{width:100%;padding:10px;margin:8px 0;border:1px solid #333;border-radius:6px;background:#111;color:#fff;box-sizing:border-box}
-button{width:100%;padding:10px;border:none;border-radius:6px;background:#9b7cff;color:#fff;font-weight:700;cursor:pointer;margin-top:8px}
-.msg{color:#61e294;margin-top:10px}.err{color:#ff6f7d;margin-top:10px}</style></head>
-<body><h2>Reset Password</h2>
-<form onsubmit="return doReset()">
-<input type="password" id="pw" placeholder="New password (min 8 chars)" required minlength="8">
-<input type="password" id="pw2" placeholder="Confirm new password" required minlength="8">
-<button type="submit">Reset Password</button>
-<div id="msg"></div></form>
-<script>
-var RESETAccountId=${safeAccountId};
-var RESETToken=${safeToken};
-async function doReset(){
-const pw=document.getElementById('pw').value;
-const pw2=document.getElementById('pw2').value;
-const msg=document.getElementById('msg');
-if(pw!==pw2){msg.className='err';msg.textContent='Passwords do not match.';return false}
-try{const r=await fetch('/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},
-body:JSON.stringify({accountId:RESETAccountId,token:RESETToken,newPassword:pw})});
-const d=await r.json();if(d.ok){msg.className='msg';msg.textContent='Password reset! Redirecting to login...';
-setTimeout(()=>window.location.href='/',2000)}else{msg.className='err';msg.textContent=d.error||'Reset failed'}}
-catch(e){msg.className='err';msg.textContent='Network error'}return false}
-</script></body></html>`);
+  const _safep = (v) => JSON.stringify(v);
+  const _html = '<!DOCTYPE html><html><head><title>Reset Password - AshenAI</title><style>body{font-family:system-ui;max-width:400px;margin:50px auto;padding:20px;background:#07070b;color:#f7f7fb}input{width:100%;padding:10px;margin:8px 0;border:1px solid #333;border-radius:6px;background:#111;color:#fff;box-sizing:border-box}button{width:100%;padding:10px;border:none;border-radius:6px;background:#9b7cff;color:#fff;font-weight:700;cursor:pointer;margin-top:8px}.msg{color:#61e294;margin-top:10px}.err{color:#ff6f7d;margin-top:10px}</style></head><body><h2>Reset Password</h2><form id="resetForm"><input type="password" id="pw" placeholder="New password (min 8 chars)" required minlength="8"><input type="password" id="pw2" placeholder="Confirm new password" required minlength="8"><button type="submit">Reset Password</button><div id="msg"></div></form><input type="hidden" id="resetAccountId" value=' + _safep(accountId) + '><input type="hidden" id="resetToken" value=' + _safep(token) + '><script>var RESETAccountId=document.getElementById("resetAccountId").value;var RESETToken=document.getElementById("resetToken").value;async function doReset(){const pw=document.getElementById("pw").value;const pw2=document.getElementById("pw2").value;const msg=document.getElementById("msg");if(pw!==pw2){msg.className="err";msg.textContent="Passwords do not match.";return false}try{const r=await fetch("/auth/reset-password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accountId:RESETAccountId,token:RESETToken,newPassword:pw})});const d=await r.json();if(d.ok){msg.className="msg";msg.textContent="Password reset! Redirecting to login...";setTimeout(()=>window.location.href="/",2000)}else{msg.className="err";msg.textContent=d.error||"Reset failed"}}catch(e){msg.className="err";msg.textContent="Network error"}return false}</script></body></html>';
+  res.send(_html);
 });
 app.post("/auth/change-password", import_roles.requireAuth, import_roles.requireCsrf, (req, res) => {
   const authReq = req;

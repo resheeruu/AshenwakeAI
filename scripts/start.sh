@@ -90,7 +90,7 @@ fi
 # Resource check: disk, RAM, CPU. Never crashes startup.
 export APP_DIR="${ROOT_DIR}"
 if [[ -f "${ROOT_DIR}/scripts/check-resources.sh" ]]; then
-    . "$APP_DIR/scripts/check-resources.sh" || true
+    . "$APP_DIR/scripts/check-resources.sh"
 fi
 
 if [ -n "${PORT:-}" ]; then

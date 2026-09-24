@@ -1,3 +1,4 @@
+import { INTERNAL_SKIP_CONFIRMATION } from "../ai/tools/executor";
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
@@ -1582,7 +1583,7 @@ export async function processBuilderMessage(
               thread.id,
               undefined,
               undefined,
-              { skipConfirmation: true },
+              { [INTERNAL_SKIP_CONFIRMATION]: true },
             );
 
             if (result.status === "success") {

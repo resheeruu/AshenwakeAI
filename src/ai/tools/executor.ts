@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import crypto, { createHash } from "node:crypto";
 import { logger } from "../../logger";
 import { recordAudit } from "../../security/audit";
 import { sanitizeToolError } from "../../security/sanitize";
@@ -23,15 +23,19 @@ export interface ExecutorOptions {
   dryRun?: boolean;
   /** If true, skip rate limit check (used for confirmed executions) */
   skipRateLimit?: boolean;
-  /** If true, skip confirmation prompt and execute immediately (used for pre-confirmed multi-step plans) */
-  skipConfirmation?: boolean;
 }
+
+/**
+ * Internal-only flag for skipping confirmation.
+ * MUST NOT be set by model output, user input, or external callers.
+ * Only internal code paths that have already performed plan-level
+ * confirmation may use this mechanism.
+ */
+export const INTERNAL_SKIP_CONFIRMATION = Symbol("internalSkipConfirmation");
 
 /* ================================================================
  * ACTION PLAN CREATION
  * ================================================================ */
-
-let planCounter = 0;
 
 export function createActionPlan(
   context: ToolContext,
@@ -39,7 +43,7 @@ export function createActionPlan(
   changes: ActionPlan["changes"],
   requiresConfirmation: boolean,
 ): ActionPlan {
-  const id = `plan_${Date.now().toString(36)}_${++planCounter}`;
+  const id = `plan_${crypto.randomBytes(8).toString("hex")}`;
 
   // Compute arguments hash for tamper detection
   const argsForHash = { ...context.arguments };
@@ -202,8 +206,10 @@ export async function executeTool(
   }
 
   // 8. Confirmation required — reserve rate limit with actual plan ID
-  // Skip if skipConfirmation is set (used for pre-confirmed multi-step template plans)
-  if (tool.confirmationRequired && !options.skipConfirmation) {
+  // Only internal code paths that have already performed plan-level
+  // confirmation may skip the per-step confirmation prompt.
+  const internalSkipConfirmation = (options as any)[INTERNAL_SKIP_CONFIRMATION] === true;
+  if (tool.confirmationRequired && !internalSkipConfirmation) {
     const plan = createActionPlan(
       context,
       tool.riskLevel,

@@ -143,16 +143,30 @@ export function verifyEntry(
   const { signature: _sig, prevHash: _prev, ...signable } = entry;
   const expectedSignature = computeSignature(signable);
 
-  return crypto.timingSafeEqual(
-    Buffer.from(entry.signature, "hex"),
-    Buffer.from(expectedSignature, "hex"),
-  );
+  // Decode signatures safely — timingSafeEqual requires equal-length Buffers.
+  // Malformed or different-length signatures must return false, never throw.
+  let expectedBuf: Buffer;
+  let actualBuf: Buffer;
+  try {
+    expectedBuf = Buffer.from(expectedSignature, "hex");
+    actualBuf = Buffer.from(entry.signature, "hex");
+  } catch {
+    return false;
+  }
+  if (expectedBuf.length !== actualBuf.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }
 
 /**
  * Verifies the integrity of an entire audit chain.
- * Pre-U13 entries (without signature/prevHash) are accepted as valid
- * chain members — verification starts from the first signed entry.
+ * Pre-U13 entries (without signature/prevHash) are treated as
+ * LEGACY_UNAUTHENTICATED — they are counted but NOT treated as
+ * cryptographically verified. Verification starts from the first
+ * signed entry, and any chain containing unsigned entries is
+ * marked as not fully authenticated.
  *
  * @returns { valid: true } if chain is intact, or { valid: false, brokenAt: index }
  */
@@ -213,7 +227,10 @@ export function verifyAuditChain(
     // Track legacy unsigned entries
     if (!entry.signature || !entry.prevHash) {
       result.legacyEntries++;
-      continue;
+      result.valid = false;
+      result.firstInvalidIndex = i;
+      result.tamperingDetected = true;
+      return result;
     }
 
     const signed = entry as SignedAuditEntry;

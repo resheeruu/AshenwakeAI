@@ -142,7 +142,8 @@ async function executePlan(plan: ActionPlan): Promise<{ status: string; message:
  * TEMPLATE PLAN CONFIRMATION
  *
  * Executes a decomposed template plan by running each step through
- * the existing executePlan dispatcher with skipConfirmation.
+ * the existing executePlan dispatcher using the internal-only
+ * INTERNAL_SKIP_CONFIRMATION mechanism.
  * Each step is independently re-authorized (tool exists, arguments
  * valid, identity/guild/channel/role/Discord perms, risk, protection)
  * before execution — the original template plan is not trusted as

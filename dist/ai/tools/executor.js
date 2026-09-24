@@ -1,7 +1,9 @@
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -15,15 +17,24 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var executor_exports = {};
 __export(executor_exports, {
+  INTERNAL_SKIP_CONFIRMATION: () => INTERNAL_SKIP_CONFIRMATION,
   createActionPlan: () => createActionPlan,
   executeTool: () => executeTool,
   validateBatch: () => validateBatch
 });
 module.exports = __toCommonJS(executor_exports);
-var import_node_crypto = require("node:crypto");
+var import_node_crypto = __toESM(require("node:crypto"));
 var import_logger = require("../../logger");
 var import_sanitize = require("../../security/sanitize");
 var import_channel_scope = require("./channel-scope");
@@ -31,9 +42,9 @@ var import_validator = require("./validator");
 var import_audit2 = require("./audit");
 var import_registry = require("./registry");
 var import_tool_rate_limit = require("./tool-rate-limit");
-let planCounter = 0;
+const INTERNAL_SKIP_CONFIRMATION = /* @__PURE__ */ Symbol("internalSkipConfirmation");
 function createActionPlan(context, riskLevel, changes, requiresConfirmation) {
-  const id = `plan_${Date.now().toString(36)}_${++planCounter}`;
+  const id = `plan_${import_node_crypto.default.randomBytes(8).toString("hex")}`;
   const argsForHash = { ...context.arguments };
   delete argsForHash._toolName;
   delete argsForHash._sessionId;
@@ -143,7 +154,8 @@ Risk: ${tool.riskLevel}`,
     (0, import_audit2.recordToolAudit)(context, "success", void 0, startTime, dryRun);
     return result;
   }
-  if (tool.confirmationRequired && !options.skipConfirmation) {
+  const internalSkipConfirmation = options[INTERNAL_SKIP_CONFIRMATION] === true;
+  if (tool.confirmationRequired && !internalSkipConfirmation) {
     const plan = createActionPlan(
       context,
       tool.riskLevel,
@@ -220,6 +232,7 @@ function validateBatch(items) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  INTERNAL_SKIP_CONFIRMATION,
   createActionPlan,
   executeTool,
   validateBatch
