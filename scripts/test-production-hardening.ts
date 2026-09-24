@@ -834,6 +834,64 @@ console.log("  ✅ npm run build uses low-memory esbuild transpile");
 console.log("  ✅ ensure-dist.mjs removed from runtime startup");
 console.log("  ✅ start.sh has no npm ci, npm install, tsc, or tsx runtime fallback");
 
+// P0-1: Graceful shutdown must clear all setInterval timers
+try {
+  const indexSrc = fs.readFileSync(
+    require("node:path").join(process.cwd(), "src", "index.ts"),
+    "utf8"
+  );
+
+  const shutdownMatch = indexSrc.match(/async function gracefulShutdown[\s\S]*?process\.exit\(0\)/);
+  if (!shutdownMatch) {
+    throw new Error("gracefulShutdown function not found");
+  }
+  const shutdownBody = shutdownMatch[0];
+
+  if (!shutdownBody.includes("clearInterval(usageStatsTimer)")) {
+    throw new Error("gracefulShutdown must clear usageStatsTimer");
+  }
+  if (!shutdownBody.includes("clearInterval(backupTimer)")) {
+    throw new Error("gracefulShutdown must clear backupTimer");
+  }
+
+  pass("graceful shutdown clears all setInterval timers");
+} catch (e) {
+  fail("graceful shutdown clears all setInterval timers", e);
+}
+
+// P1-1: Backup integrity verification and restore
+try {
+  const { createBackup, restoreBackup, listBackups } = require("../src/core/backup-manager");
+  const backup = await createBackup("Production readiness test", "manual");
+
+  if (!backup.id || !backup.integrityChecksum) {
+    throw new Error("Backup must have id and integrityChecksum");
+  }
+  if (!backup.files || backup.files.length === 0) {
+    throw new Error("Backup must have at least one file");
+  }
+  for (const f of backup.files) {
+    if (!f.checksum || f.checksum.length !== 64) {
+      throw new Error(`File ${f.file} missing valid SHA-256 checksum`);
+    }
+  }
+
+  const backups = listBackups();
+  const found = backups.find((b: any) => b.id === backup.id);
+  if (!found) {
+    throw new Error("Backup not found in index");
+  }
+
+  const restored = restoreBackup(backup.id);
+  if (!restored.success) {
+    throw new Error(`Restore failed: ${restored.message}`);
+  }
+
+  pass("Backup integrity verification and restore");
+} catch (e) {
+  fail("Backup integrity verification and restore", e);
+}
+
 closeOutboundAgents();
 
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

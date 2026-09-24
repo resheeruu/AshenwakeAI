@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { logger } from "../logger";
 
 import { typecheck, runTests } from "./tools";
 
@@ -116,7 +117,7 @@ async function verify(): Promise<{
   passed: boolean;
   output: string;
 }> {
-  console.log("🧪 Checking TypeScript...");
+  logger.info("🧪 Checking TypeScript...");
 
   const typeOutput = await typecheck();
 
@@ -131,8 +132,8 @@ async function verify(): Promise<{
     };
   }
 
-  console.log("✅ TypeScript passed.");
-  console.log("🧪 Running tests...");
+  logger.info("✅ TypeScript passed.");
+  logger.info("🧪 Running tests...");
 
   const testOutput = await runTests();
 
@@ -157,34 +158,34 @@ async function handleChange(
     return;
   }
 
-  console.log("");
-  console.log("🩹 AshenAI Self-Healer");
-  console.log(
+  logger.info("");
+  logger.info("🩹 AshenAI Self-Healer");
+  logger.info(
     `👀 Changed: ${relative(filePath)}`,
   );
 
   const verification = await verify();
 
   if (verification.passed) {
-    console.log(
+    logger.info(
       "✅ TypeScript and tests are healthy.",
     );
     return;
   }
 
-  console.log("❌ Verification failed.");
-  console.log(
+  logger.info("❌ Verification failed.");
+  logger.info(
     verification.output.slice(0, 12000),
   );
 
   if (!repairCallback) {
-    console.log(
+    logger.info(
       "⚠️ No repair engine connected.",
     );
     return;
   }
 
-  console.log(
+  logger.info(
     "🧠 Sending the actual failure to AshenAI...",
   );
 
@@ -205,7 +206,7 @@ async function handleChange(
     );
 
     if (!repaired) {
-      console.log(
+      logger.info(
         "❌ AshenAI could not safely repair the file.",
       );
 
@@ -214,14 +215,14 @@ async function handleChange(
         filePath,
       );
 
-      console.log(
+      logger.info(
         "↩️ Original file restored.",
       );
 
       return;
     }
 
-    console.log(
+    logger.info(
       "🔍 Verifying repair...",
     );
 
@@ -229,7 +230,7 @@ async function handleChange(
       await verify();
 
     if (!finalVerification.passed) {
-      console.log(
+      logger.info(
         "❌ AI repair failed verification.",
       );
 
@@ -238,30 +239,30 @@ async function handleChange(
         filePath,
       );
 
-      console.log(
+      logger.info(
         "↩️ Broken repair restored from backup.",
       );
 
       return;
     }
 
-    console.log(
+    logger.info(
       "✅ SELF-HEAL SUCCESS",
     );
 
-    console.log(
+    logger.info(
       `   Repaired: ${relative(filePath)}`,
     );
 
-    console.log(
+    logger.info(
       "   TypeScript: PASS",
     );
 
-    console.log(
+    logger.info(
       "   Tests: PASS",
     );
   } catch (error) {
-    console.log(
+    logger.info(
       "❌ Self-Healer error:",
       error instanceof Error
         ? error.message
@@ -275,12 +276,12 @@ async function handleChange(
           filePath,
         );
 
-        console.log(
+        logger.info(
           "↩️ Original file restored.",
         );
       }
     } catch {
-      console.log(
+      logger.info(
         "⚠️ Could not restore backup.",
       );
     }
@@ -341,7 +342,7 @@ function scanForChanges(): void {
               stat.mtimeMs,
             );
 
-            console.log(
+            logger.info(
               `\n✏️ Source changed: ${relative(filePath)}`,
             );
 
@@ -357,7 +358,7 @@ function scanForChanges(): void {
       if (!currentFiles.has(filePath)) {
         knownFiles.delete(filePath);
 
-        console.log(
+        logger.info(
           `\n🗑️ Source removed: ${relative(filePath)}`,
         );
       }
@@ -487,7 +488,7 @@ export function startSelfHealer(
   callback?: RepairCallback,
 ): void {
   if (healerRunning) {
-    console.log(
+    logger.info(
       "🩹 Self-Healer is already running.",
     );
     return;
@@ -496,28 +497,28 @@ export function startSelfHealer(
   repairCallback = callback;
   healerRunning = true;
 
-  console.log(
+  logger.info(
     "🩹 AshenAI Self-Healer starting...",
   );
 
-  console.log(
+  logger.info(
     "👀 Watching source files for changes",
   );
 
-  console.log(
+  logger.info(
     "📱 Termux polling mode enabled",
   );
 
-  console.log(
+  logger.info(
     "🧪 TypeScript errors will be checked automatically",
   );
 
-  console.log(
+  logger.info(
     "💾 Broken automatic repairs are restored from backup",
   );
 
   for (const directory of WATCH_DIRS) {
-    console.log(
+    logger.info(
       `📂 Watching: ${relative(directory)}`,
     );
   }
@@ -531,7 +532,7 @@ export function startSelfHealer(
     1000,
   );
 
-  console.log(
+  logger.info(
     "🟢 Self-Healer polling loop is running.",
   );
 }
@@ -551,7 +552,7 @@ export function stopSelfHealer(): void {
   repairCallback = undefined;
   scanRunning = false;
 
-  console.log(
+  logger.info(
     "🔴 AshenAI Self-Healer stopped.",
   );
 }

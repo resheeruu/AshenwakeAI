@@ -9,6 +9,7 @@ services:
     image: ashenai:latest
     container_name: ashenai
     restart: unless-stopped
+    stop_timeout: 30s
     ports:
       - "9002:9002"
     environment:

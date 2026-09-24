@@ -15,7 +15,7 @@ RUN npm run build
 
 FROM node:22-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl logrotate procps && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -38,6 +38,8 @@ USER ashenu
 # Prevent privilege escalation
 RUN chmod 700 /app/data && chmod 700 /app/backups
 
+STOPSIGNAL SIGTERM
+
 # Host may override with -e PORT=...; default matches EXPOSE/HEALTHCHECK below.
 ENV PORT=9002
 
@@ -49,6 +51,10 @@ EXPOSE 9002
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:9002/api/health || exit 1
+
+# Log rotation via logrotate at container level
+COPY logrotate.conf /etc/logrotate.d/ashenai
+RUN logrotate -s /var/lib/logrotate/status ashenai || true
 
 # No-new-privileges enforced via Docker --security-opt=no-new-privileges
 # (also set in docker-compose.yml security_opt)

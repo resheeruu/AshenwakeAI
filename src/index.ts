@@ -2383,6 +2383,8 @@ async function gracefulShutdown(signal: string): Promise<void> {
     // Best effort
   }
 
+  clearInterval(usageStatsTimer);
+  clearInterval(backupTimer);
   clearTimeout(forceExit);
   logger.info("✅ Graceful shutdown complete.");
   process.exit(0);

@@ -70,3 +70,7 @@ src/index.working.ts
 
 .gemini/
 gha-creds-*.json
+
+# Backup and log rotation
+backups/
+# logrotate.conf is tracked as a deployment asset

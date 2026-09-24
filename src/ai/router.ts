@@ -415,7 +415,7 @@ export class AIRouter {
         "💾 Provider performance history loaded."
       );
     } catch (error) {
-      console.warn(
+      logger.warn(
         "⚠️ Could not load provider history:",
         error instanceof Error
           ? error.message
@@ -533,7 +533,7 @@ export class AIRouter {
       );
       fs.renameSync(tmpPath, HEALTH_FILE);
     } catch (error) {
-      console.warn(
+      logger.warn(
         "⚠️ Could not save provider history:",
         error instanceof Error
           ? error.message

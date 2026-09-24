@@ -1,3 +1,4 @@
+import { logger } from "../logger";
 import path from "path";
 import "dotenv/config";
 import readline from "readline";
@@ -59,11 +60,11 @@ const verboseLogs =
   process.env.ASHENAI_VERBOSE_LOGS === "true";
 
 const agentLog = (...args: unknown[]): void => {
-  if (verboseLogs) console.log(...args);
+  if (verboseLogs) logger.info(...args);
 };
 
 const importantLog = (...args: unknown[]): void => {
-  console.log(...args);
+  logger.info(...args);
 };
 
 
@@ -404,7 +405,7 @@ async function askAgent(
       ? "FIX"
       : "CHECK";
 
-  console.log(
+  logger.info(
     `\n🧭 Agent mode: ${mode.toUpperCase()}`,
   );
 
@@ -443,13 +444,13 @@ Return exactly ONE JSON action.
 
   if (verificationRequested) {
     try {
-      console.log("\\n🔬 Deterministic verification requested.");
+      logger.info("\\n🔬 Deterministic verification requested.");
 
-      console.log("\\n🛠️ Verification: typecheck");
+      logger.info("\\n🛠️ Verification: typecheck");
       const typecheckResult = await executeAction({
         action: "typecheck",
       });
-      console.log(
+      logger.info(
         `   ✓ Tool completed (${typecheckResult.length} chars)`,
       );
 
@@ -459,16 +460,16 @@ Return exactly ONE JSON action.
         /FAILED/i.test(typecheckResult);
 
       if (typecheckFailed) {
-        console.log("   ❌ Typecheck failed.");
+        logger.info("   ❌ Typecheck failed.");
         verificationPassed = false;
       } else {
-        console.log("   ✅ Typecheck passed");
+        logger.info("   ✅ Typecheck passed");
 
-        console.log("\\n🛠️ Verification: run_tests");
+        logger.info("\\n🛠️ Verification: run_tests");
         const testResult = await executeAction({
           action: "run_tests",
         });
-        console.log(
+        logger.info(
           `   ✓ Tool completed (${testResult.length} chars)`,
         );
 
@@ -478,7 +479,7 @@ Return exactly ONE JSON action.
 
         verificationPassed = !testsFailed;
 
-        console.log(
+        logger.info(
           verificationPassed
             ? "   ✅ Tests passed"
             : "   ❌ Tests failed",
@@ -486,7 +487,7 @@ Return exactly ONE JSON action.
       }
     } catch (error) {
       verificationPassed = false;
-      console.log(
+      logger.info(
         `   ❌ Verification error: ${
           error instanceof Error
             ? error.message
@@ -505,8 +506,8 @@ Return exactly ONE JSON action.
    * is authoritative.
    */
   if (verificationRequested && verificationPassed) {
-    console.log("\n✅ Deterministic verification passed.");
-    console.log("🤖 Project verification complete.");
+    logger.info("\n✅ Deterministic verification passed.");
+    logger.info("🤖 Project verification complete.");
     return;
   }
 
@@ -534,7 +535,7 @@ Return exactly ONE JSON action.
       response =
         await router.generate(request);
     } catch (error) {
-      console.log(
+      logger.info(
         `\n❌ AI generation failed: ${
           error instanceof Error
             ? error.message
@@ -563,7 +564,7 @@ Return exactly ONE JSON action.
         response.text,
       );
     } catch {
-      console.log(
+      logger.info(
         "\n⚠️ Invalid agent action. Retrying...\n",
       );
 
@@ -576,7 +577,7 @@ Return exactly ONE JSON action.
       continue;
     }
 
-    console.log(
+    logger.info(
       `\n🛠️ Step ${step}: ${action.action}`,
     );
 
@@ -587,7 +588,7 @@ Return exactly ONE JSON action.
       mode === "check" &&
       isMutatingAction(action)
     ) {
-      console.log(
+      logger.info(
         "   🛡️ BLOCKED: CHECK mode is read-only.",
       );
 
@@ -609,7 +610,7 @@ Return exactly ONE JSON action.
       repairAttempts++;
 
       if (repairAttempts > 3) {
-        console.log(
+        logger.info(
           "   🛡️ Repair limit reached.",
         );
 
@@ -634,7 +635,7 @@ Return exactly ONE JSON action.
       action.action === "finish"
     ) {
       if (!verificationPassed) {
-        console.log(
+        logger.info(
           "   🛡️ BLOCKED: Cannot finish before verification passes.",
         );
 
@@ -647,7 +648,7 @@ Return exactly ONE JSON action.
         continue;
       }
 
-      console.log(
+      logger.info(
         `\n🤖 ${action.message}\n`,
       );
 
@@ -661,7 +662,7 @@ Return exactly ONE JSON action.
       const result =
         await executeAction(action);
 
-      console.log(
+      logger.info(
         `   ✓ Tool completed (${result.length} chars)`,
       );
 
@@ -679,7 +680,7 @@ Return exactly ONE JSON action.
         verificationPassed =
           !failed;
 
-        console.log(
+        logger.info(
           verificationPassed
             ? "   ✅ Verification passed"
             : "   ❌ Verification failed",
@@ -706,7 +707,7 @@ Remember:
           ? error.message
           : String(error);
 
-      console.log(
+      logger.info(
         `   ❌ Tool failed: ${message}`,
       );
 
@@ -722,12 +723,12 @@ Diagnose the actual error and choose the next safe action.`
     }
   }
 
-  console.log(
+  logger.info(
     `\n⚠️ Agent stopped after ${maxSteps} steps.`,
   );
 
   if (!verificationPassed) {
-    console.log(
+    logger.info(
       "⚠️ Project health was NOT verified.",
     );
   }
@@ -741,7 +742,7 @@ async function main(): Promise<void> {
    * It watches src/ and scripts/ for changes.
    */
   startSelfHealer(async (filePath, errorOutput) => {
-    console.log(`🧠 AshenAI is diagnosing: ${filePath}`);
+    logger.info(`🧠 AshenAI is diagnosing: ${filePath}`);
 
     const repairRequest: AIRequest = {
       messages: [
@@ -798,12 +799,12 @@ Do not use markdown fences.`,
       agentLog("");
       agentLog("🧾 ===== SELF-HEALER AI RESPONSE =====");
       if (verboseLogs) {
-        console.log(response.text.slice(0, 4000));
+        logger.info(response.text.slice(0, 4000));
         if (response.text.length > 4000) {
-          console.log(`… truncated ${response.text.length - 4000} characters`);
+          logger.info(`… truncated ${response.text.length - 4000} characters`);
         }
       } else {
-        console.log(`🧾 Self-Healer response received (${response.text.length} chars)`);
+        logger.info(`🧾 Self-Healer response received (${response.text.length} chars)`);
       }
       agentLog("🧾 ===== END SELF-HEALER RESPONSE =====");
       agentLog("");
@@ -813,25 +814,25 @@ Do not use markdown fences.`,
       try {
         action = extractJSON(response.text);
       } catch {
-        console.log("❌ Self-Healer received invalid repair JSON.");
+        logger.info("❌ Self-Healer received invalid repair JSON.");
         return false;
       }
 
       if (action.action !== "write_file") {
-        console.log("🛡️ Self-Healer rejected unsafe repair action.");
+        logger.info("🛡️ Self-Healer rejected unsafe repair action.");
         return false;
       }
 
       if (path.resolve(action.path) !== path.resolve(filePath)) {
-        console.log("🛡️ Self-Healer rejected repair targeting another file.");
+        logger.info("🛡️ Self-Healer rejected repair targeting another file.");
         return false;
       }
 
-      console.log(`🛠️ Applying AI repair to ${filePath}`);
+      logger.info(`🛠️ Applying AI repair to ${filePath}`);
 
       await executeAction(action);
 
-      console.log("🧪 Verifying AI repair...");
+      logger.info("🧪 Verifying AI repair...");
 
       const verification = await typecheck();
 
@@ -840,14 +841,14 @@ Do not use markdown fences.`,
         /error:/i.test(verification) ||
         /failed/i.test(verification)
       ) {
-        console.log("❌ AI repair failed TypeScript verification.");
+        logger.info("❌ AI repair failed TypeScript verification.");
         return false;
       }
 
-      console.log("✅ AI repair passed TypeScript verification.");
+      logger.info("✅ AI repair passed TypeScript verification.");
       return true;
     } catch (error) {
-      console.log(
+      logger.info(
         "❌ Self-Healer repair error:",
         error instanceof Error ? error.message : String(error),
       );
@@ -872,11 +873,11 @@ Do not use markdown fences.`,
         const goal = cliArgs.slice(2).join(" ").trim();
 
         if (!goal) {
-          console.log('Usage: task add "your goal"');
+          logger.info('Usage: task add "your goal"');
           process.exit(1);
         }
 
-        console.log(`🧠 Planning task: ${goal}`);
+        logger.info(`🧠 Planning task: ${goal}`);
 
         const planned = await planTask(router, goal);
 
@@ -890,17 +891,17 @@ Do not use markdown fences.`,
           })),
         );
 
-        console.log(`💾 Task saved: ${task.id}`);
+        logger.info(`💾 Task saved: ${task.id}`);
 
-        console.log("");
-        console.log("✅ Task created");
-        console.log(`🆔 ${task.id}`);
-        console.log(`🎯 ${task.goal}`);
-        console.log(`📊 ${task.steps.length} steps`);
-        console.log("");
-        console.log(`Run:    npx tsx src/agent/index.ts task run ${task.id}`);
-        console.log(`Status: npx tsx src/agent/index.ts task status ${task.id}`);
-        console.log(`Cancel: npx tsx src/agent/index.ts task cancel ${task.id}`);
+        logger.info("");
+        logger.info("✅ Task created");
+        logger.info(`🆔 ${task.id}`);
+        logger.info(`🎯 ${task.goal}`);
+        logger.info(`📊 ${task.steps.length} steps`);
+        logger.info("");
+        logger.info(`Run:    npx tsx src/agent/index.ts task run ${task.id}`);
+        logger.info(`Status: npx tsx src/agent/index.ts task status ${task.id}`);
+        logger.info(`Cancel: npx tsx src/agent/index.ts task cancel ${task.id}`);
 
         process.exit(0);
       }
@@ -909,15 +910,15 @@ Do not use markdown fences.`,
         const tasks = await taskEngine.list();
 
         if (tasks.length === 0) {
-          console.log("📭 No tasks.");
+          logger.info("📭 No tasks.");
           process.exit(0);
         }
 
-        console.log("🤖 AshenAI Tasks");
-        console.log("");
+        logger.info("🤖 AshenAI Tasks");
+        logger.info("");
 
         for (const task of tasks.slice(-20).reverse()) {
-          console.log(
+          logger.info(
             `${task.status === "completed" ? "✅" :
               task.status === "cancelled" ? "🛑" :
               task.status === "failed" ? "❌" :
@@ -933,22 +934,22 @@ Do not use markdown fences.`,
         const id = cliArgs[2]?.trim();
 
         if (!id) {
-          console.log("Usage: task status <task-id>");
+          logger.info("Usage: task status <task-id>");
           process.exit(1);
         }
 
         const task = await taskEngine.get(id);
 
         if (!task) {
-          console.log(`❌ Task not found: ${id}`);
+          logger.info(`❌ Task not found: ${id}`);
           process.exit(1);
         }
 
-        console.log("🤖 Task Status");
-        console.log(`🆔 ${task.id}`);
-        console.log(`📌 ${task.status}`);
-        console.log(`🎯 ${task.goal}`);
-        console.log("");
+        logger.info("🤖 Task Status");
+        logger.info(`🆔 ${task.id}`);
+        logger.info(`📌 ${task.status}`);
+        logger.info(`🎯 ${task.goal}`);
+        logger.info("");
 
         task.steps.forEach((step, index) => {
           const icon =
@@ -957,12 +958,12 @@ Do not use markdown fences.`,
             step.status === "running" ? "🔄" :
             step.status === "skipped" ? "⏭️" : "⏳";
 
-          console.log(`${icon} ${index + 1}. ${step.title}`);
+          logger.info(`${icon} ${index + 1}. ${step.title}`);
         });
 
         if (task.error) {
-          console.log("");
-          console.log(`❌ ${task.error}`);
+          logger.info("");
+          logger.info(`❌ ${task.error}`);
         }
 
         process.exit(0);
@@ -972,30 +973,30 @@ Do not use markdown fences.`,
         const id = cliArgs[2]?.trim();
 
         if (!id) {
-          console.log("Usage: task run <task-id>");
+          logger.info("Usage: task run <task-id>");
           process.exit(1);
         }
 
         const task = await taskEngine.get(id);
 
         if (!task) {
-          console.log(`❌ Task not found: ${id}`);
+          logger.info(`❌ Task not found: ${id}`);
           process.exit(1);
         }
 
-        console.log(`🚀 Running task ${task.id}`);
-        console.log(`🎯 ${task.goal}`);
-        console.log("");
+        logger.info(`🚀 Running task ${task.id}`);
+        logger.info(`🎯 ${task.goal}`);
+        logger.info("");
 
         const result = await taskEngine.run(task.id);
 
-        console.log("");
-        console.log(
+        logger.info("");
+        logger.info(
           result.status === "completed"
             ? "✅ TASK COMPLETED"
             : `⚠️ TASK ${result.status.toUpperCase()}`,
         );
-        console.log(`🆔 ${result.id}`);
+        logger.info(`🆔 ${result.id}`);
 
         process.exit(result.status === "completed" ? 0 : 1);
       }
@@ -1004,23 +1005,23 @@ Do not use markdown fences.`,
         const id = cliArgs[2]?.trim();
 
         if (!id) {
-          console.log("Usage: task cancel <task-id>");
+          logger.info("Usage: task cancel <task-id>");
           process.exit(1);
         }
 
         const result = await taskEngine.cancel(id);
 
-        console.log(`🛑 Task ${result.id} is now ${result.status}.`);
+        logger.info(`🛑 Task ${result.id} is now ${result.status}.`);
 
         process.exit(0);
       }
 
-      console.log(
+      logger.info(
         "Usage: task <add|list|status|run|cancel> [arguments]",
       );
       process.exit(1);
     } catch (error) {
-      console.error(
+      logger.error(
         "❌ Task CLI error:",
         error instanceof Error ? error.message : String(error),
       );
@@ -1028,37 +1029,37 @@ Do not use markdown fences.`,
     }
   }
 
-  console.log("");
-  console.log(
+  logger.info("");
+  logger.info(
     "🔥 AshenAI — Living Agent V2",
   );
-  console.log("");
-  console.log(
+  logger.info("");
+  logger.info(
     "🧠 Interactive development agent",
   );
-  console.log(
+  logger.info(
     "🔎 CHECK mode is read-only",
   );
-  console.log(
+  logger.info(
     "🔧 FIX mode can repair files",
   );
-  console.log(
+  logger.info(
     "🧪 Verification required after repairs",
   );
-  console.log(
+  logger.info(
     "💾 File changes receive automatic backups",
   );
-  console.log(
+  logger.info(
     "🩹 Self-Healer watches your source code",
   );
-  console.log(
+  logger.info(
     "🛡️ Dangerous operations are blocked",
   );
-  console.log("");
-  console.log(
+  logger.info("");
+  logger.info(
     "Type 'exit' to quit.",
   );
-  console.log("");
+  logger.info("");
 
   const rl =
     readline.createInterface({
@@ -1091,7 +1092,7 @@ Do not use markdown fences.`,
       try {
         await askAgent(input);
       } catch (error) {
-        console.error(
+        logger.error(
           "❌ Agent error:",
           error instanceof Error
             ? error.message
@@ -1106,7 +1107,7 @@ Do not use markdown fences.`,
   rl.on(
     "close",
     () => {
-      console.log(
+      logger.info(
         "\n👋 AshenAI agent stopped.",
       );
       process.exit(0);

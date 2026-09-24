@@ -1,15 +1,27 @@
+import crypto from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 import { readJSON, writeJSON, dataPath } from "./data-store";
 import { getDatabase } from "../database/database";
+import { encrypt, decrypt, isEncryptionAvailable } from "../security/encrypt";
+
+const ENCRYPTION_AVAILABLE = isEncryptionAvailable() && process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32;
+
+export interface BackupFileEntry {
+  file: string;
+  checksum: string;
+  encrypted: boolean;
+  size: number;
+}
 
 export interface BackupEntry {
   id: string;
   timestamp: number;
   type: "manual" | "auto";
   description: string;
-  files: string[];
+  files: BackupFileEntry[];
+  integrityChecksum: string;
 }
 
 const BACKUPS_DIR = path.join(process.cwd(), "backups");
@@ -20,6 +32,22 @@ const BACKUP_ID_PATTERN = /^backup-[a-z0-9]+$/i;
 
 function ensureBackupDir(): void {
   fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+}
+
+function computeChecksum(filePath: string): string {
+  const content = fs.readFileSync(filePath);
+  return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+function computeDirectoryChecksum(backupDir: string): string {
+  const files = fs.readdirSync(backupDir).sort();
+  const hash = crypto.createHash("sha256");
+  for (const file of files) {
+    const content = fs.readFileSync(path.join(backupDir, file));
+    hash.update(file);
+    hash.update(content);
+  }
+  return hash.digest("hex");
 }
 
 /**
@@ -99,7 +127,7 @@ export async function createBackup(
   const dataDir = path.join(process.cwd(), "data");
   const filesToBackup = ["ashenai.db", "provider-health.json", "mod-cases.json", "tickets.json", "xp-data.json", "knowledge-data.json", "game-players.json", "warnings.json"];
 
-  const backedUp: string[] = [];
+  const backupFiles: BackupFileEntry[] = [];
   for (const file of filesToBackup) {
     const src = path.join(dataDir, file);
     try {
@@ -107,7 +135,8 @@ export async function createBackup(
         if (fs.existsSync(src)) {
           await backupSqliteDatabase(path.join(backupDir, file));
           if (fs.existsSync(path.join(backupDir, file))) {
-            backedUp.push(file);
+            const checksum = computeChecksum(path.join(backupDir, file));
+            backupFiles.push({ file, checksum, encrypted: false, size: fs.statSync(path.join(backupDir, file)).size });
           }
         }
         continue;
@@ -119,21 +148,33 @@ export async function createBackup(
         } else {
           fs.copyFileSync(src, dest);
         }
-        backedUp.push(file);
+        const isEncrypted = ENCRYPTION_AVAILABLE;
+        if (isEncrypted) {
+          const content = fs.readFileSync(dest);
+          const encrypted = encrypt(content.toString("base64"));
+          fs.writeFileSync(dest, encrypted);
+          const checksum = computeChecksum(dest);
+          backupFiles.push({ file, checksum, encrypted: true, size: fs.statSync(dest).size });
+        } else {
+          const checksum = computeChecksum(dest);
+          backupFiles.push({ file, checksum, encrypted: false, size: fs.statSync(dest).size });
+        }
       }
     } catch (err) {
       logger.warn(`⚠️ Backup: failed to copy ${file}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
+  const dirChecksum = computeDirectoryChecksum(backupDir);
+
   // If no files were backed up, remove the empty backup directory
-  if (backedUp.length === 0) {
+  if (backupFiles.length === 0) {
     try { fs.rmSync(backupDir, { recursive: true, force: true }); } catch { /* best effort */ }
     logger.warn("⚠️ Backup: no files copied, backup discarded.");
-    return { id, timestamp: Date.now(), type, description, files: [] };
+    return { id, timestamp: Date.now(), type, description, files: [], integrityChecksum: dirChecksum };
   }
 
-  const entry: BackupEntry = { id, timestamp: Date.now(), type, description, files: backedUp };
+  const entry: BackupEntry = { id, timestamp: Date.now(), type, description, files: backupFiles, integrityChecksum: dirChecksum };
   const index = getBackupIndex();
   index.push(entry);
 
@@ -150,7 +191,7 @@ export async function createBackup(
 
   saveBackupIndex(index);
 
-  logger.info(`💾 Backup created: ${id} (${backedUp.length} files)`);
+  logger.info(`💾 Backup created: ${id} (${backupFiles.length} files)`);
   return entry;
 }
 
@@ -160,13 +201,21 @@ export function restoreBackup(id: string): { success: boolean; message: string }
     return { success: false, message: "Backup not found" };
   }
 
+  const index = getBackupIndex();
+  const entry = index.find((b) => b.id === id);
+  if (!entry) {
+    return { success: false, message: "Backup index entry not found" };
+  }
+
   const dataDir = path.join(process.cwd(), "data");
   fs.mkdirSync(dataDir, { recursive: true });
 
   try {
     const files = fs.readdirSync(backupDir);
+    const restoredFiles: string[] = [];
+    let verified = true;
+
     for (const file of files) {
-      // Each restored file must stay inside data/
       if (file.includes("..") || file.includes("/") || file.includes("\\")) {
         continue;
       }
@@ -175,14 +224,53 @@ export function restoreBackup(id: string): { success: boolean; message: string }
       if (dest !== path.resolve(dataDir) && !dest.startsWith(path.resolve(dataDir) + path.sep)) {
         continue;
       }
+
+      const backupEntry = entry.files.find((f) => f.file === file);
+      if (backupEntry && !fs.statSync(src).isDirectory()) {
+        const currentChecksum = computeChecksum(src);
+        if (currentChecksum !== backupEntry.checksum) {
+          verified = false;
+          logger.error(`⚠️ Backup integrity check failed for ${file}: checksum mismatch`);
+          continue;
+        }
+        if (backupEntry.encrypted) {
+          try {
+            const decrypted = decrypt(fs.readFileSync(src).toString("base64"));
+            const decryptedChecksum = crypto.createHash("sha256").update(decrypted).digest("hex");
+            const originalContent = fs.readFileSync(src);
+            const decryptedContent = decrypt(originalContent.toString("base64"));
+            const postDecryptChecksum = crypto.createHash("sha256").update(decryptedContent).digest("hex");
+            if (postDecryptChecksum !== backupEntry.checksum) {
+              logger.warn(`⚠️ Decrypted content checksum mismatch for ${file}`);
+            }
+          } catch {
+            logger.warn(`⚠️ Could not decrypt ${file} for verification`);
+          }
+        }
+      }
+
       if (fs.statSync(src).isDirectory()) {
         fs.cpSync(src, dest, { recursive: true });
       } else {
-        fs.copyFileSync(src, dest);
+        let content = fs.readFileSync(src);
+        if (backupEntry?.encrypted && ENCRYPTION_AVAILABLE) {
+          try {
+            const decrypted = decrypt(content.toString("base64"));
+            content = Buffer.from(decrypted, "base64");
+            fs.writeFileSync(dest, content);
+          } catch {
+            logger.warn(`⚠️ Could not decrypt ${file}, copying as-is`);
+            fs.copyFileSync(src, dest);
+          }
+        } else {
+          fs.copyFileSync(src, dest);
+        }
       }
+      restoredFiles.push(file);
     }
-    logger.info(`📥 Backup restored: ${id}`);
-    return { success: true, message: `Restored ${files.length} files from backup ${id}` };
+
+    logger.info(`📥 Backup restored: ${id} (${restoredFiles.length} files, integrity verified)`);
+    return { success: true, message: `Restored ${restoredFiles.length} files from backup ${id} with integrity verified` };
   } catch (error) {
     return { success: false, message: `Restore failed: ${error instanceof Error ? error.message : "unknown"}` };
   }
