@@ -89,9 +89,9 @@ function isDataDirectoryAccessible() {
     return false;
   }
 }
-function getStatus() {
+async function getStatus() {
   const discordHealth = (0, import_discord_health.getDiscordHealth)();
-  const updateStatus = (0, import_update_manager.getUpdateStatus)();
+  const updateStatus = await (0, import_update_manager.getUpdateStatus)();
   return {
     running: isRunning,
     uptime: Math.floor(process.uptime()),

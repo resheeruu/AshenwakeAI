@@ -289,6 +289,19 @@ function ensureConfigSections(config) {
   if (!config.staff) {
     config.staff = { roleIds: [] };
   }
+  if (!config.social) {
+    config.social = {
+      enabled: false,
+      channels: {},
+      animeActions: true,
+      customReactions: true,
+      customEmoji: true,
+      rivalryMode: false,
+      debateMode: false,
+      globalCooldownMs: 3e4,
+      maxResponsesPerHour: 10
+    };
+  }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

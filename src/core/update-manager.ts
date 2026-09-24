@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { logger } from "../logger";
@@ -59,6 +59,7 @@ export interface UpdateManagerConfig {
   recordFile: string;
   maxRollbackAttempts: number;
   healthCheckDelayMs: number;
+  gitTimeoutMs: number;
 }
 
 const DEFAULT_CONFIG: UpdateManagerConfig = {
@@ -68,6 +69,7 @@ const DEFAULT_CONFIG: UpdateManagerConfig = {
   recordFile: path.join(process.cwd(), "data", "update-record.json"),
   maxRollbackAttempts: 2,
   healthCheckDelayMs: 15_000,
+  gitTimeoutMs: 15_000,
 };
 
 let config = { ...DEFAULT_CONFIG };
@@ -81,84 +83,58 @@ function sleep(ms: number): Promise<void> {
 }
 
 /* ================================================================
- * GIT HELPERS
+ * GIT HELPERS — async spawn with bounded timeout
  * ================================================================ */
 
-function getShortCommit(): string {
-  try {
-    return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
-      encoding: "utf8",
-      timeout: 5_000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return "unknown";
-  }
-}
-
-function getFullCommit(): string {
-  try {
-    return execFileSync("git", ["rev-parse", "HEAD"], {
-      encoding: "utf8",
-      timeout: 5_000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return "unknown";
-  }
-}
-
-function getRemoteHead(): string | null {
-  try {
-    execFileSync("git", ["fetch", "origin", config.branch, "--quiet"], {
-      encoding: "utf8",
-      timeout: 30_000,
-    });
-    return execFileSync("git", ["rev-parse", `origin/${config.branch}`], {
-      encoding: "utf8",
-      timeout: 5_000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch (error) {
-    logger.warn(
-      `[UpdateManager] failed to fetch remote: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-    return null;
-  }
-}
-
-function gitCheckout(commit: string): boolean {
-  try {
-    execFileSync("git", ["checkout", commit], {
-      encoding: "utf8",
-      timeout: 30_000,
+function runGitAsync(args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("git", args, {
       cwd: process.cwd(),
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024,
     });
-    logger.info(`[UpdateManager] checked out ${commit}`);
-    return true;
-  } catch (error) {
-    logger.error(
-      `[UpdateManager] git checkout ${commit} failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-    return false;
-  }
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => { stdout += d.toString(); });
+    proc.stderr.on("data", (d) => { stderr += d.toString(); });
+    proc.on("close", (code) => {
+      if (code !== 0) { reject(new Error(`git ${args.join(" ")} exited ${code}: ${stderr.slice(0, 200)}`)); }
+      else { resolve(stdout.trim()); }
+    });
+    proc.on("error", (err) => reject(err));
+  });
 }
 
-function gitPull(): boolean {
-  try {
-    execFileSync("git", ["pull", "origin", config.branch, "--ff-only"], {
-      encoding: "utf8",
-      timeout: 30_000,
-      cwd: process.cwd(),
+function getShortCommit(): Promise<string> {
+  return runGitAsync(["rev-parse", "--short", "HEAD"], 5_000).catch(() => "unknown");
+}
+
+function getFullCommit(): Promise<string> {
+  return runGitAsync(["rev-parse", "HEAD"], 5_000).catch(() => "unknown");
+}
+
+function getRemoteHead(): Promise<string | null> {
+  return runGitAsync(["fetch", "origin", config.branch, "--quiet"], config.gitTimeoutMs)
+    .then(() => runGitAsync(["rev-parse", `origin/${config.branch}`], 5_000))
+    .catch((error) => {
+      logger.warn(`[UpdateManager] failed to fetch remote: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
     });
-    return true;
-  } catch {
-    return false;
-  }
+}
+
+function gitCheckout(commit: string): Promise<boolean> {
+  return runGitAsync(["checkout", commit], 30_000)
+    .then(() => { logger.info(`[UpdateManager] checked out ${commit}`); return true; })
+    .catch((error) => {
+      logger.error(`[UpdateManager] git checkout ${commit} failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    });
+}
+
+function gitPull(): Promise<boolean> {
+  return runGitAsync(["pull", "origin", config.branch, "--ff-only"], config.gitTimeoutMs)
+    .then(() => true)
+    .catch(() => false);
 }
 
 /* ================================================================
@@ -243,64 +219,45 @@ export function getUpdateRecord(): UpdateRecord | null {
  * VALIDATION GATES
  * ================================================================ */
 
-function runTypecheck(): boolean {
-  try {
-    execFileSync("node", ["./node_modules/.bin/tsc", "--noEmit"], {
-      encoding: "utf8",
-      timeout: 120_000,
-      cwd: process.cwd(),
-    });
-    return true;
-  } catch {
-    return false;
-  }
+function runTypecheck(): Promise<boolean> {
+  return runNodeAsync("./node_modules/.bin/tsc", ["--noEmit"], 120_000);
 }
 
-function runBuild(): boolean {
-  try {
-    execFileSync("node", ["./node_modules/.bin/tsc"], {
-      encoding: "utf8",
-      timeout: 120_000,
-      cwd: process.cwd(),
-    });
-    return true;
-  } catch {
-    return false;
-  }
+function runBuild(): Promise<boolean> {
+  return runNodeAsync("./node_modules/.bin/tsc", [], 120_000);
 }
 
-function runCriticalTests(): boolean {
-  try {
-    execFileSync("node", ["./node_modules/.bin/tsx", "scripts/run-all-tests.ts"], {
-      encoding: "utf8",
-      timeout: 600_000,
-      cwd: process.cwd(),
-      env: { ...process.env, NODE_OPTIONS: "" },
-    });
-    return true;
-  } catch {
-    return false;
-  }
+function runCriticalTests(): Promise<boolean> {
+  return runNodeAsync("./node_modules/.bin/tsx", ["scripts/run-all-tests.ts"], 600_000, { ...process.env, NODE_OPTIONS: "" });
 }
 
-function installDepsIfNeeded(): boolean {
-  try {
+function installDepsIfNeeded(): Promise<boolean> {
+  return new Promise((resolve) => {
     const lockfile = path.join(process.cwd(), "package-lock.json");
     const nodeModules = path.join(process.cwd(), "node_modules");
 
     if (!existsSync(nodeModules) || !existsSync(lockfile)) {
       logger.info("[UpdateManager] installing dependencies...");
-      execFileSync("npm", ["ci", "--include=dev"], {
-        encoding: "utf8",
-        timeout: 120_000,
-        cwd: process.cwd(),
-      });
+      runNodeAsync("npm", ["ci", "--include=dev"], 120_000)
+        .then(() => resolve(true))
+        .catch(() => resolve(false));
+    } else {
+      resolve(true);
     }
+  });
+}
 
-    return true;
-  } catch {
-    return false;
-  }
+function runNodeAsync(bin: string, args: string[], timeoutMs: number, env?: NodeJS.ProcessEnv): Promise<boolean> {
+  return new Promise((resolve) => {
+    const proc = spawn(bin, args, {
+      cwd: process.cwd(),
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024,
+      env: env || process.env,
+    });
+    proc.on("close", (code) => { resolve(code === 0); });
+    proc.on("error", () => { resolve(false); });
+  });
 }
 
 /* ================================================================
@@ -395,7 +352,7 @@ export async function postStartValidation(): Promise<void> {
     if (health.healthy) {
       record.state = "SUCCESS";
       record.healthResult = "passed";
-      record.currentCommit = getShortCommit();
+      record.currentCommit = await getShortCommit();
       saveRecord(record);
       logger.info(`[UpdateManager] new version ${record.targetCommit} verified healthy and is now known-good.`);
     } else {
@@ -444,7 +401,7 @@ async function triggerRollback(record: UpdateRecord): Promise<void> {
     `[UpdateManager] ROLLING BACK: ${record.targetCommit} -> ${previousCommit} (attempt ${record.rollbackAttempt}/${config.maxRollbackAttempts})`
   );
 
-  if (!gitCheckout(previousCommit)) {
+  if (!(await gitCheckout(previousCommit))) {
     record.state = "ROLLBACK_FAILED";
     record.rollbackResult = "failed";
     record.error = `git checkout ${previousCommit} failed`;
@@ -453,7 +410,7 @@ async function triggerRollback(record: UpdateRecord): Promise<void> {
     return;
   }
 
-  if (!installDepsIfNeeded()) {
+  if (!(await installDepsIfNeeded())) {
     record.state = "ROLLBACK_FAILED";
     record.rollbackResult = "failed";
     record.error = "dependency installation failed during rollback";
@@ -462,7 +419,7 @@ async function triggerRollback(record: UpdateRecord): Promise<void> {
     return;
   }
 
-  if (!runBuild()) {
+  if (!(await runBuild())) {
     record.state = "ROLLBACK_FAILED";
     record.rollbackResult = "failed";
     record.error = "build failed during rollback";
@@ -495,12 +452,12 @@ async function performUpdate(): Promise<boolean> {
     return false;
   }
 
-  const remoteCommit = getRemoteHead();
+  const remoteCommit = await getRemoteHead();
   if (!remoteCommit) {
     return false;
   }
 
-  const localCommit = getShortCommit();
+  const localCommit = await getShortCommit();
   if (remoteCommit === localCommit || remoteCommit.slice(0, 7) === localCommit) {
     return false;
   }
@@ -542,7 +499,7 @@ async function performUpdate(): Promise<boolean> {
 
   try {
     logger.info("[UpdateManager] pulling changes...");
-    if (!gitPull()) {
+    if (!(await gitPull())) {
       record.state = "FAILED";
       record.error = "git pull failed";
       saveRecord(record);
@@ -550,7 +507,7 @@ async function performUpdate(): Promise<boolean> {
     }
 
     logger.info("[UpdateManager] checking dependencies...");
-    if (!installDepsIfNeeded()) {
+    if (!(await installDepsIfNeeded())) {
       record.state = "FAILED";
       record.error = "dependency installation failed";
       saveRecord(record);
@@ -560,35 +517,35 @@ async function performUpdate(): Promise<boolean> {
     updateState = "VALIDATING";
     record.state = "VALIDATING";
     logger.info("[UpdateManager] running typecheck...");
-    record.validationResult = runTypecheck() ? "passed" : "failed";
+    record.validationResult = (await runTypecheck()) ? "passed" : "failed";
     if (record.validationResult === "failed") {
       record.state = "FAILED";
       record.error = "typecheck failed - keeping current version";
       saveRecord(record);
       logger.error("[UpdateManager] typecheck failed, aborting update");
-      gitCheckout(record.previousKnownGoodCommit);
+      await gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
 
     logger.info("[UpdateManager] running build...");
-    record.buildResult = runBuild() ? "passed" : "failed";
+    record.buildResult = (await runBuild()) ? "passed" : "failed";
     if (record.buildResult === "failed") {
       record.state = "FAILED";
       record.error = "build failed - keeping current version";
       saveRecord(record);
       logger.error("[UpdateManager] build failed, aborting update");
-      gitCheckout(record.previousKnownGoodCommit);
+      await gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
 
     logger.info("[UpdateManager] running critical tests...");
-    record.testResult = runCriticalTests() ? "passed" : "failed";
+    record.testResult = (await runCriticalTests()) ? "passed" : "failed";
     if (record.testResult === "failed") {
       record.state = "FAILED";
       record.error = "tests failed - keeping current version";
       saveRecord(record);
       logger.error("[UpdateManager] tests failed, aborting update");
-      gitCheckout(record.previousKnownGoodCommit);
+      await gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
 
@@ -614,7 +571,7 @@ async function performUpdate(): Promise<boolean> {
     record.error = error instanceof Error ? error.message : String(error);
     saveRecord(record);
     logger.error(`[UpdateManager] update failed: ${record.error}`);
-    gitCheckout(record.previousKnownGoodCommit);
+    await gitCheckout(record.previousKnownGoodCommit);
     return false;
   } finally {
     if (record.state !== "RESTART_PENDING") {
@@ -629,7 +586,15 @@ async function performUpdate(): Promise<boolean> {
  * STATUS & LIFECYCLE
  * ================================================================ */
 
-export function getUpdateStatus(): {
+let cachedCurrentCommit = "unknown";
+let cachedLatestAvailable: string | null = null;
+
+(async () => {
+  cachedCurrentCommit = await getShortCommit().catch(() => "unknown");
+  getRemoteHead().then((r) => { cachedLatestAvailable = r?.slice(0, 7) ?? null; }).catch(() => {});
+})();
+
+export async function getUpdateStatus(): Promise<{
   currentCommit: string;
   knownGoodCommit: string | null;
   targetCommit: string | null;
@@ -641,19 +606,9 @@ export function getUpdateStatus(): {
   lastRollback: UpdateRecord | null;
   isUpdating: boolean;
   branch: string;
-} {
-  const current = getShortCommit();
+}> {
+  const current = cachedCurrentCommit;
   const record = getUpdateRecord();
-
-  let latestAvailable: string | null = null;
-  try {
-    if (!isUpdating) {
-      const remote = getRemoteHead();
-      latestAvailable = remote?.slice(0, 7) ?? null;
-    }
-  } catch {
-    // Best effort
-  }
 
   return {
     currentCommit: current,
@@ -662,8 +617,8 @@ export function getUpdateStatus(): {
         ? record.targetCommit
         : record?.previousKnownGoodCommit ?? null,
     targetCommit: record?.targetCommit ?? null,
-    latestAvailable,
-    updateAvailable: latestAvailable ? latestAvailable !== current : false,
+    latestAvailable: cachedLatestAvailable,
+    updateAvailable: cachedLatestAvailable ? cachedLatestAvailable !== current : false,
     updateState,
     lastUpdate: record,
     lastFailedUpdate:
@@ -679,14 +634,14 @@ export function getUpdateStatus(): {
   };
 }
 
-export function startUpdateManager(
+export async function startUpdateManager(
   customConfig?: Partial<UpdateManagerConfig>
-): void {
+): Promise<void> {
   if (customConfig) {
     config = { ...DEFAULT_CONFIG, ...customConfig };
   }
 
-  currentVersion = getShortCommit();
+  currentVersion = cachedCurrentCommit;
   logger.info(
     `[UpdateManager] monitoring branch=${config.branch} every ${
       config.checkIntervalMs / 1000

@@ -52,7 +52,7 @@ function getSession(guildId, userId) {
 function removeSession(guildId, userId) {
   activeSessions.delete(sessionKey(guildId, userId));
 }
-const P = { cat: "as", tog: "at", ch: "ac", rl: "ar", num: "an" };
+const P = { cat: "as", tog: "at", ch: "ac", rl: "ar", num: "an", str: "st" };
 const BRAND = 8141549;
 function buildEmbed(category, guildId) {
   const config = (0, import_guild_config.loadGuildConfig)(guildId);
@@ -136,6 +136,27 @@ function buildEmbed(category, guildId) {
       const roleList = st.roleIds.length > 0 ? st.roleIds.map((id) => `<@&${id}>`).join(", ") : "No staff roles configured";
       return new import_discord.EmbedBuilder().setTitle("\u{1F465} ASHENAI SETTINGS \u2014 STAFF").setColor(BRAND).setDescription("Configure staff roles for case management.").addFields({ name: "Staff Roles", value: roleList }).setFooter({ text: "Use the role selector below to add/remove roles." });
     }
+    case "social": {
+      const s = config.social;
+      return new import_discord.EmbedBuilder().setTitle("\u{1F4AC} ASHENAI SETTINGS \u2014 SOCIAL").setColor(BRAND).setDescription("Configure AI Social autonomous behavior.").addFields(
+        { name: "Enabled", value: s.enabled ? "\u2705" : "\u274C", inline: true },
+        { name: "Global Cooldown", value: `${s.globalCooldownMs}ms`, inline: true },
+        { name: "Max Responses/Hour", value: `${s.maxResponsesPerHour}`, inline: true },
+        { name: "Anime Actions", value: s.animeActions ? "\u2705" : "\u274C", inline: true },
+        { name: "Custom Reactions", value: s.customReactions ? "\u2705" : "\u274C", inline: true },
+        { name: "Custom Emoji", value: s.customEmoji ? "\u2705" : "\u274C", inline: true },
+        { name: "Rivalry Mode", value: s.rivalryMode ? "\u2705" : "\u274C", inline: true },
+        { name: "Debate Mode", value: s.debateMode ? "\u2705" : "\u274C", inline: true }
+      ).setFooter({ text: "Use buttons to toggle, or select another category." });
+    }
+    case "personality": {
+      const p = config.personality;
+      return new import_discord.EmbedBuilder().setTitle("\u{1F3AD} ASHENAI SETTINGS \u2014 PERSONALITY").setColor(BRAND).setDescription("Configure AshenAI's personality and tone.").addFields(
+        { name: "Bot Name", value: p.name || "AshenAI", inline: true },
+        { name: "Tone", value: p.tone || "friendly", inline: true },
+        { name: "Instructions", value: p.customInstructions || "None", inline: false }
+      ).setFooter({ text: "Use the number modal to edit name or tone." });
+    }
     case "audit": {
       const entries = (0, import_service.getRecentAuditEntries)(guildId, 10);
       const logs = (0, import_service.getRecentLogEntries)(10);
@@ -201,6 +222,15 @@ function buildNumberRows(settings) {
   }
   return rows;
 }
+function buildStringRows(settings) {
+  const rows = [];
+  for (const s of settings) {
+    const row = new import_discord.ActionRowBuilder();
+    row.addComponents(new import_discord.ButtonBuilder().setCustomId(`${P.str}:${s.id}`).setLabel(`Set ${s.label}`).setStyle(import_discord.ButtonStyle.Primary));
+    rows.push(row);
+  }
+  return rows;
+}
 function buildCategoryComponents(category) {
   if (category === "overview" || category === "audit") return [];
   const settings = (0, import_definitions2.getSettingsByCategory)(category);
@@ -208,9 +238,11 @@ function buildCategoryComponents(category) {
   const booleans = settings.filter((s) => s.type === "boolean");
   const channels = settings.filter((s) => s.type === "channel");
   const numbers = settings.filter((s) => s.type === "number");
+  const strings = settings.filter((s) => s.type === "string");
   if (booleans.length > 0) components.push(...buildBooleanRows(booleans));
   if (channels.length > 0) components.push(...buildChannelRows(channels));
   if (numbers.length > 0) components.push(...buildNumberRows(numbers));
+  if (strings.length > 0) components.push(...buildStringRows(strings));
   if (category === "staff") components.push(...buildRoleRows());
   return components;
 }
@@ -225,6 +257,16 @@ function buildNumberModal(setting, currentValue) {
   if (setting.min !== void 0) {
     input.setMinLength(1);
     input.setMaxLength(10);
+  }
+  modal.addComponents(new import_discord.ActionRowBuilder().addComponents(input));
+  return modal;
+}
+function buildStringModal(setting, currentValue) {
+  const modal = new import_discord.ModalBuilder().setCustomId(`${P.str}:${setting.id}`).setTitle(`Set ${setting.label}`);
+  const input = new import_discord.TextInputBuilder().setCustomId("value").setLabel(setting.description).setStyle(import_discord.TextInputStyle.Short).setPlaceholder(`Current: ${(0, import_service.formatValue)(currentValue)}${setting.min !== void 0 ? ` (${setting.min}-${setting.max} chars)` : ""}`).setRequired(true);
+  if (setting.min !== void 0) {
+    input.setMinLength(1);
+    input.setMaxLength(setting.max ?? 100);
   }
   modal.addComponents(new import_discord.ActionRowBuilder().addComponents(input));
   return modal;
@@ -357,18 +399,61 @@ async function handleNumberModalSubmit(interaction, settingId, guildId) {
   }, interaction.user.id, interaction.user.tag);
   await interaction.reply({ ...buildFullMessage(session.currentCategory, guildId), ephemeral: true });
 }
+async function handleStringModalSubmit(interaction, settingId, guildId) {
+  const session = getSession(guildId, interaction.user.id);
+  if (!session) {
+    await interaction.reply({ content: "This panel has expired.", ephemeral: true });
+    return;
+  }
+  const descriptor = (0, import_definitions2.getSettingById)(settingId);
+  if (!descriptor) {
+    await interaction.reply({ content: "Invalid setting.", ephemeral: true });
+    return;
+  }
+  const rawValue = interaction.fields.getTextInputValue("value");
+  if (!rawValue) {
+    await interaction.reply({ content: "No value provided.", ephemeral: true });
+    return;
+  }
+  const validation = (0, import_service.validateSettingValue)(descriptor, rawValue, guildId);
+  if (!validation.valid) {
+    await interaction.reply({ content: validation.error ?? "Invalid value.", ephemeral: true });
+    return;
+  }
+  const config = (0, import_guild_config.loadGuildConfig)(guildId);
+  (0, import_service.ensureConfigSections)(config);
+  const currentValue = (0, import_service.applySettingValue)(config, settingId);
+  (0, import_service.applySettingValue)(config, settingId, validation.normalized);
+  (0, import_service.saveSettingChange)(config, {
+    settingId,
+    category: descriptor.category,
+    path: descriptor.path,
+    label: descriptor.label,
+    oldValue: currentValue,
+    newValue: validation.normalized,
+    guildId,
+    userId: interaction.user.id,
+    userName: interaction.user.tag,
+    timestamp: Date.now()
+  }, interaction.user.id, interaction.user.tag);
+  await interaction.reply({ ...buildFullMessage(session.currentCategory, guildId), ephemeral: true });
+}
 function createSettingsCommand() {
   return {
     data: new import_discord.SlashCommandBuilder().setName("settings").setDescription("Interactive server settings panel for AshenAI").setDefaultMemberPermissions(import_discord.PermissionFlagsBits.ManageGuild).addSubcommand(
       (sub) => sub.setName("update").setDescription("Update a specific setting (advanced/manual)").addStringOption(
         (opt) => opt.setName("category").setDescription("Settings category").setRequired(true).addChoices(
+          { name: "Overview", value: "overview" },
+          { name: "Moderation", value: "moderation" },
           { name: "Support", value: "support" },
           { name: "Reports", value: "reports" },
           { name: "Appeals", value: "appeals" },
           { name: "AI", value: "ai" },
+          { name: "Social", value: "social" },
+          { name: "Personality", value: "personality" },
           { name: "Logging", value: "logging" },
           { name: "Staff", value: "staff" },
-          { name: "Moderation", value: "moderation" }
+          { name: "Audit", value: "audit" }
         )
       ).addStringOption(
         (opt) => opt.setName("setting").setDescription("Setting name to update").setRequired(true)
@@ -466,6 +551,18 @@ function createSettingsCommand() {
               await i.showModal(buildNumberModal(descriptor, currentValue));
               return;
             }
+            if (customId.startsWith(`${P.str}:`)) {
+              const settingId = customId.slice(P.str.length + 1);
+              const descriptor = (0, import_definitions2.getSettingById)(settingId);
+              if (!descriptor) {
+                await i.reply({ content: "Invalid setting.", ephemeral: true });
+                return;
+              }
+              const config = (0, import_guild_config.loadGuildConfig)(guildId);
+              const currentValue = (0, import_service.applySettingValue)(config, settingId);
+              await i.showModal(buildStringModal(descriptor, currentValue));
+              return;
+            }
           } catch (error) {
             import_logger.logger.error("Settings panel error:", error instanceof Error ? error.message : String(error));
             try {
@@ -496,13 +593,17 @@ function createSettingsCommand() {
 function createSettingsUpdateCommand() {
   return {
     data: new import_discord.SlashCommandBuilder().setName("settings-update").setDescription("Update a specific setting (advanced/manual)").setDefaultMemberPermissions(import_discord.PermissionFlagsBits.ManageGuild).addStringOption((opt) => opt.setName("category").setDescription("Settings category").setRequired(true).addChoices(
+      { name: "Overview", value: "overview" },
+      { name: "Moderation", value: "moderation" },
       { name: "Support", value: "support" },
       { name: "Reports", value: "reports" },
       { name: "Appeals", value: "appeals" },
       { name: "AI", value: "ai" },
+      { name: "Social", value: "social" },
+      { name: "Personality", value: "personality" },
       { name: "Logging", value: "logging" },
       { name: "Staff", value: "staff" },
-      { name: "Moderation", value: "moderation" }
+      { name: "Audit", value: "audit" }
     )).addStringOption((opt) => opt.setName("setting").setDescription("Setting name to update").setRequired(true)).addStringOption((opt) => opt.setName("value").setDescription("New value (true/false, channel ID, role ID, or number)").setRequired(true)),
     async execute(interaction) {
       try {
@@ -558,6 +659,16 @@ function createSettingsUpdateCommand() {
 async function handleSettingsModalSubmit(interaction) {
   try {
     const customId = interaction.customId;
+    if (customId.startsWith(`${P.str}:`)) {
+      const settingId2 = customId.slice(P.str.length + 1);
+      const guildId2 = interaction.guildId;
+      if (!guildId2) {
+        await interaction.reply({ content: "Must be used in a server.", ephemeral: true });
+        return;
+      }
+      await handleStringModalSubmit(interaction, settingId2, guildId2);
+      return;
+    }
     if (!customId.startsWith(`${P.num}:`)) return;
     const settingId = customId.slice(P.num.length + 1);
     const guildId = interaction.guildId;

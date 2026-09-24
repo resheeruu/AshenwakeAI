@@ -250,7 +250,6 @@ async function buildInteractiveContext(message, content, botId, alreadyFetchedRe
 client.once(
   import_discord.Events.ClientReady,
   async (readyClient) => {
-    import_logger.logger.info("Starting AshenAI...");
     import_logger.logger.info(
       `\u2705 Logged in as ${readyClient.user.tag}`
     );
@@ -1955,7 +1954,7 @@ async function startDiscord() {
     (0, import_discord_health.initDiscordHealth)(client);
     import_logger.logger.info("\u{1F4E1} Discord shard observability active.");
     if (process.env.ASHENAI_AUTO_UPDATE !== "off") {
-      (0, import_update_manager.startUpdateManager)();
+      void (0, import_update_manager.startUpdateManager)();
       import_logger.logger.info("\u{1F504} Update manager active.");
     }
     (0, import_rivalry.startSessionCleanup)();

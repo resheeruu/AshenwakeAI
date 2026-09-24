@@ -45,7 +45,8 @@ const DEFAULT_CONFIG = {
   lockFile: import_node_path.default.join(process.cwd(), "data", ".update-lock"),
   recordFile: import_node_path.default.join(process.cwd(), "data", "update-record.json"),
   maxRollbackAttempts: 2,
-  healthCheckDelayMs: 15e3
+  healthCheckDelayMs: 15e3,
+  gitTimeoutMs: 15e3
 };
 let config = { ...DEFAULT_CONFIG };
 let checkTimer = null;
@@ -55,73 +56,54 @@ let updateState = "IDLE";
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+function runGitAsync(args, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const proc = (0, import_node_child_process.spawn)("git", args, {
+      cwd: process.cwd(),
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => {
+      stdout += d.toString();
+    });
+    proc.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`git ${args.join(" ")} exited ${code}: ${stderr.slice(0, 200)}`));
+      } else {
+        resolve(stdout.trim());
+      }
+    });
+    proc.on("error", (err) => reject(err));
+  });
+}
 function getShortCommit() {
-  try {
-    return (0, import_node_child_process.execFileSync)("git", ["rev-parse", "--short", "HEAD"], {
-      encoding: "utf8",
-      timeout: 5e3,
-      stdio: ["pipe", "pipe", "pipe"]
-    }).trim();
-  } catch {
-    return "unknown";
-  }
+  return runGitAsync(["rev-parse", "--short", "HEAD"], 5e3).catch(() => "unknown");
 }
 function getFullCommit() {
-  try {
-    return (0, import_node_child_process.execFileSync)("git", ["rev-parse", "HEAD"], {
-      encoding: "utf8",
-      timeout: 5e3,
-      stdio: ["pipe", "pipe", "pipe"]
-    }).trim();
-  } catch {
-    return "unknown";
-  }
+  return runGitAsync(["rev-parse", "HEAD"], 5e3).catch(() => "unknown");
 }
 function getRemoteHead() {
-  try {
-    (0, import_node_child_process.execFileSync)("git", ["fetch", "origin", config.branch, "--quiet"], {
-      encoding: "utf8",
-      timeout: 3e4
-    });
-    return (0, import_node_child_process.execFileSync)("git", ["rev-parse", `origin/${config.branch}`], {
-      encoding: "utf8",
-      timeout: 5e3,
-      stdio: ["pipe", "pipe", "pipe"]
-    }).trim();
-  } catch (error) {
-    import_logger.logger.warn(
-      `[UpdateManager] failed to fetch remote: ${error instanceof Error ? error.message : String(error)}`
-    );
+  return runGitAsync(["fetch", "origin", config.branch, "--quiet"], config.gitTimeoutMs).then(() => runGitAsync(["rev-parse", `origin/${config.branch}`], 5e3)).catch((error) => {
+    import_logger.logger.warn(`[UpdateManager] failed to fetch remote: ${error instanceof Error ? error.message : String(error)}`);
     return null;
-  }
+  });
 }
 function gitCheckout(commit) {
-  try {
-    (0, import_node_child_process.execFileSync)("git", ["checkout", commit], {
-      encoding: "utf8",
-      timeout: 3e4,
-      cwd: process.cwd()
-    });
+  return runGitAsync(["checkout", commit], 3e4).then(() => {
     import_logger.logger.info(`[UpdateManager] checked out ${commit}`);
     return true;
-  } catch (error) {
-    import_logger.logger.error(
-      `[UpdateManager] git checkout ${commit} failed: ${error instanceof Error ? error.message : String(error)}`
-    );
+  }).catch((error) => {
+    import_logger.logger.error(`[UpdateManager] git checkout ${commit} failed: ${error instanceof Error ? error.message : String(error)}`);
     return false;
-  }
+  });
 }
 function gitPull() {
-  try {
-    (0, import_node_child_process.execFileSync)("git", ["pull", "origin", config.branch, "--ff-only"], {
-      encoding: "utf8",
-      timeout: 3e4,
-      cwd: process.cwd()
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return runGitAsync(["pull", "origin", config.branch, "--ff-only"], config.gitTimeoutMs).then(() => true).catch(() => false);
 }
 function acquireLock() {
   try {
@@ -181,58 +163,41 @@ function getUpdateRecord() {
   return null;
 }
 function runTypecheck() {
-  try {
-    (0, import_node_child_process.execFileSync)("node", ["./node_modules/.bin/tsc", "--noEmit"], {
-      encoding: "utf8",
-      timeout: 12e4,
-      cwd: process.cwd()
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return runNodeAsync("./node_modules/.bin/tsc", ["--noEmit"], 12e4);
 }
 function runBuild() {
-  try {
-    (0, import_node_child_process.execFileSync)("node", ["./node_modules/.bin/tsc"], {
-      encoding: "utf8",
-      timeout: 12e4,
-      cwd: process.cwd()
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return runNodeAsync("./node_modules/.bin/tsc", [], 12e4);
 }
 function runCriticalTests() {
-  try {
-    (0, import_node_child_process.execFileSync)("node", ["./node_modules/.bin/tsx", "scripts/run-all-tests.ts"], {
-      encoding: "utf8",
-      timeout: 6e5,
-      cwd: process.cwd(),
-      env: { ...process.env, NODE_OPTIONS: "" }
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return runNodeAsync("./node_modules/.bin/tsx", ["scripts/run-all-tests.ts"], 6e5, { ...process.env, NODE_OPTIONS: "" });
 }
 function installDepsIfNeeded() {
-  try {
+  return new Promise((resolve) => {
     const lockfile = import_node_path.default.join(process.cwd(), "package-lock.json");
     const nodeModules = import_node_path.default.join(process.cwd(), "node_modules");
     if (!(0, import_node_fs.existsSync)(nodeModules) || !(0, import_node_fs.existsSync)(lockfile)) {
       import_logger.logger.info("[UpdateManager] installing dependencies...");
-      (0, import_node_child_process.execFileSync)("npm", ["ci", "--include=dev"], {
-        encoding: "utf8",
-        timeout: 12e4,
-        cwd: process.cwd()
-      });
+      runNodeAsync("npm", ["ci", "--include=dev"], 12e4).then(() => resolve(true)).catch(() => resolve(false));
+    } else {
+      resolve(true);
     }
-    return true;
-  } catch {
-    return false;
-  }
+  });
+}
+function runNodeAsync(bin, args, timeoutMs, env) {
+  return new Promise((resolve) => {
+    const proc = (0, import_node_child_process.spawn)(bin, args, {
+      cwd: process.cwd(),
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024,
+      env: env || process.env
+    });
+    proc.on("close", (code) => {
+      resolve(code === 0);
+    });
+    proc.on("error", () => {
+      resolve(false);
+    });
+  });
 }
 function runPostStartHealthCheck() {
   try {
@@ -301,7 +266,7 @@ async function postStartValidation() {
     if (health.healthy) {
       record.state = "SUCCESS";
       record.healthResult = "passed";
-      record.currentCommit = getShortCommit();
+      record.currentCommit = await getShortCommit();
       saveRecord(record);
       import_logger.logger.info(`[UpdateManager] new version ${record.targetCommit} verified healthy and is now known-good.`);
     } else {
@@ -340,7 +305,7 @@ async function triggerRollback(record) {
   import_logger.logger.info(
     `[UpdateManager] ROLLING BACK: ${record.targetCommit} -> ${previousCommit} (attempt ${record.rollbackAttempt}/${config.maxRollbackAttempts})`
   );
-  if (!gitCheckout(previousCommit)) {
+  if (!await gitCheckout(previousCommit)) {
     record.state = "ROLLBACK_FAILED";
     record.rollbackResult = "failed";
     record.error = `git checkout ${previousCommit} failed`;
@@ -348,7 +313,7 @@ async function triggerRollback(record) {
     import_logger.logger.error(`[UpdateManager] ${record.error}`);
     return;
   }
-  if (!installDepsIfNeeded()) {
+  if (!await installDepsIfNeeded()) {
     record.state = "ROLLBACK_FAILED";
     record.rollbackResult = "failed";
     record.error = "dependency installation failed during rollback";
@@ -356,7 +321,7 @@ async function triggerRollback(record) {
     import_logger.logger.error(`[UpdateManager] ${record.error}`);
     return;
   }
-  if (!runBuild()) {
+  if (!await runBuild()) {
     record.state = "ROLLBACK_FAILED";
     record.rollbackResult = "failed";
     record.error = "build failed during rollback";
@@ -380,11 +345,11 @@ async function performUpdate() {
     import_logger.logger.warn("[UpdateManager] update already in progress");
     return false;
   }
-  const remoteCommit = getRemoteHead();
+  const remoteCommit = await getRemoteHead();
   if (!remoteCommit) {
     return false;
   }
-  const localCommit = getShortCommit();
+  const localCommit = await getShortCommit();
   if (remoteCommit === localCommit || remoteCommit.slice(0, 7) === localCommit) {
     return false;
   }
@@ -420,14 +385,14 @@ async function performUpdate() {
   };
   try {
     import_logger.logger.info("[UpdateManager] pulling changes...");
-    if (!gitPull()) {
+    if (!await gitPull()) {
       record.state = "FAILED";
       record.error = "git pull failed";
       saveRecord(record);
       return false;
     }
     import_logger.logger.info("[UpdateManager] checking dependencies...");
-    if (!installDepsIfNeeded()) {
+    if (!await installDepsIfNeeded()) {
       record.state = "FAILED";
       record.error = "dependency installation failed";
       saveRecord(record);
@@ -436,33 +401,33 @@ async function performUpdate() {
     updateState = "VALIDATING";
     record.state = "VALIDATING";
     import_logger.logger.info("[UpdateManager] running typecheck...");
-    record.validationResult = runTypecheck() ? "passed" : "failed";
+    record.validationResult = await runTypecheck() ? "passed" : "failed";
     if (record.validationResult === "failed") {
       record.state = "FAILED";
       record.error = "typecheck failed - keeping current version";
       saveRecord(record);
       import_logger.logger.error("[UpdateManager] typecheck failed, aborting update");
-      gitCheckout(record.previousKnownGoodCommit);
+      await gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
     import_logger.logger.info("[UpdateManager] running build...");
-    record.buildResult = runBuild() ? "passed" : "failed";
+    record.buildResult = await runBuild() ? "passed" : "failed";
     if (record.buildResult === "failed") {
       record.state = "FAILED";
       record.error = "build failed - keeping current version";
       saveRecord(record);
       import_logger.logger.error("[UpdateManager] build failed, aborting update");
-      gitCheckout(record.previousKnownGoodCommit);
+      await gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
     import_logger.logger.info("[UpdateManager] running critical tests...");
-    record.testResult = runCriticalTests() ? "passed" : "failed";
+    record.testResult = await runCriticalTests() ? "passed" : "failed";
     if (record.testResult === "failed") {
       record.state = "FAILED";
       record.error = "tests failed - keeping current version";
       saveRecord(record);
       import_logger.logger.error("[UpdateManager] tests failed, aborting update");
-      gitCheckout(record.previousKnownGoodCommit);
+      await gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
     record.state = "RESTART_PENDING";
@@ -484,7 +449,7 @@ async function performUpdate() {
     record.error = error instanceof Error ? error.message : String(error);
     saveRecord(record);
     import_logger.logger.error(`[UpdateManager] update failed: ${record.error}`);
-    gitCheckout(record.previousKnownGoodCommit);
+    await gitCheckout(record.previousKnownGoodCommit);
     return false;
   } finally {
     if (record.state !== "RESTART_PENDING") {
@@ -494,23 +459,24 @@ async function performUpdate() {
     }
   }
 }
-function getUpdateStatus() {
-  const current = getShortCommit();
+let cachedCurrentCommit = "unknown";
+let cachedLatestAvailable = null;
+(async () => {
+  cachedCurrentCommit = await getShortCommit().catch(() => "unknown");
+  getRemoteHead().then((r) => {
+    cachedLatestAvailable = r?.slice(0, 7) ?? null;
+  }).catch(() => {
+  });
+})();
+async function getUpdateStatus() {
+  const current = cachedCurrentCommit;
   const record = getUpdateRecord();
-  let latestAvailable = null;
-  try {
-    if (!isUpdating) {
-      const remote = getRemoteHead();
-      latestAvailable = remote?.slice(0, 7) ?? null;
-    }
-  } catch {
-  }
   return {
     currentCommit: current,
     knownGoodCommit: record?.state === "SUCCESS" ? record.targetCommit : record?.previousKnownGoodCommit ?? null,
     targetCommit: record?.targetCommit ?? null,
-    latestAvailable,
-    updateAvailable: latestAvailable ? latestAvailable !== current : false,
+    latestAvailable: cachedLatestAvailable,
+    updateAvailable: cachedLatestAvailable ? cachedLatestAvailable !== current : false,
     updateState,
     lastUpdate: record,
     lastFailedUpdate: record?.state === "FAILED" || record?.state === "ROLLBACK_FAILED" ? record : null,
@@ -519,11 +485,11 @@ function getUpdateStatus() {
     branch: config.branch
   };
 }
-function startUpdateManager(customConfig) {
+async function startUpdateManager(customConfig) {
   if (customConfig) {
     config = { ...DEFAULT_CONFIG, ...customConfig };
   }
-  currentVersion = getShortCommit();
+  currentVersion = cachedCurrentCommit;
   import_logger.logger.info(
     `[UpdateManager] monitoring branch=${config.branch} every ${config.checkIntervalMs / 1e3}s (current=${currentVersion})`
   );

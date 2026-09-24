@@ -403,10 +403,9 @@ async function buildInteractiveContext(
    READY
    ===================================================== */
 
-client.once(
+  client.once(
   Events.ClientReady,
   async (readyClient) => {
-    logger.info("Starting AshenAI...");
     logger.info(
       `✅ Logged in as ${readyClient.user.tag}`
     );
@@ -2832,7 +2831,7 @@ async function startDiscord(): Promise<void> {
     logger.info("📡 Discord shard observability active.");
 
     if (process.env.ASHENAI_AUTO_UPDATE !== "off") {
-      startUpdateManager();
+      void startUpdateManager();
       logger.info("🔄 Update manager active.");
     }
 
