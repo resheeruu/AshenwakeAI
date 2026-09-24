@@ -10,7 +10,6 @@
 # --- Dependencies (NEVER commit) ---
 node_modules/
 dist/
-!dist/
 *.tsbuildinfo
 
 # --- Data & runtime state ---

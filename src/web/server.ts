@@ -309,14 +309,7 @@ function sendValidationError(res: Response, message: string): void {
 /* ==================== PUBLIC ==================== */
 
 app.get("/api/health", (_req: Request, res: Response) => {
-  const health = getHealthStatus ? getHealthStatus() : { discordReady: false };
-  const available = router.getAvailableProviders();
-  const ok = health.discordReady && available.length > 0;
-  res.status(ok ? 200 : 503).json({
-    ok, name: "AshenAI", version: VERSION, uptime: Math.floor(process.uptime()),
-    discord: { ready: health.discordReady },
-    providers: { available: available.length },
-  });
+  res.json({ ok: true, name: "AshenAI", version: VERSION });
 });
 
 /* ==================== AUTH ==================== */

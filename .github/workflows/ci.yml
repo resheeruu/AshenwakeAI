@@ -49,6 +49,12 @@ jobs:
           npm ls --depth=0 2>&1 | head -50
 
       # --- STAGE: Security Gate (blocking) ---
+      - name: Secret scanning with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_LOG_LEVEL: error
+        continue-on-error: false
+
       - name: npm audit (high+)
         run: |
           set +e

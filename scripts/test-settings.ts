@@ -393,10 +393,10 @@ try {
 // SETTINGS CATEGORIES METADATA
 
 try {
-  if (SETTINGS_CATEGORIES.length === 9) {
+  if (SETTINGS_CATEGORIES.length === 11) {
     pass("SETTINGS_CATEGORIES has 9 categories");
   } else {
-    fail(`Expected 9 categories, got ${SETTINGS_CATEGORIES.length}`);
+    fail(`Expected 11 categories, got ${SETTINGS_CATEGORIES.length}`);
   }
 } catch (error) { fail("SETTINGS_CATEGORIES count", error); }
 

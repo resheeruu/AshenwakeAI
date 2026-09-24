@@ -102,13 +102,19 @@ try {
 
 try {
   const { getUpdateStatus } = require("../src/core/update-manager");
-  const status = getUpdateStatus();
+  const statusPromise = getUpdateStatus();
 
-  if (typeof status.currentCommit !== "string") {
-    throw new Error("currentCommit should be string");
+  if (!(statusPromise && typeof statusPromise.then === "function")) {
+    throw new Error("getUpdateStatus should return a Promise");
   }
-  assertEqual(status.isUpdating, false, "not updating by default");
-  assertEqual(status.branch, "main", "default branch");
+
+  await statusPromise.then((status: any) => {
+    if (typeof status.currentCommit !== "string") {
+      throw new Error("currentCommit should be string");
+    }
+    assertEqual(status.isUpdating, false, "not updating by default");
+    assertEqual(status.branch, "main", "default branch");
+  });
 
   pass("update manager: status defaults");
 } catch (e) {
@@ -391,17 +397,20 @@ try {
     "utf8"
   );
 
-  if (!serverContent.includes("discord:")) {
-    throw new Error("health endpoint missing discord field");
+  // Check public health endpoint (no auth) returns minimal response
+  const publicHealthMatch = serverContent.match(/app\.get\("\/api\/health"[^}]+\}[\s]*\);/s);
+  if (!publicHealthMatch) {
+    throw new Error("public health endpoint not found");
   }
-  if (!serverContent.includes("providers:")) {
-    throw new Error("health endpoint missing providers field");
+  const publicHealthCode = publicHealthMatch[0];
+  if (!publicHealthCode.includes('name: "AshenAI"')) {
+    throw new Error("public health endpoint missing name field");
   }
-  if (!serverContent.includes("ok, name: \"AshenAI\"")) {
-    throw new Error("health endpoint missing ok/name fields");
+  if (publicHealthCode.includes("discord") || publicHealthCode.includes("providers")) {
+    throw new Error("public health endpoint should not leak discord/providers state");
   }
 
-  pass("health endpoint: sanitized response with discord/providers/ok fields");
+  pass("health endpoint: minimal sanitized response without internal state");
 } catch (e) {
   fail("health endpoint: sanitized response with discord/providers/ok fields", e);
 }

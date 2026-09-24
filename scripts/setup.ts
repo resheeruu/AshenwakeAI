@@ -298,7 +298,8 @@ function createEnvFile(
   }
 
   fs.writeFileSync(ENV_FILE, lines.join("\n"), "utf-8");
-  logOk("Created .env from .env.example");
+  fs.chmodSync(ENV_FILE, 0o600);
+  logOk("Created .env from .env.example with restricted permissions (0600)");
   return true;
 }
 
@@ -359,6 +360,11 @@ async function main() {
   const created = createEnvFile(existingEnv, newSecret, ownerCreds);
   if (created) {
     logOk(".env file created with generated secrets");
+  }
+
+  // Ensure .env has restrictive permissions even if it pre-existed
+  if (fs.existsSync(ENV_FILE)) {
+    fs.chmodSync(ENV_FILE, 0o600);
   }
 
   // Effective config: process.env > .env > .env.example defaults
