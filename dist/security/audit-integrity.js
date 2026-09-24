@@ -43,11 +43,11 @@ function validateKeyForProduction() {
   if (keyValidated) return;
   keyValidated = true;
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 16) {
+  if (!secret || secret.length < 32) {
     const isProduction = process.env.NODE_ENV === "production";
     if (isProduction) {
       console.error(
-        "[FATAL] SESSION_SECRET is required in production (minimum 16 characters). Audit log integrity cannot be guaranteed without a strong secret."
+        "[FATAL] SESSION_SECRET is required in production (minimum 32 characters). Audit log integrity cannot be guaranteed without a high-entropy secret."
       );
       process.exit(1);
     } else {
