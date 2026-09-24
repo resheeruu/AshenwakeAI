@@ -56,29 +56,47 @@ let updateState = "IDLE";
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+const MAX_CAPTURED_OUTPUT_BYTES = 1024 * 1024;
 function runGitAsync(args, timeoutMs) {
   return new Promise((resolve, reject) => {
     const proc = (0, import_node_child_process.spawn)("git", args, {
       cwd: process.cwd(),
       timeout: timeoutMs,
-      maxBuffer: 1024 * 1024
+      stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      proc.kill("SIGKILL");
+      reject(error);
+    };
     proc.stdout.on("data", (d) => {
+      if (settled) return;
       stdout += d.toString();
+      if (stdout.length > MAX_CAPTURED_OUTPUT_BYTES) {
+        fail(new Error(`git ${args.join(" ")} produced too much output`));
+      }
     });
     proc.stderr.on("data", (d) => {
+      if (settled) return;
       stderr += d.toString();
+      if (stderr.length > MAX_CAPTURED_OUTPUT_BYTES) {
+        stderr = stderr.slice(0, MAX_CAPTURED_OUTPUT_BYTES);
+      }
     });
     proc.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       if (code !== 0) {
         reject(new Error(`git ${args.join(" ")} exited ${code}: ${stderr.slice(0, 200)}`));
       } else {
         resolve(stdout.trim());
       }
     });
-    proc.on("error", (err) => reject(err));
+    proc.on("error", (err) => fail(err instanceof Error ? err : new Error(String(err))));
   });
 }
 function getShortCommit() {
@@ -188,13 +206,32 @@ function runNodeAsync(bin, args, timeoutMs, env) {
     const proc = (0, import_node_child_process.spawn)(bin, args, {
       cwd: process.cwd(),
       timeout: timeoutMs,
-      maxBuffer: 1024 * 1024,
+      /* Explicit stdio + drained pipes: see capture() below. */
+      stdio: ["ignore", "pipe", "pipe"],
       env: env || process.env
     });
+    let captured = "";
+    const capture = (d) => {
+      captured += d.toString();
+      if (captured.length > MAX_CAPTURED_OUTPUT_BYTES) {
+        captured = captured.slice(captured.length - MAX_CAPTURED_OUTPUT_BYTES);
+      }
+    };
+    proc.stdout.on("data", capture);
+    proc.stderr.on("data", capture);
     proc.on("close", (code) => {
+      if (code !== 0) {
+        const tail = captured.trim().split("\n").slice(-10).join("\n");
+        import_logger.logger.warn(
+          `${import_node_path.default.basename(bin)} ${args.join(" ")} exited ${code}${tail ? `: ${tail}` : ""}`
+        );
+      }
       resolve(code === 0);
     });
-    proc.on("error", () => {
+    proc.on("error", (err) => {
+      import_logger.logger.warn(
+        `Failed to spawn ${bin} ${args.join(" ")}: ${err instanceof Error ? err.message : String(err)}`
+      );
       resolve(false);
     });
   });

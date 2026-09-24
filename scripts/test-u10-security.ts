@@ -628,11 +628,15 @@ test("Session store does not log session IDs", () => {
 });
 
 test("Frontend redacts secrets in logs", () => {
-  const htmlSrc = fs.readFileSync(
-    path.join(process.cwd(), "src/web/public/index.html"), "utf8"
+  const escSrc = fs.readFileSync(
+    path.join(process.cwd(), "src/web/public/js/escape.js"), "utf8"
   );
-  assert(htmlSrc.includes("function redact(s)"), "Frontend should have redact function");
-  assert(htmlSrc.includes("REDACTED"), "Redact function should replace with [REDACTED]");
+  assert(escSrc.includes("function redact(s)"), "Frontend should have redact function");
+  assert(escSrc.includes("REDACTED"), "Redact function should replace with [REDACTED]");
+  const analyticsSrc = fs.readFileSync(
+    path.join(process.cwd(), "src/web/public/js/analytics.js"), "utf8"
+  );
+  assert(analyticsSrc.includes("redact("), "Log display must apply redact()");
 });
 
 // ============================================================

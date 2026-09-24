@@ -63,7 +63,7 @@ Edit `.env` with required values:
 # Required
 DISCORD_TOKEN=your_discord_bot_token
 DISCORD_CLIENT_ID=your_client_id
-SESSION_SECRET=your_session_secret_minimum_16_chars
+SESSION_SECRET=your_session_secret_minimum_32_chars
 
 # At least one AI provider
 GROQ_API_KEY=your_groq_key
@@ -121,7 +121,7 @@ curl http://localhost:${PORT:-8080}/api/health
 |----------|-------------|
 | `DISCORD_TOKEN` | Discord bot token from Discord Developer Portal |
 | `DISCORD_CLIENT_ID` | Discord application client ID |
-| `SESSION_SECRET` | Strong random secret for session encryption (min 16 chars) |
+| `SESSION_SECRET` | Strong random secret for session encryption (min 32 chars) |
 
 ### Optional
 

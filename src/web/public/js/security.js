@@ -21,7 +21,7 @@ async function loadSecurity() {
       sessionsEl.innerHTML = `
         <div style="margin-bottom:8px"><button class="btn btn-danger btn-sm" onclick="revokeAllSessions()">Revoke All Other Sessions</button></div>
         ${sessionsRes.sessions.map(s => `
-          <div class="provider-row"><span class="provider-name">Session ${s.sessionId}</span><span class="badge ${s.isCurrent ? 'badge-green' : 'badge-muted'}">${s.isCurrent ? 'Current' : 'Other'}</span></div>
+          <div class="provider-row"><span class="provider-name">Session ${escapeHtml(s.sessionId)}</span><span class="badge ${s.isCurrent ? 'badge-green' : 'badge-muted'}">${s.isCurrent ? 'Current' : 'Other'}</span></div>
         `).join('')}
       `;
     }

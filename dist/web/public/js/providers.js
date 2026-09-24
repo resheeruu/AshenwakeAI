@@ -119,8 +119,8 @@ async function loadManagedProviders() {
       listEl.innerHTML = data.providers.map(p => `
         <div class="provider-row">
           <div>
-            <div class="provider-name">${p.displayName || p.name}</div>
-            <div class="provider-meta"><span>${p.protocol || 'N/A'}</span><span>${p.health?.healthState || 'N/A'}</span></div>
+            <div class="provider-name">${escapeHtml(p.displayName || p.name)}</div>
+            <div class="provider-meta"><span>${escapeHtml(p.protocol || 'N/A')}</span><span>${escapeHtml(p.health?.healthState || 'N/A')}</span></div>
           </div>
           <span class="badge ${p.enabled ? 'badge-green' : 'badge-muted'}">${p.enabled ? 'Active' : 'Inactive'}</span>
         </div>

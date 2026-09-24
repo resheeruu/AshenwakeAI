@@ -15,10 +15,10 @@ async function loadAnalytics() {
     if (statsEl && systemUsage.ok && systemUsage.systemUsage) {
       const usage = systemUsage.systemUsage;
       statsEl.innerHTML = `
-        <div class="stat-card purple"><div class="stat-value">${usage.requests || 0}</div><div class="stat-label">Requests</div></div>
-        <div class="stat-card green"><div class="stat-value">${usage.successfulRequests || 0}</div><div class="stat-label">Successful</div></div>
-        <div class="stat-card red"><div class="stat-value">${usage.failedRequests || 0}</div><div class="stat-label">Failed</div></div>
-        <div class="stat-card yellow"><div class="stat-value">${usage.activeUsers || 0}</div><div class="stat-label">Active Users</div></div>
+        <div class="stat-card purple"><div class="stat-value">${escapeHtml(usage.requests || 0)}</div><div class="stat-label">Requests</div></div>
+        <div class="stat-card green"><div class="stat-value">${escapeHtml(usage.successfulRequests || 0)}</div><div class="stat-label">Successful</div></div>
+        <div class="stat-card red"><div class="stat-value">${escapeHtml(usage.failedRequests || 0)}</div><div class="stat-label">Failed</div></div>
+        <div class="stat-card yellow"><div class="stat-value">${escapeHtml(usage.activeUsers || 0)}</div><div class="stat-label">Active Users</div></div>
       `;
     }
 
@@ -29,9 +29,9 @@ async function loadAnalytics() {
         <div class="log-list">
           ${recentLogs.map(e => `
             <div class="log-entry">
-              <span class="log-ts">${new Date(e.timestamp).toLocaleString()}</span>
-              <span class="log-level ${e.level || 'info'}">${e.level || 'INFO'}</span>
-              <span>${e.message || e.what || 'Unknown'}</span>
+              <span class="log-ts">${escapeHtml(new Date(e.timestamp).toLocaleString())}</span>
+              <span class="log-level ${escapeHtml(e.level || 'info')}">${escapeHtml(e.level || 'INFO')}</span>
+              <span>${escapeHtml(redact(e.message || e.what || 'Unknown'))}</span>
             </div>
           `).join('')}
         </div>

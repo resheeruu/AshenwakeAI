@@ -115,7 +115,7 @@ async function loadOverview() {
       const status = stats.status || {};
       statsEl.innerHTML = `
         <div class="stat-card green"><div class="stat-value">${status.discordReady ? 'Yes' : 'No'}</div><div class="stat-label">Discord</div></div>
-        <div class="stat-card purple"><div class="stat-value">${providers.providers?.length || 0}</div><div class="stat-label">Providers</div></div>
+        <div class="stat-card purple"><div class="stat-value">${escapeHtml(providers.providers?.length || 0)}</div><div class="stat-label">Providers</div></div>
         <div class="stat-card yellow"><div class="stat-value">Online</div><div class="stat-label">Status</div></div>
       `;
     }
@@ -125,10 +125,10 @@ async function loadOverview() {
     if (providersEl && providers.ok && providers.providers) {
       providersEl.innerHTML = providers.providers.map(p => `
         <div class="provider-card">
-          <h4><span class="status-dot ${p.health?.healthState === 'HEALTHY' ? 'status-dot-green' : 'status-dot-yellow'}"></span>${p.displayName || p.name}</h4>
+          <h4><span class="status-dot ${p.health?.healthState === 'HEALTHY' ? 'status-dot-green' : 'status-dot-yellow'}"></span>${escapeHtml(p.displayName || p.name)}</h4>
           <div class="provider-meta">
-            <span class="badge ${p.health?.healthState === 'HEALTHY' ? 'badge-green' : 'badge-yellow'}">${p.health?.healthState || 'UNKNOWN'}</span>
-            <span>${p.modelCount || 0} models</span>
+            <span class="badge ${p.health?.healthState === 'HEALTHY' ? 'badge-green' : 'badge-yellow'}">${escapeHtml(p.health?.healthState || 'UNKNOWN')}</span>
+            <span>${escapeHtml(p.modelCount || 0)} models</span>
           </div>
         </div>
       `).join('');
@@ -145,18 +145,24 @@ async function loadProviders() {
     if (listEl && data.ok && data.providers) {
       listEl.innerHTML = data.providers.map(p => `
         <div class="provider-card">
-          <h4>${p.displayName || p.name} <span class="badge ${p.enabled ? 'badge-green' : 'badge-muted'}">${p.enabled ? 'HEALTHY' : 'DISABLED'}</span></h4>
+          <h4>${escapeHtml(p.displayName || p.name)} <span class="badge ${p.enabled ? 'badge-green' : 'badge-muted'}">${p.enabled ? 'HEALTHY' : 'DISABLED'}</span></h4>
           <div class="provider-meta">
-            <span>${p.protocol || 'N/A'}</span>
-            <span>${p.health?.healthState || 'N/A'}</span>
-            <span>${p.modelCount || 0} models</span>
+            <span>${escapeHtml(p.protocol || 'N/A')}</span>
+            <span>${escapeHtml(p.health?.healthState || 'N/A')}</span>
+            <span>${escapeHtml(p.modelCount || 0)} models</span>
           </div>
           <div class="step-actions" style="margin-top:8px">
-            <button class="btn btn-sm btn-outline" onclick="testProvider('${p.id}')">Test</button>
-            <button class="btn btn-sm btn-outline" onclick="toggleProvider('${p.id}', ${!p.enabled})">${p.enabled ? 'Disable' : 'Enable'}</button>
+            <button class="btn btn-sm btn-outline" data-action="test" data-id="${escapeHtml(p.id)}">Test</button>
+            <button class="btn btn-sm btn-outline" data-action="toggle" data-id="${escapeHtml(p.id)}" data-enabled="${p.enabled ? 'true' : 'false'}">${p.enabled ? 'Disable' : 'Enable'}</button>
           </div>
         </div>
       `).join('');
+      listEl.querySelectorAll('button[data-action="test"]').forEach(btn => {
+        btn.addEventListener('click', () => testProvider(btn.getAttribute('data-id')));
+      });
+      listEl.querySelectorAll('button[data-action="toggle"]').forEach(btn => {
+        btn.addEventListener('click', () => toggleProvider(btn.getAttribute('data-id'), btn.getAttribute('data-enabled') === 'true'));
+      });
     }
   } catch (error) {
     const listEl = document.getElementById('providerList');
@@ -179,8 +185,8 @@ async function loadModels() {
       }
       listEl.innerHTML = allModels.map(m => `
         <div class="model-card">
-          <h4>${m.displayName || m.modelId || m.id}</h4>
-          <div class="provider-meta"><span>${m.provider || 'N/A'}</span></div>
+          <h4>${escapeHtml(m.displayName || m.modelId || m.id)}</h4>
+          <div class="provider-meta"><span>${escapeHtml(m.provider || 'N/A')}</span></div>
         </div>
       `).join('');
     }
@@ -212,10 +218,10 @@ async function loadAnalytics() {
     if (statsEl && stats.ok && stats.systemUsage) {
       const usage = stats.systemUsage;
       statsEl.innerHTML = `
-        <div class="stat-card purple"><div class="stat-value">${usage.requests || 0}</div><div class="stat-label">Requests</div></div>
-        <div class="stat-card green"><div class="stat-value">${usage.successfulRequests || 0}</div><div class="stat-label">Successful</div></div>
-        <div class="stat-card red"><div class="stat-value">${usage.failedRequests || 0}</div><div class="stat-label">Failed</div></div>
-        <div class="stat-card yellow"><div class="stat-value">${usage.activeUsers || 0}</div><div class="stat-label">Active Users</div></div>
+        <div class="stat-card purple"><div class="stat-value">${escapeHtml(usage.requests || 0)}</div><div class="stat-label">Requests</div></div>
+        <div class="stat-card green"><div class="stat-value">${escapeHtml(usage.successfulRequests || 0)}</div><div class="stat-label">Successful</div></div>
+        <div class="stat-card red"><div class="stat-value">${escapeHtml(usage.failedRequests || 0)}</div><div class="stat-label">Failed</div></div>
+        <div class="stat-card yellow"><div class="stat-value">${escapeHtml(usage.activeUsers || 0)}</div><div class="stat-label">Active Users</div></div>
       `;
     }
   } catch (error) {
@@ -233,10 +239,10 @@ async function loadAudit() {
         <div class="log-list">
           ${data.entries.map(e => `
             <div class="log-entry">
-              <span class="log-ts">${new Date(e.timestamp).toLocaleString()}</span>
-              <span class="log-level info">${e.result || 'info'}</span>
-              <span>${e.what || 'Unknown'}</span>
-              <span style="color:var(--dim)">- ${e.who || 'unknown'}</span>
+              <span class="log-ts">${escapeHtml(new Date(e.timestamp).toLocaleString())}</span>
+              <span class="log-level info">${escapeHtml(e.result || 'info')}</span>
+              <span>${escapeHtml(redact(e.what || 'Unknown'))}</span>
+              <span style="color:var(--dim)">- ${escapeHtml(e.who || 'unknown')}</span>
             </div>
           `).join('')}
         </div>
@@ -267,7 +273,7 @@ async function loadSecurity() {
       sessionsEl.innerHTML = `
         <div style="margin-bottom:8px"><button class="btn btn-danger btn-sm" onclick="revokeAllSessions()">Revoke All Other Sessions</button></div>
         ${sessions.sessions.map(s => `
-          <div class="provider-row"><span class="provider-name">Session ${s.sessionId}</span><span class="badge ${s.isCurrent ? 'badge-green' : 'badge-muted'}">${s.isCurrent ? 'Current' : 'Other'}</span></div>
+          <div class="provider-row"><span class="provider-name">Session ${escapeHtml(s.sessionId)}</span><span class="badge ${s.isCurrent ? 'badge-green' : 'badge-muted'}">${s.isCurrent ? 'Current' : 'Other'}</span></div>
         `).join('')}
       `;
     }

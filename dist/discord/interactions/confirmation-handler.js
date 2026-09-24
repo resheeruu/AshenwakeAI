@@ -179,9 +179,8 @@ function authorizeTemplateStep(plan, step, requesterAshenRole, guildConfig, guil
       dryRun: false
     },
     guildConfig,
-    false,
     true
-    // skip rate limit — consumed at plan creation
+    // skipRateLimit — consumed at plan creation
   );
   if (!validation.allowed) {
     return {
@@ -526,7 +525,7 @@ async function handleConfirm(interaction) {
     requesterRole: requesterAshenRole,
     arguments: plan.arguments,
     dryRun: false
-  }, guildConfig, false, true);
+  }, guildConfig, true);
   if (!validation.allowed) {
     (0, import_confirmation_store.removePendingPlan)(planId);
     const result = {

@@ -86,10 +86,10 @@ function buildActionsHelp(): string {
  * TARGET RESOLUTION
  * ================================================================ */
 
-function resolveTarget(
+async function resolveTarget(
   message: Message,
   parts: string[],
-): string | null {
+): Promise<string | null> {
   // 1. Explicit Discord mention
   if (message.mentions.users.size > 0) {
     const mentioned = message.mentions.users.first();
@@ -98,13 +98,26 @@ function resolveTarget(
 
   // 2. Reply-based targeting
   if (message.reference?.messageId) {
-    try {
-      const repliedTo = message.channel.messages.cache.get(message.reference.messageId);
-      if (repliedTo && repliedTo.author.id !== message.author.id) {
-        return repliedTo.author.id;
+    const referenceId = message.reference.messageId;
+    const cached = message.channel.messages.cache.get(referenceId);
+
+    if (cached) {
+      if (cached.author.id !== message.author.id) {
+        return cached.author.id;
       }
-    } catch {
-      // Ignore cache miss
+    } else {
+      /*
+       * Not in cache — fetch it from Discord so the documented
+       * "reply to a message with `ash <action>`" flow works reliably.
+       */
+      try {
+        const referenced = await message.fetchReference();
+        if (referenced.author.id !== message.author.id) {
+          return referenced.author.id;
+        }
+      } catch {
+        // Deleted or inaccessible referenced message — fall through.
+      }
     }
   }
 
@@ -186,7 +199,7 @@ export async function handleAnimeAction(
   }
 
   const botId = client.user?.id ?? "";
-  let targetId = resolveTarget(message, parts);
+  let targetId = await resolveTarget(message, parts);
 
   if (action.targetRequired && !targetId) {
     const emoteStr = action.emoteName

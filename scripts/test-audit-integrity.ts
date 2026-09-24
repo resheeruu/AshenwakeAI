@@ -194,7 +194,8 @@ const twoChain: SignedAuditEntry[] = [
 ];
 const twoResult = verifyAuditChain(twoChain);
 assertEqual(twoResult.valid, true, "Two-entry chain is valid");
-assert(twoResult.brokenAt === undefined, "Two-entry chain has no broken index");
+assertEqual(twoResult.firstInvalidIndex, null, "Two-entry chain has no firstInvalidIndex");
+assertEqual(twoResult.tamperingDetected, false, "Two-entry chain has no tampering");
 
 // B4: Three-entry chain
 const sig3 = signEntry(entry3, sig2.signature);
@@ -211,14 +212,15 @@ const tamperedChain = [...threeChain];
 tamperedChain[0] = { ...tamperedChain[0], who: "TAMPERED" };
 const tamperResult = verifyAuditChain(tamperedChain);
 assertEqual(tamperResult.valid, false, "Tampered 'who' field detected");
-assertEqual(tamperResult.brokenAt, 0, "Tamper detected at index 0");
+assertEqual(tamperResult.firstInvalidIndex, 0, "Tamper detected at firstInvalidIndex 0");
+assertEqual(tamperResult.tamperingDetected, true, "Tampering flagged for who-field tamper");
 
 // B6: Tamper detection — modify result field
 const tamperedResult2 = [...threeChain];
 tamperedResult2[1] = { ...tamperedResult2[1], result: "TAMPERED" as any };
 const tamperResult2 = verifyAuditChain(tamperedResult2);
 assertEqual(tamperResult2.valid, false, "Tampered 'result' field detected");
-assertEqual(tamperResult2.brokenAt, 1, "Result tamper detected at index 1");
+assertEqual(tamperResult2.firstInvalidIndex, 1, "Result tamper detected at firstInvalidIndex 1");
 
 // B7: Tamper detection — modify timestamp
 const tamperedTimestamp = [...threeChain];
@@ -231,7 +233,7 @@ const tamperedSig = [...threeChain];
 tamperedSig[1] = { ...tamperedSig[1], signature: "a".repeat(64) };
 const tamperResult4 = verifyAuditChain(tamperedSig);
 assertEqual(tamperResult4.valid, false, "Tampered 'signature' field detected");
-assertEqual(tamperResult4.brokenAt, 1, "Signature tamper detected at index 1");
+assertEqual(tamperResult4.firstInvalidIndex, 1, "Signature tamper detected at firstInvalidIndex 1");
 
 // B9: Insert extra entry
 const insertedChain = [
@@ -259,7 +261,7 @@ assertEqual(reorderResult.valid, false, "Reordered entries break chain");
 
 console.log("\nSection C: Backward Compatibility");
 
-// C1: All unsigned entries (pre-U13 format)
+// C1: All unsigned entries (pre-U13 format) — fail closed as legacy/tampered
 const preU13Entries: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "signature" | "prevHash">>> = [
   { id: "old1", timestamp: 1000, who: "user", what: "login", where: "web", result: "success" },
   { id: "old2", timestamp: 2000, who: "user", what: "logout", where: "web", result: "success" },
@@ -267,9 +269,12 @@ const preU13Entries: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "
 ];
 
 const preU13Result = verifyAuditChain(preU13Entries);
-assertEqual(preU13Result.valid, true, "Pre-U13 unsigned entries are accepted");
+assertEqual(preU13Result.valid, false, "Pre-U13 unsigned entries fail closed");
+assertEqual(preU13Result.tamperingDetected, true, "Legacy unsigned entries flagged as tampering");
+assertEqual(preU13Result.legacyEntries, 1, "Fail-closed at first legacy entry (early return)");
+assertEqual(preU13Result.trustedFromIndex, null, "No trusted index without signed entries");
 
-// C2: Mixed chain (old unsigned + new signed)
+// C2: Mixed chain (old unsigned + new signed) — fail closed on first legacy entry
 const mixedChain: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "signature" | "prevHash">>> = [
   { id: "old1", timestamp: 1000, who: "user", what: "login", where: "web", result: "success" },
   { id: "old2", timestamp: 2000, who: "user", what: "logout", where: "web", result: "success" },
@@ -277,27 +282,33 @@ const mixedChain: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "sig
   { ...entry2, signature: sig2.signature, prevHash: sig2.prevHash },
 ];
 const mixedResult = verifyAuditChain(mixedChain);
-assertEqual(mixedResult.valid, true, "Mixed chain (old + new) is valid");
+assertEqual(mixedResult.valid, false, "Mixed chain with legacy entries fails closed");
+assertEqual(mixedResult.tamperingDetected, true, "Mixed chain flagged as tampering");
+assertEqual(mixedResult.firstInvalidIndex, 0, "First legacy entry is firstInvalidIndex");
 
-// C3: Signed entries after unsigned
+// C3: Signed entries after unsigned — fail closed on the unsigned entry
 const signedAfterUnsigned: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "signature" | "prevHash">>> = [
   { id: "unsigned1", timestamp: 1000, who: "user", what: "test", where: "test", result: "success" },
   { ...entry1, signature: sig1.signature, prevHash: sig1.prevHash },
   { ...entry2, signature: sig2.signature, prevHash: sig2.prevHash },
 ];
 const sauResult = verifyAuditChain(signedAfterUnsigned);
-assertEqual(sauResult.valid, true, "Signed entries after unsigned are valid");
+assertEqual(sauResult.valid, false, "Signed entries after unsigned fail closed");
+assertEqual(sauResult.tamperingDetected, true, "Unsigned-then-signed flagged as tampering");
+assertEqual(sauResult.firstInvalidIndex, 0, "Unsigned entry at index 0 is firstInvalidIndex");
 
-// C4: Only unsigned entries with various shapes
+// C4: Only unsigned entries with various shapes — all fail closed
 const mixedUnsigned: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "signature" | "prevHash">>> = [
   { id: "u1", timestamp: 1, who: "a", what: "b", where: "c", result: "success" },
   { id: "u2", timestamp: 2, who: "d", what: "e", where: "f", result: "failure", guildId: "123" },
   { id: "u3", timestamp: 3, who: "g", what: "h", where: "i", result: "denied", reason: "test" },
 ];
 const muResult = verifyAuditChain(mixedUnsigned);
-assertEqual(muResult.valid, true, "All unsigned entries of various shapes are valid");
+assertEqual(muResult.valid, false, "All unsigned entries of various shapes fail closed");
+assertEqual(muResult.tamperingDetected, true, "Unsigned-only chain flagged as tampering");
+assertEqual(muResult.legacyEntries, 1, "Fail-closed at first unsigned entry (early return)");
 
-// C5: Chain starts at first signed entry (prevHash = genesis for first signed)
+// C5: Legacy entries before signed entries — fail closed at first unsigned
 const chainStartsCorrectly: Array<SignableAuditEntry & Partial<Pick<SignedAuditEntry, "signature" | "prevHash">>> = [
   { id: "pre1", timestamp: 100, who: "old", what: "old", where: "old", result: "success" },
   { id: "pre2", timestamp: 200, who: "old", what: "old", where: "old", result: "success" },
@@ -305,7 +316,19 @@ const chainStartsCorrectly: Array<SignableAuditEntry & Partial<Pick<SignedAuditE
   { ...entry2, signature: sig2.signature, prevHash: sig2.prevHash },
 ];
 const cscResult = verifyAuditChain(chainStartsCorrectly);
-assertEqual(cscResult.valid, true, "Chain starts verification at first signed entry");
+assertEqual(cscResult.valid, false, "Chain with legacy prefix fails closed");
+assertEqual(cscResult.tamperingDetected, true, "Legacy prefix flagged as tampering");
+assertEqual(cscResult.firstInvalidIndex, 0, "First legacy entry is firstInvalidIndex");
+
+// C5b: Pure signed chain with genesis first entry remains valid
+const pureSigned: SignedAuditEntry[] = [
+  { ...entry1, signature: sig1.signature, prevHash: "genesis" },
+  { ...entry2, signature: sig2.signature, prevHash: sig2.prevHash },
+];
+const pureResult = verifyAuditChain(pureSigned);
+assertEqual(pureResult.valid, true, "Pure signed chain from genesis is valid");
+assertEqual(pureResult.trustedFromIndex, 0, "Trusted from first signed entry");
+assertEqual(pureResult.tamperingDetected, false, "Pure signed chain has no tampering");
 
 /* ================================================================
  * SECTION D: Non-Blocking Verification (15+ assertions)
@@ -338,17 +361,18 @@ try {
 }
 assert(!threw, "verifyAuditChain does not throw on tampered chain");
 
-// D2: Broken chain returns entries (not empty)
+// D2: Broken chain returns structured result
 const brokenResult = verifyAuditChain(tamperedChain);
 assert(typeof brokenResult.valid === "boolean", "Broken chain returns valid boolean");
-assert(typeof brokenResult.brokenAt === "number", "Broken chain returns brokenAt number");
+assertEqual(typeof brokenResult.firstInvalidIndex, "number", "Broken chain returns firstInvalidIndex number");
+assertEqual(brokenResult.firstInvalidIndex, 0, "Broken chain firstInvalidIndex is 0 for entry-0 tamper");
 
 // D3: First break index is correct
 const laterTamper = [...threeChain];
 laterTamper[2] = { ...laterTamper[2], who: "LATER_TAMPERED" };
 const laterResult = verifyAuditChain(laterTamper);
 assertEqual(laterResult.valid, false, "Later tamper detected");
-assertEqual(laterResult.brokenAt, 2, "Later tamper detected at correct index");
+assertEqual(laterResult.firstInvalidIndex, 2, "Later tamper detected at firstInvalidIndex 2");
 
 // D4: Genesis hash constant
 assertEqual(getGenesisHash(), "genesis", "Genesis hash is 'genesis'");
@@ -510,7 +534,7 @@ const tampered100 = [...chain100];
 tampered100[50] = { ...tampered100[50], who: "TAMPERED_MID" };
 const tampered100Result = verifyAuditChain(tampered100);
 assertEqual(tampered100Result.valid, false, "Tamper in 100-entry chain detected");
-assertEqual(tampered100Result.brokenAt, 50, "Tamper in 100-entry chain at correct index");
+assertEqual(tampered100Result.firstInvalidIndex, 50, "Tamper in 100-entry chain at firstInvalidIndex 50");
 
 // F8: Signature is not the same as the entry content
 const entryForSigCheck: SignableAuditEntry = {

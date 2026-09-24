@@ -27,6 +27,7 @@ var import_definitions = require("./definitions");
 var import_providers = require("./providers");
 var import_media_security = require("./media-security");
 var import_anime_emotes = require("../../discord/anime-emotes");
+var import_logger = require("../../logger");
 async function executeAction(actionName, message, targetId, botId) {
   const action = (0, import_definitions.getAction)(actionName);
   if (!action) return null;
@@ -64,10 +65,24 @@ async function buildDiscordResponse(result) {
   if (!result.animationUrl) {
     return { content: result.text };
   }
-  const media = await (0, import_media_security.safeMediaFetch)(result.animationUrl);
-  if (!media) {
+  const urlCheck = (0, import_media_security.validateMediaUrl)(result.animationUrl);
+  if (!urlCheck.ok) {
+    import_logger.logger.warn(
+      `anime_media result=url_rejected source=${result.animationSource ?? "unknown"} detail=${(urlCheck.error ?? "unknown").replace(/\s+/g, "_")} fallback=text`
+    );
     return { content: result.text };
   }
+  const startedAt = Date.now();
+  const media = await (0, import_media_security.safeMediaFetch)(result.animationUrl);
+  if (!media) {
+    import_logger.logger.warn(
+      `anime_media result=fetch_failed source=${result.animationSource ?? "unknown"} elapsed=${Date.now() - startedAt}ms fallback=text`
+    );
+    return { content: result.text };
+  }
+  import_logger.logger.debug(
+    `anime_media result=success source=${result.animationSource ?? "unknown"} bytes=${media.buffer.byteLength} contentType=${media.contentType} elapsed=${Date.now() - startedAt}ms`
+  );
   let ext = "gif";
   if (media.contentType.includes("webp")) ext = "webp";
   else if (media.contentType.includes("png")) ext = "png";

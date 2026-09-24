@@ -30,6 +30,10 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
+      # --- STAGE: Baseline Gate ---
+      - name: TypeScript baseline gate
+        run: bash scripts/tsc-baseline-gate.sh
+
       # --- STAGE: Build ---
       - name: Build
         run: npm run build

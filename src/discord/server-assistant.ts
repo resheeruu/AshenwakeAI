@@ -117,7 +117,7 @@ export async function executeServerAction(
 
   const config = loadGuildConfig(guild.id);
 
-  const risk = assessRisk(action.action, action.target, false);
+  const risk = assessRisk(action.action, action.target);
   if (risk.level === "critical") {
     return {
       success: false,

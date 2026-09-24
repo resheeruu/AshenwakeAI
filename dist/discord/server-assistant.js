@@ -114,7 +114,7 @@ async function executeServerAction(guild, action, executorId, executorName) {
     return { success: false, message: `\u274C Permission denied: ${perm.reason}` };
   }
   const config = (0, import_guild_config.loadGuildConfig)(guild.id);
-  const risk = (0, import_risk_engine.assessRisk)(action.action, action.target, false);
+  const risk = (0, import_risk_engine.assessRisk)(action.action, action.target);
   if (risk.level === "critical") {
     return {
       success: false,

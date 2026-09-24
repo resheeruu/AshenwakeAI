@@ -16,7 +16,7 @@ async function loadServerList() {
     if (selector && data.ok && data.guilds) {
       const guilds = data.guilds;
       selector.innerHTML = '<option value="">Select Server</option>' +
-        guilds.map(g => `<option value="${g.guildId}">${g.guildName || g.guildId}</option>`).join('');
+        guilds.map(g => `<option value="${escapeHtml(g.guildId)}">${escapeHtml(g.guildName || g.guildId)}</option>`).join('');
     }
   } catch (error) {
     // Silently handle

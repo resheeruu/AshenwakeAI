@@ -1,0 +1,45 @@
+# Runtime hardening for AshenAI — pairs with Dockerfile.
+# Usage: docker compose up -d
+# Docker is NOT available in this Termux environment; this file is for
+# production hosts. Static verification only — not runtime-tested here.
+
+services:
+  ashenai:
+    build: .
+    image: ashenai:latest
+    container_name: ashenai
+    restart: unless-stopped
+    ports:
+      - "9002:9002"
+    environment:
+      - NODE_ENV=production
+      - PORT=9002
+      # Supply secrets via env-file or secrets, never commit them:
+      # - SESSION_SECRET=...
+      # - DISCORD_TOKEN=...
+    env_file:
+      - .env
+    # Read-only root FS; only data/backups/tmp are writable.
+    read_only: true
+    # Drop all Linux capabilities; app runs as non-root (USER ashenu in Dockerfile).
+    cap_drop:
+      - ALL
+    # Deny privilege escalation (setuid/setgid, etc.).
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      # Persist application data and backups on the host.
+      - ./data:/app/data
+      - ./backups:/app/backups
+    # No extra groups, no host PID/IPC, no privileged mode.
+    privileged: false
+    pids_limit: 256
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9002/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

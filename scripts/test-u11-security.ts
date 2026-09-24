@@ -490,18 +490,22 @@ test("OAuth cannot elevate user to admin/owner", () => {
 console.log("\n=== INPUT VALIDATION ===");
 
 test("Frontend escapes HTML in dynamic content", () => {
+  const escSrc = fs.readFileSync(path.join(ROOT, "src/web/public/js/escape.js"), "utf8");
+  assert(escSrc.includes("function esc(s)"), "Frontend should have esc() function");
+  assert(escSrc.includes("&lt;"), "esc() should escape <");
+  assert(escSrc.includes("&gt;"), "esc() should escape >");
+  assert(escSrc.includes("&amp;"), "esc() should escape &");
+  assert(escSrc.includes("&quot;"), "esc() should escape quotes");
   const htmlSrc = fs.readFileSync(path.join(ROOT, "src/web/public/index.html"), "utf8");
-  assert(htmlSrc.includes("function esc(s)"), "Frontend should have esc() function");
-  assert(htmlSrc.includes("&lt;"), "esc() should escape <");
-  assert(htmlSrc.includes("&gt;"), "esc() should escape >");
-  assert(htmlSrc.includes("&amp;"), "esc() should escape &");
-  assert(htmlSrc.includes("&quot;"), "esc() should escape quotes");
+  assert(htmlSrc.includes("js/escape.js"), "index.html must load shared escape.js before other scripts");
 });
 
 test("Frontend redacts secrets in log display", () => {
-  const htmlSrc = fs.readFileSync(path.join(ROOT, "src/web/public/index.html"), "utf8");
-  assert(htmlSrc.includes("function redact(s)"), "Frontend should have redact() function");
-  assert(htmlSrc.includes("REDACTED"), "redact() should replace with [REDACTED]");
+  const escSrc = fs.readFileSync(path.join(ROOT, "src/web/public/js/escape.js"), "utf8");
+  assert(escSrc.includes("function redact(s)"), "Frontend should have redact() function");
+  assert(escSrc.includes("REDACTED"), "redact() should replace with [REDACTED]");
+  const analyticsSrc = fs.readFileSync(path.join(ROOT, "src/web/public/js/analytics.js"), "utf8");
+  assert(analyticsSrc.includes("redact("), "Log rendering must call redact() before display");
 });
 
 test("OAuth redirects use encodeURIComponent", () => {

@@ -29,6 +29,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var audit_integrity_exports = {};
 __export(audit_integrity_exports, {
   getGenesisHash: () => getGenesisHash,
+  safeTimingEqual: () => safeTimingEqual,
   signEntry: () => signEntry,
   verifyAuditChain: () => verifyAuditChain,
   verifyEntry: () => verifyEntry
@@ -84,16 +85,12 @@ function signEntry(entry, previousSignature) {
   const prevHash = previousSignature ? import_node_crypto.default.createHash("sha256").update(previousSignature).digest("hex") : "genesis";
   return { signature, prevHash };
 }
-function verifyEntry(entry, expectedPrevHash) {
-  const expectedPrevHashComputed = entry.prevHash === expectedPrevHash;
-  if (!expectedPrevHashComputed) return false;
-  const { signature: _sig, prevHash: _prev, ...signable } = entry;
-  const expectedSignature = computeSignature(signable);
+function safeTimingEqual(expectedHex, actualHex) {
   let expectedBuf;
   let actualBuf;
   try {
-    expectedBuf = Buffer.from(expectedSignature, "hex");
-    actualBuf = Buffer.from(entry.signature, "hex");
+    expectedBuf = Buffer.from(expectedHex, "hex");
+    actualBuf = Buffer.from(actualHex, "hex");
   } catch {
     return false;
   }
@@ -101,6 +98,13 @@ function verifyEntry(entry, expectedPrevHash) {
     return false;
   }
   return import_node_crypto.default.timingSafeEqual(expectedBuf, actualBuf);
+}
+function verifyEntry(entry, expectedPrevHash) {
+  const expectedPrevHashComputed = entry.prevHash === expectedPrevHash;
+  if (!expectedPrevHashComputed) return false;
+  const { signature: _sig, prevHash: _prev, ...signable } = entry;
+  const expectedSignature = computeSignature(signable);
+  return safeTimingEqual(expectedSignature, entry.signature);
 }
 function verifyAuditChain(entries) {
   const result = {
@@ -130,20 +134,16 @@ function verifyAuditChain(entries) {
     if (firstSignedIndex === -1) {
       firstSignedIndex = i;
       result.trustedFromIndex = i;
-      if (entry.prevHash !== "genesis") {
-        const expectedSig = computeSignature(signable);
-        if (!import_node_crypto.default.timingSafeEqual(
-          Buffer.from(signed.signature, "hex"),
-          Buffer.from(expectedSig, "hex")
-        )) {
-          result.valid = false;
-          result.firstInvalidIndex = i;
-          result.tamperingDetected = true;
-          return result;
-        }
+      const expectedSig = computeSignature(signable);
+      if (!safeTimingEqual(expectedSig, signed.signature)) {
+        result.valid = false;
+        result.firstInvalidIndex = i;
+        result.tamperingDetected = true;
+        return result;
       }
       lastSignature = signed.signature;
       result.signedEntriesVerified++;
+      expectedNextIndex = i + 1;
       continue;
     }
     const expectedPrevHash = import_node_crypto.default.createHash("sha256").update(lastSignature).digest("hex");
@@ -172,6 +172,7 @@ function getGenesisHash() {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   getGenesisHash,
+  safeTimingEqual,
   signEntry,
   verifyAuditChain,
   verifyEntry

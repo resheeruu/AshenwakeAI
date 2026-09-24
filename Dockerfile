@@ -43,10 +43,13 @@ ENV PORT=9002
 
 # Read-only filesystem with explicit writable mounts
 # Runtime flag: docker run --read-only --tmpfs /tmp --tmpfs /app/data --tmpfs /app/backups
+# Prefer docker-compose.yml for full hardening (read_only, cap_drop: [ALL],
+# security_opt: no-new-privileges, tmpfs/volume mounts for data/backups/tmp).
 EXPOSE 9002
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:9002/api/health || exit 1
 
 # No-new-privileges enforced via Docker --security-opt=no-new-privileges
+# (also set in docker-compose.yml security_opt)
 CMD ["bash", "scripts/start.sh"]

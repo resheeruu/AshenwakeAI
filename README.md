@@ -69,7 +69,7 @@ Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cer
 
 Required:
 - `DISCORD_TOKEN` — Discord bot token
-- `SESSION_SECRET` — HMAC key for audit signatures (min 16 chars)
+- `SESSION_SECRET` — HMAC key for audit signatures (min 32 chars)
 
 Optional AI providers (at least one required):
 - `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.

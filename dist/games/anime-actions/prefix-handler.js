@@ -79,18 +79,26 @@ function buildActionsHelp() {
   lines.push("**Aliases:** `h`=hug, `pu`=punch, `hp`=headpat, `sl`=slap, `hf`=highfive");
   return lines.join("\n");
 }
-function resolveTarget(message, parts) {
+async function resolveTarget(message, parts) {
   if (message.mentions.users.size > 0) {
     const mentioned = message.mentions.users.first();
     if (mentioned) return mentioned.id;
   }
   if (message.reference?.messageId) {
-    try {
-      const repliedTo = message.channel.messages.cache.get(message.reference.messageId);
-      if (repliedTo && repliedTo.author.id !== message.author.id) {
-        return repliedTo.author.id;
+    const referenceId = message.reference.messageId;
+    const cached = message.channel.messages.cache.get(referenceId);
+    if (cached) {
+      if (cached.author.id !== message.author.id) {
+        return cached.author.id;
       }
-    } catch {
+    } else {
+      try {
+        const referenced = await message.fetchReference();
+        if (referenced.author.id !== message.author.id) {
+          return referenced.author.id;
+        }
+      } catch {
+      }
     }
   }
   if (parts[1]) {
@@ -157,7 +165,7 @@ async function handleAnimeAction(message, client) {
     return true;
   }
   const botId = client.user?.id ?? "";
-  let targetId = resolveTarget(message, parts);
+  let targetId = await resolveTarget(message, parts);
   if (action.targetRequired && !targetId) {
     const emoteStr = action.emoteName ? (0, import_anime_emotes.animeEmote)(action.emoteName) : action.emoji;
     await message.reply(

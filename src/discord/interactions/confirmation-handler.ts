@@ -222,6 +222,7 @@ function authorizeTemplateStep(
   }
 
   // 4. Full tool validation pipeline (args, role, channel scope, risk, rate limit skip)
+  // Rate-limit token is consumed at plan creation via reserve(); skip here to avoid double-consumption.
   const validation = validateToolRequest(
     tool,
     {
@@ -234,8 +235,7 @@ function authorizeTemplateStep(
       dryRun: false,
     },
     guildConfig,
-    false,
-    true, // skip rate limit — consumed at plan creation
+    true, // skipRateLimit — consumed at plan creation
   );
 
   if (!validation.allowed) {
@@ -638,7 +638,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     requesterRole: requesterAshenRole,
     arguments: plan.arguments,
     dryRun: false,
-  }, guildConfig, false, true);
+  }, guildConfig, true);
 
   if (!validation.allowed) {
     removePendingPlan(planId);

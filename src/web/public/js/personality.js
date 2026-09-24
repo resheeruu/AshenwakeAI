@@ -11,9 +11,9 @@ async function loadPersonality() {
     if (editorEl && data.ok && data.config) {
       const config = data.config;
       editorEl.innerHTML = `
-        <div class="field"><label class="label">Name</label><input class="input" id="personalityName" value="${config.name || ''}"></div>
-        <div class="field"><label class="label">Tone</label><input class="input" id="personalityTone" value="${config.tone || ''}"></div>
-        <div class="field"><label class="label">Custom Instructions</label><textarea class="input" rows="4" id="personalityInstructions">${config.customInstructions || ''}</textarea></div>
+        <div class="field"><label class="label">Name</label><input class="input" id="personalityName" value="${escapeHtml(config.name || '')}"></div>
+        <div class="field"><label class="label">Tone</label><input class="input" id="personalityTone" value="${escapeHtml(config.tone || '')}"></div>
+        <div class="field"><label class="label">Custom Instructions</label><textarea class="input" rows="4" id="personalityInstructions">${escapeHtml(config.customInstructions || '')}</textarea></div>
         <button class="btn btn-primary" onclick="savePersonality()">Save Personality</button>
       `;
     }

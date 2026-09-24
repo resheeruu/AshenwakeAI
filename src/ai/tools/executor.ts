@@ -18,20 +18,26 @@ import type {
  * EXECUTOR OPTIONS
  * ================================================================ */
 
-export interface ExecutorOptions {
-  /** If true, only produce a plan without executing */
-  dryRun?: boolean;
-  /** If true, skip rate limit check (used for confirmed executions) */
-  skipRateLimit?: boolean;
-}
-
 /**
  * Internal-only flag for skipping confirmation.
  * MUST NOT be set by model output, user input, or external callers.
  * Only internal code paths that have already performed plan-level
  * confirmation may use this mechanism.
+ *
+ * Declared as `unique symbol` and as an optional key on ExecutorOptions
+ * so internal callers can set it without `as any`, while plain object
+ * construction/spread still cannot invent the flag (symbol not present).
  */
-export const INTERNAL_SKIP_CONFIRMATION = Symbol("internalSkipConfirmation");
+export const INTERNAL_SKIP_CONFIRMATION: unique symbol = Symbol("internalSkipConfirmation");
+
+export interface ExecutorOptions {
+  /** If true, only produce a plan without executing */
+  dryRun?: boolean;
+  /** If true, skip rate limit check (used for confirmed executions) */
+  skipRateLimit?: boolean;
+  /** Internal-only: skip per-step confirmation (set only by trusted call sites) */
+  [INTERNAL_SKIP_CONFIRMATION]?: true;
+}
 
 /* ================================================================
  * ACTION PLAN CREATION
@@ -208,7 +214,7 @@ export async function executeTool(
   // 8. Confirmation required — reserve rate limit with actual plan ID
   // Only internal code paths that have already performed plan-level
   // confirmation may skip the per-step confirmation prompt.
-  const internalSkipConfirmation = (options as any)[INTERNAL_SKIP_CONFIRMATION] === true;
+  const internalSkipConfirmation = options[INTERNAL_SKIP_CONFIRMATION] === true;
   if (tool.confirmationRequired && !internalSkipConfirmation) {
     const plan = createActionPlan(
       context,

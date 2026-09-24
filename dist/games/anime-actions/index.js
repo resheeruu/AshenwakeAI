@@ -19,6 +19,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var anime_actions_exports = {};
 __export(anime_actions_exports, {
   buildDiscordResponse: () => import_engine.buildDiscordResponse,
+  buildProviders: () => import_providers.buildProviders,
   clearAnimationCache: () => import_providers.clearAnimationCache,
   executeAction: () => import_engine.executeAction,
   fetchAnimation: () => import_providers.fetchAnimation,
@@ -42,6 +43,7 @@ var import_prefix_handler = require("./prefix-handler");
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   buildDiscordResponse,
+  buildProviders,
   clearAnimationCache,
   executeAction,
   fetchAnimation,

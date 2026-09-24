@@ -7,18 +7,18 @@ async function loadProviderCatalog() {
     if (listEl && data.ok && data.catalog) {
       const catalog = data.catalog;
       listEl.innerHTML = catalog.map(p => `
-        <div class="provider-card" data-pricing="${p.pricingClass}">
+        <div class="provider-card" data-pricing="${escapeHtml(p.pricingClass)}">
           <div class="provider-header">
-            <h4>${p.displayName}</h4>
-            <span class="badge badge-${p.pricingClass === 'free' ? 'green' : p.pricingClass === 'local' ? 'purple' : p.pricingClass === 'trial' ? 'yellow' : 'muted'}">${p.pricingClass.toUpperCase()}</span>
+            <h4>${escapeHtml(p.displayName)}</h4>
+            <span class="badge badge-${p.pricingClass === 'free' ? 'green' : p.pricingClass === 'local' ? 'purple' : p.pricingClass === 'trial' ? 'yellow' : 'muted'}">${escapeHtml(p.pricingClass.toUpperCase())}</span>
           </div>
           <div class="provider-meta">
-            <span>${p.category}</span>
-            <span>${p.capabilities ? p.capabilities.join(', ') : 'N/A'}</span>
+            <span>${escapeHtml(p.category)}</span>
+            <span>${escapeHtml(p.capabilities ? p.capabilities.join(', ') : 'N/A')}</span>
             <span>Key: ${p.credentialRequired ? 'Yes' : 'No'}</span>
           </div>
           <div class="provider-footer">
-            <span class="availability ${p.availability === 'available' ? 'text-green' : p.availability === 'unknown' ? 'text-yellow' : 'text-red'}">${p.availability}</span>
+            <span class="availability ${p.availability === 'available' ? 'text-green' : p.availability === 'unknown' ? 'text-yellow' : 'text-red'}">${escapeHtml(p.availability)}</span>
           </div>
         </div>
       `).join('');

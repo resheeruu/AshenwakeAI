@@ -13,7 +13,7 @@ import {
   type ActionDefinition,
 } from "./definitions";
 import { fetchAnimation } from "./providers";
-import { safeMediaFetch } from "./media-security";
+import { safeMediaFetch, validateMediaUrl } from "./media-security";
 import { animeEmote, type AnimeEmoteName } from "../../discord/anime-emotes";
 import { logger } from "../../logger";
 
@@ -86,10 +86,26 @@ export async function buildDiscordResponse(
     return { content: result.text };
   }
 
-  const media = await safeMediaFetch(result.animationUrl);
-  if (!media) {
+  const urlCheck = validateMediaUrl(result.animationUrl);
+  if (!urlCheck.ok) {
+    logger.warn(
+      `anime_media result=url_rejected source=${result.animationSource ?? "unknown"} detail=${(urlCheck.error ?? "unknown").replace(/\s+/g, "_")} fallback=text`,
+    );
     return { content: result.text };
   }
+
+  const startedAt = Date.now();
+  const media = await safeMediaFetch(result.animationUrl);
+  if (!media) {
+    logger.warn(
+      `anime_media result=fetch_failed source=${result.animationSource ?? "unknown"} elapsed=${Date.now() - startedAt}ms fallback=text`,
+    );
+    return { content: result.text };
+  }
+
+  logger.debug(
+    `anime_media result=success source=${result.animationSource ?? "unknown"} bytes=${media.buffer.byteLength} contentType=${media.contentType} elapsed=${Date.now() - startedAt}ms`,
+  );
 
   let ext = "gif";
   if (media.contentType.includes("webp")) ext = "webp";

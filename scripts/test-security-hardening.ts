@@ -17,16 +17,45 @@ import { UserRateLimiter } from "../src/security/rate-limit";
 
 let passed = 0;
 let failed = 0;
+const pending: Promise<void>[] = [];
 
-function test(name: string, fn: () => void) {
+function test(name: string, fn: () => void | Promise<void>) {
   try {
-    fn();
+    const result = fn();
+    if (result instanceof Promise) {
+      pending.push(
+        result
+          .then(() => {
+            passed++;
+            console.log(`  ✅ ${name}`);
+          })
+          .catch((error: any) => {
+            failed++;
+            console.log(`  ❌ ${name}: ${error.message}`);
+          }),
+      );
+      return;
+    }
     passed++;
     console.log(`  ✅ ${name}`);
   } catch (error: any) {
     failed++;
     console.log(`  ❌ ${name}: ${error.message}`);
   }
+}
+
+async function finish(): Promise<void> {
+  await Promise.all(pending);
+  console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log(`Passed: ${passed}`);
+  console.log(`Failed: ${failed}`);
+  if (failed === 0) {
+    console.log("🎉 ALL U15 SECURITY HARDENING TESTS PASSED");
+  } else {
+    console.log("❌ SOME TESTS FAILED");
+    process.exit(1);
+  }
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }
 
 console.log("🧪 U15: Security Hardening Regression Tests\n");
@@ -274,7 +303,9 @@ test("verifyAuditChain rejects tampered chain", async () => {
   ];
   const result = mod.verifyAuditChain(chain);
   assert.strictEqual(result.valid, false);
-  assert.strictEqual(typeof result.brokenAt, "number");
+  assert.strictEqual(typeof result.firstInvalidIndex, "number");
+  assert.strictEqual(result.firstInvalidIndex, 1);
+  assert.strictEqual(result.tamperingDetected, true);
 });
 
 test("Empty chain is valid", async () => {
@@ -283,7 +314,7 @@ test("Empty chain is valid", async () => {
   assert.strictEqual(result.valid, true);
 });
 
-test("Pre-U13 unsigned entries are accepted", async () => {
+test("Pre-U13 unsigned entries fail closed as legacy/tampered", async () => {
   const mod = await import("../src/security/audit-integrity");
   const entry1 = { id: "old1", timestamp: 1, who: "a", what: "a1", where: "t", result: "ok" };
   const entry2 = { id: "old2", timestamp: 2, who: "b", what: "a2", where: "t", result: "ok" };
@@ -291,7 +322,10 @@ test("Pre-U13 unsigned entries are accepted", async () => {
   const sig3 = mod.signEntry(entry3, null);
   const chain = [entry1, entry2, { ...entry3, ...sig3 }];
   const result = mod.verifyAuditChain(chain);
-  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.tamperingDetected, true);
+  assert.strictEqual(result.firstInvalidIndex, 0);
+  assert.strictEqual(result.legacyEntries, 1);
 });
 
 /* ================================================================
@@ -393,13 +427,4 @@ test("Backslash traversal is normalized", () => {
 /* ================================================================
  * RESULTS
  * ================================================================ */
-console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log(`Passed: ${passed}`);
-console.log(`Failed: ${failed}`);
-if (failed === 0) {
-  console.log("🎉 ALL U15 SECURITY HARDENING TESTS PASSED");
-} else {
-  console.log("❌ SOME TESTS FAILED");
-  process.exit(1);
-}
-console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+void finish();

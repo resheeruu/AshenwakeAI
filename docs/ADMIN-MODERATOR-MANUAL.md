@@ -281,7 +281,7 @@ Run these to verify AshenAI is healthy:
 ### Optional Environment Variables
 - `DISCORD_GUILD_ID` - Test guild for development
 - `ADMIN_DISCORD_IDS` - Comma-separated admin user IDs
-- `SESSION_SECRET` - Web session secret (required in production; must be >= 16 characters)
+- `SESSION_SECRET` - Web session secret (required in production; must be >= 32 characters)
 - `ASHENAI_CORS_ORIGINS` - Allowed CORS origins
 - Various `*_API_KEY` variables for AI providers
 - `LOG_LEVEL` - Logging verbosity (info, debug, error)

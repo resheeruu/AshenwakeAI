@@ -52,7 +52,7 @@ async function loadAutomation() {
       `;
       builderEl.querySelectorAll('button[data-action]').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-          const target = e.currentTarget as HTMLButtonElement;
+          const target = e.currentTarget;
           const ruleId = target.getAttribute('data-rule-id');
           if (!ruleId) return;
           if (target.getAttribute('data-action') === 'delete') {
@@ -113,13 +113,4 @@ async function deleteAutomation(guildId, ruleId) {
   } catch (error) {
     showToast(error && error.message ? error.message : 'Failed to delete automation.', 'error');
   }
-}
-
-function escapeHtml(value) {
-  return String(value == null ? '' : value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

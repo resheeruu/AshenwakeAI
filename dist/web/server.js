@@ -64,10 +64,11 @@ const trustProxySetting = (() => {
 app.set("trust proxy", trustProxySetting);
 app.use((_req, res, next) => {
   const cspNonce = import_node_crypto.default.randomBytes(16).toString("base64");
+  res.locals.cspNonce = cspNonce;
   const cspHeader = [
     "default-src 'self'",
-    "script-src 'self' 'nonce-' + cspNonce",
-    "style-src 'self' 'nonce-' + cspNonce",
+    `script-src 'self' 'nonce-${cspNonce}'`,
+    `style-src 'self' 'nonce-${cspNonce}'`,
     "img-src 'self' data:",
     "connect-src 'self'",
     "font-src 'self'",
@@ -320,7 +321,7 @@ app.get("/auth/discord/callback", async (req, res) => {
   const result = await (0, import_oauth.handleDiscordCallback)(code, state, ip);
   if (result.success && result.sessionId) {
     (0, import_auth.setSessionCookie)(res, result.sessionId, result.expiresAt);
-    res.redirect("/?login=success&provider=discord");
+    res.redirect(`/?login=success&provider=discord&username=${encodeURIComponent(result.username || "")}`);
   } else if (result.requiresLinking) {
     res.redirect(`/?link_required=true&provider=discord&message=${encodeURIComponent(result.error || "Account linking required")}`);
   } else {
@@ -347,7 +348,7 @@ app.get("/auth/google/callback", async (req, res) => {
   const result = await (0, import_oauth.handleGoogleCallback)(code, state, ip);
   if (result.success && result.sessionId) {
     (0, import_auth.setSessionCookie)(res, result.sessionId, result.expiresAt);
-    res.redirect("/?login=success&provider=google");
+    res.redirect(`/?login=success&provider=google&username=${encodeURIComponent(result.username || "")}`);
   } else if (result.requiresLinking) {
     res.redirect(`/?link_required=true&provider=google&message=${encodeURIComponent(result.error || "Account linking required")}`);
   } else {
@@ -438,8 +439,9 @@ app.get("/auth/reset-password/:accountId/:token", (req, res) => {
     res.status(400).send("Invalid or expired reset link.");
     return;
   }
-  const _safep = (v) => JSON.stringify(v);
-  const _html = '<!DOCTYPE html><html><head><title>Reset Password - AshenAI</title><style>body{font-family:system-ui;max-width:400px;margin:50px auto;padding:20px;background:#07070b;color:#f7f7fb}input{width:100%;padding:10px;margin:8px 0;border:1px solid #333;border-radius:6px;background:#111;color:#fff;box-sizing:border-box}button{width:100%;padding:10px;border:none;border-radius:6px;background:#9b7cff;color:#fff;font-weight:700;cursor:pointer;margin-top:8px}.msg{color:#61e294;margin-top:10px}.err{color:#ff6f7d;margin-top:10px}</style></head><body><h2>Reset Password</h2><form id="resetForm"><input type="password" id="pw" placeholder="New password (min 8 chars)" required minlength="8"><input type="password" id="pw2" placeholder="Confirm new password" required minlength="8"><button type="submit">Reset Password</button><div id="msg"></div></form><input type="hidden" id="resetAccountId" value=' + _safep(accountId) + '><input type="hidden" id="resetToken" value=' + _safep(token) + '><script>var RESETAccountId=document.getElementById("resetAccountId").value;var RESETToken=document.getElementById("resetToken").value;async function doReset(){const pw=document.getElementById("pw").value;const pw2=document.getElementById("pw2").value;const msg=document.getElementById("msg");if(pw!==pw2){msg.className="err";msg.textContent="Passwords do not match.";return false}try{const r=await fetch("/auth/reset-password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accountId:RESETAccountId,token:RESETToken,newPassword:pw})});const d=await r.json();if(d.ok){msg.className="msg";msg.textContent="Password reset! Redirecting to login...";setTimeout(()=>window.location.href="/",2000)}else{msg.className="err";msg.textContent=d.error||"Reset failed"}}catch(e){msg.className="err";msg.textContent="Network error"}return false}</script></body></html>';
+  const nonceAttr = (v) => typeof v === "string" && /^[A-Za-z0-9+/=]+$/.test(v) ? v : "";
+  const _cspNonce = nonceAttr(res.locals.cspNonce);
+  const _html = '<!DOCTYPE html><html><head><title>Reset Password - AshenAI</title><style nonce="' + _cspNonce + '">body{font-family:system-ui;max-width:400px;margin:50px auto;padding:20px;background:#07070b;color:#f7f7fb}input{width:100%;padding:10px;margin:8px 0;border:1px solid #333;border-radius:6px;background:#111;color:#fff;box-sizing:border-box}button{width:100%;padding:10px;border:none;border-radius:6px;background:#9b7cff;color:#fff;font-weight:700;cursor:pointer;margin-top:8px}.msg{color:#61e294;margin-top:10px}.err{color:#ff6f7d;margin-top:10px}</style></head><body><h2>Reset Password</h2><form id="resetForm"><input type="password" id="pw" placeholder="New password (min 8 chars)" required minlength="8"><input type="password" id="pw2" placeholder="Confirm new password" required minlength="8"><button type="submit">Reset Password</button><div id="msg"></div></form><input type="hidden" id="resetAccountId" value=' + JSON.stringify(accountId) + '><input type="hidden" id="resetToken" value=' + JSON.stringify(token) + '><script nonce="' + _cspNonce + '">var RESETAccountId=document.getElementById("resetAccountId").value;var RESETToken=document.getElementById("resetToken").value;async function doReset(){const pw=document.getElementById("pw").value;const pw2=document.getElementById("pw2").value;const msg=document.getElementById("msg");if(pw!==pw2){msg.className="err";msg.textContent="Passwords do not match.";return false}try{const r=await fetch("/auth/reset-password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accountId:RESETAccountId,token:RESETToken,newPassword:pw})});const d=await r.json();if(d.ok){msg.className="msg";msg.textContent="Password reset! Redirecting to login...";setTimeout(()=>window.location.href="/",2000)}else{msg.className="err";msg.textContent=d.error||"Reset failed"}}catch(e){msg.className="err";msg.textContent="Network error"}return false}</script></body></html>';
   res.send(_html);
 });
 app.post("/auth/change-password", import_roles.requireAuth, import_roles.requireCsrf, (req, res) => {

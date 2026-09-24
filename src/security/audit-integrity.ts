@@ -128,6 +128,27 @@ export function signEntry(
  * ================================================================ */
 
 /**
+ * Timing-safe comparison of two hex-encoded HMAC signatures.
+ * Hex-decodes both inputs, verifies equal length, and returns false on
+ * any malformed input instead of throwing.
+ * Shared by verifyEntry and verifyAuditChain.
+ */
+export function safeTimingEqual(expectedHex: string, actualHex: string): boolean {
+  let expectedBuf: Buffer;
+  let actualBuf: Buffer;
+  try {
+    expectedBuf = Buffer.from(expectedHex, "hex");
+    actualBuf = Buffer.from(actualHex, "hex");
+  } catch {
+    return false;
+  }
+  if (expectedBuf.length !== actualBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuf, actualBuf);
+}
+
+/**
  * Verifies a single signed entry against its expected previous signature.
  * Does NOT throw — always returns a boolean.
  */
@@ -143,21 +164,7 @@ export function verifyEntry(
   const { signature: _sig, prevHash: _prev, ...signable } = entry;
   const expectedSignature = computeSignature(signable);
 
-  // Decode signatures safely — timingSafeEqual requires equal-length Buffers.
-  // Malformed or different-length signatures must return false, never throw.
-  let expectedBuf: Buffer;
-  let actualBuf: Buffer;
-  try {
-    expectedBuf = Buffer.from(expectedSignature, "hex");
-    actualBuf = Buffer.from(entry.signature, "hex");
-  } catch {
-    return false;
-  }
-  if (expectedBuf.length !== actualBuf.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(expectedBuf, actualBuf);
+  return safeTimingEqual(expectedSignature, entry.signature);
 }
 
 /**
@@ -168,7 +175,7 @@ export function verifyEntry(
  * signed entry, and any chain containing unsigned entries is
  * marked as not fully authenticated.
  *
- * @returns { valid: true } if chain is intact, or { valid: false, brokenAt: index }
+ * @returns Structured verification result with firstInvalidIndex on failure.
  */
 /**
  * Structured verification result for the audit chain.
@@ -236,26 +243,25 @@ export function verifyAuditChain(
     const signed = entry as SignedAuditEntry;
     const { signature: _sig, prevHash: _prev, ...signable } = signed;
 
-    // First signed entry: prevHash should be "genesis"
+    // First signed entry: always verify its signature against its content.
+    // For genesis prevHash this detects content tampering of entry 0.
+    // For non-genesis prevHash (e.g. chain resumes after legacy entries)
+    // this is a signature-only check — the missing prior link is tolerated
+    // because legacy unsigned entries are not part of the signed chain.
     if (firstSignedIndex === -1) {
       firstSignedIndex = i;
       result.trustedFromIndex = i;
 
-      if (entry.prevHash !== "genesis") {
-        // Non-genesis prevHash on first signed entry — signature-only check
-        const expectedSig = computeSignature(signable);
-        if (!crypto.timingSafeEqual(
-          Buffer.from(signed.signature, "hex"),
-          Buffer.from(expectedSig, "hex"),
-        )) {
-          result.valid = false;
-          result.firstInvalidIndex = i;
-          result.tamperingDetected = true;
-          return result;
-        }
+      const expectedSig = computeSignature(signable);
+      if (!safeTimingEqual(expectedSig, signed.signature)) {
+        result.valid = false;
+        result.firstInvalidIndex = i;
+        result.tamperingDetected = true;
+        return result;
       }
       lastSignature = signed.signature;
       result.signedEntriesVerified++;
+      expectedNextIndex = i + 1;
       continue;
     }
 

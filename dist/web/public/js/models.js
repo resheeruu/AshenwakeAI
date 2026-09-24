@@ -53,10 +53,10 @@ async function loadModels() {
         <thead><tr><th>Model</th><th>Provider</th><th>Capabilities</th><th>Context</th><th>Status</th></tr></thead>
         <tbody>${allModels.map(m => `
           <tr>
-            <td><strong>${m.displayName || m.modelId}</strong></td>
-            <td>${m.provider || 'N/A'}</td>
-            <td>${(m.capabilities || []).join(', ') || 'N/A'}</td>
-            <td>${m.contextLength || 'N/A'}</td>
+            <td><strong>${escapeHtml(m.displayName || m.modelId)}</strong></td>
+            <td>${escapeHtml(m.provider || 'N/A')}</td>
+            <td>${escapeHtml((m.capabilities || []).join(', ') || 'N/A')}</td>
+            <td>${escapeHtml(m.contextLength || 'N/A')}</td>
             <td><span class="badge badge-green">Active</span></td>
           </tr>
         `).join('')}</tbody>

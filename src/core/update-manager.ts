@@ -86,22 +86,64 @@ function sleep(ms: number): Promise<void> {
  * GIT HELPERS — async spawn with bounded timeout
  * ================================================================ */
 
+/**
+ * Hard cap on captured child-process output (replaces the ineffective
+ * `maxBuffer` spawn option — `spawn` never supported it).
+ */
+const MAX_CAPTURED_OUTPUT_BYTES = 1024 * 1024;
+
 function runGitAsync(args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
+    /*
+     * `spawn()` has no `maxBuffer` option (that belongs to exec/execFile), so
+     * passing it was both a type error and a no-op. The bound is enforced
+     * explicitly below via MAX_CAPTURED_OUTPUT_BYTES, and stdio is declared
+     * explicitly so stdout/stderr are typed as non-null streams.
+     */
     const proc = spawn("git", args, {
       cwd: process.cwd(),
       timeout: timeoutMs,
-      maxBuffer: 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
     });
+
     let stdout = "";
     let stderr = "";
-    proc.stdout.on("data", (d) => { stdout += d.toString(); });
-    proc.stderr.on("data", (d) => { stderr += d.toString(); });
-    proc.on("close", (code) => {
-      if (code !== 0) { reject(new Error(`git ${args.join(" ")} exited ${code}: ${stderr.slice(0, 200)}`)); }
-      else { resolve(stdout.trim()); }
+    let settled = false;
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      proc.kill("SIGKILL");
+      reject(error);
+    };
+
+    proc.stdout.on("data", (d: Buffer) => {
+      if (settled) return;
+      stdout += d.toString();
+      if (stdout.length > MAX_CAPTURED_OUTPUT_BYTES) {
+        fail(new Error(`git ${args.join(" ")} produced too much output`));
+      }
     });
-    proc.on("error", (err) => reject(err));
+
+    proc.stderr.on("data", (d: Buffer) => {
+      if (settled) return;
+      stderr += d.toString();
+      if (stderr.length > MAX_CAPTURED_OUTPUT_BYTES) {
+        stderr = stderr.slice(0, MAX_CAPTURED_OUTPUT_BYTES);
+      }
+    });
+
+    proc.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      if (code !== 0) {
+        reject(new Error(`git ${args.join(" ")} exited ${code}: ${stderr.slice(0, 200)}`));
+      } else {
+        resolve(stdout.trim());
+      }
+    });
+
+    proc.on("error", (err) => fail(err instanceof Error ? err : new Error(String(err))));
   });
 }
 
@@ -252,11 +294,45 @@ function runNodeAsync(bin: string, args: string[], timeoutMs: number, env?: Node
     const proc = spawn(bin, args, {
       cwd: process.cwd(),
       timeout: timeoutMs,
-      maxBuffer: 1024 * 1024,
+      /* Explicit stdio + drained pipes: see capture() below. */
+      stdio: ["ignore", "pipe", "pipe"],
       env: env || process.env,
     });
-    proc.on("close", (code) => { resolve(code === 0); });
-    proc.on("error", () => { resolve(false); });
+
+    /*
+     * stdout/stderr MUST be drained. An unread pipe fills up (~64 KB), the
+     * child blocks on write, and the spawn timeout then kills it — which made
+     * every validation step (tsc / the test runner write far more than the
+     * pipe buffer) fail regardless of the real result. A bounded tail is kept
+     * for diagnostics only.
+     */
+    let captured = "";
+    const capture = (d: Buffer): void => {
+      captured += d.toString();
+      if (captured.length > MAX_CAPTURED_OUTPUT_BYTES) {
+        captured = captured.slice(captured.length - MAX_CAPTURED_OUTPUT_BYTES);
+      }
+    };
+
+    proc.stdout.on("data", capture);
+    proc.stderr.on("data", capture);
+
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        const tail = captured.trim().split("\n").slice(-10).join("\n");
+        logger.warn(
+          `${path.basename(bin)} ${args.join(" ")} exited ${code}${tail ? `: ${tail}` : ""}`,
+        );
+      }
+      resolve(code === 0);
+    });
+
+    proc.on("error", (err) => {
+      logger.warn(
+        `Failed to spawn ${bin} ${args.join(" ")}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      resolve(false);
+    });
   });
 }
 
