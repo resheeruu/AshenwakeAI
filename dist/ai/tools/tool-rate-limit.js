@@ -31,7 +31,6 @@ const ROLE_MULTIPLIERS = {
 };
 function getEffectiveLimit(baseLimit, role) {
   const multiplier = ROLE_MULTIPLIERS[role] ?? 1;
-  if (!isFinite(multiplier)) return Infinity;
   return Math.max(1, Math.floor(baseLimit * multiplier));
 }
 class ToolRateLimiter {
@@ -264,8 +263,8 @@ class ToolRateLimiter {
    * INTERNAL — Check a single bucket (consume token).
    * ============================================================== */
   checkBucket(buckets, key, maxRequests, windowMs, now) {
-    if (!isFinite(maxRequests)) {
-      return { allowed: true, remaining: Infinity, retryAfterMs: 0 };
+    if (maxRequests <= 0) {
+      return { allowed: true, remaining: 999999, retryAfterMs: 0 };
     }
     let bucket = buckets.get(key);
     if (!bucket) {
@@ -291,8 +290,8 @@ class ToolRateLimiter {
    * INTERNAL — Peek at a single bucket without consuming.
    * ============================================================== */
   peekBucket(buckets, key, maxRequests, windowMs, now) {
-    if (!isFinite(maxRequests)) {
-      return { allowed: true, remaining: Infinity, retryAfterMs: 0 };
+    if (maxRequests <= 0) {
+      return { allowed: true, remaining: 999999, retryAfterMs: 0 };
     }
     let bucket = buckets.get(key);
     if (!bucket) {

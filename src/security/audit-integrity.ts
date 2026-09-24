@@ -10,6 +10,7 @@
  */
 
 import crypto from "node:crypto";
+import { getAuditIntegrityKey } from "./encrypt";
 
 /* ================================================================
  * KEY DERIVATION
@@ -25,12 +26,12 @@ function validateKeyForProduction(): void {
   keyValidated = true;
 
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 16) {
+  if (!secret || secret.length < 32) {
     const isProduction = process.env.NODE_ENV === "production";
     if (isProduction) {
       console.error(
-        "[FATAL] SESSION_SECRET is required in production (minimum 16 characters). " +
-        "Audit log integrity cannot be guaranteed without a strong secret."
+        "[FATAL] SESSION_SECRET is required in production (minimum 32 characters). " +
+        "Audit log integrity cannot be guaranteed without a high-entropy secret."
       );
       process.exit(1);
     } else {
@@ -47,22 +48,10 @@ function getIntegrityKey(): Buffer {
 
   validateKeyForProduction();
 
-  const secret = process.env.SESSION_SECRET;
-  if (secret && secret.length >= 16) {
-    integrityKey = crypto
-      .createHmac("sha256", secret)
-      .update(INTEGRITY_CONTEXT)
-      .digest();
-  } else {
-    // Fallback: use a random key generated at startup.
-    // This provides per-process tamper detection but does NOT
-    // survive restarts (entries signed before restart cannot be verified).
-    console.warn(
-      "[WARN] Audit integrity using ephemeral fallback key — signatures are valid only for this process lifetime."
-    );
-    integrityKey = crypto.randomBytes(32);
-  }
-
+  // Use HKDF-derived domain-separated key for audit integrity.
+  // This ensures audit integrity keys are independent from
+  // session encryption and MFA encryption keys.
+  integrityKey = getAuditIntegrityKey();
   return integrityKey;
 }
 

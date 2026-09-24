@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 import { hashPassword, verifyPassword } from "../utils/password-hash";
-import { encrypt, decrypt, isEncryptionAvailable } from "../security/encrypt";
+import { encryptMFA, decryptMFA, isEncryptionAvailable } from "../security/encrypt";
 export { hashPassword, verifyPassword };
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -72,7 +72,7 @@ function loadAccounts(): void {
     accounts = accounts.map((a: Account) => {
       if (a.mfaSecret && typeof a.mfaSecret === "string") {
         try {
-          a.mfaSecret = decrypt(a.mfaSecret);
+          a.mfaSecret = decryptMFA(a.mfaSecret);
         } catch {
           logger.warn("Failed to decrypt MFA secret for account " + a.username);
           a.mfaSecret = undefined;
@@ -90,7 +90,7 @@ function saveAccounts(): void {
     ensureDataDir();
     const accountsToSave = accounts.map((a) => {
       if (a.mfaSecret) {
-        return { ...a, mfaSecret: encrypt(a.mfaSecret) };
+        return { ...a, mfaSecret: encryptMFA(a.mfaSecret) };
       }
       return a;
     });

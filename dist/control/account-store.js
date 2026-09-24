@@ -80,7 +80,7 @@ function loadAccounts() {
     accounts = accounts.map((a) => {
       if (a.mfaSecret && typeof a.mfaSecret === "string") {
         try {
-          a.mfaSecret = (0, import_encrypt.decrypt)(a.mfaSecret);
+          a.mfaSecret = (0, import_encrypt.decryptMFA)(a.mfaSecret);
         } catch {
           import_logger.logger.warn("Failed to decrypt MFA secret for account " + a.username);
           a.mfaSecret = void 0;
@@ -97,7 +97,7 @@ function saveAccounts() {
     ensureDataDir();
     const accountsToSave = accounts.map((a) => {
       if (a.mfaSecret) {
-        return { ...a, mfaSecret: (0, import_encrypt.encrypt)(a.mfaSecret) };
+        return { ...a, mfaSecret: (0, import_encrypt.encryptMFA)(a.mfaSecret) };
       }
       return a;
     });

@@ -466,7 +466,7 @@ async function main() {
 
     for (const tool of tools) {
       const ctx = makeContext({ arguments: makeArgs(tool.name) });
-      const result = await executeTool(tool.name, ctx, { dryRun: false, isBotOwner: false });
+      const result = await executeTool(tool.name, ctx, { dryRun: false });
 
       if (tool.riskLevel === "medium") {
         // edit_channel: confirmation_required with plan

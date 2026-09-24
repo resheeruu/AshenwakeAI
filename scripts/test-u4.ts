@@ -343,7 +343,7 @@ async function main() {
 
     for (const tool of tools) {
       const ctx = makeContext({ arguments: makeArgs(tool.name) });
-      const result = await executeTool(tool.name, ctx, { dryRun: false, isBotOwner: false });
+      const result = await executeTool(tool.name, ctx, { dryRun: false });
       assertEqual(result.status, "confirmation_required", `Tool ${tool.name} returns confirmation_required via executor`);
       assert(result.plan !== undefined, `Tool ${tool.name} includes plan`);
       assert(result.plan!.id.startsWith("plan_"), `Tool ${tool.name} plan has valid ID`);
@@ -537,7 +537,7 @@ async function main() {
 
     for (const tool of tools) {
       const ctx = makeContext({ arguments: makeArgs(tool.name) });
-      const result = await executeTool(tool.name, ctx, { dryRun: false, isBotOwner: false });
+      const result = await executeTool(tool.name, ctx, { dryRun: false });
       if (result.plan) {
         assert(result.plan.changes.length > 0, `Tool ${tool.name} plan has changes`);
         assert(result.plan.changes[0].permissions === "ManageChannels", `Tool ${tool.name} plan change includes ManageChannels`);

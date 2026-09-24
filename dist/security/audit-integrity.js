@@ -35,6 +35,7 @@ __export(audit_integrity_exports, {
 });
 module.exports = __toCommonJS(audit_integrity_exports);
 var import_node_crypto = __toESM(require("node:crypto"));
+var import_encrypt = require("./encrypt");
 const INTEGRITY_CONTEXT = "ashenai-audit-integrity-v1";
 let integrityKey = null;
 let keyValidated = false;
@@ -59,15 +60,7 @@ function validateKeyForProduction() {
 function getIntegrityKey() {
   if (integrityKey) return integrityKey;
   validateKeyForProduction();
-  const secret = process.env.SESSION_SECRET;
-  if (secret && secret.length >= 16) {
-    integrityKey = import_node_crypto.default.createHmac("sha256", secret).update(INTEGRITY_CONTEXT).digest();
-  } else {
-    console.warn(
-      "[WARN] Audit integrity using ephemeral fallback key \u2014 signatures are valid only for this process lifetime."
-    );
-    integrityKey = import_node_crypto.default.randomBytes(32);
-  }
+  integrityKey = (0, import_encrypt.getAuditIntegrityKey)();
   return integrityKey;
 }
 function computeSignature(entry) {

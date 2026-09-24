@@ -271,9 +271,9 @@ console.log("\n===== RISK VALIDATION =====");
   const crit = validateRisk(critTool, false);
   assert(!crit.allowed, "Critical risk with confirmation is blocked");
 
-  // Bot owner bypasses risk
-  const ownerBypass = validateRisk(highTool, true);
-  assert(ownerBypass.allowed, "Bot owner bypasses high risk");
+  // Owner does NOT bypass risk (security fix)
+  const ownerRisk = validateRisk(highTool);
+  assert(!ownerRisk.allowed, "Owner cannot bypass high risk confirmation");
 }
 
 // ===== FULL VALIDATION PIPELINE =====
