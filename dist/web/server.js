@@ -1091,6 +1091,12 @@ app.post("/auth/mfa/verify", import_roles.requireAuth, import_roles.requireCsrf,
     res.status(400).json({ ok: false, error: "MFA setup not initiated." });
     return;
   }
+  const ipRateCheck = mfaVerifyLimiter.check(ip);
+  if (!ipRateCheck.allowed) {
+    const retrySeconds = Math.ceil((ipRateCheck.retryAfterMs || 0) / 1e3);
+    res.status(429).json({ ok: false, error: `Too many MFA attempts. Try again in ${retrySeconds}s.` });
+    return;
+  }
   const mfaRateCheck = checkMFARateLimit(account.id, ip);
   if (!mfaRateCheck.allowed) {
     const retrySeconds = Math.ceil((mfaRateCheck.retryAfterMs || 0) / 1e3);
@@ -1109,6 +1115,7 @@ app.post("/auth/mfa/verify", import_roles.requireAuth, import_roles.requireCsrf,
     return;
   }
   resetMFARateLimit(account.id, ip);
+  mfaVerifyLimiter.reset(ip);
   if (enable) {
     const recoveryCodes = Array.from(
       { length: 10 },
@@ -1216,6 +1223,7 @@ app.post("/auth/mfa/recovery-codes", import_roles.requireAuth, import_roles.requ
 const mfaChallengeLimiter = (0, import_auth.createLoginRateLimiter)();
 const mfaVerifyLimiter = (0, import_auth.createLoginRateLimiter)();
 const mfaFailedAttempts = /* @__PURE__ */ new Map();
+const mfaFailedAttemptsByAccount = /* @__PURE__ */ new Map();
 const MFA_MAX_FAILED_ATTEMPTS = 5;
 const MFA_LOCKOUT_MS = 15 * 60 * 1e3;
 const MFA_WINDOW_MS = 5 * 60 * 1e3;
@@ -1223,8 +1231,15 @@ function getMFARateLimitKey(accountId, ip) {
   return `mfa:${accountId}:${ip}`;
 }
 function checkMFARateLimit(accountId, ip) {
-  const key = getMFARateLimitKey(accountId, ip);
   const now = Date.now();
+  const accountAttempts = mfaFailedAttemptsByAccount.get(accountId) || [];
+  const recentAccountAttempts = accountAttempts.filter((t) => now - t < MFA_WINDOW_MS);
+  if (recentAccountAttempts.length >= MFA_MAX_FAILED_ATTEMPTS) {
+    const oldestAttempt = Math.min(...recentAccountAttempts);
+    const retryAfterMs = MFA_LOCKOUT_MS - (now - oldestAttempt);
+    return { allowed: false, retryAfterMs };
+  }
+  const key = getMFARateLimitKey(accountId, ip);
   const attempts = mfaFailedAttempts.get(key) || [];
   const recentAttempts = attempts.filter((t) => now - t < MFA_WINDOW_MS);
   if (recentAttempts.length >= MFA_MAX_FAILED_ATTEMPTS) {
@@ -1235,8 +1250,11 @@ function checkMFARateLimit(accountId, ip) {
   return { allowed: true };
 }
 function recordMFARefailure(accountId, ip) {
-  const key = getMFARateLimitKey(accountId, ip);
   const now = Date.now();
+  const accountAttempts = mfaFailedAttemptsByAccount.get(accountId) || [];
+  accountAttempts.push(now);
+  mfaFailedAttemptsByAccount.set(accountId, accountAttempts);
+  const key = getMFARateLimitKey(accountId, ip);
   const attempts = mfaFailedAttempts.get(key) || [];
   attempts.push(now);
   mfaFailedAttempts.set(key, attempts);
@@ -1250,11 +1268,21 @@ function recordMFARefailure(accountId, ip) {
         mfaFailedAttempts.set(key, filtered);
       }
     }
+    const currentAccount = mfaFailedAttemptsByAccount.get(accountId);
+    if (currentAccount) {
+      const filteredAccount = currentAccount.filter((t) => now - t < MFA_WINDOW_MS);
+      if (filteredAccount.length === 0) {
+        mfaFailedAttemptsByAccount.delete(accountId);
+      } else {
+        mfaFailedAttemptsByAccount.set(accountId, filteredAccount);
+      }
+    }
   }, MFA_WINDOW_MS);
 }
 function resetMFARateLimit(accountId, ip) {
   const key = getMFARateLimitKey(accountId, ip);
   mfaFailedAttempts.delete(key);
+  mfaFailedAttemptsByAccount.delete(accountId);
 }
 app.post("/auth/mfa/challenge", (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "unknown";

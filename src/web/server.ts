@@ -1360,6 +1360,14 @@ app.post("/auth/mfa/verify", requireAuth, requireCsrf, (req: Request, res: Respo
   }
 
   // Rate-limit failed MFA attempts to prevent brute-force attacks
+  // Per-IP rate limit (prevents brute force from any single IP)
+  const ipRateCheck = mfaVerifyLimiter.check(ip);
+  if (!ipRateCheck.allowed) {
+    const retrySeconds = Math.ceil((ipRateCheck.retryAfterMs || 0) / 1000);
+    res.status(429).json({ ok: false, error: `Too many MFA attempts. Try again in ${retrySeconds}s.` });
+    return;
+  }
+  // Per-account rate limit (IP-independent — prevents bypass by changing IP)
   const mfaRateCheck = checkMFARateLimit(account.id, ip);
   if (!mfaRateCheck.allowed) {
     const retrySeconds = Math.ceil((mfaRateCheck.retryAfterMs || 0) / 1000);
@@ -1381,8 +1389,9 @@ app.post("/auth/mfa/verify", requireAuth, requireCsrf, (req: Request, res: Respo
     return;
   }
 
-  // Successful verification resets the failure counter
+  // Successful verification resets the failure counters
   resetMFARateLimit(account.id, ip);
+  mfaVerifyLimiter.reset(ip);
 
   if (enable) {
     // Generate recovery codes
@@ -1523,6 +1532,7 @@ const mfaChallengeLimiter = createLoginRateLimiter();
 // MFA brute-force protection for /auth/mfa/verify
 const mfaVerifyLimiter = createLoginRateLimiter();
 const mfaFailedAttempts = new Map<string, number[]>();
+const mfaFailedAttemptsByAccount = new Map<string, number[]>();
 const MFA_MAX_FAILED_ATTEMPTS = 5;
 const MFA_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 const MFA_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -1532,8 +1542,17 @@ function getMFARateLimitKey(accountId: string, ip: string): string {
 }
 
 function checkMFARateLimit(accountId: string, ip: string): { allowed: boolean; retryAfterMs?: number } {
-  const key = getMFARateLimitKey(accountId, ip);
   const now = Date.now();
+  // Check per-account rate limit first (IP-independent — prevents bypass by changing IP)
+  const accountAttempts = mfaFailedAttemptsByAccount.get(accountId) || [];
+  const recentAccountAttempts = accountAttempts.filter((t) => now - t < MFA_WINDOW_MS);
+  if (recentAccountAttempts.length >= MFA_MAX_FAILED_ATTEMPTS) {
+    const oldestAttempt = Math.min(...recentAccountAttempts);
+    const retryAfterMs = MFA_LOCKOUT_MS - (now - oldestAttempt);
+    return { allowed: false, retryAfterMs };
+  }
+  // Also check per-IP rate limit
+  const key = getMFARateLimitKey(accountId, ip);
   const attempts = mfaFailedAttempts.get(key) || [];
   const recentAttempts = attempts.filter((t) => now - t < MFA_WINDOW_MS);
   if (recentAttempts.length >= MFA_MAX_FAILED_ATTEMPTS) {
@@ -1545,8 +1564,13 @@ function checkMFARateLimit(accountId: string, ip: string): { allowed: boolean; r
 }
 
 function recordMFARefailure(accountId: string, ip: string): void {
-  const key = getMFARateLimitKey(accountId, ip);
   const now = Date.now();
+  // Record per-account failure (IP-independent)
+  const accountAttempts = mfaFailedAttemptsByAccount.get(accountId) || [];
+  accountAttempts.push(now);
+  mfaFailedAttemptsByAccount.set(accountId, accountAttempts);
+  // Record per-IP failure
+  const key = getMFARateLimitKey(accountId, ip);
   const attempts = mfaFailedAttempts.get(key) || [];
   attempts.push(now);
   mfaFailedAttempts.set(key, attempts);
@@ -1561,12 +1585,22 @@ function recordMFARefailure(accountId: string, ip: string): void {
         mfaFailedAttempts.set(key, filtered);
       }
     }
+    const currentAccount = mfaFailedAttemptsByAccount.get(accountId);
+    if (currentAccount) {
+      const filteredAccount = currentAccount.filter((t) => now - t < MFA_WINDOW_MS);
+      if (filteredAccount.length === 0) {
+        mfaFailedAttemptsByAccount.delete(accountId);
+      } else {
+        mfaFailedAttemptsByAccount.set(accountId, filteredAccount);
+      }
+    }
   }, MFA_WINDOW_MS);
 }
 
 function resetMFARateLimit(accountId: string, ip: string): void {
   const key = getMFARateLimitKey(accountId, ip);
   mfaFailedAttempts.delete(key);
+  mfaFailedAttemptsByAccount.delete(accountId);
 }
 
 app.post("/auth/mfa/challenge", (req: Request, res: Response) => {
