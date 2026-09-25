@@ -31,7 +31,9 @@ import { messageRateLimiter } from "./security";
 import { config } from "./config/env";
 import { loadGuildConfig, guildConfigExists } from "./core/guild-config";
 import { loadGuildAIConfig } from "./ai/tools/channel-scope";
+import { registerProductionDiscordTools } from "./ai/tools/discord/bootstrap";
 import { ASHENAI_SYSTEM_PROMPT } from "./security/policy";
+import { buildGuildInstructionBlock } from "./ai/guild-instructions";
 import { guardAIOutput } from "./security/output-guard";
 import { stripSecurityLabels } from "./security/context";
 import { buildAdaptivePersonality } from "./ai/adaptive-personality";
@@ -41,12 +43,15 @@ import {
   handleToolConfirmation,
   setDiscordClient,
 } from "./discord/interactions/confirmation-handler";
+import { buildToolConfirmationComponents } from "./discord/interactions/tool-confirmation-ui";
 import {
   handleConversation,
   classifyIntent,
 } from "./discord/conversational-agent";
 import { closeDatabase, getDatabaseStats } from "./database";
 import { isAnimeActionPrefix, handleAnimeAction } from "./games/anime-actions";
+import { parseAfkCommand, handleAfkCommand, processAfkOnMessage } from "./community/afk";
+import { initializeLocalGifs } from "./media/local-gifs";
 import { provisionEmojis } from "./discord/emoji-provisioner";
 
 import { providers } from "./ai/providers";
@@ -63,7 +68,7 @@ import { SuggestionManager } from "./community/suggestions";
 import { EventManager } from "./community/events";
 import { ReactionRoleManager } from "./community/reaction-roles";
 import { runHealthCheck } from "./core/health-checker";
-import { runPreflight, createSupervisorChecks } from "./core/preflight";
+import { runPreflight, createSupervisorChecks, markPreflightFailed } from "./core/preflight";
 import { autoBackup } from "./core/backup-manager";
 import { checkLoad, recordRequest } from "./core/load-manager";
 import { detectHostProvider } from "./core/resource-profile";
@@ -74,7 +79,6 @@ import { createAskCommand } from "./commands/ask";
 import { createResetCommand } from "./commands/reset";
 import { createHelpCommand } from "./commands/help";
 import { createStatusCommand } from "./commands/status";
-import { createGameCommand } from "./commands/game";
 import { getBlackjackGame, hitBlackjack, standBlackjack, handText, calculateTotal,
 } from "./games/games/blackjack";
 
@@ -105,7 +109,7 @@ import { createSupportCommand } from "./commands/support";
 import { createAccessCommand } from "./commands/access";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
 import { createPersonalityCommand } from "./commands/personality";
-import { createSettingsCommand, handleSettingsModalSubmit } from "./commands/settings";
+import { createSettingsCommand, handleSettingsModalSubmit, isSettingsModalCustomId } from "./commands/settings";
 import {
   startSupportAutomation,
   stopSupportAutomation,
@@ -150,6 +154,7 @@ import { recordWorldEvent, checkLevelMilestone, announceWorldEvent } from "./gam
 import { updateQuestProgress } from "./games/quests";
 import { recordAudit } from "./security/audit";
 import { StageTimer } from "./ai/timing";
+import { SAFE_ALLOWED_MENTIONS } from "./discord/allowed-mentions";
 
 /* =====================================================
    DISCORD CLIENT
@@ -168,14 +173,52 @@ const client = new Client({
     Partials.Message,
   ],
 
+  allowedMentions: SAFE_ALLOWED_MENTIONS,
 });
+
+/*
+ * PRODUCTION COMPOSITION ROOT — AI tool registration.
+ *
+ * Registers every Discord AI tool into the global ToolRegistry so
+ * executeTool(), checkFullAuthorization() and the confirmation
+ * handler can resolve tools by name. An empty registry means the
+ * whole AI tool subsystem is dead, so fail fast at startup rather
+ * than silently serving "not registered" denials forever.
+ */
+{
+  const registeredToolCount = registerProductionDiscordTools(() => client);
+  if (registeredToolCount <= 0) {
+    logger.error(
+      "FATAL: AI tool registry is empty after production registration — refusing to start.",
+    );
+    process.exit(1);
+  }
+}
 
 
 const router = new AIRouter(providers);
 
 // Unified preflight — run once at startup, then feed into InternalSupervisor
-void runPreflight(router, { logLevel: "compact" }).catch((error) => {
-  logger.warn("Preflight failed:", error instanceof Error ? error.message : String(error));
+void runPreflight(router, { logLevel: "compact" })
+  .then((report) => {
+    if (report.overall === "BLOCKED") {
+      logger.error(
+        `🚨 Preflight BLOCKED — required startup checks failed; /api/health reports 503 until resolved. ${report.summary}`,
+      );
+    }
+  })
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    markPreflightFailed(message);
+    logger.warn("Preflight failed:", message);
+  });
+
+// Local anime GIF index — built once at startup (memoized), never per message.
+void initializeLocalGifs().catch((error) => {
+  logger.warn(
+    "Local GIF indexing failed:",
+    error instanceof Error ? error.message : String(error),
+  );
 });
 
 const memory = new ConversationMemory();
@@ -217,7 +260,6 @@ const agentManager = new AgentManager(router, undefined, systemUsage);
 
 const commands: AshenCommand[] = [
   createAskCommand(router, memory, usageManager),
-  createGameCommand(),
   createResetCommand(memory),
   createStatusCommand(router, memory, agentManager),
   createServerCommand(),
@@ -755,18 +797,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
       error instanceof Error ? error.message : String(error);
 
     if (message === "BLACKJACK_FINISHED") {
-      await interaction.reply({
-        content: "🃏 This Blackjack game has already finished.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction
+        .reply({
+          content: "🃏 This Blackjack game has already finished.",
+          flags: MessageFlags.Ephemeral,
+        })
+        .catch(() => {});
       return;
     }
 
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: "❌ Something went wrong while processing Blackjack.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction
+        .reply({
+          content: "❌ Something went wrong while processing Blackjack.",
+          flags: MessageFlags.Ephemeral,
+        })
+        .catch(() => {});
     }
   }
 });
@@ -1065,10 +1111,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content,
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction
+        .reply({
+          content,
+          flags: MessageFlags.Ephemeral,
+        })
+        .catch(() => {});
     }
   }
 });
@@ -1090,116 +1138,131 @@ client.on(
       return;
     }
 
-    const parts = interaction.customId.split(":");
-    const userId = parts[2];
-    const channelId = parts[3];
-    const actionType = parts[1];
+    try {
+      const parts = interaction.customId.split(":");
+      const userId = parts[2];
+      const channelId = parts[3];
+      const actionType = parts[1];
 
-    if (
-      interaction.user.id !== userId ||
-      interaction.channelId !== channelId
-    ) {
-      await interaction.reply({
-        content: "❌ This confirmation belongs to another user.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const actionKey = createActionKey(userId, channelId);
-    const pendingAction = getPendingAction(actionKey);
-
-    if (!pendingAction) {
-      await interaction.update({
-        content: "⌛ This moderation confirmation has expired.",
-        components: [],
-      });
-      return;
-    }
-
-    if (interaction.customId.endsWith(":cancel")) {
-      clearPendingAction(actionKey);
-
-      await interaction.update({
-        content: "❌ Moderation action cancelled.",
-        components: [],
-      });
-
-      return;
-    }
-
-    if (interaction.customId.endsWith(":confirm")) {
-      if (!interaction.guild) {
-        await interaction.update({
-          content: "❌ This action can only be used inside a server.",
-          components: [],
+      if (
+        interaction.user.id !== userId ||
+        interaction.channelId !== channelId
+      ) {
+        await interaction.reply({
+          content: "❌ This confirmation belongs to another user.",
+          flags: MessageFlags.Ephemeral,
         });
-        clearPendingAction(actionKey);
         return;
       }
 
-      try {
-        const guild = interaction.guild;
+      const actionKey = createActionKey(userId, channelId);
+      const pendingAction = getPendingAction(actionKey);
 
-        const requester = await guild.members.fetch(
-          interaction.user.id
-        );
+      if (!pendingAction) {
+        await interaction.update({
+          content: "⌛ This moderation confirmation has expired.",
+          components: [],
+        });
+        return;
+      }
 
-        if (!pendingAction.targetUserId) {
+      if (interaction.customId.endsWith(":cancel")) {
+        clearPendingAction(actionKey);
+
+        await interaction.update({
+          content: "❌ Moderation action cancelled.",
+          components: [],
+        });
+
+        return;
+      }
+
+      if (interaction.customId.endsWith(":confirm")) {
+        if (!interaction.guild) {
           await interaction.update({
-            content:
-              "❌ No valid target was found for this moderation action.",
+            content: "❌ This action can only be used inside a server.",
             components: [],
           });
-
           clearPendingAction(actionKey);
           return;
         }
 
-        const target = await guild.members.fetch(
-          pendingAction.targetUserId
-        );
+        try {
+          const guild = interaction.guild;
 
-        const botMember = await guild.members.fetch(
-          client.user!.id
-        );
-
-        const result =
-          await executeInteractiveModeration(
-            requester,
-            target,
-            botMember,
-            pendingAction.action,
-            pendingAction.durationMinutes,
-            pendingAction.reason ||
-              "Interactive moderation action"
+          const requester = await guild.members.fetch(
+            interaction.user.id
           );
 
-        clearPendingAction(actionKey);
+          if (!pendingAction.targetUserId) {
+            await interaction.update({
+              content:
+                "❌ No valid target was found for this moderation action.",
+              components: [],
+            });
 
-        await interaction.update({
-          content: result.message,
-          components: [],
-        });
+            clearPendingAction(actionKey);
+            return;
+          }
 
-        logger.info(
-          `${result.success ? "✅" : "❌"} Interactive moderation result: ${result.message}`
-        );
-      } catch (error) {
-        clearPendingAction(actionKey);
+          const target = await guild.members.fetch(
+            pendingAction.targetUserId
+          );
 
-        logger.error(
-          "❌ Interactive moderation execution failed:",
-          error instanceof Error
-            ? error.message
-            : String(error)
-        );
+          const botMember = await guild.members.fetch(
+            client.user!.id
+          );
 
-        await interaction.update({
-          content:
-            "❌ I couldn't execute that moderation action. The member may no longer exist or Discord may have rejected the action.",
-          components: [],
-        });
+          const result =
+            await executeInteractiveModeration(
+              requester,
+              target,
+              botMember,
+              pendingAction.action,
+              pendingAction.durationMinutes,
+              pendingAction.reason ||
+                "Interactive moderation action"
+            );
+
+          clearPendingAction(actionKey);
+
+          await interaction.update({
+            content: result.message,
+            components: [],
+          });
+
+          logger.info(
+            `${result.success ? "✅" : "❌"} Interactive moderation result: ${result.message}`
+          );
+        } catch (error) {
+          clearPendingAction(actionKey);
+
+          logger.error(
+            "❌ Interactive moderation execution failed:",
+            error instanceof Error
+              ? error.message
+              : String(error)
+          );
+
+          await interaction.update({
+            content:
+              "❌ I couldn't execute that moderation action. The member may no longer exist or Discord may have rejected the action.",
+            components: [],
+          });
+        }
+      }
+    } catch (error) {
+      logger.error(
+        "❌ Moderation confirmation handler failed:",
+        error instanceof Error ? error.message : String(error)
+      );
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction
+          .reply({
+            content: "❌ This confirmation has expired or could not be processed.",
+            flags: MessageFlags.Ephemeral,
+          })
+          .catch(() => {});
       }
     }
   }
@@ -1490,6 +1553,37 @@ client.on(
           isReplyToBot =
             referencedMessage.author.id === botId;
         }
+
+      /*
+       * AFK (prefix-only) — approved order:
+       *   AFK command → return
+       *   AFK auto-clear
+       *   AFK mention notifications
+       *   then the existing Ash intercept below.
+       * Sits after dedup/bot filter/assistant-channel gate so AFK
+       * obeys the same channel policy as every other response.
+       */
+      const afkCommand = parseAfkCommand(message.content);
+      if (afkCommand) {
+        try {
+          await handleAfkCommand(message, afkCommand);
+        } catch (error) {
+          logger.warn(
+            "AFK command error:",
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+        return;
+      }
+
+      try {
+        await processAfkOnMessage(message);
+      } catch (error) {
+        logger.warn(
+          "AFK message error:",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
 
       /*
        * ANIME ACTION PREFIX: "ash <action> @user"
@@ -1844,7 +1938,20 @@ client.on(
         t.mark("agent_conversation");
 
         if (agentResponse.shouldReply) {
-          await message.reply(truncateForDiscord(agentResponse.reply));
+          /*
+           * Confirmation-required plans render Confirm/Cancel buttons
+           * bound to the stored plan id; the dispatcher re-validates
+           * requester, guild, expiry and double-execution on click.
+           */
+          const components =
+            agentResponse.requiresConfirmation && agentResponse.planId
+              ? buildToolConfirmationComponents(agentResponse.planId)
+              : [];
+
+          await message.reply({
+            content: truncateForDiscord(agentResponse.reply),
+            ...(components.length > 0 ? { components } : {}),
+          });
           replySent = true;
           logger.debug(
             `🤖 Conversational agent responded: intent handled, executed=${agentResponse.executed}`,
@@ -1989,7 +2096,11 @@ client.on(
         {
           role: "system" as const,
 
-          content: ASHENAI_SYSTEM_PROMPT + "\n\n" + personalityBlock,
+          content:
+            ASHENAI_SYSTEM_PROMPT +
+            buildGuildInstructionBlock(guildId) +
+            "\n\n" +
+            personalityBlock,
         },
 
         // Security: neither conversation history nor the user's current
@@ -2189,10 +2300,10 @@ client.on(
 
     // Serialize message processing per session to prevent race conditions
     // on session.pendingPlan, session.serverState, and DB writes
-    const { withLock } = await import("./games/lock");
-    const sessionLockKey = `builder-process:${session.guildId}:${session.userId}`;
-
     try {
+      const { withLock } = await import("./games/lock");
+      const sessionLockKey = `builder-process:${session.guildId}:${session.userId}`;
+
       await withLock(sessionLockKey, async () => {
         await processBuilderMessage(
           client,
@@ -2300,7 +2411,9 @@ client.on(
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isModalSubmit()) return;
-  if (!interaction.customId.startsWith("an:")) return;
+  // BOTH settings modal types: `st:` (string) and `an:` (number).
+  // A single hardcoded prefix silently dropped every st: submission.
+  if (!isSettingsModalCustomId(interaction.customId)) return;
   await handleSettingsModalSubmit(interaction);
 });
 

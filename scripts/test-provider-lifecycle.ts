@@ -42,6 +42,14 @@ import { AIProvider, AIRequest, AIResponse, HealthState } from "../src/ai/types"
 
 import { setCacheEnabled } from "../src/ai/response-cache";
 import { isSafeEndpoint } from "../src/ai/providers/platform/connection-tester";
+import { registerProductionDiscordTools } from "../src/ai/tools/discord/bootstrap";
+
+/*
+ * Mirror the production composition root (index.ts): the supervisor
+ * requires a populated AI tool registry, so register the real tools
+ * before exercising preflight/supervisor checks.
+ */
+registerProductionDiscordTools(() => null);
 
 setCacheEnabled(false);
 

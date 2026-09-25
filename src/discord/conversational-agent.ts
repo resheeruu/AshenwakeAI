@@ -8,7 +8,7 @@ import { recordAudit } from "../security/audit";
 import { toolRegistry } from "../ai/tools/registry";
 import { executeTool, INTERNAL_SKIP_CONFIRMATION } from "../ai/tools/executor";
 import { createActionPlan } from "../ai/tools/executor";
-import { storePendingPlan, getPendingPlan, verifyPlan, markPlanExecuted, removePendingPlan } from "../ai/tools/confirmation-store";
+import { storePendingPlan, getPendingPlan, verifyPlan, markPlanExecuted, removePendingPlan, isPlanExecuted } from "../ai/tools/confirmation-store";
 import {
   resolveUserContext,
   checkBotPermissions,
@@ -1095,7 +1095,7 @@ export async function handleConversation(
           );
 
           if (result.newStatus) {
-            caseManager.transitionCase(activeCase.id, result.newStatus, "system");
+            caseManager.transitionCase(activeCase.id, result.newStatus, "system", guild.id);
           }
 
           if (result.shouldReply) {
@@ -1498,6 +1498,10 @@ async function handleDenial(
   // Cancel unified plan
   if (state.unifiedPlan) {
     const planGoal = state.unifiedPlan.goal;
+    // Drop the stored confirmation plan so Confirm buttons die with it.
+    if (state.pendingConfirmation) {
+      removePendingPlan(state.pendingConfirmation.planId);
+    }
     state.unifiedPlan = undefined;
     state.pendingConfirmation = undefined;
 
@@ -1593,7 +1597,9 @@ async function handlePreview(
       reply: formatUnifiedPlanSummary(state.unifiedPlan),
       executed: false,
       requiresConfirmation: true,
-      planId: state.unifiedPlan.id,
+      // Confirm/Cancel buttons must reference the STORED plan id,
+      // not the display-only unified plan id.
+      planId: state.pendingConfirmation?.planId,
     };
   }
 
@@ -1686,7 +1692,8 @@ async function handleDetails(
       reply: lines.join("\n"),
       executed: false,
       requiresConfirmation: true,
-      planId: plan.id,
+      // Stored plan id — what the Confirm/Cancel buttons resolve.
+      planId: state.pendingConfirmation?.planId,
     };
   }
 
@@ -1800,8 +1807,46 @@ async function handleDeleteExcept(
   };
 
   state.unifiedPlan = plan;
+
+  /*
+   * Store a confirmation-store plan so Confirm/Cancel buttons work
+   * for this flow too. templateSteps = the delete steps (their
+   * category is "create" so executeUnifiedPlan runs them as well —
+   * both paths execute the identical step set).
+   */
+  const actionPlan = createActionPlan(
+    {
+      guildId: guild.id,
+      channelId: message.channel.id,
+      requesterId: userContext.userId,
+      requesterName: userContext.username,
+      requesterRole: userContext.ashenRole,
+      arguments: {
+        _toolName: "delete_except",
+        deleteChannels: deleteChannels.map(ch => ch.id),
+        keepChannels: keepChannels.map(ch => ch.id),
+        templateSteps: steps,
+      },
+      dryRun: false,
+    },
+    "high",
+    steps.map(s => ({
+      type: "delete" as const,
+      target: s.description,
+      description: s.description,
+    })),
+    true,
+  );
+  (actionPlan as any).toolName = "delete_except";
+  (actionPlan as any).arguments = {
+    deleteChannels: deleteChannels.map(ch => ch.id),
+    keepChannels: keepChannels.map(ch => ch.id),
+    templateSteps: steps,
+  };
+  storePendingPlan(actionPlan);
+
   state.pendingConfirmation = {
-    planId: plan.id,
+    planId: actionPlan.id,
     toolName: "delete_except",
     args: { deleteChannels: deleteChannels.map(ch => ch.id), keepChannels: keepChannels.map(ch => ch.id) },
     timestamp: Date.now(),
@@ -1835,7 +1880,7 @@ async function handleDeleteExcept(
     reply: lines.join("\n"),
     executed: false,
     requiresConfirmation: true,
-    planId: plan.id,
+    planId: actionPlan.id,
   };
 }
 
@@ -2310,12 +2355,6 @@ async function handleServerTemplateUnified(
     };
 
     state.unifiedPlan = plan;
-    state.pendingConfirmation = {
-      planId: plan.id,
-      toolName: "apply_template",
-      args: { templateName, templateSteps: steps.filter(s => s.category === "create"), template },
-      timestamp: Date.now(),
-    };
 
     const actionPlan = createActionPlan(
       {
@@ -2335,12 +2374,25 @@ async function handleServerTemplateUnified(
     (actionPlan as any).arguments = { templateName, templateSteps: steps.filter(s => s.category === "create"), template };
     storePendingPlan(actionPlan);
 
+    /*
+     * pendingConfirmation must reference the STORED plan id
+     * (actionPlan.id), not the display-only unified plan id — the
+     * Confirm/Cancel buttons and the confirmation store both resolve
+     * by actionPlan.id.
+     */
+    state.pendingConfirmation = {
+      planId: actionPlan.id,
+      toolName: "apply_template",
+      args: { templateName, templateSteps: steps.filter(s => s.category === "create"), template },
+      timestamp: Date.now(),
+    };
+
     return {
       shouldReply: true,
       reply: reply.join("\n"),
       executed: false,
       requiresConfirmation: true,
-      planId: plan.id,
+      planId: actionPlan.id,
     };
   }
 
@@ -2450,12 +2502,6 @@ async function handleServerTemplateUnified(
 
   // Store the plan
   state.unifiedPlan = plan;
-  state.pendingConfirmation = {
-    planId: plan.id,
-    toolName: "apply_template",
-    args: { templateName, templateSteps: steps.filter(s => s.category === "create" || s.category === "fix"), template },
-    timestamp: Date.now(),
-  };
 
   // Store in the confirmation store for persistence
   const actionPlan = createActionPlan(
@@ -2480,12 +2526,20 @@ async function handleServerTemplateUnified(
   (actionPlan as any).arguments = { templateName, templateSteps: steps.filter(s => s.category === "create" || s.category === "fix"), template };
   storePendingPlan(actionPlan);
 
+  // Must reference the STORED plan id — buttons + store resolve by it.
+  state.pendingConfirmation = {
+    planId: actionPlan.id,
+    toolName: "apply_template",
+    args: { templateName, templateSteps: steps.filter(s => s.category === "create" || s.category === "fix"), template },
+    timestamp: Date.now(),
+  };
+
   return {
     shouldReply: true,
     reply: formatUnifiedPlanSummary(plan),
     executed: false,
     requiresConfirmation: true,
-    planId: plan.id,
+    planId: actionPlan.id,
   };
 }
 
@@ -2495,7 +2549,7 @@ async function handleServerTemplateUnified(
  * Executes all steps in the unified plan after confirmation.
  * ================================================================ */
 
-async function executeUnifiedPlan(
+export async function executeUnifiedPlan(
   state: ConversationState,
   userContext: ResolvedUserContext,
   guild: Guild,
@@ -2513,6 +2567,29 @@ async function executeUnifiedPlan(
   const plan = state.unifiedPlan;
   const startTime = Date.now();
   const executorOptions: ExecutorOptions = { [INTERNAL_SKIP_CONFIRMATION]: true };
+
+  /*
+   * Double-execution guard: the same plan can be confirmed via text
+   * ("yes") or via the Confirm button. The button path marks and
+   * removes the stored plan — if the stored entry is gone or already
+   * executed, this plan has been confirmed/cancelled elsewhere (or
+   * expired) and must not run again.
+   */
+  const confirmPlanId = state.pendingConfirmation?.planId;
+  if (confirmPlanId) {
+    const stored = getPendingPlan(confirmPlanId);
+    if (!stored || isPlanExecuted(confirmPlanId)) {
+      state.unifiedPlan = undefined;
+      state.pendingConfirmation = undefined;
+      return {
+        shouldReply: true,
+        reply:
+          "⌛ That plan was already confirmed, cancelled, or has expired. Please ask me to create a new plan.",
+        executed: false,
+        requiresConfirmation: false,
+      };
+    }
+  }
 
   // Filter to actionable steps (create + fix + configure)
   const actionableSteps = plan.steps.filter(
@@ -2577,6 +2654,13 @@ async function executeUnifiedPlan(
   const duration = Date.now() - startTime;
 
   logExecution(userContext.userId, guild.id, "unified_plan", hasFailures ? "partial" : "success", duration);
+
+  // Consume the stored confirmation plan so a later button press
+  // cannot re-execute this plan.
+  if (confirmPlanId) {
+    markPlanExecuted(confirmPlanId);
+    removePendingPlan(confirmPlanId);
+  }
 
   state.unifiedPlan = undefined;
   state.pendingConfirmation = undefined;
@@ -2915,7 +2999,7 @@ async function handleSupportTicket(
   if (!supportConfig.enabled) {
     return {
       shouldReply: true,
-      reply: "Support tickets are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
+      reply: "Support tickets are not currently enabled on this server. Ask an admin to enable them with `/settings panel`.",
       executed: false,
       requiresConfirmation: false,
     };
@@ -2947,7 +3031,7 @@ async function handleSupportReport(
   if (!reportsConfig.enabled) {
     return {
       shouldReply: true,
-      reply: "Reports are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
+      reply: "Reports are not currently enabled on this server. Ask an admin to enable them with `/settings panel`.",
       executed: false,
       requiresConfirmation: false,
     };
@@ -2996,7 +3080,7 @@ async function handleSupportAppeal(
   if (!appealsConfig.enabled) {
     return {
       shouldReply: true,
-      reply: "Appeals are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
+      reply: "Appeals are not currently enabled on this server. Ask an admin to enable them with `/settings panel`.",
       executed: false,
       requiresConfirmation: false,
     };
@@ -3062,7 +3146,7 @@ async function handleHelp(
     "• `/report` — Report a user",
     "• `/appeal` — Submit a ban appeal",
     "• `/case` — View and manage cases",
-    "• `/settings` — Configure support systems",
+    "• `/settings panel` — Configure support systems",
     "",
     "🛡️ **Moderation (Natural Language):**",
     "• \"ban @user\" or reply to a message and say \"ban\"",

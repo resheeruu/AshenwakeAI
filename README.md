@@ -42,18 +42,18 @@ Web Research
 
 Groq, Gemini, OpenRouter, OpenAI, Anthropic, Cohere, DeepSeek, Mistral, xAI, Cerebras, Fireworks, Novita, NVIDIA, Ollama, SambaNova, Together, HuggingFace, Local LLM, DeepInfra, Replicate, GitHub Models, Cloudflare Workers AI, Z.AI, MiniMax, Alibaba Qwen, AI21, Baseten, Amazon Bedrock, Hyperbolic, Custom OpenAI-Compatible
 
-## Commands
+## Commands (npm scripts)
 
 | Command | Description |
 |---------|-------------|
 | `npm start` | Start bot (uses `scripts/start.sh`) |
 | `npm run bot` | Start directly via `tsx src/index.ts` |
-| `npm test` | Run mandatory test suite (37+ suites, 2000+ assertions) |
+| `npm test` | Run mandatory test suite (41 suites, 2500+ assertions) |
 | `npm run test:smoke` | Production smoke test |
 | `npm run test:all` | Run all tests including optional suites |
 | `npm run typecheck` | TypeScript type check |
-| `npm run build` | Compile TypeScript + copy static assets |
-| `npm run check` | Lint check + tests |
+| `npm run build` | Transpile with esbuild (no typecheck) |
+| `npm run check` | Repo checks + typecheck + tests |
 
 ## Security
 
@@ -79,7 +79,7 @@ See `.env.example` for full configuration options.
 ## Testing
 
 ```bash
-npm test                    # 36 mandatory suites (~2000+ assertions)
+npm test                    # 41 mandatory suites (~2500+ assertions)
 npm run test:smoke          # Production smoke test
 npm run test:all            # All suites including optional
 npm run typecheck           # TypeScript check

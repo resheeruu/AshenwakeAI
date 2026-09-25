@@ -52,7 +52,7 @@ export const logger = {
     recordLog("error", ...safe);
 
     if (enabled("error")) {
-      pinoLogger.error(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
+      pinoLogger.error(safe[0] instanceof Error ? safe[0] : { msg: String(safe[0]) }, ...safe.slice(1).map(String));
     }
   },
 
@@ -61,7 +61,7 @@ export const logger = {
     recordLog("warn", ...safe);
 
     if (enabled("warn")) {
-      pinoLogger.warn(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
+      pinoLogger.warn(safe[0] instanceof Error ? safe[0] : { msg: String(safe[0]) }, ...safe.slice(1).map(String));
     }
   },
 
@@ -70,7 +70,7 @@ export const logger = {
     recordLog("info", ...safe);
 
     if (enabled("info")) {
-      pinoLogger.info(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
+      pinoLogger.info(safe[0] instanceof Error ? safe[0] : { msg: String(safe[0]) }, ...safe.slice(1).map(String));
     }
   },
 
@@ -79,7 +79,7 @@ export const logger = {
     recordLog("debug", ...safe);
 
     if (enabled("debug")) {
-      pinoLogger.debug(args[0] instanceof Error ? args[0] : { msg: String(args[0]) }, ...args.slice(1).map(String));
+      pinoLogger.debug(safe[0] instanceof Error ? safe[0] : { msg: String(safe[0]) }, ...safe.slice(1).map(String));
     }
   },
 };

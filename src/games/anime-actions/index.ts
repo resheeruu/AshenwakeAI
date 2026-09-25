@@ -14,4 +14,4 @@ export { validateMediaUrl, safeMediaFetch, followRedirectsSafe } from "./media-s
 export type { MediaValidationResult } from "./media-security";
 export { executeAction, buildDiscordResponse } from "./engine";
 export type { ActionResult } from "./engine";
-export { isAnimeActionPrefix, handleAnimeAction } from "./prefix-handler";
+export { isAnimeActionPrefix, handleAnimeAction, safeReply } from "./prefix-handler";

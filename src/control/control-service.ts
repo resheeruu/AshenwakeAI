@@ -333,22 +333,81 @@ export function getGuildConfig(guildId: string): GuildConfig {
   return loadGuildConfig(guildId);
 }
 
+/*
+ * Every schema-defined top-level section of GuildConfig.
+ *
+ * This allowlist exists to reject arbitrary/unexpected keys from the web
+ * layer — but it MUST stay in sync with GuildConfig. When `ai`, `routing`,
+ * `limits`, `models`, `social`, `support`, `reports`, `appeals`,
+ * `supportAi`, `supportLogging` and `staff` were missing here, every
+ * dashboard PUT for those sections was filtered out before the save while
+ * the endpoint still reported success (the values never persisted).
+ */
+/** Fields the control layer is allowed to update. */
 const GUILD_CONFIG_ALLOWED_FIELDS = new Set([
   "guildName", "enabled", "assistantChannelId", "ticketCategoryId",
   "logChannelId", "verificationRoleId", "welcomeChannelId",
   "automod", "moderation", "tickets", "community",
   "automation", "personality", "memory", "usage",
+  "support", "reports", "appeals", "supportAi", "supportLogging",
+  "staff", "social", "ai", "routing", "limits", "models",
 ]);
+
+/** Keys that must hold an object value. */
+const SECTION_OBJECT_KEYS = new Set([
+  "automod", "moderation", "tickets", "community", "automation",
+  "personality", "memory", "usage", "support", "reports", "appeals",
+  "supportAi", "supportLogging", "staff", "ai", "routing", "limits", "social",
+]);
+/** Keys whose expected type is enforced separately. */
+const EXPECTED_TYPE: Record<string, "object" | "array" | "boolean" | "string"> = {
+  guildName: "string", enabled: "boolean",
+  assistantChannelId: "string", ticketCategoryId: "string", logChannelId: "string",
+  verificationRoleId: "string", welcomeChannelId: "string", models: "array",
+};
+
+function assertValidConfigUpdate(key: string, value: unknown): void {
+  const type = EXPECTED_TYPE[key];
+  if (type) {
+    const article = type === "array" || type === "object" ? "an" : "a";
+    if (typeof value !== type) throw new Error(`Field "${key}" must be ${article} ${type}`);
+    if (type === "object" && (value === null || Array.isArray(value))) {
+      throw new Error(`Field "${key}" must be an object`);
+    }
+    return;
+  }
+  if (SECTION_OBJECT_KEYS.has(key)) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new Error(`Field "${key}" must be an object`);
+    }
+    return;
+  }
+  // Unrecognised field: let the schema validate on load.
+}
 
 export function updateGuildConfig(guildId: string, updates: Partial<GuildConfig>): ActionResult {
   try {
     const config = loadGuildConfig(guildId);
     const filtered: Record<string, unknown> = {};
+    const ignored: string[] = [];
     for (const key of Object.keys(updates)) {
       if (GUILD_CONFIG_ALLOWED_FIELDS.has(key)) {
+        assertValidConfigUpdate(key, (updates as any)[key]);
         (filtered as any)[key] = (updates as any)[key];
+      } else {
+        ignored.push(key);
       }
     }
+
+    const requested = Object.keys(updates).length;
+    if (requested > 0 && Object.keys(filtered).length === 0) {
+      // Never report success for a write that persisted nothing.
+      return {
+        success: false,
+        message: `No permitted fields to update for ${guildId}: ${ignored.join(", ")}`,
+      };
+    }
+
     const merged = { ...config, ...filtered, guildId };
     saveGuildConfig(merged);
     recordAudit({
@@ -358,10 +417,15 @@ export function updateGuildConfig(guildId: string, updates: Partial<GuildConfig>
       guildId,
       result: "success",
     });
-    return { success: true, message: `Guild config updated for ${guildId}` };
+    return {
+      success: true,
+      message: ignored.length > 0
+        ? `Guild config updated for ${guildId} (ignored: ${ignored.join(", ")})`
+        : `Guild config updated for ${guildId}`,
+    };
   } catch (error) {
-    console.error("[control] saveGuildConfig failed:", error);
-    return { success: false, message: "Failed to update guild config." };
+    logger.error("[control] saveGuildConfig failed:", error);
+    return { success: false, message: `Failed to update guild config: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -458,14 +522,29 @@ export async function executeAction(request: ActionRequest, operatorId: string, 
       }
 
       case "restart": {
-        recordAudit({ who: operatorId, whoName: operatorName, what: "Initiated restart", where: "control", result: "success" });
-        return { success: true, message: "Restart initiated. Process will exit and should be restarted by the process manager." };
+        recordAudit({ who: operatorId, whoName: operatorName, what: "Restart requested", where: "control", result: "success", details: "Process will exit; the process manager will restart the bot." });
+        isRunning = false;
+        process.exit(0);
+        return { success: true, message: "Restart requested — the process will exit and be restarted by the process manager." };
       }
 
       case "stop": {
         isRunning = false;
-        recordAudit({ who: operatorId, whoName: operatorName, what: "Initiated shutdown", where: "control", result: "success" });
-        return { success: true, message: "Shutdown initiated." };
+        recordAudit({ who: operatorId, whoName: operatorName, what: "Initiated shutdown", where: "control", result: "success", details: "Process will exit now." });
+        process.exit(0);
+        return { success: true, message: "Shutdown requested — the process will exit now." };
+      }
+
+      case "backup": {
+        try {
+          const { createBackup } = require("../core/backup-manager");
+          const b = createBackup("Control plane backup", "control");
+          recordAudit({ who: operatorId, whoName: operatorName, what: "Triggered backup", where: "control", result: b.success ? "success" : "failure", details: b.message });
+          return { success: b.success, message: b.success ? `Backup created: ${b.id}` : `Backup failed: ${b.message}` };
+        } catch (err) {
+          recordAudit({ who: operatorId, whoName: operatorName, what: "Triggered backup", where: "control", result: "failure", details: err instanceof Error ? err.message : String(err) });
+          return { success: false, message: `Backup failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
       }
 
       default:

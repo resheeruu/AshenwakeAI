@@ -1,6 +1,6 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 
-PROJECT_DIR="$HOME/AshenAI"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE_FILE="$PROJECT_DIR/.ashennai-mode"
 PID_FILE="$PROJECT_DIR/.termux-backup.pid"
 FAILOVER_PID_FILE="$PROJECT_DIR/.failover-monitor.pid"

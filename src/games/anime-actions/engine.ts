@@ -12,8 +12,9 @@ import {
   resolveResponse,
   type ActionDefinition,
 } from "./definitions";
-import { fetchAnimation } from "./providers";
+import { fetchAnimation, type FetchAnimationOptions } from "./providers";
 import { safeMediaFetch, validateMediaUrl } from "./media-security";
+import { readLocalGif, type LocalGifAsset } from "../../media/local-gifs";
 import { animeEmote, type AnimeEmoteName } from "../../discord/anime-emotes";
 import { logger } from "../../logger";
 
@@ -21,6 +22,13 @@ export interface ActionResult {
   text: string;
   animationUrl?: string;
   animationSource?: string;
+  /**
+   * POSIX path (relative to the local media root) of a validated
+   * local asset. Never sent to users — logging/tests only.
+   */
+  localMediaPath?: string;
+  /** Full asset needed by buildDiscordResponse for secure revalidation. */
+  localMediaAsset?: LocalGifAsset;
 }
 
 /* ================================================================
@@ -32,6 +40,7 @@ export async function executeAction(
   message: Message,
   targetId: string | null,
   botId: string,
+  options: FetchAnimationOptions = {},
 ): Promise<ActionResult | null> {
   const action = getAction(actionName);
   if (!action) return null;
@@ -56,7 +65,7 @@ export async function executeAction(
     isSelfTarget,
   );
 
-  const animation = await fetchAnimation(action.mediaKey);
+  const animation = await fetchAnimation(action.mediaKey, options);
 
   const outcomeSuffix = outcome ? ` [${outcome}]` : "";
   const emoteStr = action.emoteName
@@ -64,7 +73,16 @@ export async function executeAction(
     : action.emoji;
   const finalText = `${emoteStr} ${text}${outcomeSuffix}`;
 
-  if (animation) {
+  if (animation?.localAsset) {
+    return {
+      text: finalText,
+      animationSource: animation.source,
+      localMediaPath: animation.localAsset.relPath,
+      localMediaAsset: animation.localAsset,
+    };
+  }
+
+  if (animation?.url) {
     return {
       text: finalText,
       animationUrl: animation.url,
@@ -82,6 +100,36 @@ export async function executeAction(
 export async function buildDiscordResponse(
   result: ActionResult,
 ): Promise<{ content?: string; files?: AttachmentBuilder[] }> {
+  // 1) LOCAL MEDIA — preferred when present, fully revalidated on read.
+  //    Local filesystem paths are never included in user-facing content.
+  if (result.localMediaAsset) {
+    const startedAt = Date.now();
+    const local = await readLocalGif(result.localMediaAsset);
+    if (local) {
+      const ext = local.contentType.includes("webp")
+        ? "webp"
+        : local.contentType.includes("png")
+          ? "png"
+          : local.contentType.includes("jpeg")
+            ? "jpg"
+            : "gif";
+
+      logger.debug(
+        `anime_media result=local_success source=${result.animationSource ?? "local"} bytes=${local.buffer.byteLength} contentType=${local.contentType} elapsed=${Date.now() - startedAt}ms`,
+      );
+
+      const attachment = new AttachmentBuilder(local.buffer, {
+        name: `anime.${ext}`,
+      });
+      return { content: result.text, files: [attachment] };
+    }
+
+    logger.warn(
+      `anime_media result=local_read_failed source=${result.animationSource ?? "local"} detail=revalidation_failed elapsed=${Date.now() - startedAt}ms fallback=text`,
+    );
+    return { content: result.text };
+  }
+
   if (!result.animationUrl) {
     return { content: result.text };
   }

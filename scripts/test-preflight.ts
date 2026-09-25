@@ -16,6 +16,15 @@ import {
   classifyProviderStatus,
 } from "../src/core/preflight";
 import { HealthState } from "../src/ai/types";
+import { registerProductionDiscordTools } from "../src/ai/tools/discord/bootstrap";
+import { toolRegistry } from "../src/ai/tools/registry";
+
+/*
+ * Mirror the production composition root (index.ts): register the
+ * real Discord tools before exercising preflight. Without this the
+ * registry is legitimately empty and tool_registry must FAIL.
+ */
+registerProductionDiscordTools(() => null);
 
 let passed = 0;
 let failed = 0;
@@ -307,6 +316,44 @@ async function main(): Promise<void> {
     assert(cache !== undefined, "response_cache check discovered");
   } catch (error) {
     assert(false, `Observability checks failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  // ========== EMPTY REGISTRY IS BLOCKING ==========
+
+  console.log("\n━━━ Tool Registry Required ━━━");
+
+  try {
+    // Prove preflight detects a missing production registration.
+    toolRegistry.clear();
+    const blockedReport = await runPreflight(null, { logLevel: "quiet" });
+
+    const toolCheck = blockedReport.checks.find(c => c.name === "tool_registry");
+    assert(toolCheck !== undefined, "tool_registry check present when empty");
+    assert(toolCheck!.required === true, "tool_registry check is REQUIRED");
+    assert(
+      toolCheck!.status === "FAILED",
+      `tool_registry FAILED when empty (got ${toolCheck!.status})`,
+    );
+    assert(
+      blockedReport.overall === "BLOCKED",
+      `overall is BLOCKED with empty registry (got ${blockedReport.overall})`,
+    );
+
+    // Recover exactly like production does — re-registration must work.
+    const recovered = registerProductionDiscordTools(() => null);
+    assert(recovered > 0, "production re-registration restores the registry");
+    const okReport = await runPreflight(null, { logLevel: "quiet" });
+    const okToolCheck = okReport.checks.find(c => c.name === "tool_registry");
+    assert(
+      okToolCheck!.status === "READY",
+      `tool_registry READY after re-registration (got ${okToolCheck!.status})`,
+    );
+    assert(
+      okReport.overall !== "BLOCKED",
+      `overall recovers to ${okReport.overall} after re-registration`,
+    );
+  } catch (error) {
+    assert(false, `Tool registry required checks failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   // ========== OVERALL STATUS CALCULATION ==========

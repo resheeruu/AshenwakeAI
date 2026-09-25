@@ -710,12 +710,22 @@ function checkTools(): PreflightCheck[] {
     const count = toolRegistry.count();
     const names = toolRegistry.getNames();
 
+    /*
+     * The tool registry is REQUIRED: an empty registry means every AI
+     * tool call fails with "not registered" — the AI tool subsystem is
+     * completely unavailable. That must surface as a FAILED check that
+     * blocks overall readiness, never as a silent DEGRADED. The
+     * production composition root (index.ts) additionally refuses to
+     * start when registration yields zero tools.
+     */
     checks.push({
       name: "tool_registry",
       category: "tools",
-      status: count > 0 ? "READY" : "DEGRADED",
-      required: false,
-      details: `${count} tools registered${count > 0 ? `: ${names.slice(0, 5).join(", ")}${names.length > 5 ? ` +${names.length - 5} more` : ""}` : ""}`,
+      status: count > 0 ? "READY" : "FAILED",
+      required: true,
+      details: count > 0
+        ? `${count} tools registered: ${names.slice(0, 5).join(", ")}${names.length > 5 ? ` +${names.length - 5} more` : ""}`
+        : "0 tools registered — AI tool execution unavailable (production registration missing)",
       durationMs: Date.now() - t0,
       lastChecked: Date.now(),
     });
@@ -723,8 +733,9 @@ function checkTools(): PreflightCheck[] {
     checks.push({
       name: "tool_registry",
       category: "tools",
-      status: "UNVERIFIED",
-      required: false,
+      status: "FAILED",
+      required: true,
+      details: "Tool registry could not be loaded — AI tool execution unavailable",
       lastChecked: Date.now(),
     });
   }
@@ -1158,6 +1169,25 @@ function checkPostRestart(): PreflightCheck {
  * @param router - The AIRouter instance (for provider health)
  * @param options - Preflight options
  */
+
+/** Last completed preflight report — surfaced via /api/health so startup problems are observable. */
+let lastPreflightReport: PreflightReport | null = null;
+let lastPreflightFailure: string | null = null;
+
+export function getLastPreflightResult(): PreflightReport | null {
+  return lastPreflightReport;
+}
+
+export function markPreflightFailed(message: string): void {
+  lastPreflightFailure = message;
+}
+
+export function getPreflightStatus(): "READY" | "DEGRADED" | "BLOCKED" | "failed" | "running" {
+  if (lastPreflightReport) return lastPreflightReport.overall;
+  if (lastPreflightFailure) return "failed";
+  return "running";
+}
+
 export async function runPreflight(
   router: any,
   options: {
@@ -1246,6 +1276,7 @@ export async function runPreflight(
   // Log based on log level
   logReport(report, logLevel);
 
+  lastPreflightReport = report;
   return report;
 }
 
@@ -1493,6 +1524,16 @@ export function createSupervisorChecks(
       }
     } catch {
       reasons.push("Database health check failed");
+    }
+
+    // Check AI tool registry — empty means every tool call is denied.
+    try {
+      const { toolRegistry } = require("../ai/tools/registry");
+      if (toolRegistry.count() === 0) {
+        reasons.push("AI tool registry is empty (0 tools registered)");
+      }
+    } catch {
+      reasons.push("AI tool registry unavailable");
     }
 
     // Check memory

@@ -8,9 +8,16 @@ import { encrypt, decrypt, isEncryptionAvailable } from "../security/encrypt";
 
 const ENCRYPTION_AVAILABLE = isEncryptionAvailable() && process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32;
 
+/** Files larger than this are not copied into backups (unbounded data files would fill the disk). */
+const MAX_BACKUP_FILE_MB = 64;
+/** Total on-disk size cap across all retained backups; oldest are pruned beyond it. */
+const MAX_TOTAL_BACKUP_MB = 1536;
+
 export interface BackupFileEntry {
   file: string;
   checksum: string;
+  /** SHA-256 of the plaintext file, recorded before encryption (older backups omit it). */
+  plaintextChecksum?: string;
   encrypted: boolean;
   size: number;
 }
@@ -143,6 +150,10 @@ export async function createBackup(
       }
       if (fs.existsSync(src)) {
         const dest = path.join(backupDir, file);
+        if (fs.statSync(src).isFile() && fs.statSync(src).size > MAX_BACKUP_FILE_MB * 1024 * 1024) {
+          logger.warn(`⚠️ Backup: skipping ${file} — exceeds ${MAX_BACKUP_FILE_MB}MB limit`);
+          continue;
+        }
         if (fs.statSync(src).isDirectory()) {
           fs.cpSync(src, dest, { recursive: true });
         } else {
@@ -151,10 +162,11 @@ export async function createBackup(
         const isEncrypted = ENCRYPTION_AVAILABLE;
         if (isEncrypted) {
           const content = fs.readFileSync(dest);
+          const plaintextChecksum = crypto.createHash("sha256").update(content).digest("hex");
           const encrypted = encrypt(content.toString("base64"));
           fs.writeFileSync(dest, encrypted);
           const checksum = computeChecksum(dest);
-          backupFiles.push({ file, checksum, encrypted: true, size: fs.statSync(dest).size });
+          backupFiles.push({ file, checksum, plaintextChecksum, encrypted: true, size: fs.statSync(dest).size });
         } else {
           const checksum = computeChecksum(dest);
           backupFiles.push({ file, checksum, encrypted: false, size: fs.statSync(dest).size });
@@ -189,6 +201,37 @@ export async function createBackup(
     }
   }
 
+  // Size-aware pruning: bound total on-disk backup size, oldest first
+  const maxTotalBytes = MAX_TOTAL_BACKUP_MB * 1024 * 1024;
+  const sizes = index.map((e) => {
+    const d = resolveBackupDir(e.id);
+    let size = 0;
+    if (d && fs.existsSync(d)) {
+      try {
+        for (const f of fs.readdirSync(d)) {
+          const st = fs.statSync(path.join(d, f));
+          if (st.isFile()) size += st.size;
+        }
+      } catch { /* best effort */ }
+    }
+    return { e, size };
+  });
+  let totalSize = sizes.reduce((s, x) => s + x.size, 0);
+  if (totalSize > maxTotalBytes) {
+    const prunable = [...sizes].sort((a, b) => a.e.timestamp - b.e.timestamp).filter((x) => x.e.id !== id);
+    for (const x of prunable) {
+      if (totalSize <= maxTotalBytes) break;
+      const d = resolveBackupDir(x.e.id);
+      if (d) {
+        try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
+      }
+      const idx = index.findIndex((e) => e.id === x.e.id);
+      if (idx >= 0) index.splice(idx, 1);
+      totalSize -= x.size;
+      logger.info(`💾 Backup pruned (size cap): ${x.e.id}`);
+    }
+  }
+
   saveBackupIndex(index);
 
   logger.info(`💾 Backup created: ${id} (${backupFiles.length} files)`);
@@ -213,7 +256,7 @@ export function restoreBackup(id: string): { success: boolean; message: string }
   try {
     const files = fs.readdirSync(backupDir);
     const restoredFiles: string[] = [];
-    let verified = true;
+    const failedFiles: string[] = [];
 
     for (const file of files) {
       if (file.includes("..") || file.includes("/") || file.includes("\\")) {
@@ -225,50 +268,64 @@ export function restoreBackup(id: string): { success: boolean; message: string }
         continue;
       }
 
-      const backupEntry = entry.files.find((f) => f.file === file);
-      if (backupEntry && !fs.statSync(src).isDirectory()) {
-        const currentChecksum = computeChecksum(src);
-        if (currentChecksum !== backupEntry.checksum) {
-          verified = false;
-          logger.error(`⚠️ Backup integrity check failed for ${file}: checksum mismatch`);
-          continue;
-        }
-        if (backupEntry.encrypted) {
-          try {
-            const decrypted = decrypt(fs.readFileSync(src).toString("base64"));
-            const decryptedChecksum = crypto.createHash("sha256").update(decrypted).digest("hex");
-            const originalContent = fs.readFileSync(src);
-            const decryptedContent = decrypt(originalContent.toString("base64"));
-            const postDecryptChecksum = crypto.createHash("sha256").update(decryptedContent).digest("hex");
-            if (postDecryptChecksum !== backupEntry.checksum) {
-              logger.warn(`⚠️ Decrypted content checksum mismatch for ${file}`);
-            }
-          } catch {
-            logger.warn(`⚠️ Could not decrypt ${file} for verification`);
-          }
-        }
-      }
-
       if (fs.statSync(src).isDirectory()) {
         fs.cpSync(src, dest, { recursive: true });
-      } else {
-        let content = fs.readFileSync(src);
-        if (backupEntry?.encrypted && ENCRYPTION_AVAILABLE) {
-          try {
-            const decrypted = decrypt(content.toString("base64"));
-            content = Buffer.from(decrypted, "base64");
-            fs.writeFileSync(dest, content);
-          } catch {
-            logger.warn(`⚠️ Could not decrypt ${file}, copying as-is`);
-            fs.copyFileSync(src, dest);
-          }
-        } else {
-          fs.copyFileSync(src, dest);
+        restoredFiles.push(file);
+        continue;
+      }
+
+      const backupEntry = entry.files.find((f) => f.file === file);
+      if (!backupEntry) {
+        logger.warn(`⚠️ Restore: skipping ${file} — not in backup manifest`);
+        continue;
+      }
+
+      // Ciphertext integrity: manifest checksum is taken over the stored backup file.
+      const currentChecksum = computeChecksum(src);
+      if (currentChecksum !== backupEntry.checksum) {
+        failedFiles.push(file);
+        logger.error(`⚠️ Restore: integrity check failed for ${file}: checksum mismatch — file left untouched`);
+        continue;
+      }
+
+      if (backupEntry.encrypted) {
+        if (!ENCRYPTION_AVAILABLE) {
+          failedFiles.push(file);
+          logger.error(`⚠️ Restore: ${file} is encrypted but SESSION_SECRET is unavailable — file left untouched`);
+          continue;
         }
+        // Stored as encrypt(base64(plaintext)). Decrypt once, then base64-decode.
+        // On any failure the live file is left untouched — never copy ciphertext over data.
+        let content: Buffer;
+        try {
+          content = Buffer.from(decrypt(fs.readFileSync(src, "utf8")), "base64");
+        } catch (err) {
+          failedFiles.push(file);
+          logger.error(`⚠️ Restore: decryption failed for ${file}: ${err instanceof Error ? err.message : String(err)} — file left untouched`);
+          continue;
+        }
+        if (backupEntry.plaintextChecksum) {
+          const plainChecksum = crypto.createHash("sha256").update(content).digest("hex");
+          if (plainChecksum !== backupEntry.plaintextChecksum) {
+            failedFiles.push(file);
+            logger.error(`⚠️ Restore: plaintext checksum mismatch for ${file} — file left untouched`);
+            continue;
+          }
+        }
+        fs.writeFileSync(dest, content);
+      } else {
+        fs.copyFileSync(src, dest);
       }
       restoredFiles.push(file);
     }
 
+    if (failedFiles.length > 0) {
+      logger.error(`📥 Backup restored with failures: ${id} (${restoredFiles.length} ok, ${failedFiles.length} skipped)`);
+      return {
+        success: false,
+        message: `Restore incomplete for ${id}: ${restoredFiles.length} file(s) restored, ${failedFiles.length} skipped (${failedFiles.join(", ")}) — skipped files were left untouched`,
+      };
+    }
     logger.info(`📥 Backup restored: ${id} (${restoredFiles.length} files, integrity verified)`);
     return { success: true, message: `Restored ${restoredFiles.length} files from backup ${id} with integrity verified` };
   } catch (error) {

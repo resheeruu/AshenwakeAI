@@ -64,6 +64,8 @@ function initMFACChallenge() {
   btn.addEventListener('click', verifyMfaChallenge);
 }
 
+let pendingMfaChallengeToken = null;
+
 async function verifyMfaChallenge() {
   const code = document.getElementById('mfaCode')?.value;
   const recoveryCode = document.getElementById('mfaRecoveryCode')?.value;
@@ -73,14 +75,20 @@ async function verifyMfaChallenge() {
     errorEl.textContent = 'Please enter a code.';
     return;
   }
+  if (!pendingMfaChallengeToken) {
+    errorEl.textContent = 'MFA challenge expired. Please sign in again.';
+    return;
+  }
 
   try {
     const data = await API.post('/auth/mfa/challenge', {
+      challengeToken: pendingMfaChallengeToken,
       code: code || null,
       recoveryCode: recoveryCode || null,
     });
 
     const role = data.user?.role || 'user';
+    pendingMfaChallengeToken = null;
     API.setAuth(data.csrfToken, null);
     showApp(role);
     showToast('MFA verified!', 'success');
@@ -90,6 +98,7 @@ async function verifyMfaChallenge() {
 }
 
 function showMFACChallenge(token, username, role) {
+  pendingMfaChallengeToken = token;
   const loginScreen = document.getElementById('loginScreen');
   const mfaScreen = document.getElementById('mfaChallengeScreen');
   const titleEl = document.getElementById('mfaChallengeSubtitle');
@@ -102,6 +111,11 @@ function showMFACChallenge(token, username, role) {
 function initOAuthButtons() {
   // Check for OAuth callbacks
   const params = new URLSearchParams(window.location.search);
+  if (params.get('mfa_required') && params.get('challengeToken')) {
+    // OAuth login for an MFA-enabled account — prompt for the code.
+    showMFACChallenge(params.get('challengeToken'), params.get('username') || '', null);
+    return;
+  }
   if (params.get('link_required')) {
     const msg = params.get('message') || 'Please link your account';
     showToast(msg, 'error');

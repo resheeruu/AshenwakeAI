@@ -128,15 +128,21 @@ export function loadGuildConfigDB(guildId: string): GuildConfig {
  * Save guild config to SQLite.
  */
 export function saveGuildConfigDB(config: GuildConfig): void {
-  safeDbOperation(() => {
-    const configJson = JSON.stringify(config);
-    const secrets = scanForSecrets(configJson);
-    if (secrets.length > 0) {
-      throw new Error(`Config contains secrets: ${secrets.join(", ")}`);
-    }
+  /*
+   * The secret scan and its throw must stay OUTSIDE safeDbOperation:
+   * safeDbOperation converts any throw into its fallback value, so a
+   * rejected save used to look like success to every caller (the web
+   * layer reported "updated" while nothing was persisted).
+   */
+  config.updatedAt = Date.now();
+  const configJson = JSON.stringify(config);
+  const secrets = scanForSecrets(configJson);
+  if (secrets.length > 0) {
+    throw new Error(`Config contains secrets: ${secrets.join(", ")}`);
+  }
 
+  safeDbOperation(() => {
     const db = getDatabase();
-    config.updatedAt = Date.now();
     db.prepare(`
       INSERT INTO guild_configs (guild_id, config_json, updated_at)
       VALUES (?, ?, ?)
@@ -155,25 +161,29 @@ export function saveGuildConfigCAS(
   config: GuildConfig,
   expectedUpdatedAt: number,
 ): boolean {
-  return safeDbOperation(() => {
-    const configJson = JSON.stringify(config);
-    const secrets = scanForSecrets(configJson);
-    if (secrets.length > 0) {
-      throw new Error(`Config contains secrets: ${secrets.join(", ")}`);
-    }
+  /*
+   * Same rule as saveGuildConfigDB: the secret scan must run outside
+   * safeDbOperation, which converts throws into its fallback value.
+   */
+  config.updatedAt = Date.now();
+  const configJson = JSON.stringify(config);
+  const secrets = scanForSecrets(configJson);
+  if (secrets.length > 0) {
+    throw new Error(`Config contains secrets: ${secrets.join(", ")}`);
+  }
 
+  return safeDbOperation(() => {
     const db = getDatabase();
     const result = db.prepare(`
       UPDATE guild_configs
       SET config_json = ?, updated_at = ?
       WHERE guild_id = ? AND updated_at = ?
-    `).run(configJson, Date.now(), config.guildId, expectedUpdatedAt);
+    `).run(configJson, config.updatedAt, config.guildId, expectedUpdatedAt);
 
     if (result.changes === 0) {
       return false;
     }
 
-    config.updatedAt = Date.now();
     configCache.set(config.guildId, config);
     return true;
   }, false, `saveGuildConfigCAS(${config.guildId})`);

@@ -47,6 +47,18 @@ export class ToolRegistry {
   count(): number {
     return this.tools.size;
   }
+
+  /**
+   * Remove every registration.
+   *
+   * Only used by tests and preflight self-checks to prove that an
+   * empty registry is detected and that production registration can
+   * be re-established. Production code must never call this.
+   */
+  clear(): void {
+    this.tools.clear();
+    logger.warn("Tool registry cleared (test/verification path).");
+  }
 }
 
 /** Global singleton registry */

@@ -5,8 +5,14 @@
  * for the AI Social feature.
  * ================================================================ */
 
+import fs from "node:fs";
+import path from "node:path";
+
 import { makeSocialDecision, buildSocialContext, type SocialDecisionInput } from "../src/ai/social/decision";
 import { SocialCooldown } from "../src/ai/social/cooldown";
+import { GuildConfigSchema, validateSchema } from "../src/database/schemas";
+import { loadGuildConfig, deleteGuildConfig } from "../src/core/guild-config";
+import type { GuildConfig } from "../src/core/guild-config";
 
 let passed = 0;
 let failed = 0;
@@ -396,6 +402,72 @@ try {
   }
 } catch (e) {
   fail("Debate context includes debate prompt", e);
+}
+
+// ─────────────────────────────────────
+// P2-6: GuildConfigSchema must not strip interface sections
+// ─────────────────────────────────────
+
+console.log("\n--- Config Persistence (GuildConfigSchema) ---");
+
+// 25. Interface ↔ schema sync (static): every GuildConfig top-level
+// key must appear in GuildConfigSchema, otherwise Zod's strip
+// behavior deletes it on every fresh DB load.
+try {
+  const ifaceSrc = fs.readFileSync(path.resolve("src/core/guild-config.ts"), "utf8");
+  const schemaSrc = fs.readFileSync(path.resolve("src/database/schemas.ts"), "utf8");
+  const ifaceMatch = ifaceSrc.match(/export interface GuildConfig \{([\s\S]*?)\n\}/);
+  const schemaMatch = schemaSrc.match(/export const GuildConfigSchema = z\.object\(\{([\s\S]*?)\n\}\);/);
+  if (!ifaceMatch || !schemaMatch) throw new Error("could not locate interface/schema");
+  const ifaceKeys = [...ifaceMatch[1].matchAll(/^  (\w+)\??:/gm)].map((m) => m[1]);
+  const schemaKeys = [...schemaMatch[1].matchAll(/^  (\w+):/gm)].map((m) => m[1]);
+  const missing = ifaceKeys.filter((k) => !schemaKeys.includes(k));
+  if (missing.length === 0) {
+    pass(`GuildConfigSchema covers every interface section (${ifaceKeys.length} keys)`);
+  } else {
+    fail(`GuildConfigSchema covers every interface section — missing: ${missing.join(", ")}`);
+  }
+} catch (e) {
+  fail("GuildConfigSchema covers every interface section", e);
+}
+
+// 26. Round-trip: social/ai/routing/limits/models survive validation.
+try {
+  const gid = "test-ai-social-schema-roundtrip";
+  const cfg: GuildConfig = loadGuildConfig(gid);
+  (cfg as any).social = {
+    enabled: true,
+    animeActions: false,
+    channels: {},
+    customReactions: true,
+    customEmoji: true,
+    rivalryMode: false,
+    debateMode: false,
+    globalCooldownMs: 30000,
+    maxResponsesPerHour: 10,
+  };
+  (cfg as any).ai = { enabled: true, streaming: false, contextSize: 8, maxOutput: 1024 };
+  (cfg as any).routing = { fallbackOrder: [], timeoutMs: 5000, retryPolicy: "exponential", mode: "automatic" };
+  (cfg as any).limits = { dailyLimit: 100, monthlyLimit: 1000, perUserLimit: 50, perRoleLimit: 100, perChannelLimit: 100 };
+  (cfg as any).models = [{ modelId: "m1", enabled: true, priority: 1, isDefault: true }];
+
+  const parsed = JSON.parse(JSON.stringify(cfg));
+  const validated: any = validateSchema(GuildConfigSchema as any, parsed);
+  if (validated === null) throw new Error("validateSchema returned null for a complete config");
+  const stripped = ["social", "ai", "routing", "limits", "models"].filter((k) => !(k in validated));
+  if (stripped.length > 0) {
+    fail("Round-trip preserves social/ai/routing/limits/models", `stripped: ${stripped.join(", ")}`);
+  } else {
+    pass("Round-trip preserves social/ai/routing/limits/models");
+  }
+  if (validated.social?.animeActions === false) {
+    pass("social.animeActions value survives the round-trip (P2-3 depends on it)");
+  } else {
+    fail("social.animeActions value survives the round-trip", validated.social?.animeActions);
+  }
+  deleteGuildConfig(gid);
+} catch (e) {
+  fail("Round-trip preserves social/ai/routing/limits/models", e);
 }
 
 // ─────────────────────────────────────

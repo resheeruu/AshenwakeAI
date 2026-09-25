@@ -203,12 +203,12 @@ function testOptimisticConcurrencyOnTransition(): void {
   assertEqual(c.version, 1, "Initial version is 1");
 
   // First transition should succeed
-  const t1 = manager.transitionCase(c.id, "investigating", STAFF);
+  const t1 = manager.transitionCase(c.id, "investigating", STAFF, c.guildId);
   assertNotNull(t1, "First transition succeeds");
   assertEqual(t1!.version, 2, "Version incremented to 2");
 
   // Second transition from same base should succeed
-  const t2 = manager.transitionCase(c.id, "waiting_user", STAFF);
+  const t2 = manager.transitionCase(c.id, "waiting_user", STAFF, c.guildId);
   assertNotNull(t2, "Second transition succeeds");
   assertEqual(t2!.version, 3, "Version incremented to 3");
 }
@@ -230,7 +230,7 @@ function testStaleTransitionRejected(): void {
   if (!c) return;
 
   // Transition to open → investigating (version becomes 2)
-  const t1 = manager.transitionCase(c.id, "investigating", STAFF);
+  const t1 = manager.transitionCase(c.id, "investigating", STAFF, c.guildId);
   assertNotNull(t1, "First transition succeeds");
   assertEqual(t1!.version, 2, "Version is 2 after first transition");
 
@@ -240,7 +240,7 @@ function testStaleTransitionRejected(): void {
   assertEqual(staleCase!.version, 2, "Stale case version is 2");
 
   // Meanwhile, another transition happens (version becomes 3)
-  const t2 = manager.transitionCase(c.id, "waiting_user", STAFF);
+  const t2 = manager.transitionCase(c.id, "waiting_user", STAFF, c.guildId);
   assertNotNull(t2, "Second transition succeeds");
   assertEqual(t2!.version, 3, "Version is 3 after second transition");
 
@@ -276,11 +276,11 @@ function testInvalidTransitionRejected(): void {
   if (!c) return;
 
   // open → closed should be rejected (not in valid transitions)
-  const t1 = manager.transitionCase(c.id, "closed", STAFF);
+  const t1 = manager.transitionCase(c.id, "closed", STAFF, GUILD);
   assertEqual(t1, null, "open → closed rejected");
 
   // open → open should be rejected (not in valid transitions)
-  const t2 = manager.transitionCase(c.id, "open", STAFF);
+  const t2 = manager.transitionCase(c.id, "open", STAFF, GUILD);
   assertEqual(t2, null, "open → open rejected");
 }
 
@@ -294,8 +294,8 @@ function testNonExistentCaseOperations(): void {
   const manager = new SupportCaseManager();
 
   assertEqual(manager.getCase("nonexistent"), null, "Get non-existent case returns null");
-  assertEqual(manager.transitionCase("nonexistent", "investigating", STAFF), null, "Transition non-existent case returns null");
-  assertEqual(manager.assignCase("nonexistent", STAFF, STAFF), null, "Assign non-existent case returns null");
+  assertEqual(manager.transitionCase("nonexistent", "investigating", STAFF, GUILD), null, "Transition non-existent case returns null");
+  assertEqual(manager.assignCase("nonexistent", STAFF, STAFF, GUILD), null, "Assign non-existent case returns null");
 
   const msgs = manager.getMessages("nonexistent");
   assertEqual(msgs.length, 0, "Get messages for non-existent case returns empty");
@@ -352,7 +352,7 @@ function testStaleDataProtection(): void {
   assertNotNull(snapshot, "Load case snapshot");
 
   // Another process modifies the case
-  manager.transitionCase(c.id, "investigating", STAFF);
+  manager.transitionCase(c.id, "investigating", STAFF, c.guildId);
 
   // The snapshot should now be stale
   // Verify that any mutation using stale version fails
@@ -384,10 +384,10 @@ function testVersionColumnExistsAndIncrements(): void {
 
   assertEqual(c.version, 1, "Initial version is 1");
 
-  const t1 = manager.transitionCase(c.id, "investigating", STAFF);
+  const t1 = manager.transitionCase(c.id, "investigating", STAFF, c.guildId);
   assertEqual(t1!.version, 2, "Version 2 after first transition");
 
-  const t2 = manager.transitionCase(c.id, "resolved", STAFF);
+  const t2 = manager.transitionCase(c.id, "resolved", STAFF, GUILD);
   assertEqual(t2!.version, 3, "Version 3 after second transition");
 }
 
@@ -479,30 +479,30 @@ function testFullLifecycleWithVersions(): void {
 
   assertEqual(c.version, 1, "v1: open");
 
-  let r = manager.transitionCase(c.id, "investigating", STAFF);
+  let r = manager.transitionCase(c.id, "investigating", STAFF, c.guildId);
   assertEqual(r!.version, 2, "v2: investigating");
   assertEqual(r!.status, "investigating", "Status: investigating");
 
-  r = manager.transitionCase(c.id, "waiting_user", STAFF);
+  r = manager.transitionCase(c.id, "waiting_user", STAFF, c.guildId);
   assertEqual(r!.version, 3, "v3: waiting_user");
 
-  r = manager.transitionCase(c.id, "escalated", STAFF);
+  r = manager.transitionCase(c.id, "escalated", STAFF, GUILD);
   assertEqual(r!.version, 4, "v4: escalated");
 
-  r = manager.transitionCase(c.id, "investigating", STAFF);
+  r = manager.transitionCase(c.id, "investigating", STAFF, c.guildId);
   assertEqual(r!.version, 5, "v5: back to investigating");
 
-  r = manager.transitionCase(c.id, "resolved", STAFF);
+  r = manager.transitionCase(c.id, "resolved", STAFF, GUILD);
   assertEqual(r!.version, 6, "v6: resolved");
   assertEqual(r!.status, "resolved", "Status: resolved");
 
-  r = manager.transitionCase(c.id, "closed", STAFF);
+  r = manager.transitionCase(c.id, "closed", STAFF, GUILD);
   assertEqual(r!.version, 7, "v7: closed");
   assertEqual(r!.status, "closed", "Status: closed");
   assertNotNull(r!.closedAt, "closedAt set");
 
   // Cannot transition from closed
-  const closed = manager.transitionCase(c.id, "open", STAFF);
+  const closed = manager.transitionCase(c.id, "open", STAFF, GUILD);
   assertEqual(closed, null, "Cannot transition from closed");
 }
 

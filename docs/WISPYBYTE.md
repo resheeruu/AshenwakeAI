@@ -1,0 +1,258 @@
+# Wispbyte Deployment Guide
+
+This document describes how to deploy AshenAI on Wispbyte hosting.
+
+## Prerequisites
+
+- Node.js 20+ (recommended: Node 24)
+- npm 10+
+- Wispbyte account with a server provisioned
+- Domain: `ashenai.freesrv.com` (or your custom domain)
+- Server port: 9002 (assigned by Wispbyte)
+
+## 1. Build Command
+
+```bash
+npm run build
+```
+
+This compiles TypeScript to `dist/` and copies static assets to `dist/web/public/`.
+
+## 2. Start Command
+
+```bash
+npm start
+```
+
+This runs `scripts/start.sh` which:
+- Validates environment
+- Ensures `.env` exists
+- Validates PORT
+- Starts `node dist/index.js`
+
+## 3. HOST Configuration
+
+The application **always binds to `0.0.0.0`** (hardcoded in `src/web/server.ts:2573`). This is required for container/hosted environments.
+
+Do not change this behavior. The server must bind externally, not to localhost.
+
+## 4. PORT Configuration
+
+### Production (Wispbyte)
+
+Set the provider-assigned port in Wispbyte's **Startup → Environment Variables**:
+
+```bash
+PORT=9002
+```
+
+The application reads `process.env.PORT` directly. The start script (`scripts/start.sh`) validates that PORT is an integer 1-65535.
+
+**Do not hard-code 9002 in source code.** The operator must configure it in Wispbyte's environment.
+
+### Local Development
+
+If no PORT is set in environment or `.env`, the application defaults to `8080`.
+
+The start script exports `PORT=8080` only when no PORT is already set and no `.env` exists.
+
+## 5. Public URL
+
+Configure the public domain in `.env`:
+
+```bash
+AUTH_BASE_URL=https://ashenai.freesrv.com
+```
+
+This is used for:
+- Password reset email links
+- OAuth callback URLs
+- Absolute URL generation
+
+## 6. OAuth Configuration
+
+### Discord OAuth
+
+```bash
+DISCORD_CLIENT_ID=your_discord_client_id
+DISCORD_CLIENT_SECRET=your_discord_client_secret
+DISCORD_REDIRECT_URI=https://ashenai.freesrv.com/auth/discord/callback
+DISCORD_OAUTH_CLIENT_ID=your_discord_client_id
+DISCORD_OAUTH_CLIENT_SECRET=your_discord_client_secret
+DISCORD_OAUTH_REDIRECT_URI=https://ashenai.freesrv.com/auth/discord/callback
+```
+
+OAuth is **disabled** unless ALL of client secret + redirect URI are set.
+
+### Google OAuth (optional)
+
+```bash
+GOOGLE_OAUTH_CLIENT_ID=your_google_client_id
+GOOGLE_OAUTH_CLIENT_SECRET=your_google_client_secret
+GOOGLE_OAUTH_REDIRECT_URI=https://ashenai.freesrv.com/auth/google/callback
+```
+
+## 7. CORS Configuration
+
+```bash
+ASHENAI_CORS_ORIGINS=https://ashenai.freesrv.com
+```
+
+Multiple origins comma-separated. Empty = all cross-origin blocked (secure default).
+
+## 8. TRUST_PROXY
+
+The application runs behind Wispbyte's reverse proxy. Configure:
+
+```bash
+TRUST_PROXY=1
+```
+
+Maximum allowed is 3. Defaults to 0 if unset/invalid. This enables proper `X-Forwarded-Proto` and `X-Forwarded-For` handling for secure cookies and OAuth callbacks.
+
+## 9. Health Endpoint
+
+```
+GET /api/health
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "name": "AshenAI",
+  "version": "git-short-hash",
+  "database": "ok",
+  "preflight": "passed",
+  "timestamp": 1234567890123
+}
+```
+
+Returns HTTP 200 when healthy, 503 when unhealthy (database down, preflight failed).
+
+Admin-only detailed endpoints:
+- `/api/system/status` (admin)
+- `/api/system/health` (admin)
+
+## 10. Persistent Data Requirements
+
+The application stores data in a `data/` directory at the project root:
+
+```
+data/
+├── ashenai.db              # SQLite database
+├── game-players.json       # Game economy state
+├── sessions.json           # Web sessions
+├── accounts.json           # Web accounts
+├── linked-identities.json  # OAuth linked accounts
+├── warnings.json           # Discord warnings
+├── provider-health.json    # AI provider health
+└── ...                     # Other JSON state files
+```
+
+**Requirements:**
+- Must persist across restarts
+- Writable by the application user
+- Recommended: mount a persistent volume at the project root
+
+## 11. Database
+
+Uses SQLite (`better-sqlite3`) with WAL mode enabled.
+Database file: `data/ashenai.db`
+
+Migrations run automatically on startup. Do not run migrations manually.
+
+## 12. Restart Behavior
+
+- Graceful shutdown on SIGTERM/SIGINT
+- HTTP server closes gracefully
+- Database connections close
+- Discord gateway disconnects gracefully
+- Process exits 0 on clean shutdown
+
+The start script does not auto-restart. Use Wispbyte's process manager or a systemd unit for auto-restart.
+
+## 13. Logs
+
+Logs output to stdout/stderr with structured JSON via Pino.
+Log level configurable via `LOG_LEVEL` (default: `info`).
+
+No log rotation built-in. Use Wispbyte's log management or external log shipper.
+
+## 14. Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DISCORD_TOKEN` | Yes | - | Discord bot token |
+| `DISCORD_CLIENT_ID` | Yes | - | Discord application ID |
+| `DISCORD_GUILD_ID` | Yes | - | Primary guild ID |
+| `SESSION_SECRET` | Yes* | - | ≥32 chars, generated by `npm run setup` |
+| `AUTH_BASE_URL` | Yes | - | Public HTTPS URL (e.g., `https://ashenai.freesrv.com`) |
+| `DISCORD_CLIENT_SECRET` | For OAuth | - | Discord OAuth secret |
+| `DISCORD_REDIRECT_URI` | For OAuth | - | Must match Discord dashboard |
+| `DISCORD_OAUTH_CLIENT_ID` | For OAuth | - | Same as DISCORD_CLIENT_ID |
+| `DISCORD_OAUTH_REDIRECT_URI` | For OAuth | - | Must match Discord dashboard |
+| `PORT` | No | 8080 | Provider-assigned port (e.g., 9002) |
+| `HOST` | No | 0.0.0.0 | Bind address (hardcoded to 0.0.0.0) |
+| `NODE_ENV` | No | production | `production` or `development` |
+| `TRUST_PROXY` | No | 0 | Proxy trust level (max 3) |
+| `ASHENAI_CORS_ORIGINS` | No | - | Comma-separated allowed origins |
+| `AUTH_BASE_URL` | Yes | - | Public HTTPS base URL |
+| `AUTH_DEV_RESET_LINKS` | No | false | Dev mode for password reset |
+| `LOG_LEVEL` | No | info | Pino log level |
+
+*Required in production. `npm run setup` generates one.
+
+## 15. Security Considerations
+
+- **Never commit `.env`** - contains secrets
+- **HTTPS terminates at Wispbyte proxy** - internal traffic is HTTP
+- **TRUST_PROXY=1** enables proper secure cookie handling behind proxy
+- **Secure cookies** (HttpOnly, SameSite=Lax, Secure in production) are set by `session-store.ts`
+- **CSRF protection** via `X-CSRF-Token` header required for mutations
+- **CORS** restricted to configured origins
+- **Rate limiting** applied globally and per-login
+- **Health endpoint** returns 503 when database/preflight unhealthy
+- **Secrets** never logged (Pino redaction)
+- **SQL injection** prevented via parameterized queries (better-sqlite3)
+
+## 16. Wispbyte Setup Steps
+
+1. **Create Wispbyte server** with Node.js runtime
+2. **Configure Startup → Environment Variables:**
+   - `PORT=9002`
+   - `NODE_ENV=production`
+   - `TRUST_PROXY=1`
+   - All required variables from section 14
+3. **Configure Domain:**
+   - Set custom domain to `ashenai.freesrv.com`
+   - Enable HTTPS (Wispbyte provides TLS)
+4. **Configure Discord OAuth:**
+   - In Discord Developer Portal, add redirect URI: `https://ashenai.freesrv.com/auth/discord/callback`
+5. **Deploy:**
+   - Push code or use Wispbyte's deployment method
+   - Run `npm run build`
+   - Start with `npm start`
+5. **Verify:**
+   - Check `/api/health` returns 200
+   - Test Discord bot connectivity
+   - Test web login/OAuth flow
+
+## 17. Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Port mismatch | PORT not set in Wispbyte env | Set `PORT=9002` in Wispbyte env |
+| OAuth callback fails | Redirect URI mismatch | Ensure Discord dashboard matches `AUTH_BASE_URL/auth/discord/callback` |
+| Secure cookies not set | TRUST_PROXY not configured | Set `TRUST_PROXY=1` |
+| CORS blocked | Origin not allowed | Add domain to `ASHENAI_CORS_ORIGINS` |
+| Health returns 503 | Database/preflight failed | Check logs, ensure `data/` writable |
+
+## 18. Data Backup
+
+Before major updates:
+```bash
+cp -r data/ data.backup.$(date +%s)
+```
+
+The application includes automated backup via `src/core/backup-manager.ts` (daily, retains 7 days).

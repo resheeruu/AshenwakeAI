@@ -43,8 +43,8 @@ import type { ToolContext, ActionPlan } from "../../ai/tools/types";
  *   ashen_tool_cancel:<planId>
  * ================================================================ */
 
-const CONFIRM_PREFIX = "ashen_tool_confirm:";
-const CANCEL_PREFIX = "ashen_tool_cancel:";
+export const CONFIRM_PREFIX = "ashen_tool_confirm:";
+export const CANCEL_PREFIX = "ashen_tool_cancel:";
 
 export function isToolConfirmationId(customId: string): boolean {
   return customId.startsWith(CONFIRM_PREFIX) || customId.startsWith(CANCEL_PREFIX);

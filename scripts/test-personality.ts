@@ -273,10 +273,10 @@ try {
   fail("/prompt name is 'prompt'", e);
 }
 
-// 14. /settings-update is NOT registered (dead code)
+// 14. One settings command (no separate /settings-update command)
 try {
-  // createSettingsUpdateCommand is exported from settings.ts but should NOT be imported in index.ts
-  // We verify by checking the function exists but is separate from createSettingsCommand
+  // createSettingsUpdateCommand was removed; manual update lives as the
+  // `/settings update` subcommand and the panel as `/settings panel`.
   const { createSettingsCommand } = require("../src/commands/settings");
   const settingsCmd = createSettingsCommand();
   if (settingsCmd.data.name === "settings") {

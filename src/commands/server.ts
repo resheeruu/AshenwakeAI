@@ -2,6 +2,7 @@ import {
   ChatInputCommandInteraction,
   GuildMember,
   SlashCommandBuilder,
+  InteractionContextType,
 } from "discord.js";
 
 import {
@@ -16,6 +17,7 @@ export function createServerCommand(): AshenCommand {
   const data = new SlashCommandBuilder()
     .setName("server")
     .setDescription("Server information and member utilities")
+    .setContexts(InteractionContextType.Guild)
     .addSubcommand((sub) =>
       sub
         .setName("info")

@@ -3,6 +3,7 @@ import {
   GuildMember,
   PermissionFlagsBits,
   SlashCommandBuilder,
+  InteractionContextType,
 } from "discord.js";
 
 import { AshenCommand } from "./definitions";
@@ -33,6 +34,7 @@ export function createModerationCommand(): AshenCommand {
   const data = new SlashCommandBuilder()
     .setName("moderation")
     .setDescription("Moderation tools for server management")
+    .setContexts(InteractionContextType.Guild)
     .addSubcommand((sub) =>
       sub
         .setName("warn")

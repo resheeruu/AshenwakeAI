@@ -7,6 +7,7 @@ import { createHelpCommand } from "../src/commands/help";
 import { createStatusCommand } from "../src/commands/status";
 import { createPromptCommand } from "../src/commands/prompt";
 import { createPersonalityCommand } from "../src/commands/personality";
+import { createSettingsCommand } from "../src/commands/settings";
 import { UsageManager } from "../src/ai/usage-manager";
 import {
   insertAIUsageDB,
@@ -383,6 +384,121 @@ try {
 
 } catch (error) {
   fail("Command test execution", error);
+}
+
+// ─────────────────────────────────────
+// STATUS: REAL GATEWAY STATE
+// ─────────────────────────────────────
+
+import fs from "node:fs";
+import path from "node:path";
+import { formatDiscordHealthField } from "../src/commands/status";
+import { initDiscordHealth } from "../src/core/discord-health";
+
+try {
+  // 1. Uninitialized health must NOT claim "Connected".
+  const cold = formatDiscordHealthField();
+  if (cold.includes("Not connected")) {
+    pass("/status reports 'Not connected' when gateway health is uninitialized");
+  } else {
+    fail("/status reports 'Not connected' when gateway health is uninitialized", cold);
+  }
+
+  // 2. Static: the Discord field is wired to the health formatter.
+  const statusSrc = fs.readFileSync(path.resolve("src/commands/status.ts"), "utf8");
+  if (statusSrc.includes("value: formatDiscordHealthField()")) {
+    pass("/status Discord field uses formatDiscordHealthField()");
+  } else {
+    fail("/status Discord field uses formatDiscordHealthField()");
+  }
+  if (!statusSrc.includes("value: `${statusDot(true)} Connected`")) {
+    pass("/status no longer hardcodes 'Connected'");
+  } else {
+    fail("/status no longer hardcodes 'Connected'");
+  }
+
+  // 3. With a ready client, the field reports live gateway metrics.
+  const mockClient = {
+    once: () => mockClient,
+    on: () => mockClient,
+    isReady: () => true,
+    ws: {
+      ping: 42,
+      shards: new Map([
+        [0, { status: 1, ping: 41, lastPingTimestamp: Date.now() }],
+      ]),
+    },
+  } as any;
+  initDiscordHealth(mockClient);
+  const warm = formatDiscordHealthField();
+  if (
+    warm.includes("Connected") &&
+    warm.includes("Latency: 42ms") &&
+    warm.includes("Shards: 1") &&
+    warm.includes("Gateway uptime:")
+  ) {
+    pass("/status reports live latency/shards/uptime when connected");
+  } else {
+    fail("/status reports live latency/shards/uptime when connected", warm);
+  }
+} catch (error) {
+  fail("Status gateway state", error);
+}
+
+// ─────────────────────────────────────
+// DM-PERMISSION DECISION (contexts)
+// ─────────────────────────────────────
+
+import { InteractionContextType } from "discord.js";
+import { createSupportCommand } from "../src/commands/support";
+import { createModerationCommand } from "../src/commands/moderation";
+import { createAccessCommand } from "../src/commands/access";
+import { createServerCommand } from "../src/commands/server";
+import { createGameCommand } from "../src/commands/game";
+
+try {
+  const guildOnly: Array<[string, { data: { toJSON(): unknown } }]> = [
+    ["settings", createSettingsCommand()],
+    ["support", createSupportCommand()],
+    ["moderation", createModerationCommand()],
+    ["access", createAccessCommand()],
+    ["server", createServerCommand()],
+    ["prompt", createPromptCommand()],
+    ["personality", createPersonalityCommand()],
+  ];
+  for (const [name, cmd] of guildOnly) {
+    const json: any = cmd.data.toJSON();
+    if (
+      Array.isArray(json.contexts) &&
+      json.contexts.length === 1 &&
+      json.contexts[0] === InteractionContextType.Guild
+    ) {
+      pass(`/${name} restricted to guild context (hidden in DMs)`);
+    } else {
+      fail(`/${name} restricted to guild context (hidden in DMs)`, json.contexts);
+    }
+  }
+
+  const dmMemory = new ConversationMemory();
+  const dmRouter = new AIRouter(providers);
+  const dmUsage = new UsageManager();
+  const dmAllowed: Array<[string, { data: { toJSON(): unknown } }]> = [
+    ["ask", createAskCommand(dmRouter, dmMemory, dmUsage)],
+    ["reset", createResetCommand(dmMemory)],
+    ["status", createStatusCommand(dmRouter, dmMemory)],
+    ["game", createGameCommand()],
+    ["help", createHelpCommand([])],
+  ];
+  for (const [name, cmd] of dmAllowed) {
+    const json: any = cmd.data.toJSON();
+    if (json.contexts === undefined) {
+      pass(`/${name} keeps default contexts (DMs allowed)`);
+    } else {
+      fail(`/${name} keeps default contexts (DMs allowed)`, json.contexts);
+    }
+  }
+} catch (error) {
+  fail("DM-permission decision", error);
 }
 
 // ─────────────────────────────────────

@@ -33,7 +33,6 @@ const EMBED_COLOR = 0x2c2f33;
 const COMMAND_METADATA: Record<string, { description: string; category: string; ownerOnly?: boolean; modOnly?: boolean; adminOnly?: boolean }> = {
   ask:    { description: "Ask AshenAI anything", category: "ai" },
   reset:  { description: "Reset your conversation memory", category: "ai" },
-  game:   { description: "Play games, earn coins, level up", category: "ai" },
   prompt: { description: "AI-powered server builder — describe what you want in natural language", category: "server" },
   personality: { description: "Set your custom AI personality prompt for this server", category: "ai", adminOnly: true },
   server: { description: "Server info, member info, and role management", category: "server" },
@@ -68,7 +67,8 @@ const CATEGORY_DEFS: CategoryDef[] = [
   { id: "access", name: "Access Control", emoji: "🔑", description: "Trusted users and permission management." },
   { id: "social", name: "Social", emoji: "💬", description: "Anime reactions and social interactions.",
     features: [
-      { name: "Anime actions", description: "Use ash <action> @user for reactions (hug, pat, bonk, etc.)" },
+      { name: "Ash actions", description: "Use ash <action> @user for reactions (hug, pat, bonk, etc.)" },
+      { name: "Ash games", description: "Use ash mine, ash battle, ash lottery, ash hunt, ash slots for games" },
       { name: "Reaction commands", description: "Affection, combat, and fun interactions" },
     ],
   },

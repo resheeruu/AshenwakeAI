@@ -4,6 +4,7 @@ import { UsageManager } from "./usage-manager";
 import { inspectUserInput } from "../security";
 import { checkBoundary } from "../security/boundary";
 import { ASHENAI_SYSTEM_PROMPT } from "../security/policy";
+import { buildGuildInstructionBlock } from "./guild-instructions";
 import { guardAIOutput } from "../security/output-guard";
 import { stripSecurityLabels } from "../security/context";
 import { logger } from "../logger";
@@ -73,7 +74,12 @@ export function createAIRequestService(deps: AIRequestDeps) {
 
       const history = memory.get(userId, channelId);
       const messages = [
-        { role: "system" as const, content: systemPrompt || ASHENAI_SYSTEM_PROMPT },
+        {
+          role: "system" as const,
+          content:
+            (systemPrompt || ASHENAI_SYSTEM_PROMPT) +
+            buildGuildInstructionBlock(guildId),
+        },
         ...history.map(entry => ({ role: entry.role as "user" | "assistant", content: entry.content })),
         { role: "user" as const, content: prompt },
       ];

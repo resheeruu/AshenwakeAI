@@ -7,6 +7,7 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   TextChannel,
+  InteractionContextType,
 } from "discord.js";
 import { AshenCommand } from "./definitions";
 import { loadGuildConfig } from "../core/guild-config";
@@ -19,6 +20,7 @@ export function createSupportCommand(): AshenCommand {
     data: new SlashCommandBuilder()
       .setName("support")
       .setDescription("Support tickets, reports, appeals, and case management")
+      .setContexts(InteractionContextType.Guild)
       .addSubcommand((sub) =>
         sub
           .setName("ticket")
@@ -119,22 +121,6 @@ export function createSupportCommand(): AshenCommand {
           .addSubcommand((c) =>
             c.setName("stats").setDescription("View case statistics")
           )
-          .addSubcommand((c) =>
-            c.setName("summarize").setDescription("AI-generated case summary")
-              .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
-          )
-          .addSubcommand((c) =>
-            c.setName("evidence").setDescription("View collected evidence")
-              .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
-          )
-          .addSubcommand((c) =>
-            c.setName("timeline").setDescription("View case message timeline")
-              .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
-          )
-          .addSubcommand((c) =>
-            c.setName("recommend").setDescription("Get AI recommendation for a case")
-              .addStringOption((opt) => opt.setName("id").setDescription("Case ID").setRequired(true))
-          )
       ),
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -146,6 +132,14 @@ export function createSupportCommand(): AshenCommand {
 
         const guildId = interaction.guild.id;
         const subcommand = interaction.options.getSubcommand();
+        /*
+         * "case" is a subcommand GROUP: getSubcommand() returns the
+         * leaf name (view/list/assign/...), never "case" — routing on
+         * "case" alone left the whole group dead (no handler ever
+         * ran). Route on the group name, with the flat name kept as
+         * a defensive fallback.
+         */
+        const subcommandGroup = interaction.options.getSubcommandGroup();
 
         if (subcommand === "ticket") {
           await handleTicket(interaction, guildId);
@@ -162,7 +156,7 @@ export function createSupportCommand(): AshenCommand {
           return;
         }
 
-        if (subcommand === "case") {
+        if (subcommandGroup === "case" || subcommand === "case") {
           await handleCase(interaction, guildId);
           return;
         }
@@ -189,15 +183,15 @@ async function handleTicket(interaction: ChatInputCommandInteraction, guildId: s
   const appealsConfig = config.appeals ?? { enabled: false, aiAnalysisEnabled: true };
 
   if (type === "support" && !supportConfig.enabled) {
-    await interaction.editReply("❌ Support tickets are not enabled. Ask an admin to enable them with `/settings`.");
+    await interaction.editReply("❌ Support tickets are not enabled. Ask an admin to enable them with `/settings panel`.");
     return;
   }
   if (type === "report" && !reportsConfig.enabled) {
-    await interaction.editReply("❌ Reports are not enabled. Ask an admin to enable them with `/settings`.");
+    await interaction.editReply("❌ Reports are not enabled. Ask an admin to enable them with `/settings panel`.");
     return;
   }
   if (type === "appeal" && !appealsConfig.enabled) {
-    await interaction.editReply("❌ Appeals are not enabled. Ask an admin to enable them with `/settings`.");
+    await interaction.editReply("❌ Appeals are not enabled. Ask an admin to enable them with `/settings panel`.");
     return;
   }
 
@@ -256,7 +250,7 @@ async function handleTicket(interaction: ChatInputCommandInteraction, guildId: s
           topic: `${typeName} ticket — ${subject}`,
         });
 
-        caseManager.transitionCase(newCase.id, "investigating", interaction.user.id);
+        caseManager.transitionCase(newCase.id, "investigating", interaction.user.id, guildId);
       }
     } catch (error) {
       logger.warn(`⚠️ Could not create ticket channel: ${error instanceof Error ? error.message : String(error)}`);
@@ -292,7 +286,7 @@ async function handleReport(interaction: ChatInputCommandInteraction, guildId: s
   const reportsConfig = config.reports ?? { enabled: false, requireEvidence: false, aiAnalysisEnabled: true, autoEscalateHighRisk: true };
 
   if (!reportsConfig.enabled) {
-    await interaction.editReply("❌ Reports are not enabled. Ask an admin to enable them with `/settings`.");
+    await interaction.editReply("❌ Reports are not enabled. Ask an admin to enable them with `/settings panel`.");
     return;
   }
 
@@ -378,7 +372,7 @@ async function handleAppeal(interaction: ChatInputCommandInteraction, guildId: s
   const appealsConfig = config.appeals ?? { enabled: false, aiAnalysisEnabled: true };
 
   if (!appealsConfig.enabled) {
-    await interaction.editReply("❌ Appeals are not enabled. Ask an admin to enable them with `/settings`.");
+    await interaction.editReply("❌ Appeals are not enabled. Ask an admin to enable them with `/settings panel`.");
     return;
   }
 
@@ -445,13 +439,61 @@ async function handleAppeal(interaction: ChatInputCommandInteraction, guildId: s
   logger.info(`🔨 Appeal ${newCase.id} submitted by ${interaction.user.tag} in ${guildId}`);
 }
 
+/**
+ * Case management (view/list/assign/status/stats) is staff-only.
+ * Authorization source of truth: guild_configs.staff.roleIds — the
+ * same model used by the support-channel handler. Fails closed when
+ * no staff roles are configured or the member cannot be resolved.
+ */
+async function hasCaseStaffAccess(
+  interaction: ChatInputCommandInteraction,
+  guildId: string,
+): Promise<boolean> {
+  try {
+    const config = loadGuildConfig(guildId);
+    const staffRoleIds = config.staff?.roleIds ?? [];
+    if (staffRoleIds.length === 0) return false;
+
+    const guild = interaction.guild;
+    if (!guild) return false;
+
+    const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+    if (!member || member.user.bot) return false;
+
+    return member.roles.cache.some((role) => staffRoleIds.includes(role.id));
+  } catch {
+    return false;
+  }
+}
+
 async function handleCase(interaction: ChatInputCommandInteraction, guildId: string): Promise<void> {
   const subcommand = interaction.options.getSubcommand();
   const caseManager = getSupportCaseManager();
 
+  /*
+   * Staff gate: EVERY /support case subcommand (view/list/assign/
+   * status/stats) exposes reports, appeals and staffing of other
+   * users — none of it is available to arbitrary guild members.
+   * Authorization source of truth: guild_configs.staff.roleIds.
+   */
+  if (!(await hasCaseStaffAccess(interaction, guildId))) {
+    recordAudit({
+      who: interaction.user.id,
+      whoName: interaction.user.tag,
+      what: `Denied /support case ${subcommand} (missing staff role)`,
+      where: "support",
+      guildId,
+      result: "denied",
+    });
+    await interaction.editReply(
+      "❌ You need a configured staff role to manage support cases.",
+    );
+    return;
+  }
+
   switch (subcommand) {
     case "view": {
-      const id = interaction.options.getString("id", true).toUpperCase();
+      const id = interaction.options.getString("id", true).trim();
       const c = caseManager.getCase(id);
       if (!c || c.guildId !== guildId) {
         await interaction.editReply(`❌ Case \`${id}\` not found.`);
@@ -506,25 +548,37 @@ async function handleCase(interaction: ChatInputCommandInteraction, guildId: str
       break;
     }
     case "assign": {
-      const id = interaction.options.getString("id", true).toUpperCase();
+      const rawId = interaction.options.getString("id", true).trim();
       const staff = interaction.options.getUser("staff", true);
-      const result = caseManager.assignCase(id, staff.id, interaction.user.id);
-      if (!result) {
-        await interaction.editReply(`❌ Case \`${id}\` not found or assignment failed.`);
+      // Resolve to the canonical case id (case-insensitive lookup),
+      // then act only if the case belongs to this guild.
+      const existing = caseManager.getCase(rawId);
+      if (!existing || existing.guildId !== guildId) {
+        await interaction.editReply(`❌ Case \`${rawId}\` not found.`);
         return;
       }
-      await interaction.editReply(`✅ Case \`${id}\` assigned to <@${staff.id}>.`);
+      const result = caseManager.assignCase(existing.id, staff.id, interaction.user.id, guildId);
+      if (!result) {
+        await interaction.editReply(`❌ Case \`${existing.id}\` not found or assignment failed.`);
+        return;
+      }
+      await interaction.editReply(`✅ Case \`${existing.id}\` assigned to <@${staff.id}>.`);
       break;
     }
     case "status": {
-      const id = interaction.options.getString("id", true).toUpperCase();
+      const rawId = interaction.options.getString("id", true).trim();
       const newStatus = interaction.options.getString("status", true) as any;
-      const result = caseManager.transitionCase(id, newStatus, interaction.user.id);
-      if (!result) {
-        await interaction.editReply(`❌ Invalid transition or case \`${id}\` not found.`);
+      const existing = caseManager.getCase(rawId);
+      if (!existing || existing.guildId !== guildId) {
+        await interaction.editReply(`❌ Invalid transition or case \`${rawId}\` not found.`);
         return;
       }
-      await interaction.editReply(`✅ Case \`${id}\` status updated to **${newStatus}**.`);
+      const result = caseManager.transitionCase(existing.id, newStatus, interaction.user.id, guildId);
+      if (!result) {
+        await interaction.editReply(`❌ Invalid transition or case \`${existing.id}\` not found.`);
+        return;
+      }
+      await interaction.editReply(`✅ Case \`${existing.id}\` status updated to **${newStatus}**.`);
       break;
     }
     case "stats": {

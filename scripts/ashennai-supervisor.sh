@@ -1,8 +1,8 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 
 set -u
 
-PROJECT_DIR="$HOME/AshenAI"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RENDER_URL="https://ashenwakeai.onrender.com/api/health"
 
 CHECK_INTERVAL=2

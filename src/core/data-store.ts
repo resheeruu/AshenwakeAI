@@ -15,7 +15,18 @@ export function readJSON<T>(filename: string, fallback: T): T {
     const raw = fs.readFileSync(filePath, "utf8");
     return JSON.parse(raw) as T;
   } catch (error) {
-    logger.warn(`⚠️ Could not parse ${filename}, using fallback: ${error instanceof Error ? error.message : String(error)}`);
+    // Quarantine unreadable content so a later write cannot destroy it.
+    try {
+      const quarantine = `${filePath}.corrupt-${Date.now()}`;
+      fs.renameSync(filePath, quarantine);
+      logger.error(
+        `⚠️ ${filename} is unreadable — moved to ${path.basename(quarantine)}, using fallback`
+      );
+    } catch {
+      logger.error(
+        `⚠️ Could not read ${filename}, using fallback: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
     return fallback;
   }
 }
@@ -28,7 +39,9 @@ export function writeJSON(filename: string, data: unknown): void {
     fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf8");
     fs.renameSync(tmpPath, filePath);
   } catch (error) {
-    logger.warn(`⚠️ Could not write ${filename}: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(
+      `⚠️ Could not write ${filename} (data NOT persisted): ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 

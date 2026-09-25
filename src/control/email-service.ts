@@ -19,6 +19,46 @@ export interface EmailService {
   send(msg: EmailMessage): Promise<{ success: boolean; error?: string }>;
 }
 
+/**
+ * Log-safe recipient: keep the domain, hide the local part so password
+ * reset / security notification recipients are not written to disk in
+ * clear text on every send.
+ */
+export function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0 || at === email.length - 1) return "***";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  return `${local[0]}***@${domain}`;
+}
+
+/**
+ * Resolve the base URL used to build password-reset links.
+ *
+ * `AUTH_BASE_URL` is authoritative. Falling back to the request's Host
+ * header lets anyone who can trigger POST /auth/forgot-password with a
+ * victim's email poison the link that lands in the victim's inbox with a
+ * domain the attacker controls (a perfect phishing bait), so the header is
+ * only trusted outside production.
+ *
+ * Returns null when no trustworthy base URL is available — callers must
+ * then skip sending instead of emitting an attacker-controlled link.
+ */
+export function resolveResetBaseUrl(
+  configured: string | undefined | null,
+  hostHeader: string | undefined | null,
+  isProduction = process.env.NODE_ENV === "production",
+): string | null {
+  const configuredUrl = configured?.trim();
+  if (configuredUrl) return configuredUrl;
+
+  if (isProduction) return null;
+
+  const host = hostHeader?.trim();
+  if (!host) return "http://localhost";
+  return `http://${host}`;
+}
+
 /* ================================================================
  * DEV EMAIL SERVICE (console logger + env var exposure)
  * ================================================================ */
@@ -32,17 +72,17 @@ class DevEmailService implements EmailService {
       // Extract any URLs from the message for console display
       const urls = msg.text.match(/https?:\/\/[^\s]+/g) || [];
       if (urls.length > 0) {
-        logger.info(`📧 [DEV EMAIL] To: ${msg.to}`);
+        logger.info(`📧 [DEV EMAIL] To: ${maskEmail(msg.to)}`);
         logger.info(`📧 [DEV EMAIL] Subject: ${msg.subject}`);
         for (const url of urls) {
           logger.info(`🔗 [DEV EMAIL] Link: ${url}`);
         }
       } else {
-        logger.info(`📧 [DEV EMAIL] To: ${msg.to} | Subject: ${msg.subject}`);
+        logger.info(`📧 [DEV EMAIL] To: ${maskEmail(msg.to)} | Subject: ${msg.subject}`);
         logger.info(`📧 [DEV EMAIL] Body: ${msg.text}`);
       }
     } else {
-      logger.info(`📧 [DEV EMAIL] To: ${msg.to} | Subject: ${msg.subject}`);
+      logger.info(`📧 [DEV EMAIL] To: ${maskEmail(msg.to)} | Subject: ${msg.subject}`);
     }
 
     return { success: true };

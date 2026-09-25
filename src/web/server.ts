@@ -61,6 +61,7 @@ import {
 } from "../control/password-reset";
 import {
   sendPasswordResetEmail,
+  resolveResetBaseUrl,
 } from "../control/email-service";
 import {
   createSession,
@@ -308,8 +309,38 @@ function sendValidationError(res: Response, message: string): void {
 
 /* ==================== PUBLIC ==================== */
 
+function healthDatabase(): "ok" | "error" {
+  try {
+    const { getDatabase } = require("../database/database");
+    getDatabase().prepare("SELECT 1").get();
+    return "ok";
+  } catch {
+    return "error";
+  }
+}
+
+function healthPreflightStatus(): string {
+  try {
+    const { getPreflightStatus } = require("../core/preflight");
+    return getPreflightStatus();
+  } catch {
+    return "unknown";
+  }
+}
+
 app.get("/api/health", (_req: Request, res: Response) => {
-  res.json({ ok: true, name: "AshenAI", version: VERSION });
+  const database = healthDatabase();
+  const preflight = healthPreflightStatus();
+  const ok = database === "ok" && preflight !== "BLOCKED" && preflight !== "failed";
+
+  res.status(ok ? 200 : 503).json({
+    ok,
+    name: "AshenAI",
+    version: VERSION,
+    database,
+    preflight,
+    timestamp: Date.now(),
+  });
 });
 
 /* ==================== AUTH ==================== */
@@ -431,7 +462,11 @@ app.get("/auth/discord/callback", async (req: Request, res: Response) => {
   }
 
   const result = await handleDiscordCallback(code, state, ip);
-  if (result.success && result.sessionId) {
+  if (result.success && result.mfaRequired && result.challengeToken) {
+    res.redirect(
+      `/?mfa_required=true&challengeToken=${encodeURIComponent(result.challengeToken)}&username=${encodeURIComponent(result.username || "")}`,
+    );
+  } else if (result.success && result.sessionId) {
     setSessionCookie(res, result.sessionId, result.expiresAt!);
     res.redirect(`/?login=success&provider=discord&username=${encodeURIComponent(result.username || "")}`);
   } else if (result.requiresLinking) {
@@ -465,7 +500,11 @@ app.get("/auth/google/callback", async (req: Request, res: Response) => {
   }
 
   const result = await handleGoogleCallback(code, state, ip);
-  if (result.success && result.sessionId) {
+  if (result.success && result.mfaRequired && result.challengeToken) {
+    res.redirect(
+      `/?mfa_required=true&challengeToken=${encodeURIComponent(result.challengeToken)}&username=${encodeURIComponent(result.username || "")}`,
+    );
+  } else if (result.success && result.sessionId) {
     setSessionCookie(res, result.sessionId, result.expiresAt!);
     res.redirect(`/?login=success&provider=google&username=${encodeURIComponent(result.username || "")}`);
   } else if (result.requiresLinking) {
@@ -513,9 +552,21 @@ app.post("/auth/forgot-password", async (req: Request, res: Response) => {
         details: `IP: ${ip}`,
       });
 
-      // Send reset email via EmailService
-      const baseUrl = process.env.AUTH_BASE_URL || `http://${req.headers.host || "localhost"}`;
-      await sendPasswordResetEmail(fullAccount.email!, fullAccount.id, resetToken, baseUrl);
+      // Send reset email via EmailService.
+      // AUTH_BASE_URL is authoritative; the request Host header is only
+      // trusted outside production so a forged Host cannot poison the
+      // link that lands in the account owner's inbox.
+      const baseUrl = resolveResetBaseUrl(
+        process.env.AUTH_BASE_URL,
+        req.headers.host,
+      );
+      if (!baseUrl) {
+        logger.error(
+          "Password reset email not sent: AUTH_BASE_URL is unset and the request Host header is not trusted in production.",
+        );
+      } else {
+        await sendPasswordResetEmail(fullAccount.email!, fullAccount.id, resetToken, baseUrl);
+      }
     }
   }
 
@@ -1913,7 +1964,7 @@ app.put("/api/guilds/:guildId/personality", requireAuth, requireRole("owner"), r
   }
   const result = updateGuildConfig(guildId, { personality: req.body as any });
   if (result.success) {
-    res.json({ ok: true, message: "Personality updated." });
+    res.json({ ok: true, message: result.message });
   } else {
     res.status(500).json({ ok: false, error: result.message });
   }
@@ -1933,7 +1984,7 @@ app.put("/api/guilds/:guildId/moderation", requireAuth, requireRole("owner"), re
   }
   const result = updateGuildConfig(guildId, { moderation: req.body as any });
   if (result.success) {
-    res.json({ ok: true, message: "Moderation settings updated." });
+    res.json({ ok: true, message: result.message });
   } else {
     res.status(500).json({ ok: false, error: result.message });
   }
@@ -1950,7 +2001,7 @@ app.get("/api/guilds/:guildId/automation", requireAuth, requireGuildAuth, (req: 
 app.get("/api/guilds/:guildId/social", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const config = getGuildConfig(guildId);
-  res.json({ ok: true, config: config.community });
+  res.json({ ok: true, config: config.social || {} });
 });
 
 // Analytics
@@ -1996,7 +2047,7 @@ app.put("/api/guilds/:guildId/ai", requireAuth, requireRole("owner"), requireCsr
   }
   const result = updateGuildConfig(guildId, { ai: req.body as any });
   if (result.success) {
-    res.json({ ok: true, message: "AI configuration updated." });
+    res.json({ ok: true, message: result.message });
   } else {
     res.status(500).json({ ok: false, error: result.message });
   }
@@ -2015,7 +2066,7 @@ app.put("/api/guilds/:guildId/ai/routing", requireAuth, requireRole("owner"), re
   }
   const result = updateGuildConfig(guildId, { routing: req.body as any });
   if (result.success) {
-    res.json({ ok: true, message: "Routing configuration updated." });
+    res.json({ ok: true, message: result.message });
   } else {
     res.status(500).json({ ok: false, error: result.message });
   }
@@ -2034,7 +2085,7 @@ app.put("/api/guilds/:guildId/ai/limits", requireAuth, requireRole("owner"), req
   }
   const result = updateGuildConfig(guildId, { limits: req.body as any });
   if (result.success) {
-    res.json({ ok: true, message: "Usage limits updated." });
+    res.json({ ok: true, message: result.message });
   } else {
     res.status(500).json({ ok: false, error: result.message });
   }
@@ -2056,7 +2107,7 @@ app.put("/api/guilds/:guildId/models", requireAuth, requireRole("owner"), requir
   }
   const result = updateGuildConfig(guildId, { models: req.body });
   if (result.success) {
-    res.json({ ok: true, message: "Model configuration updated." });
+    res.json({ ok: true, message: result.message });
   } else {
     res.status(500).json({ ok: false, error: result.message });
   }
@@ -2208,7 +2259,7 @@ app.put("/api/guilds/:guildId/support/:caseId", requireAuth, requireRole("admin"
       });
     }
 
-    const updated = manager.transitionCase(caseId, newStatus as any, authReq.accountId || "web");
+    const updated = manager.transitionCase(caseId, newStatus as any, authReq.accountId || "web", guildId);
     if (!updated) {
       return res.status(409).json({ ok: false, error: "Transition rejected (conflict or invalid)" });
     }
@@ -2385,7 +2436,7 @@ app.delete("/api/guilds/:guildId/automation/rules/:ruleId", requireAuth, require
 app.get("/api/guilds/:guildId/social/config", requireAuth, requireGuildAuth, (req: Request, res: Response) => {
   const guildId = typeof req.params.guildId === "string" ? req.params.guildId : "";
   const config = getGuildConfig(guildId);
-  res.json({ ok: true, config: config.community || {} });
+  res.json({ ok: true, config: config.social || {} });
 });
 
 app.put("/api/guilds/:guildId/social/config", requireAuth, requireRole("owner"), requireCsrf, requireGuildAuth, (req: Request, res: Response) => {
@@ -2393,9 +2444,9 @@ app.put("/api/guilds/:guildId/social/config", requireAuth, requireRole("owner"),
   if (!isPlainObject(req.body)) {
     return sendValidationError(res, "Social config body must be a JSON object");
   }
-  const result = updateGuildConfig(guildId, { community: req.body as any });
+  const result = updateGuildConfig(guildId, { social: req.body as any });
   if (result.success) {
-    res.json({ ok: true, message: "Social configuration updated." });
+    res.json({ ok: true, message: result.message });
   } else {
     res.status(500).json({ ok: false, error: result.message });
   }
@@ -2521,5 +2572,14 @@ export function startWebServer(
 
   httpServer = app.listen(PORT, "0.0.0.0", () => {
     logger.info(`AshenAI Web listening on port ${PORT}`);
-  });
+  })
+    .on("error", (error: NodeJS.ErrnoException) => {
+      logger.error(
+        `AshenAI Web server failed to start on port ${PORT}: ${error.message} — ${
+          error.code === "EADDRINUSE"
+            ? "the port is already in use by another process"
+            : "check the requested address and retry"
+        }`
+      );
+    });
 }

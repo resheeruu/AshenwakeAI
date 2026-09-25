@@ -114,6 +114,69 @@ export const GuildConfigSchema = z.object({
   staff: z.object({
     roleIds: z.array(z.string()),
   }).nullish(),
+  /*
+   * Sections below exist on the GuildConfig interface but were
+   * MISSING here. Zod strips unknown keys on a successful parse, so
+   * every fresh DB load silently deleted them (in-process cache
+   * masked it): social/AI settings reverted to defaults after a
+   * restart, including social.animeActions. Keep this list in sync
+   * with the GuildConfig interface — a regression test in
+   * scripts/test-ai-social.ts round-trips every section.
+   */
+  social: z.object({
+    enabled: z.boolean(),
+    channels: z.record(z.string(), z.object({
+      enabled: z.boolean(),
+      cooldownMs: z.number(),
+      responseProbability: z.number(),
+      debateEnabled: z.boolean(),
+      contextWindow: z.number(),
+      minActivityThreshold: z.number(),
+    })),
+    animeActions: z.boolean(),
+    /**
+     * Clear a user's AFK automatically when they send a normal
+     * message. Optional (older rows lack it); consumers read it
+     * as `?? true` so the documented default is ON.
+     */
+    afkAutoClear: z.boolean().nullish(),
+    customReactions: z.boolean(),
+    customEmoji: z.boolean(),
+    rivalryMode: z.boolean(),
+    debateMode: z.boolean(),
+    globalCooldownMs: z.number(),
+    maxResponsesPerHour: z.number(),
+  }).nullish(),
+  ai: z.object({
+    enabled: z.boolean(),
+    defaultModel: z.string().nullish(),
+    defaultProvider: z.string().nullish(),
+    responseMode: z.string().nullish(),
+    streaming: z.boolean(),
+    contextSize: z.number(),
+    maxOutput: z.number(),
+  }).nullish(),
+  routing: z.object({
+    primaryProvider: z.string().nullish(),
+    fallbackProvider: z.string().nullish(),
+    fallbackOrder: z.array(z.string()),
+    timeoutMs: z.number(),
+    retryPolicy: z.string(),
+    mode: z.enum(["automatic", "fastest", "lowest-cost", "free-first", "custom"]),
+  }).nullish(),
+  limits: z.object({
+    dailyLimit: z.number(),
+    monthlyLimit: z.number(),
+    perUserLimit: z.number(),
+    perRoleLimit: z.number(),
+    perChannelLimit: z.number(),
+  }).nullish(),
+  models: z.array(z.object({
+    modelId: z.string(),
+    enabled: z.boolean(),
+    priority: z.number(),
+    isDefault: z.boolean(),
+  })).nullish(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

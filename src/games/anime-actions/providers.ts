@@ -2,8 +2,12 @@
  * ANIME ANIMATION PROVIDER
  *
  * Provider abstraction for anime GIF retrieval with variety.
- * Fallback chain: cache -> Gifukai API -> OtakuGIFs API -> text-only.
- * Each action stores multiple results for variety.
+ * Fallback chain: local -> cache -> Gifukai API -> OtakuGIFs API
+ *                  -> text-only.
+ * Local results are served from the shared local media index
+ * (src/media/local-gifs.ts), never enter the remote URL cache,
+ * and are always checked before any cache or network work.
+ * Each remote action stores multiple results for variety.
  *
  * All outbound HTTP goes through the canonical hardened fetch
  * (src/security/outbound-fetch.ts) — provider APIs get the same URL,
@@ -19,9 +23,13 @@ import { LRUCache } from "lru-cache";
 import { logger } from "../../logger";
 import { validateMediaUrl } from "./media-security";
 import { hardenedFetch, readLimitedText } from "../../security/outbound-fetch";
+import { resolveLocalGif, type LocalGifAsset } from "../../media/local-gifs";
 
 export interface AnimationResult {
-  url: string;
+  /** Remote animation URL (absent for local-only results). */
+  url?: string;
+  /** Validated local media asset (absent for remote results). */
+  localAsset?: LocalGifAsset;
   source: string;
 }
 
@@ -302,19 +310,50 @@ function logAttempt(action: string, attempt: ProviderAttempt, fallback: string):
   );
 }
 
+/** Deterministic local media resolver (same shape as resolveLocalGif). */
+export interface LocalGifSource {
+  resolve(key: string): Promise<LocalGifAsset | null>;
+}
+
 export interface FetchAnimationOptions {
   /** Deterministic transport override (tests). Defaults to the hardened boundary. */
   httpClient?: AnimeHttpClient;
+  /**
+   * Local provider override.
+   *  - undefined → shared singleton local provider (default)
+   *  - null      → local lookup disabled (remote-chain tests)
+   *  - object    → injected resolver (deterministic tests)
+   */
+  localGifs?: LocalGifSource | null;
 }
 
 export async function fetchAnimation(
   action: string,
   options: FetchAnimationOptions = {},
 ): Promise<AnimationResult | null> {
+  // 1) LOCAL FIRST — validated on disk, never cached in the remote URL cache.
+  if (options.localGifs !== null) {
+    try {
+      const resolver = options.localGifs?.resolve ?? resolveLocalGif;
+      const local = await resolver(`actions:${action}`);
+      if (local) {
+        logger.debug(
+          `anime_action action=${action} provider=local result=local_hit license=${local.license}`,
+        );
+        return { localAsset: local, source: "local" };
+      }
+    } catch (error) {
+      // Local provider failure must never break the chain.
+      logger.warn(
+        `anime_action action=${action} provider=local result=local_error detail=${error instanceof Error ? error.message : "unknown"} fallback=remote`,
+      );
+    }
+  }
+
   const cacheKey = `anime:${action}`;
   const cached = cache.get(cacheKey);
 
-  // Return a random URL from the cached pool for variety
+  // 2) Remote cache — returns a random URL from the pool for variety.
   if (cached && cached.urls.length > 0) {
     const idx = Math.floor(Math.random() * cached.urls.length);
     logger.debug(
@@ -337,7 +376,7 @@ export async function fetchAnimation(
     const attempt = await provider.fetch(action);
     logAttempt(action, attempt, fallback);
 
-    if (attempt.animation) {
+    if (attempt.animation?.url) {
       collectedUrls.push(attempt.animation.url);
       source = attempt.provider;
       if (collectedUrls.length >= MAX_RESULTS_PER_ACTION) break;

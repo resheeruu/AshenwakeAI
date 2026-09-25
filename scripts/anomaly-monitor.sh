@@ -1,8 +1,8 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 
 set -u
 
-PROJECT_DIR="$HOME/AshenAI"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_FILE="$PROJECT_DIR/anomaly-monitor.log"
 ALERT_FILE="$PROJECT_DIR/.ashennai-anomaly"
 PID_FILE="$PROJECT_DIR/.anomaly-monitor.pid"

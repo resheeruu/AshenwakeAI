@@ -29,7 +29,6 @@ export {
   resetSetting,
   getOverviewData,
   getRecentAuditEntries,
-  getRecentLogEntries,
   formatValue,
   formatChannelMention,
   formatRoleMention,

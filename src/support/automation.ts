@@ -218,7 +218,7 @@ async function sendAutoClose(
 ): Promise<void> {
   try {
     const caseManager = getSupportCaseManager();
-    caseManager.transitionCase(aiCase.id, "closed", "system");
+    caseManager.transitionCase(aiCase.id, "closed", "system", aiCase.guildId);
 
     const guild = client.guilds.cache.get(aiCase.guildId);
     if (!guild) return;

@@ -1,7 +1,6 @@
 import { loadGuildConfig, saveGuildConfig, type GuildConfig } from "../core/guild-config";
 import { recordAudit } from "../security/audit";
 import { logger } from "../logger";
-import { getRecentLogs } from "../log-stream";
 import { getAuditLog } from "../security/audit";
 import { ALL_SETTINGS, getSettingById, getSettingsByCategory } from "./definitions";
 import type {
@@ -282,22 +281,6 @@ export function getRecentAuditEntries(
     what: e.what,
     result: e.result,
     details: e.details,
-  }));
-}
-
-export interface LogStreamEntry {
-  id: number;
-  timestamp: string;
-  level: string;
-  message: string;
-}
-
-export function getRecentLogEntries(limit = 30): LogStreamEntry[] {
-  return getRecentLogs(limit).map((e) => ({
-    id: e.id,
-    timestamp: e.timestamp,
-    level: e.level,
-    message: e.message,
   }));
 }
 

@@ -19,12 +19,17 @@ feature branch → pull request → GitHub Actions (CORE) → merge main
 Current enforced behavior (do not weaken):
 
 - matrix: Node **22** and **24** (matches `"engines": { "node": ">=22" }`)
-- `npm ci` → `typecheck` → `build` → `npm test` (36 CORE suites, fail-fast)
-- then `npm ls`, `npm audit` (informational) and icon validation
+- `npm ci` → `typecheck` → `tsc-baseline-gate` → `build` → `npm test`
+  (41 CORE suites, fail-fast)
+- then `npm ls`, `npm audit --omit=dev --audit-level=high` (**blocking**:
+  `exit 1` on any high/critical finding) and icon validation
+  (`continue-on-error` — the only non-blocking step)
 
-### Dependency audit policy (recommended gate)
+### Dependency audit policy
 
-`npm audit` is currently informational (`continue-on-error`). Adopt this policy:
+CI runs `npm audit --omit=dev --audit-level=high` and **fails the build** on
+any high/critical finding (`.github/workflows/ci.yml`). The recommended
+severity policy for releases is:
 
 | Severity | Policy |
 |---|---|
@@ -33,11 +38,11 @@ Current enforced behavior (do not weaken):
 | **moderate** | warning in the PR, fix opportunistically |
 | **low** | informational |
 
-Rationale: the dependency set is small (27 runtime deps) and `npm audit`
+Rationale: the dependency set is small (34 runtime deps) and `npm audit`
 currently reports 0 vulnerabilities, so enforcing critical/high at release time
-adds signal without noise. Keep the CI step informational for **pushes** to
-avoid blocking unrelated work; enforce critical/high at the **release gate**
-(`release:check` / manual check) until the team agrees to a hard CI gate.
+adds signal without noise. Note the audit filter (`--omit=dev`) currently
+audits all 34 dependencies because the package has no `devDependencies`
+section — the build toolchain ships as runtime dependencies.
 
 ## 3. Main branch protection (recommended exact settings)
 
@@ -65,7 +70,7 @@ Run after every deploy; none of these require secrets:
 node --version                     # must be >= 22
 npm run typecheck
 npm run build
-npm test                           # 36/36 CORE
+npm test                           # 41/41 CORE
 node dist/cli.js --help 2>/dev/null || true   # binary boots
 ```
 

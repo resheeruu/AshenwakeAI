@@ -110,6 +110,8 @@ export interface GuildConfig {
       minActivityThreshold: number;
     }>;
     animeActions: boolean;
+    /** Auto-clear AFK on a normal message (default true). */
+    afkAutoClear?: boolean;
     customReactions: boolean;
     customEmoji: boolean;
     rivalryMode: boolean;

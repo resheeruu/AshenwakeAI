@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { GamePlayer } from "./types";
-import { withGlobalLock, withPlayerLock } from "./lock";
+import { withGlobalLock } from "./lock";
+import { logger } from "../logger";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "game-players.json");
@@ -11,7 +12,13 @@ async function ensureStore(): Promise<void> {
 
   try {
     await fs.promises.access(FILE);
-  } catch {
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    if (code !== "ENOENT") {
+      // Not "file missing" (permissions/IO): creating {} here would replace
+      // an existing store we merely failed to stat.
+      throw error;
+    }
     await fs.promises.writeFile(FILE, "{}", "utf8");
   }
 }
@@ -19,27 +26,66 @@ async function ensureStore(): Promise<void> {
 async function loadPlayersUnlocked(): Promise<Record<string, GamePlayer>> {
   await ensureStore();
 
+  let raw: string;
   try {
-    const raw = await fs.promises.readFile(FILE, "utf8");
-    const parsed = JSON.parse(raw);
+    raw = await fs.promises.readFile(FILE, "utf8");
+  } catch (error) {
+    // Read failure (permissions/IO): fail the operation instead of returning
+    // an empty store that the next save would persist over the real file.
+    throw new Error(
+      `Failed to read ${path.basename(FILE)}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 
-    return parsed && typeof parsed === "object"
-      ? parsed as Record<string, GamePlayer>
-      : {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
   } catch {
+    parsed = undefined;
+  }
+
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    /*
+     * The store is unreadable. Renaming it aside preserves the only
+     * copy: the next save recreates FILE, and an in-place overwrite
+     * would silently destroy every player's progress.
+     */
+    const backup = `${FILE}.corrupt-${Date.now()}`;
+    logger.error(
+      `${path.basename(FILE)} is corrupt — moving it to ${path.basename(
+        backup,
+      )} and starting from an empty store`,
+    );
+    await fs.promises.rename(FILE, backup).catch(() => {});
     return {};
   }
+
+  return parsed as Record<string, GamePlayer>;
 }
 
 async function savePlayersUnlocked(
   players: Record<string, GamePlayer>,
 ): Promise<void> {
   await ensureStore();
+
+  /*
+   * Write to a temp file and rename so a crash mid-write can never
+   * leave a truncated JSON file behind (a truncated file would parse
+   * as corrupt on the next load).
+   */
+  const tmp = `${FILE}.tmp-${process.pid}`;
   await fs.promises.writeFile(
-    FILE,
+    tmp,
     JSON.stringify(players, null, 2),
     "utf8",
   );
+  await fs.promises.rename(tmp, FILE);
 }
 
 export async function loadPlayers(): Promise<Record<string, GamePlayer>> {
@@ -157,12 +203,19 @@ export async function getPlayer(
   userId: string,
   username = "Unknown",
 ): Promise<GamePlayer> {
-  return withPlayerLock(userId, async () => {
-    const players = await loadPlayers();
+  /*
+   * game-players.json is one shared file, so first-time creation (which
+   * writes the file) must hold the same global lock as every other
+   * writer. NOTE: keep the body store-only — calling getPlayer/updatePlayer
+   * from inside a mutatePlayer mutator would re-enter this lock and
+   * reject after LOCK_TIMEOUT.
+   */
+  return withGlobalLock("game-players-store", async () => {
+    const players = await loadPlayersUnlocked();
 
     if (!players[userId]) {
       players[userId] = normalizePlayer({}, userId, username);
-      await savePlayers(players);
+      await savePlayersUnlocked(players);
     } else {
       players[userId] = normalizePlayer(
         players[userId],
@@ -178,8 +231,14 @@ export async function getPlayer(
 export async function updatePlayer(
   player: GamePlayer,
 ): Promise<void> {
-  return withPlayerLock(player.userId, async () => {
-    const players = await loadPlayers();
+  /*
+   * Load -> mutate -> save must happen inside ONE lock acquisition.
+   * Taking the lock separately around the read and the write (as this
+   * used to) lets a concurrent writer's snapshot clobber this update:
+   * two different players saving at once silently lost one purchase.
+   */
+  return withGlobalLock("game-players-store", async () => {
+    const players = await loadPlayersUnlocked();
 
     players[player.userId] = normalizePlayer(
       player,
@@ -187,7 +246,7 @@ export async function updatePlayer(
       player.username,
     );
 
-    await savePlayers(players);
+    await savePlayersUnlocked(players);
   });
 }
 

@@ -3,6 +3,7 @@ import {
   SlashCommandBuilder,
   PermissionFlagsBits,
   EmbedBuilder,
+  InteractionContextType,
 } from "discord.js";
 import { AshenCommand } from "./definitions";
 import { loadGuildConfig, saveGuildConfig } from "../core/guild-config";
@@ -40,6 +41,7 @@ export function createPersonalityCommand(): AshenCommand {
     data: new SlashCommandBuilder()
       .setName("personality")
       .setDescription("Manage AshenAI's custom personality prompt for this server")
+      .setContexts(InteractionContextType.Guild)
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
       .addSubcommand((sub) =>
         sub

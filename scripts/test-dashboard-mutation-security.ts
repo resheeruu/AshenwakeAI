@@ -322,7 +322,7 @@ function testAutomationAndSupportBehavior(): void {
     );
     assertEqual(canTransition(created.status, "investigating"), true, "valid support transition allowed");
     assertEqual(canTransition(created.status, "closed"), false, "invalid support transition rejected before mutation");
-    const updated = manager.transitionCase(created.id, "investigating", "tester");
+    const updated = manager.transitionCase(created.id, "investigating", "tester", created.guildId);
     assertEqual(updated?.status, "investigating", "support transition persists");
     assertEqual(manager.getCase(created.id)?.status, "investigating", "support status persisted");
   }

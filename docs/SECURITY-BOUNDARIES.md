@@ -1,6 +1,7 @@
 # Security Boundaries
 
-> Verified against the code on `2ef0a77`. This describes enforced behavior,
+> Verified against the code at HEAD `de3485b` plus this release's
+> hardening changes (working tree). This describes enforced behavior,
 > not intentions. Anything marked **recommendation** is not yet implemented.
 
 ## 1. Trust model in one paragraph
@@ -22,7 +23,7 @@ Tools declare their own metadata (`src/ai/tools/*/index.ts`):
 | Capability | AI | User (Discord) | Permission gate | Risk | Confirmation | Network | Filesystem |
 |---|---|---|---|---|---|---|---|
 | Read conversation/memory | yes | yes | role + channel scope | safe | no | no | no |
-| Moderation (warn/timeout/kick/ban) | yes | yes | Discord perm + role | medium/high | yes (23 tools) | no | no |
+| Moderation (warn/timeout/kick/ban) | yes | yes | Discord perm + role | medium/high | yes (25 Discord tools, 28 repo-wide) | no | no |
 | Channel/role administration | yes | admin cmds | `ManageGuild`-class | high | yes | no | no |
 | File read/write inside project | agent/fix only | no | `tool-permissions.ts` (`canReadPath`/`canWritePath`) | high | yes | no | yes (project root only) |
 | Shell/command execution | agent/fix only | no | `tool-permissions.ts` + command allowlist | critical | yes | no | no |
@@ -141,7 +142,86 @@ The bot does **not** request `Administrator` for itself; `Administrator` /
 `ManageGuild` appear only inside channel-permission *presets* a human admin
 applies deliberately.
 
-## 9. Recommendations (not implemented)
+DM exposure is decided per command with the non-deprecated
+`.setContexts(InteractionContextType.Guild)` API (Discord hides these from
+DM lists): `settings`, `support`, `moderation`, `access`, `server`, `prompt`,
+`personality` are guild-only; `ask`, `game`, `reset`, `status`, `help` keep
+the default contexts and work in DMs. Guild-only handlers that resolve
+guild state also re-check guild context in code (§9).
+
+## 9. Discord interaction hardening (this release)
+
+Each item below was a concrete finding in this release; every one is
+covered by tests in `scripts/`:
+
+- **Support case staff gate** — every `/support case*` subcommand passes
+  `hasCaseStaffAccess` (case staff role OR admin, checked against
+  `guild_configs.staff.roleIds`; no second authorization system) before
+  any case content is shown; denials are audit-logged. Case reads/writes
+  are guild-scoped: `getCase` is `WHERE id = ? AND guild_id = ?`
+  (case-insensitive id), and UI actions resolve only ids that belong to
+  the current guild (`src/support/case-manager.ts`, `expectedGuildId`).
+  Four subcommands that existed as registration-only stubs (no handler
+  logic) were removed.
+- **Settings audit isolation** — `/settings audit` renders only
+  `getRecentAuditEntries(guildId, 10)` (this guild, parameterized);
+  the process-wide log-stream reader that could mix other guilds'/process
+  log lines into an embed was removed.
+- **Modal dispatch** — settings modal/role-select callbacks are matched
+  by exact customId (`isSettingsModalCustomId`), not `startsWith`, and
+  each modal validates its `st:`/`an:` session (guild, expiry, owner)
+  before applying anything; expired/forged sessions get an error reply
+  and no write. Message ids bound at open time are re-checked on submit.
+- **Settings reachability** — the root `/settings` command exposes
+  `panel` and `update` subcommands (a root command with subcommands
+  cannot be invoked bare on Discord; `createSettingsUpdateCommand` dead
+  code removed). Both paths, their audit entries, and their error strings
+  are asserted by `scripts/test-discord-wiring.ts` §K.
+- **Guild config persistence** — `GuildConfigSchema` now includes the
+  `social`, `ai`, `routing`, `limits`, and `models` sections. Previously
+  Zod's default strip behavior deleted these sections on every fresh DB
+  load (the in-process config cache masked it until a restart), silently
+  reverting admin changes including `social.animeActions`.
+  `scripts/test-ai-social.ts` round-trips all interface sections through
+  the schema (parse-failure falls back to `{...defaults, ...parsed}`,
+  preserving stored data).
+- **Anime action flag (`social.animeActions`)** — evaluated per guild in
+  `handleAnimeAction` *after* the rate limit (disabled replies cannot be
+  spammed) and *before* parsing/help/cooldown: disabled ⇒ informational
+  reply, no cooldown consumed; unreadable config ⇒ fail closed (feature
+  off) with a logged error. Reachable by admins via `/settings panel`
+  and `/settings update social animeActions <bool>`.
+- **Anime action target fail-closed** — mentions/replies resolve
+  directly; raw ids are verified with `guild.members.fetch()`; tokens
+  that look like targets but do not resolve (`@abc`, malformed
+  `<@…>`, ≥10-digit strings) are rejected even for optional-target
+  actions instead of silently self-targeting; resolution is a typed
+  `TargetResolution {id, explicit, resolvable}` — no implicit fallback
+  after a failed explicit attempt.
+- **Mass-ping suppression** — every `ash` reply is sent via `safeReply`
+  with `allowedMentions: {parse: []}`, so user-controlled action text can
+  never mention-ping `@everyone`/roles.
+- **Confirmation button replay** — `verifyPlan` (planId store) checks
+  requester id, guild id, optional channel/session binding, expiry, and
+  executed state on every Confirm/Cancel press; a second press after
+  execution is refused (double-exec guard in `executeUnifiedPlan`);
+  Cancel is requester-checked.
+- **Production tool registration** — `registerProductionDiscordTools`
+  runs before preflight; if any of the expected production tools is
+  missing the process exits (`process.exit(1)`) instead of booting with a
+  silently reduced tool surface.
+- **`/status` honesty** — the gateway field comes from
+  `getDiscordHealth()` (uninitialized ⇒ "Not connected"; ready ⇒
+  Connected + latency + gateway uptime + shards + reconnects) instead of
+  a hardcoded "Connected".
+
+Accepted trade-offs (documented, intentional): per-action cooldowns are
+consumed before target validation; the 15/min rate limit is per-user
+globally rather than per-guild (a user in many guilds shares the budget);
+guild-wide `ash` spam is bounded by the per-user limit rather than a
+per-guild limiter.
+
+## 10. Recommendations (not implemented)
 
 1. Pin an explicit MCP server allowlist in configuration.
 2. Confirm `Secure` cookie behavior behind production TLS.

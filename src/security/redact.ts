@@ -41,6 +41,24 @@ export function redact(value: unknown): unknown {
     return redactString(value);
   }
 
+  /*
+   * Errors are objects too, but Object.entries() would drop their
+   * non-enumerable message/stack and return {}. Redact both fields so a
+   * secret embedded in an error message or stack trace cannot reach the
+   * log sink.
+   */
+  if (value instanceof Error) {
+    const copy = new Error(redactString(value.message));
+    copy.name = value.name;
+    if (typeof value.stack === "string") {
+      copy.stack = redactString(value.stack);
+    }
+    if (value.cause !== undefined) {
+      copy.cause = redact(value.cause);
+    }
+    return copy;
+  }
+
   if (Array.isArray(value)) {
     return value.map(redact);
   }
@@ -70,6 +88,9 @@ const SECRET_PATTERNS = [
   { pattern: /(?:bearer|authorization)\s*[:=]\s*['"]?[A-Za-z0-9_\-\.]{20,}['"]?/gi, name: "Authorization" },
   { pattern: /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/g, name: "GitHub token" },
   { pattern: /sk-[A-Za-z0-9]{20,}/g, name: "OpenAI key" },
+  { pattern: /sk-(?:live|test)?-[\w\-]{16,}/g, name: "OpenAI-compatible key" },
+  { pattern: /sk-ant-[\w\-]{16,}/g, name: "Anthropic key" },
+  { pattern: /[\w-]{18,}\.[\w-]{6}\.[\w-]{20,}/g, name: "Discord token" },
   { pattern: /AIza[A-Za-z0-9_\-]{35}/g, name: "Google API key" },
 ];
 

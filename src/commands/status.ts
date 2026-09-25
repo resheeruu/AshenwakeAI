@@ -10,6 +10,7 @@ import { ConversationMemory } from "../ai/memory";
 import { AshenCommand } from "./definitions";
 import { AgentManager } from "../agent/manager";
 import { getAIUsageSummaryDB } from "../database/ai-usage-repo";
+import { getDiscordHealth } from "../core/discord-health";
 import { logger } from "../logger";
 import { emoji } from "../discord/emojis";
 
@@ -32,6 +33,33 @@ function formatTokens(n: number): string {
 
 function statusDot(online: boolean): string {
   return online ? `${emoji("ash_online")}` : `${emoji("ash_offline")}`;
+}
+
+/**
+ * Real gateway state from the discord-health observer — never a
+ * hardcoded "Connected". Uninitialized health (no client) reports
+ * as not connected rather than pretending everything is fine.
+ */
+export function formatDiscordHealthField(): string {
+  const health = getDiscordHealth();
+  if (!health.ready) {
+    const reason = health.lastDisconnectReason
+      ? ` (${health.lastDisconnectReason})`
+      : "";
+    return `${statusDot(false)} Not connected${reason}`;
+  }
+  const lines: string[] = [`${statusDot(true)} Connected`];
+  lines.push(
+    `Latency: ${health.gatewayLatency >= 0 ? `${Math.round(health.gatewayLatency)}ms` : "n/a"}`,
+  );
+  lines.push(`Gateway uptime: ${formatUptime(Math.floor(health.uptime / 1000))}`);
+  if (health.shardCount > 0) {
+    lines.push(`Shards: ${health.shardCount}`);
+  }
+  if (health.reconnectCount > 0) {
+    lines.push(`Reconnects: ${health.reconnectCount}`);
+  }
+  return lines.join("\n");
 }
 
 export function createStatusCommand(
@@ -72,7 +100,7 @@ export function createStatusCommand(
           .addFields(
             {
               name: `${emoji("ash_ai")} Discord`,
-              value: `${statusDot(true)} Connected`,
+              value: formatDiscordHealthField(),
               inline: true,
             },
             {

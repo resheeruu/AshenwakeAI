@@ -226,25 +226,25 @@ function testLifecycleTransitions(): void {
     assertEqual(canTransition("closed", "investigating"), false, "closed → investigating invalid");
 
     // Execute transitions
-    const t1 = manager.transitionCase(supportCase.id, "investigating", TEST_STAFF);
+    const t1 = manager.transitionCase(supportCase.id, "investigating", TEST_STAFF, supportCase.guildId);
     assertNotNull(t1, "Transition to investigating");
     assertEqual(t1!.status, "investigating", "Status is investigating");
 
-    const t2 = manager.transitionCase(supportCase.id, "waiting_user", TEST_STAFF);
+    const t2 = manager.transitionCase(supportCase.id, "waiting_user", TEST_STAFF, supportCase.guildId);
     assertNotNull(t2, "Transition to waiting_user");
     assertEqual(t2!.status, "waiting_user", "Status is waiting_user");
 
-    const t3 = manager.transitionCase(supportCase.id, "resolved", TEST_STAFF);
+    const t3 = manager.transitionCase(supportCase.id, "resolved", TEST_STAFF, supportCase.guildId);
     assertNotNull(t3, "Transition to resolved");
     assertEqual(t3!.status, "resolved", "Status is resolved");
 
-    const t4 = manager.transitionCase(supportCase.id, "closed", TEST_STAFF);
+    const t4 = manager.transitionCase(supportCase.id, "closed", TEST_STAFF, supportCase.guildId);
     assertNotNull(t4, "Transition to closed");
     assertEqual(t4!.status, "closed", "Status is closed");
     assertNotNull(t4!.closedAt, "Closed case has closedAt");
 
     // Cannot transition from closed
-    const t5 = manager.transitionCase(supportCase.id, "open", TEST_STAFF);
+    const t5 = manager.transitionCase(supportCase.id, "open", TEST_STAFF, supportCase.guildId);
     assertEqual(t5, null, "Cannot transition from closed");
   }
 }

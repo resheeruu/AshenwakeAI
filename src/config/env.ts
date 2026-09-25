@@ -149,6 +149,12 @@ export const config = {
     braveSearchApiKey: optional("BRAVE_SEARCH_API_KEY"),
   },
 
+  media: {
+    localGifsDir:
+      optional("ASHENAI_LOCAL_GIFS_DIR") ||
+      "data/anime-gifs",
+  },
+
   logLevel:
     process.env.LOG_LEVEL?.trim() ||
     "info",
@@ -192,6 +198,10 @@ export const config = {
   ai: RuntimeConfig["ai"];
 
   sessionSecret?: string;
+
+  media: {
+    localGifsDir: string;
+  };
 
   logLevel: string;
 };

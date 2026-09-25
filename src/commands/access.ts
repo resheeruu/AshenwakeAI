@@ -2,6 +2,7 @@ import {
   ChatInputCommandInteraction,
   PermissionFlagsBits,
   SlashCommandBuilder,
+  InteractionContextType,
 } from "discord.js";
 import { AshenCommand } from "./definitions";
 import {
@@ -20,6 +21,7 @@ export function createAccessCommand(): AshenCommand {
     data: new SlashCommandBuilder()
       .setName("access")
       .setDescription("Manage trusted users and send messages as AshenAI")
+      .setContexts(InteractionContextType.Guild)
       .addSubcommand((sub) =>
         sub
           .setName("add")

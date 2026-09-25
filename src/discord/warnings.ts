@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { logger } from "../logger";
 
 export interface WarningRecord {
   id: string;
@@ -26,24 +27,51 @@ function ensureStorage(): void {
 function readWarnings(): WarningRecord[] {
   ensureStorage();
 
+  let raw: string;
   try {
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    const parsed = JSON.parse(raw);
+    raw = fs.readFileSync(DATA_FILE, "utf8");
+  } catch (error) {
+    // Read failure (permissions/IO): fail the operation loudly instead of
+    // returning an empty store that a subsequent write would persist.
+    throw new Error(
+      `Failed to read ${path.basename(DATA_FILE)}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 
-    return Array.isArray(parsed) ? parsed : [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
   } catch {
+    parsed = undefined;
+  }
+
+  if (!Array.isArray(parsed)) {
+    // Corrupt content: quarantine the file so the only copy is preserved,
+    // then start from an empty store. Never overwrite it in place.
+    const quarantine = `${DATA_FILE}.corrupt-${Date.now()}`;
+    try {
+      fs.renameSync(DATA_FILE, quarantine);
+      logger.error(
+        `${path.basename(DATA_FILE)} is corrupt — moved to ${path.basename(quarantine)} and starting from an empty warning store`
+      );
+    } catch (renameError) {
+      logger.error(
+        `${path.basename(DATA_FILE)} is corrupt and could not be quarantined: ${renameError instanceof Error ? renameError.message : String(renameError)}`
+      );
+    }
     return [];
   }
+
+  return parsed as WarningRecord[];
 }
 
 function writeWarnings(warnings: WarningRecord[]): void {
   ensureStorage();
 
-  fs.writeFileSync(
-    DATA_FILE,
-    JSON.stringify(warnings, null, 2),
-    "utf8"
-  );
+  // Atomic write: a crash mid-write must never truncate the store.
+  const tmp = `${DATA_FILE}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(warnings, null, 2), "utf8");
+  fs.renameSync(tmp, DATA_FILE);
 }
 
 export function addWarning(

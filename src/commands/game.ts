@@ -931,19 +931,15 @@ export function createGameCommand(): AshenCommand {
           true,
         ) as ShopItemId;
 
-        const player = await getPlayer(
+        const result = await buyItem(
           interaction.user.id,
           interaction.user.username,
-        );
-
-        const result = await buyItem(
-          player,
           itemId,
         );
 
         await interaction.editReply(
-          result.success
-            ? `${result.message}\n\n🪙 Remaining coins: **${player.coins}**`
+          result.success && result.player
+            ? `${result.message}\n\n🪙 Remaining coins: **${result.player.coins}**`
             : result.message,
         );
 

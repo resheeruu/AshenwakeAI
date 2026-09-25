@@ -713,7 +713,7 @@ async function handleStaffInteraction(
   }
 
   if (/\b(assign|claim|take)\s*(this|case)?/i.test(lower)) {
-    const updated = caseManager.assignCase(aiCase.id, userId, userId);
+    const updated = caseManager.assignCase(aiCase.id, userId, userId, aiCase.guildId);
     if (updated) {
       return {
         reply: `✅ Case ${aiCase.id} has been assigned to you.`,
@@ -733,7 +733,7 @@ async function handleStaffInteraction(
 
   if (/\b(escalate|escalation|urgent|priority)\b/i.test(lower)) {
     if (canTransition(aiCase.status, "escalated")) {
-      const updated = caseManager.transitionCase(aiCase.id, "escalated", userId);
+      const updated = caseManager.transitionCase(aiCase.id, "escalated", userId, aiCase.guildId);
       if (updated) {
         return {
           reply: `✅ Case ${aiCase.id} has been **escalated**. Staff will be notified.`,
@@ -754,7 +754,7 @@ async function handleStaffInteraction(
 
   if (/\b(resolve|resolved|close|closed|done|complete)\b/i.test(lower)) {
     if (canTransition(aiCase.status, "resolved")) {
-      const updated = caseManager.transitionCase(aiCase.id, "resolved", userId);
+      const updated = caseManager.transitionCase(aiCase.id, "resolved", userId, aiCase.guildId);
       if (updated) {
         return {
           reply: `✅ Case ${aiCase.id} has been **resolved**.`,
@@ -1120,7 +1120,7 @@ function updateCaseFromCollectedInfo(aiCase: AiCase, convState: CaseConversation
 
   // Transition to investigating if we now have a reported user
   if (info.reportedUserId && !aiCase.subjectUserId && aiCase.status === "open") {
-    caseManager.transitionCase(aiCase.id, "investigating", "system");
+    caseManager.transitionCase(aiCase.id, "investigating", "system", aiCase.guildId);
   }
 }
 

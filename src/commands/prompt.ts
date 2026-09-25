@@ -7,6 +7,7 @@ import {
   ThreadAutoArchiveDuration,
   MessageFlags,
   EmbedBuilder,
+  InteractionContextType,
 } from "discord.js";
 import { AshenCommand } from "./definitions";
 import { loadGuildAIConfig, isTrustedUser } from "../ai/tools/channel-scope";
@@ -907,6 +908,7 @@ export function createPromptCommand(): AshenCommand {
     data: new SlashCommandBuilder()
       .setName("prompt")
       .setDescription("AI-powered server builder — describe what you want in natural language")
+      .setContexts(InteractionContextType.Guild)
       .addStringOption((option) =>
         option
           .setName("prompt")

@@ -8,12 +8,14 @@ never duplicate suite lists elsewhere.
 | Tier | When it runs | Command | Requirements |
 |---|---|---|---|
 | **CORE** | every PR (CI) | `npm test` | no credentials, no network, deterministic |
-| **EXTENDED** | before a release | `npm run test:all` (`--all`) | may be slower / DB-backed / stateful |
+| **EXTENDED** | manual / release check (`npm run test:all` — **not** wired into CI) | `npm run test:all` (`--all`) | may be slower / DB-backed / stateful |
 | **LIVE** | manual, with real infra | individual `tsx scripts/test-*.ts` | real provider keys, hosting, browser |
 
-- **CORE = the 36 mandatory suites.** They run sequentially and **fail fast** by
+- **CORE = the 41 mandatory suites.** They run sequentially and **fail fast** by
   default: the first failing suite aborts the rest, so CI fails fast and loud.
   `Preflight`, `Router`, and `Provider Lifecycle` are CORE and must stay CORE.
+  `AFK` (prefix-only AFK + local GIF provider) and `Repo Remediation`
+  (§40 repository-audit remediations) are CORE.
 - **EXTENDED** suites are the previously "optional" feature suites
   (U3–U19) plus `Provider Platform`. They run with `--all` and never abort the
   run — every failure is reported.
@@ -21,7 +23,10 @@ never duplicate suite lists elsewhere.
   `U17 Hosting` (environment-dependent). They must never require production
   secrets in normal CI.
 
-Each suite carries `tier` metadata in `scripts/run-all-tests.ts`.
+Optional suites carry `tier` metadata in `scripts/run-all-tests.ts`; mandatory
+suites are CORE by default. Note: `Remediation` and `Dashboard Mutation Security`
+are tagged `tier: "CORE"` but registered under `OPTIONAL_SUITES` — they run on
+demand (`--all` / verification passes), not on every PR.
 
 ## Diagnostic mode
 
@@ -55,7 +60,8 @@ promoting.
 1. Never weaken or delete an assertion to make CORE green.
 2. Never mark a CORE suite optional to avoid a failure.
 3. New security regression tests go into an existing CORE suite (keeps the
-   count at 36 and runs on every PR), unless they need new infrastructure —
-   then EXTENDED.
+   count stable and runs on every PR). Add a new CORE suite only when the tests
+   span multiple subsystems — then update every suite-count reference
+   (docs/TESTING.md, README.md, docs/OPERATIONS.md).
 4. Tests must be deterministic: no live network, no real secrets, no reliance
    on developer `.env`.

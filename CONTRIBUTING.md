@@ -3,8 +3,8 @@
 ## Getting Started
 
 ```bash
-git clone https://github.com/resheeruu/AshenAI.git
-cd AshenAI
+git clone https://github.com/resheeruu/AshenwakeAI.git
+cd AshenwakeAI
 npm install
 cp .env.example .env
 npm run build

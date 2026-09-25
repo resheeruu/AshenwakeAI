@@ -54,12 +54,28 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 
 ### System Commands
 - `/status` - Show system status and AI usage.
-- `/settings` - Interactive server settings panel (Admin+).
+- `/settings panel` - Interactive server settings panel (Admin+).
 - `/settings update <category> <setting> <value>` - Update a specific setting (Admin+).
 - `/help` - Show all available commands.
 
 ### Games (Any member)
 - `/game` - Play AshenAI games (includes dice, coinflip, rps, duel, slots, casino, and more).
+
+### Anime Actions (prefix command, any member)
+- `ash <action> @user` - Fictional roleplay interactions (32 actions,
+  e.g. `ash hug @user`, `ash punch @rival`). Full list and rules:
+  [ASH-ACTIONS.md](./ASH-ACTIONS.md).
+- **Disable/enable**: `/settings panel` → **AI Social** → *Anime Actions*,
+  or `/settings update social animeActions true|false` (Admin+, per server).
+  When disabled members get a short notice; no action runs.
+- Rate limits: 15 `ash` messages per user per 60s, plus a per-action
+  cooldown (5–10s).
+
+### Which commands work in DMs
+- **DMs allowed**: `/ask`, `/game`, `/reset`, `/status`, `/help`.
+- **Servers only** (hidden in DMs): `/settings`, `/support`, `/moderation`,
+  `/access`, `/server`, `/prompt`, `/personality` — these resolve server
+  configuration and are rejected outside a server.
 
 ## 4. Confirmation-Required Actions
 

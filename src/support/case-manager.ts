@@ -85,7 +85,14 @@ export class SupportCaseManager {
   getCase(id: string): AiCase | null {
     return safeDbOperation(() => {
       const db = getDatabase();
-      const row = db.prepare("SELECT * FROM support_cases WHERE id = ?").get(id) as any;
+      let row = db.prepare("SELECT * FROM support_cases WHERE id = ?").get(id) as any;
+      if (!row) {
+        // Case ids contain a mixed-case random suffix; tolerate
+        // case-insensitive input from slash commands / copy-paste.
+        row = db
+          .prepare("SELECT * FROM support_cases WHERE id = ? COLLATE NOCASE")
+          .get(id) as any;
+      }
       if (!row) return null;
       return this.rowToCase(row);
     }, null, `getCase(${id})`);
@@ -134,13 +141,23 @@ export class SupportCaseManager {
     }, [], `getChannelCases(${channelId})`);
   }
 
-  transitionCase(id: string, newStatus: CaseStatus, actorId: string): AiCase | null {
+  transitionCase(
+    id: string,
+    newStatus: CaseStatus,
+    actorId: string,
+    expectedGuildId: string,
+  ): AiCase | null {
     return safeDbOperation(() => {
       const db = getDatabase();
 
-      // Read current state WITH version for optimistic concurrency
-      const row = db.prepare("SELECT * FROM support_cases WHERE id = ?").get(id) as any;
-      if (!row) return null;
+      // Read current state WITH version for optimistic concurrency.
+      // Guild-scoped: a case id from another guild must be invisible
+      // to this caller (cross-guild IDOR guard).
+      const row = db.prepare("SELECT * FROM support_cases WHERE id = ? AND guild_id = ?").get(id, expectedGuildId) as any;
+      if (!row) {
+        logger.warn(`⚠️ transitionCase rejected: case ${id} not found in guild ${expectedGuildId}`);
+        return null;
+      }
 
       const current = row.status as CaseStatus;
       const currentVersion = row.version ?? 1;
@@ -180,20 +197,25 @@ export class SupportCaseManager {
     }, null, `transitionCase(${id})`);
   }
 
-  assignCase(id: string, staffId: string, assignedBy: string): AiCase | null {
+  assignCase(id: string, staffId: string, assignedBy: string, expectedGuildId: string): AiCase | null {
     return safeDbOperation(() => {
       const db = getDatabase();
       const now = Date.now();
+      // Guild-scoped: cross-guild case ids must not be assignable.
       const result = db.prepare(`
-        UPDATE support_cases SET assigned_staff_id = ?, updated_at = ? WHERE id = ?
-      `).run(staffId, now, id);
+        UPDATE support_cases SET assigned_staff_id = ?, updated_at = ? WHERE id = ? AND guild_id = ?
+      `).run(staffId, now, id, expectedGuildId);
 
-      if (result.changes === 0) return null;
+      if (result.changes === 0) {
+        logger.warn(`⚠️ assignCase rejected: case ${id} not found in guild ${expectedGuildId}`);
+        return null;
+      }
 
       recordAudit({
         who: assignedBy,
         what: `Assigned case ${id} to staff ${staffId}`,
         where: "support",
+        guildId: expectedGuildId,
         result: "success",
       });
 

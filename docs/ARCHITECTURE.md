@@ -63,6 +63,14 @@ Important principles:
 - inventory
 - progression
 - casino/game logic
+- **Ash prefix namespace** (`ash mine`, `ash battle`, `ash lottery`, `ash hunt`, `ash slots`) — games use the `ash` prefix; see `src/games/anime-actions/prefix-handler.ts` for the unified Ash parser
+- **Result-authority guarantee** — animations are purely visual; all game outcomes are computed by engines and stored in the database before any animation is displayed (`src/games/animation/index.ts`)
+
+### `src/games/animation/`
+
+Game animation framework.
+
+Provides safe, deterministic animation playback for Ash games. The animation layer is read-only and cannot modify game state, coin balances, or XP values. Flow: engine computes outcome → database updated → animation displayed.
 
 ### `src/security/`
 
@@ -182,6 +190,14 @@ ordered migrations tracked in schema_migrations)
 | Secret redaction (before logging/output) | `src/security/redact.ts`, `src/security/output-guard.ts` |
 | Outbound network (SSRF) boundary | `src/security/network-boundary.ts` |
 | Audit trail | `src/security/audit.ts`, `src/ai/tools/audit.ts`, `src/security/audit-integrity.ts` |
+| Production tool registration (fail-fast) | `src/ai/tools/discord/bootstrap.ts` (registered + counted before preflight) |
+| Confirmation buttons (render + double-exec guard) | `src/discord/interactions/tool-confirmation-ui.ts`, `confirmation-handler.ts`, `conversational-agent.ts` (`executeUnifiedPlan`) |
+| Settings panel + modal dispatch | `src/commands/settings.ts` (`/settings panel`, `/settings update`, `st:`/`an:` modals) |
+| Support case authorization | `src/commands/support.ts` (`hasCaseStaffAccess`), `src/support/case-manager.ts` (guild-scoped) |
+| Anime action feature flag | `src/games/anime-actions/prefix-handler.ts` (`social.animeActions`, fail-closed) |
+| AFK (prefix `!afk`) | `src/community/afk.ts`, `src/database/afk-repo.ts` (migration v18 `afk_states`, `social.afkAutoClear` default ON) — [AFK.md](./AFK.md) |
+| Local GIF provider (local-first media) | `src/media/local-gifs.ts` (`ASHENAI_LOCAL_GIFS_DIR`, default `data/anime-gifs`; ships no GIFs) |
+| Gateway health observer | `src/core/discord-health.ts` (consumed by `/status`, web, control service) |
 | Startup readiness | `src/core/preflight.ts`, `src/core/health-checker.ts` |
 | Process execution (shell) | `src/agent/tools.ts`, `src/agent/supervisor/supervisor.ts`, `src/coding-agents/coordinator.ts`, `src/core/update-manager.ts`, `src/cli.ts` |
 | Background self-update | `src/core/update-manager.ts` (background timer only; no HTTP/AI trigger) |
@@ -190,8 +206,7 @@ ordered migrations tracked in schema_migrations)
 
 ### Provider concepts (do not conflate these)
 
-These are four different things. The code keeps them separate — see
-[PROVIDER-LIFECYCLE.md](./PROVIDER-LIFECYCLE.md):
+These are four different things. The code keeps them separate:
 
 - **registered** — the provider object exists in `ProviderRegistry` (discovery)
 - **configured** — a credential/API key is available right now
@@ -201,3 +216,47 @@ These are four different things. The code keeps them separate — see
 Preflight enumerates **registered** providers regardless of credentials and
 classifies credential-less ones as `NOT_CONFIGURED` *before* consulting any
 persisted health state (`classifyProviderStatus` in `src/core/preflight.ts`).
+
+### Discord interaction surface (hardened this release)
+
+Verified behavior of the interaction entry points:
+
+- **Slash commands** — registered once from `create*Command()` factories
+  (`src/index.ts`, registration list). Guild-only commands
+  (`settings`, `support`, `moderation`, `access`, `server`, `prompt`,
+  `personality`) declare `.setContexts(InteractionContextType.Guild)` so
+  Discord hides them in DMs (deprecated `setDMPermission` not used).
+  `ask`, `game`, `reset`, `status`, `help` keep the default contexts and
+  work in DMs. Handlers that resolve guild state additionally re-check
+  `message.guildId`/interaction guild in code (`settings`, `support`,
+  `moderation`, `access`, `server`, `personality`); `prompt` is
+  guild-only via contexts and relies on its builder-session store.
+- **`/settings`** — the root command has two subcommands: `panel`
+  (interactive selects/modals, Admin+) and `update`
+  (`<category> <setting> <value>`, Admin+). Discord renders a root
+  command with subcommands as unusable when invoked bare; both paths are
+  reachable and covered by `scripts/test-discord-wiring.ts` §K.
+  Modal/role-select callbacks are dispatched by exact customId match
+  (`isSettingsModalCustomId`), not `startsWith`.
+- **Confirmation flow** — button interactions carry a planId; the store
+  verifies requester, guild, channel/session binding, expiry, and
+  execution state before rendering (`verifyPlan`), and `executeUnifiedPlan`
+  refuses to execute the same plan twice (double-exec guard). Cancel is
+  requester-checked in `confirmation-handler.ts`.
+- **Conversational chat** — `src/discord/conversational-agent.ts` is the
+  only non-`ash` message path that runs the AI; it consumes the same
+  executor pipeline (validation → permission → risk → rate limit →
+  confirmation → execution → audit).
+- **`ash` anime actions** — text-message commands gated by
+  `social.animeActions` (fail-closed), 15/min per-user rate limit,
+  per-action cooldowns, fail-closed target resolution, and
+  `allowedMentions: { parse: [] }` on every reply. Full reference:
+  [ASH-ACTIONS.md](./ASH-ACTIONS.md).
+- **AFK** — literal-prefix `!afk`, handled *before* the `ash` intercept
+  (command returns, notices fall through). Guild-persistent state, one
+  consolidated suppressed-mention notice per message, local-only GIF
+  media. Full reference: [AFK.md](./AFK.md).
+- **Health** — `src/core/discord-health.ts` records ready-state, latency,
+  gateway uptime, shards, and reconnects; `/status` reads the live
+  snapshot (no hardcoded strings), the web control surface and
+  `formatDiscordHealthField` share it.

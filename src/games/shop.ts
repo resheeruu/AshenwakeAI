@@ -1,5 +1,5 @@
 import { GamePlayer } from "./types";
-import { updatePlayer } from "./store";
+import { mutatePlayer } from "./store";
 
 export const SHOP_ITEMS = {
   xp_boost: {
@@ -21,57 +21,76 @@ export const SHOP_ITEMS = {
 
 export type ShopItemId = keyof typeof SHOP_ITEMS;
 
-export async function buyItem(
-  player: GamePlayer,
-  itemId: ShopItemId,
-): Promise<{
+export type PurchaseResult = {
   success: boolean;
   message: string;
-}> {
+  player: GamePlayer | null;
+};
+
+/**
+ * Purchase an item.
+ *
+ * The affordability check and the deduction run inside one mutatePlayer
+ * critical section. Checking on a snapshot fetched earlier (and writing it
+ * back afterwards) let two concurrent purchases both pass the same
+ * "coins >= price" check and both receive the item for one deduction.
+ */
+export async function buyItem(
+  userId: string,
+  username: string,
+  itemId: ShopItemId,
+): Promise<PurchaseResult> {
   const item = SHOP_ITEMS[itemId];
 
   if (!item) {
     return {
       success: false,
       message: "❌ That shop item does not exist.",
+      player: null,
     };
   }
 
-  if (!player.inventory) {
-    player.inventory = {};
-  }
+  const { player, result } = await mutatePlayer(
+    userId,
+    (p): { success: boolean; message: string } => {
+      if (!p.inventory) {
+        p.inventory = {};
+      }
 
-  // VIP Badge is permanent and cannot be purchased twice.
-  if (
-    itemId === "vip_badge" &&
-    (player.inventory.vip_badge ?? 0) > 0
-  ) {
-    return {
-      success: false,
-      message: "👑 You already own the VIP Badge.",
-    };
-  }
+      // VIP Badge is permanent and cannot be purchased twice.
+      if (
+        itemId === "vip_badge" &&
+        (p.inventory.vip_badge ?? 0) > 0
+      ) {
+        return {
+          success: false,
+          message: "👑 You already own the VIP Badge.",
+        };
+      }
 
-  if (player.coins < item.price) {
-    return {
-      success: false,
-      message:
-        `❌ You need **${item.price} coins**, ` +
-        `but you only have **${player.coins}**.`,
-    };
-  }
+      if (p.coins < item.price) {
+        return {
+          success: false,
+          message:
+            `❌ You need **${item.price} coins**, ` +
+            `but you only have **${p.coins}**.`,
+        };
+      }
 
-  player.coins -= item.price;
+      p.coins -= item.price;
 
-  player.inventory[itemId] =
-    (player.inventory[itemId] ?? 0) + 1;
+      p.inventory[itemId] =
+        (p.inventory[itemId] ?? 0) + 1;
 
-  await updatePlayer(player);
+      return {
+        success: true,
+        message:
+          `✅ You purchased **${item.name}** for ` +
+          `**${item.price} coins**!`,
+      };
+    },
+    username,
+  );
 
-  return {
-    success: true,
-    message:
-      `✅ You purchased **${item.name}** for ` +
-      `**${item.price} coins**!`,
-  };
+  return { ...result, player };
 }

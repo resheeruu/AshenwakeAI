@@ -12,6 +12,7 @@ import {
 } from "./account-store";
 import {
   createSession,
+  createPreAuthToken,
   setSessionCookie,
   type Session,
 } from "./session-store";
@@ -170,6 +171,9 @@ export interface OAuthLoginResult {
   accountId?: string;
   isNewAccount?: boolean;
   requiresLinking?: boolean;
+  /** Account has MFA enabled — a challenge must be completed before a session is issued. */
+  mfaRequired?: boolean;
+  challengeToken?: string;
   error?: string;
 }
 
@@ -240,6 +244,27 @@ export async function handleDiscordCallback(
       }
 
       existingIdentity.lastUsedAt = Date.now();
+
+      // MFA-enabled accounts must pass the same challenge as password login —
+      // an OAuth identity alone must not bypass MFA.
+      if (account.mfaEnabled) {
+        const challengeToken = createPreAuthToken(account.id, account.role, account.username, ip);
+        recordAudit({
+          who: account.username,
+          what: "MFA challenge required",
+          where: "oauth",
+          result: "denied",
+          details: `Provider: discord, IP: ${ip}`,
+        });
+        return {
+          success: true,
+          mfaRequired: true,
+          challengeToken,
+          username: account.username,
+          role: account.role,
+        };
+      }
+
       const session = createSession(account.id, account.role, ip);
       updateAccountCredentials(account.id, { lastLoginAt: Date.now() });
 
@@ -514,6 +539,27 @@ export async function handleGoogleCallback(
       }
 
       existingIdentity.lastUsedAt = Date.now();
+
+      // MFA-enabled accounts must pass the same challenge as password login —
+      // an OAuth identity alone must not bypass MFA.
+      if (account.mfaEnabled) {
+        const challengeToken = createPreAuthToken(account.id, account.role, account.username, ip);
+        recordAudit({
+          who: account.username,
+          what: "MFA challenge required",
+          where: "oauth",
+          result: "denied",
+          details: `Provider: google, IP: ${ip}`,
+        });
+        return {
+          success: true,
+          mfaRequired: true,
+          challengeToken,
+          username: account.username,
+          role: account.role,
+        };
+      }
+
       const session = createSession(account.id, account.role, ip);
       updateAccountCredentials(account.id, { lastLoginAt: Date.now() });
 

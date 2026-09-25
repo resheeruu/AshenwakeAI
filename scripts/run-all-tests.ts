@@ -66,6 +66,7 @@ const MANDATORY_SUITES: TestSuite[] = [
   // Tool Registry
   { name: "Tool Registry", file: "scripts/test-tool-registry.ts", category: "tool" },
   { name: "Template Execution", file: "scripts/test-template-execution.ts", category: "tool" },
+  { name: "Discord Wiring", file: "scripts/test-discord-wiring.ts", category: "tool" },
   { name: "Builder inspectServer", file: "scripts/test-builder-inspect-server.ts", category: "tool" },
   { name: "Production Upgrade", file: "scripts/test-production-upgrade.ts", category: "integration" },
   { name: "Update Rollback", file: "scripts/test-update-rollback.ts", category: "integration" },
@@ -82,6 +83,7 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Support", file: "scripts/test-support.ts", category: "core" },
   { name: "Support AI", file: "scripts/test-support-ai.ts", category: "core" },
   { name: "Support Hardening", file: "scripts/test-support-hardening.ts", category: "security" },
+  { name: "Support Cases", file: "scripts/test-support-cases.ts", category: "security" },
 
   // Integration
   { name: "Coding Agents", file: "scripts/test-coding-agents.ts", category: "integration" },
@@ -93,8 +95,16 @@ const MANDATORY_SUITES: TestSuite[] = [
   // Anime Actions
   { name: "Anime Actions", file: "scripts/test-anime-actions.ts", category: "core" },
 
+  // AFK (prefix-only) + local GIF provider security
+  { name: "AFK", file: "scripts/test-afk.ts", category: "core" },
+
   // Resource / hosting storage (disk, RAM, ENOSPC)
   { name: "Resource Startup", file: "scripts/test-resource-startup.ts", category: "integration" },
+
+  // §40 repository audit remediations (mention policy, reset-link host
+  // guard, log redaction, guild-config allowlist, guild instructions,
+  // game-store atomicity, shop double-spend, AFK persistence reporting)
+  { name: "Repo Remediation", file: "scripts/test-repo-remediation.ts", category: "security" },
 
 ];
 

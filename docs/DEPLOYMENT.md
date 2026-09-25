@@ -43,7 +43,7 @@ The **build toolchain is part of the runtime dependencies** (`esbuild`,
 `typescript`, `tsx`, `@types/express`, `@types/better-sqlite3`,
 `@types/node`, `@types/turndown`), so a production install still has
 everything needed to compile `dist/`. `npm run build` uses the low-memory
-esbuild transpile (~5 MB wrapper heap, ~1-2s for 321 files) instead of
+esbuild transpile (~5 MB wrapper heap, ~1-2s for 329 files) instead of
 `tsc` emit, because `tsc` OOMs on memory-constrained hosts (Wispbyte Node
 22 exits 134 at ~294-303 MB heap). Full strict type safety is preserved
 via `npm run typecheck` (CI runs `tsc --noEmit` separately).
@@ -204,6 +204,8 @@ The SQLite database is at `data/ashenai.db`. If corrupted:
 mv data/ashenai.db data/ashenai.db.backup
 npm start  # Creates new database
 ```
+
+Operator restore: `npx tsx scripts/restore-backup.ts` lists backups; pass a backup id to restore it (`scripts/restore-backup.ts`). Never restore a backup over a live data directory without verifying the checksums first — the restore function verifies ciphertext integrity and the plaintext checksum before writing.
 
 ### Low Disk Space
 

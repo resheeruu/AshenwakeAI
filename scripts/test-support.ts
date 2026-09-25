@@ -239,7 +239,7 @@ try {
     summary: "Transition test",
   });
 
-  const updated = manager.transitionCase(c!.id, "investigating", "staff-1");
+  const updated = manager.transitionCase(c!.id, "investigating", "staff-1", "test-guild-1");
   if (updated && updated.status === "investigating") {
     pass("Transition open → investigating");
   } else {
@@ -258,7 +258,7 @@ try {
     summary: "Invalid transition test",
   });
 
-  const updated = manager.transitionCase(c!.id, "closed", "staff-1");
+  const updated = manager.transitionCase(c!.id, "closed", "staff-1", "test-guild-1");
   if (updated === null) {
     pass("Invalid transition open → closed rejected");
   } else {
@@ -277,13 +277,13 @@ try {
     summary: "Full lifecycle test",
   });
 
-  let r = manager.transitionCase(c!.id, "investigating", "staff-1");
+  let r = manager.transitionCase(c!.id, "investigating", "staff-1", "test-guild-1");
   if (!r || r.status !== "investigating") fail("Lifecycle step 1");
 
-  r = manager.transitionCase(c!.id, "resolved", "staff-1");
+  r = manager.transitionCase(c!.id, "resolved", "staff-1", "test-guild-1");
   if (!r || r.status !== "resolved") fail("Lifecycle step 2");
 
-  r = manager.transitionCase(c!.id, "closed", "staff-1");
+  r = manager.transitionCase(c!.id, "closed", "staff-1", "test-guild-1");
   if (!r || r.status !== "closed" || !r.closedAt) fail("Lifecycle step 3");
 
   if (r && r.status === "closed" && r.closedAt) {
@@ -294,7 +294,7 @@ try {
 }
 
 try {
-  const nonExistent = manager.transitionCase("non-existent", "investigating", "staff-1");
+  const nonExistent = manager.transitionCase("non-existent", "investigating", "staff-1", "test-guild-1");
   if (nonExistent === null) {
     pass("Transition non-existent case returns null");
   } else {
@@ -317,7 +317,7 @@ try {
     summary: "Assignment test",
   });
 
-  const updated = manager.assignCase(c!.id, "staff-1", "admin-1");
+  const updated = manager.assignCase(c!.id, "staff-1", "admin-1", "test-guild-1");
   if (updated && updated.assignedStaffId === "staff-1") {
     pass("Assign case to staff");
   } else {
@@ -328,7 +328,7 @@ try {
 }
 
 try {
-  const result = manager.assignCase("non-existent", "staff-1", "admin-1");
+  const result = manager.assignCase("non-existent", "staff-1", "admin-1", "test-guild-1");
   if (result === null) {
     pass("Assign non-existent case returns null");
   } else {

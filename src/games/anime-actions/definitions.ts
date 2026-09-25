@@ -15,6 +15,8 @@ export interface ActionOutcome {
 
 export interface ActionDefinition {
   name: string;
+  /** One-line human description (help text, docs, autocomplete) */
+  description: string;
   aliases: string[];
   category: ActionCategory;
   emoji: string;
@@ -94,6 +96,7 @@ const ACTIONS: ActionDefinition[] = [
   // ── AFFECTION ──
   {
     name: "hug",
+    description: "Wrap someone in a warm hug",
     aliases: ["h"],
     category: "affection",
     emoji: "[hug]",
@@ -121,6 +124,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "cuddle",
+    description: "Cuddle up close to someone",
     aliases: ["cu"],
     category: "affection",
     emoji: "[cuddle]",
@@ -148,6 +152,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "pat",
+    description: "Give someone a gentle pat on the head",
     aliases: [],
     category: "affection",
     emoji: "[pat]",
@@ -174,6 +179,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "headpat",
+    description: "Give someone a firm headpat",
     aliases: ["hp"],
     category: "affection",
     emoji: "[headpat]",
@@ -196,6 +202,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "kiss",
+    description: "Blow someone a quick kiss",
     aliases: ["ks"],
     category: "affection",
     emoji: "[kiss]",
@@ -224,6 +231,7 @@ const ACTIONS: ActionDefinition[] = [
   // ── COMBAT ──
   {
     name: "punch",
+    description: "Throw a cartoon punch at someone",
     aliases: ["pu"],
     category: "combat",
     emoji: "[punch]",
@@ -249,6 +257,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "kick",
+    description: "Land a flashy kick on someone",
     aliases: ["kik"],
     category: "combat",
     emoji: "[kick]",
@@ -274,6 +283,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "slap",
+    description: "Slap someone with an open hand",
     aliases: ["sl"],
     category: "combat",
     emoji: "[slap]",
@@ -298,6 +308,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "bonk",
+    description: "Bonk someone on the head",
     aliases: ["bn"],
     category: "combat",
     emoji: "[bonk]",
@@ -322,6 +333,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "bite",
+    description: "Take a playful bite out of someone",
     aliases: ["bi"],
     category: "combat",
     emoji: "[bite]",
@@ -346,6 +358,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "hit",
+    description: "Smack someone with a stray hit",
     aliases: ["ht"],
     category: "combat",
     emoji: "[hit]",
@@ -369,6 +382,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "smack",
+    description: "Smack someone across the cheek",
     aliases: ["sk"],
     category: "combat",
     emoji: "[smack]",
@@ -391,6 +405,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "throw",
+    description: "Hurl someone across the room",
     aliases: ["th"],
     category: "combat",
     emoji: "[throw]",
@@ -413,6 +428,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "shoot",
+    description: "Fire a toy projectile at someone",
     aliases: ["sh"],
     category: "combat",
     emoji: "[shoot]",
@@ -435,6 +451,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "stab",
+    description: "Stab someone with a prop blade",
     aliases: ["st"],
     category: "combat",
     emoji: "[stab]",
@@ -457,6 +474,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "kill",
+    description: "Dramatically KO someone in roleplay",
     aliases: [],
     category: "combat",
     emoji: "[kill]",
@@ -479,6 +497,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "destroy",
+    description: "Unleash a finishing move on someone",
     aliases: ["ds"],
     category: "combat",
     emoji: "[destroy]",
@@ -501,6 +520,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "explode",
+    description: "Blow someone up in a shower of sparks",
     aliases: ["ex"],
     category: "combat",
     emoji: "[explode]",
@@ -525,6 +545,7 @@ const ACTIONS: ActionDefinition[] = [
   // ── FUN ──
   {
     name: "poke",
+    description: "Poke someone until they react",
     aliases: [],
     category: "fun",
     emoji: "[poke]",
@@ -551,6 +572,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "wave",
+    description: "Wave hello at someone",
     aliases: ["wv"],
     category: "fun",
     emoji: "[wave]",
@@ -574,6 +596,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "highfive",
+    description: "Give someone a high five",
     aliases: ["hf"],
     category: "fun",
     emoji: "[highfive]",
@@ -596,6 +619,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "yeet",
+    description: "Yeet someone into the void",
     aliases: [],
     category: "fun",
     emoji: "[yeet]",
@@ -619,6 +643,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "dance",
+    description: "Break into a dance with someone",
     aliases: ["da"],
     category: "fun",
     emoji: "[dance]",
@@ -645,6 +670,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "laugh",
+    description: "Burst out laughing",
     aliases: ["lf"],
     category: "fun",
     emoji: "[laugh]",
@@ -669,6 +695,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "cry",
+    description: "Cry it all out (self)",
     aliases: [],
     category: "fun",
     emoji: "[cry]",
@@ -695,6 +722,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "blush",
+    description: "Blush uncontrollably (self)",
     aliases: [],
     category: "fun",
     emoji: "[blush]",
@@ -720,6 +748,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "smug",
+    description: "Flash a smug grin (self)",
     aliases: ["sm"],
     category: "fun",
     emoji: "[smug]",
@@ -744,6 +773,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "panic",
+    description: "Panic dramatically (self)",
     aliases: ["pa"],
     category: "fun",
     emoji: "[panic]",
@@ -768,6 +798,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "sleep",
+    description: "Fall asleep on the spot (self)",
     aliases: ["slp"],
     category: "fun",
     emoji: "[sleep]",
@@ -793,6 +824,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "celebrate",
+    description: "Celebrate something awesome (self)",
     aliases: ["ce"],
     category: "fun",
     emoji: "[celebrate]",
@@ -818,6 +850,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "roast",
+    description: "Roast someone with playful trash talk",
     aliases: ["ro"],
     category: "fun",
     emoji: "[roast]",
@@ -840,6 +873,7 @@ const ACTIONS: ActionDefinition[] = [
   },
   {
     name: "simp",
+    description: "Simp hard for someone",
     aliases: [],
     category: "fun",
     emoji: "[simp]",

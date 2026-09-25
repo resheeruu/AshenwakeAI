@@ -17,23 +17,39 @@ export function getDatabase(): Database.Database {
 
   fs.mkdirSync(DATA_DIR, { recursive: true });
 
-  db = new Database(DB_PATH);
+  // Build the handle locally and only publish it after migrations succeed —
+  // a migration failure must not leave a half-initialized singleton that
+  // every later call would accept without ever retrying migrations.
+  const instance = new Database(DB_PATH);
 
   // WAL mode for better concurrent read performance
-  db.pragma("journal_mode = WAL");
+  instance.pragma("journal_mode = WAL");
 
   // Busy timeout for concurrent access
-  db.pragma("busy_timeout = 5000");
+  instance.pragma("busy_timeout = 5000");
 
   // Synchronous NORMAL for good durability with performance
-  db.pragma("synchronous = NORMAL");
+  instance.pragma("synchronous = NORMAL");
 
   // Foreign keys enabled
-  db.pragma("foreign_keys = ON");
+  instance.pragma("foreign_keys = ON");
 
   // Run migrations
-  runMigrations(db);
+  try {
+    runMigrations(instance);
+  } catch (error) {
+    logger.error(
+      `💥 Database migration failed — database handle not published: ${error instanceof Error ? error.message : String(error)}`
+    );
+    try {
+      instance.close();
+    } catch {
+      // ignore close errors
+    }
+    throw error instanceof Error ? error : new Error(String(error));
+  }
 
+  db = instance;
   logger.info("📦 SQLite database initialized: " + DB_PATH);
 
   return db;
@@ -487,6 +503,22 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
         );
         CREATE INDEX IF NOT EXISTS idx_automation_rules_guild ON automation_rules(guild_id);
         CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled);
+      `,
+    },
+    {
+      version: 18,
+      description: "AFK states (persistent, guild/user scoped)",
+      sql: `
+        CREATE TABLE IF NOT EXISTS afk_states (
+          guild_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          message TEXT NOT NULL DEFAULT '',
+          started_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          PRIMARY KEY (guild_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_afk_states_guild ON afk_states(guild_id);
+        CREATE INDEX IF NOT EXISTS idx_afk_states_started ON afk_states(started_at);
       `,
     },
   ];
