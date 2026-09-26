@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="prizeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd700" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#ff8c00" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="50" fill="url(#prizeGlow)"/>
+  <circle cx="64" cy="64" r="40" fill="none" stroke="#ffd700" stroke-width="4" stroke-dasharray="16,8"/>
+  <text x="64" y="72" font-family="Arial, sans-serif" font-size="28" font-weight="bold" text-anchor="middle" fill="#b8860b">PRIZE</text>
+  <path d="M64 20 L68 50 L98 56 L70 72 L76 102 L64 88 L52 102 L58 72 L30 56 L60 50 Z" fill="none" stroke="#ffd700" stroke-width="3" opacity="0.6"/>
+</svg>

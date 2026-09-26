@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="victoryGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#32cd32" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#ffd700" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#228b22" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="55" fill="url(#victoryGlow)"/>
+  <path d="M38 64 L56 82 L90 38" stroke="#ffffff" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="64" cy="64" r="45" fill="none" stroke="#32cd32" stroke-width="4" stroke-dasharray="10,5" opacity="0.6"/>
+  <path d="M64 16 L70 36 L94 42 L72 60 L78 96 L64 88 L50 96 L58 60 L34 42 L58 36 Z" fill="none" stroke="#32cd32" stroke-width="3" opacity="0.5"/>
+  <text x="64" y="68" font-family="Arial, sans-serif" font-size="28" font-weight="bold" text-anchor="middle" fill="#ffffff" stroke="#228b22" stroke-width="3" paint-order="stroke fill">VICTORY</text>
+  <text x="64" y="92" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#ffd700">⚔️ Well fought!</text>
+</svg>

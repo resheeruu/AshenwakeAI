@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="mineGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#dc143c" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#8b0000" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#8b0000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="mineFlash">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#dc143c" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+  <circle cx="64" cy="64" r="50" fill="#8b0000" filter="url(#mineFlash)"/>
+  <circle cx="64" cy="64" r="35" fill="#dc143c"/>
+  <circle cx="64" cy="64" r="22" fill="#ff4444"/>
+  <circle cx="64" cy="64" r="12" fill="#ffaaaa"/>
+  <path d="M64 20 L64 108 M20 64 L108 64 M30 30 L98 98 M98 30 L30 98" stroke="#ffaaaa" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#ff4444" stroke-width="3" stroke-dasharray="6,4" opacity="0.6"/>
+  <text x="64" y="110" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#ffaaaa">💥 MINE!</text>
+</svg>

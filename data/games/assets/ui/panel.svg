@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="panelBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2c2f33"/>
+      <stop offset="100%" stop-color="#23272a"/>
+    </linearGradient>
+    <filter id="panelShadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="12" fill="url(#panelBg)" filter="url(#panelShadow)"/>
+  <rect x="4" y="4" width="120" height="120" rx="12" fill="none" stroke="#7289da" stroke-width="2" opacity="0.3"/>
+</svg>

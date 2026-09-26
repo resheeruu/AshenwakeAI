@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="flagPole" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8b4513"/>
+      <stop offset="100%" stop-color="#5d2e0a"/>
+    </linearGradient>
+    <linearGradient id="flagBanner" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#dc143c"/>
+      <stop offset="100%" stop-color="#8b0000"/>
+    </linearGradient>
+  </defs>
+  <rect x="58" y="24" width="6" height="80" fill="#8b4513" rx="2"/>
+  <polygon points="64,24 108,44 64,60" fill="#dc143c"/>
+  <polygon points="64,24 104,44 64,56" fill="#ff4444" opacity="0.6"/>
+  <circle cx="61" cy="44" r="8" fill="#ffffff"/>
+  <path d="M58 42 L61 45 L65 41" stroke="#dc143c" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="18" y="88" width="92" height="20" rx="4" fill="#2a2a2a"/>
+  <text x="64" y="101" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#ffaaaa">FLAGGED</text>
+</svg>

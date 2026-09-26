@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4682b4"/>
+      <stop offset="100%" stop-color="#2e5a88"/>
+    </linearGradient>
+    <radialGradient id="defenseGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4682b4" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#2e5a88" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#1a3a5c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="55" fill="url(#defenseGlow)"/>
+  <path d="M64 18 L64 38 Q80 44 80 64 Q80 84 64 100 Q48 84 48 64 Q48 44 64 38 Z" fill="url(#shieldGrad)"/>
+  <path d="M64 22 L64 40 Q74 45 74 60 Q74 76 64 92 Q54 76 54 60 Q54 45 64 38 Z" fill="#ffffff" opacity="0.3"/>
+  <path d="M64 28 L64 44 Q70 48 70 60 Q70 72 64 86 Q58 72 58 60 Q58 48 64 44 Z" fill="#ffffff" opacity="0.2"/>
+  <circle cx="64" cy="64" r="16" fill="#4682b4" opacity="0.8"/>
+  <path d="M64 52 L64 76 M56 64 L72 64" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+  <text x="64" y="110" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#4682b4">🛡️ DEFENSE</text>
+</svg>

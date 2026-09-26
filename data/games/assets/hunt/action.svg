@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="actionGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#32cd32" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#228b22" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0d3d0d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="55" fill="url(#actionGlow)"/>
+  <path d="M64 18 L72 38 L96 44 L72 60 L76 92 L64 86 L52 92 L58 60 L32 38 L56 32 Z" fill="#32cd32" opacity="0.9"/>
+  <path d="M64 22 L76 42 L100 48 L76 58 L80 90 L64 82 L48 90 L52 58 L28 42 L56 38 Z" fill="#228b22" opacity="0.6"/>
+  <path d="M64 26 L80 46 L100 42 L80 58 L84 88 L64 80 L44 88 L48 58 L28 42 L56 38 Z" fill="#32cd32" opacity="0.4"/>
+  <path d="M64 30 L64 90 M56 74 L72 90 M72 74 L56 90" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="64" cy="64" r="20" fill="#32cd32" opacity="0.8"/>
+  <text x="64" y="110" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#ffffff" stroke="#145214" stroke-width="2" paint-order="stroke fill">HUNT!</text>
+</svg>

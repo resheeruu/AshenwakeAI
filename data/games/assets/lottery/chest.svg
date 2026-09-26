@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="chestBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8b4513"/>
+      <stop offset="100%" stop-color="#5d2e0a"/>
+    </linearGradient>
+    <linearGradient id="chestLid" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#cd853f"/>
+      <stop offset="100%" stop-color="#8b6914"/>
+    </linearGradient>
+  </defs>
+  <rect x="28" y="60" width="72" height="48" rx="4" fill="url(#chestBody)"/>
+  <rect x="24" y="36" width="80" height="32" rx="4 4 0 0" fill="url(#chestLid)"/>
+  <rect x="54" y="74" width="20" height="16" rx="2" fill="#b8860b"/>
+  <rect x="58" y="78" width="12" height="8" rx="1" fill="#8b6914"/>
+  <ellipse cx="64" cy="108" rx="32" ry="8" fill="#2c1810" opacity="0.4"/>
+</svg>

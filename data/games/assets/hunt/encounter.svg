@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="forestBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1b4d1b"/>
+      <stop offset="50%" stop-color="#145214"/>
+      <stop offset="100%" stop-color="#0d3d0d"/>
+    </linearGradient>
+    <radialGradient id="treeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#228b22" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0d3d0d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="128" height="128" fill="url(#forestBg)"/>
+  <ellipse cx="64" cy="110" rx="60" ry="15" fill="#0a2d0a" opacity="0.5"/>
+  <g>
+    <path d="M30 128 L30 60 Q20 40 30 30 Q40 40 30 60 Z" fill="#145214"/>
+    <path d="M30 60 Q25 40 30 25 Q35 40 30 60 Z" fill="#228b22" opacity="0.7"/>
+    <path d="M30 30 Q35 20 30 15 Q25 20 30 30 Z" fill="#2e8b57" opacity="0.5"/>
+  </g>
+  <g>
+    <path d="M98 128 L98 55 Q108 35 98 25 Q88 35 98 55 Z" fill="#145214"/>
+    <path d="M98 55 Q103 35 98 25 Q88 35 98 55 Z" fill="#228b22" opacity="0.7"/>
+    <path d="M98 25 Q103 15 98 10 Q88 15 98 25 Z" fill="#2e8b57" opacity="0.5"/>
+  </g>
+  <g>
+    <path d="M64 128 L64 80 Q54 60 64 50 Q74 60 64 80 Z" fill="#145214"/>
+    <path d="M64 80 Q59 60 64 50 Q74 60 64 80 Z" fill="#228b22" opacity="0.7"/>
+    <path d="M64 50 Q69 40 64 35 Q59 40 64 50 Z" fill="#2e8b57" opacity="0.5"/>
+  </g>
+  <ellipse cx="64" cy="118" rx="55" ry="10" fill="#082808" opacity="0.4"/>
+  <text x="64" y="120" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#32cd32" opacity="0.5">🌲 ASHEN FOREST</text>
+</svg>

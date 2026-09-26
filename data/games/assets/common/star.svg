@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="starGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff8dc" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#ffd700" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <polygon points="64,8 70,38 102,44 76,66 86,96 64,82 42,96 52,66 26,44 58,38" fill="url(#starGlow)"/>
+  <polygon points="64,16 68,40 88,48 72,58 78,82 64,72 50,82 56,58 40,48 60,40" fill="#fffacd" opacity="0.8"/>
+</svg>

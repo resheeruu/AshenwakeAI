@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="symbolGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd700" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#ff8c00" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#b8860b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="55" fill="url(#symbolGlow)"/>
+  <circle cx="32" cy="32" r="24" fill="#ffd700" opacity="0.2"/>
+  <text x="32" y="40" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🍒</text>
+  <circle cx="96" cy="32" r="24" fill="#ffd700" opacity="0.2"/>
+  <text x="96" y="40" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🍋</text>
+  <circle cx="64" cy="96" r="24" fill="#ffd700" opacity="0.2"/>
+  <text x="64" y="108" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🔔</text>
+  <circle cx="32" cy="96" r="24" fill="#ffd700" opacity="0.2"/>
+  <text x="32" y="108" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">💎</text>
+  <circle cx="96" cy="96" r="24" fill="#ffd700" opacity="0.2"/>
+  <text x="96" y="108" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🔥</text>
+  <circle cx="64" cy="64" r="35" fill="none" stroke="#ffd700" stroke-width="3" stroke-dasharray="8,4" opacity="0.5"/>
+  <text x="64" y="68" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#b8860b">SYMBOLS</text>
+  <text x="64" y="88" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#b8860b">🍒 🍋 🔔 💎 🔥 ⭐</text>
+</svg>

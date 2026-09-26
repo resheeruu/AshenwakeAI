@@ -1,0 +1,847 @@
+{
+  "version": "1.0.0",
+  "games": {
+    "mine": {
+      "name": "Ashen Mines",
+      "assetCount": 9,
+      "allowedExtensions": [
+        ".svg",
+        ".png"
+      ],
+      "resultAuthority": "engine",
+      "assets": [
+        "board",
+        "safe",
+        "mine",
+        "flag",
+        "explosion",
+        "multiplier",
+        "cashout",
+        "victory",
+        "defeat"
+      ]
+    },
+    "battle": {
+      "name": "Ashen Battle",
+      "assetCount": 12,
+      "allowedExtensions": [
+        ".svg",
+        ".png"
+      ],
+      "resultAuthority": "engine",
+      "assets": [
+        "player",
+        "enemy",
+        "attack",
+        "critical",
+        "defense",
+        "victory",
+        "defeat",
+        "hit",
+        "miss",
+        "draw",
+        "xp",
+        "reward"
+      ]
+    },
+    "lottery": {
+      "name": "Ash Lottery",
+      "assetCount": 6,
+      "allowedExtensions": [
+        ".svg",
+        ".png"
+      ],
+      "resultAuthority": "engine",
+      "assets": [
+        "ticket",
+        "chest",
+        "prize",
+        "jackpot",
+        "reveal",
+        "drawing"
+      ]
+    },
+    "hunt": {
+      "name": "Ash Hunt",
+      "assetCount": 10,
+      "allowedExtensions": [
+        ".svg",
+        ".png"
+      ],
+      "resultAuthority": "engine",
+      "assets": [
+        "encounter",
+        "action",
+        "loot",
+        "rare-drop",
+        "environment",
+        "hit",
+        "miss",
+        "legendary",
+        "failure",
+        "victory"
+      ]
+    },
+    "slots": {
+      "name": "Ash Slots",
+      "assetCount": 10,
+      "allowedExtensions": [
+        ".svg",
+        ".png"
+      ],
+      "resultAuthority": "engine",
+      "assets": [
+        "machine",
+        "symbols",
+        "spin",
+        "jackpot",
+        "result",
+        "stop",
+        "match",
+        "big-win",
+        "loss",
+        "reward"
+      ]
+    }
+  },
+  "assets": {
+    "common": {
+      "sparkle.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "star.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "explosion.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "success.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "failure.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "level-up.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "sparkle.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "star.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "explosion.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "success.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "failure.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "level-up.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      }
+    },
+    "ui": {
+      "panel.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "button.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "panel.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "button.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      }
+    },
+    "lottery": {
+      "ticket.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "chest.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "prize.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "jackpot.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "reveal.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "ticket.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "chest.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "prize.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "jackpot.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "reveal.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "drawing.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "drawing.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      }
+    },
+    "mine": {
+      "board.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "safe.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "mine.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "flag.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "explosion.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "board.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "safe.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "mine.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "flag.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "explosion.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "multiplier.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "multiplier.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "cashout.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "cashout.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "victory.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "victory.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "defeat.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "defeat.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      }
+    },
+    "battle": {
+      "player.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "enemy.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "attack.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "critical.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "defense.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "victory.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "defeat.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "player.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "enemy.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "attack.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "critical.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "defense.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "victory.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "defeat.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "hit.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "hit.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "miss.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "miss.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "draw.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "draw.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "xp.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "xp.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "reward.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "reward.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      }
+    },
+    "hunt": {
+      "encounter.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "action.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "loot.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "rare-drop.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "encounter.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "action.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "loot.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "rare-drop.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "environment.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "environment.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "hit.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "hit.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "miss.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "miss.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "legendary.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "legendary.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "failure.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "failure.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "victory.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "victory.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      }
+    },
+    "slots": {
+      "machine.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "symbols.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "spin.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "jackpot.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "result.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "machine.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "symbols.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "spin.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "jackpot.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "result.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "stop.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "stop.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "match.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "match.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "big-win.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "big-win.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "loss.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "loss.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      },
+      "reward.svg": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI original asset",
+        "modified": false
+      },
+      "reward.png": {
+        "source": "original",
+        "license": "CC0-1.0",
+        "attribution": "AshenWaleAI generated asset",
+        "modified": false,
+        "generatedBy": "scripts/generate-game-assets.ts"
+      }
+    }
+  },
+  "resultAuthority": {
+    "description": "Animations are purely visual. All game outcomes, coin transfers, and XP changes are computed by the engine and stored in the database before any animation is sent. The animation layer never has write access to game state.",
+    "guarantees": [
+      "Engine computes outcome first",
+      "Database is updated before animation",
+      "Animation display uses pre-computed result",
+      "Animation cannot modify game state"
+    ]
+  }
+}

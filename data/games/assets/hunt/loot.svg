@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="lootGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd700" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#ff8c00" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#b8860b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="55" fill="url(#lootGlow)"/>
+  <path d="M64 20 L68 48 L94 54 L72 70 L78 96 L64 88 L50 96 L58 70 L34 54 L60 48 Z" fill="#ffd700" opacity="0.9"/>
+  <path d="M64 24 L76 44 L100 50 L76 60 L80 90 L64 84 L48 90 L52 60 L28 44 L60 44 Z" fill="#ff8c00" opacity="0.6"/>
+  <circle cx="64" cy="64" r="22" fill="#ffd700" opacity="0.8"/>
+  <text x="64" y="68" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#b8860b">LOOT</text>
+  <text x="64" y="92" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#b8860b">💰 Coins found!</text>
+</svg>

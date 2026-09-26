@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="spinGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd700" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#ff8c00" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#b8860b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="55" fill="url(#spinGlow)"/>
+  <path d="M64 14 L68 34 L94 40 L72 54 L78 90 L64 84 L50 90 L58 54 L34 40 L58 34 Z" fill="#ffd700" opacity="0.9"/>
+  <path d="M64 18 L74 38 L98 44 L78 58 L82 92 L64 86 L46 92 L54 58 L30 38 L58 38 Z" fill="#ff8c00" opacity="0.6"/>
+  <path d="M64 22 L80 42 L100 44 L80 58 L84 92 L64 86 L44 92 L54 58 L28 40 L58 40 Z" fill="#ffd700" opacity="0.4"/>
+  <circle cx="64" cy="64" r="25" fill="#ffd700" opacity="0.8"/>
+  <path d="M64 30 L64 90 M56 74 L72 90 M72 74 L56 90" stroke="#16213e" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="64" cy="64" r="18" fill="#ffd700" opacity="0.8"/>
+  <text x="64" y="110" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#16213e" stroke="#ffffff" stroke-width="2" paint-order="stroke fill">SPINNING...</text>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="jackpotGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff69b4" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#ffd700" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#ff4500" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="55" fill="url(#jackpotGlow)"/>
+  <circle cx="64" cy="64" r="45" fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="8,4" opacity="0.7"/>
+  <text x="64" y="60" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#ffffff" stroke="#8b008b" stroke-width="2" paint-order="stroke fill">JACKPOT</text>
+  <text x="64" y="85" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#ffd700" stroke="#8b008b" stroke-width="2" paint-order="stroke fill">MYTHIC</text>
+  <path d="M64 14 L68 42 L100 48 L70 66 L76 96 L64 88 L52 96 L58 66 L28 48 L60 42 Z" fill="none" stroke="#ff69b4" stroke-width="3" opacity="0.5"/>
+  <path d="M64 10 L68 38 L98 44 L70 62 L76 92 L64 84 L52 92 L58 62 L30 44 L60 38 Z" fill="none" stroke="#ffd700" stroke-width="2" opacity="0.4"/>
+</svg>

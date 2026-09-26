@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="enemyBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#dc143c"/>
+      <stop offset="100%" stop-color="#8b0000"/>
+    </linearGradient>
+    <linearGradient id="enemyArmor" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff4444"/>
+      <stop offset="100%" stop-color="#b22222"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="64" cy="100" rx="28" ry="12" fill="#1a1a1a" opacity="0.3"/>
+  <ellipse cx="64" cy="70" rx="30" ry="35" fill="url(#enemyBody)"/>
+  <ellipse cx="64" cy="58" rx="24" ry="18" fill="url(#enemyArmor)"/>
+  <ellipse cx="64" cy="40" rx="18" ry="18" fill="#ffcccc"/>
+  <ellipse cx="54" cy="36" rx="4" ry="5" fill="#8b0000"/>
+  <ellipse cx="74" cy="36" rx="4" ry="5" fill="#8b0000"/>
+  <path d="M54 50 Q64 48 74 50" stroke="#8b0000" stroke-width="2" fill="none"/>
+  <polygon points="54,38 64,30 74,38" fill="#dc143c"/>
+  <polygon points="64,70 72,85 56,85" fill="#dc143c"/>
+  <rect x="34" y="55" width="14" height="30" rx="3" fill="#dc143c"/>
+  <rect x="80" y="55" width="14" height="30" rx="3" fill="#dc143c"/>
+  <rect x="44" y="95" width="12" height="20" rx="2" fill="#8b0000"/>
+  <rect x="72" y="95" width="12" height="20" rx="2" fill="#8b0000"/>
+  <text x="64" y="118" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#dc143c">ENEMY</text>
+</svg>

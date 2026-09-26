@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="sparkleGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#ffd700" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="50" fill="url(#sparkleGlow)"/>
+  <path d="M64 14 L68 50 L106 56 L72 78 L80 114 L64 90 L48 114 L56 78 L22 56 L60 50 Z" fill="#ffd700" opacity="0.9"/>
+  <path d="M64 20 L67 48 L92 52 L70 68 L76 94 L64 80 L52 94 L58 68 L36 52 L61 48 Z" fill="#ffec80" opacity="0.7"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="explosionGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff4500" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#ff8c00" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ffd700" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="50" fill="url(#explosionGlow)"/>
+  <path d="M64 14 L68 50 L106 56 L72 78 L80 114 L64 90 L48 114 L56 78 L22 56 L60 50 Z" fill="#ff4500" opacity="0.6"/>
+  <path d="M64 20 L67 48 L92 52 L70 68 L76 94 L64 80 L52 94 L58 68 L36 52 L61 48 Z" fill="#ff8c00" opacity="0.5"/>
+  <path d="M64 30 L66 45 L82 49 L69 58 L72 75 L64 70 L56 75 L60 58 L46 49 L62 45 Z" fill="#ffd700" opacity="0.4"/>
+</svg>
