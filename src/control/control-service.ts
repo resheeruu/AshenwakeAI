@@ -483,11 +483,6 @@ export async function executeAction(request: ActionRequest, operatorId: string, 
         return { success: true, message: `Diagnostics complete: ${result.overall} (score: ${result.score})`, details: JSON.stringify(result.checks) };
       }
 
-      case "backup": {
-        recordAudit({ who: operatorId, whoName: operatorName, what: "Triggered backup", where: "control", result: "success" });
-        return { success: true, message: "Backup triggered." };
-      }
-
       case "clear_memory": {
         recordAudit({ who: operatorId, whoName: operatorName, what: "Cleared conversation memory", where: "control", result: "success" });
         return { success: true, message: "Conversation memory cleared." };
