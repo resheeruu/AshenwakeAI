@@ -106,6 +106,7 @@ import {
 import { createServerCommand } from "./commands/server";
 import { createModCommand } from "./commands/mod";
 import { createSupportCommand } from "./commands/support";
+import { createSendCommand } from "./commands/send";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
 import { createSettingsCommand, handleSettingsModalSubmit, isSettingsModalCustomId } from "./commands/settings";
 import {
@@ -263,6 +264,7 @@ const commands: AshenCommand[] = [
   createServerCommand(),
   createModCommand(),
   createSupportCommand(),
+  createSendCommand(),
   createPromptCommand(),
   createSettingsCommand(),
 ];
