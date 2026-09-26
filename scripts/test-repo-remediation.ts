@@ -623,7 +623,7 @@ async function runTests() {
   console.log("\n===== 16. DYNAMIC IMPORT INSIDE TRY =====");
   {
     const src = readSource("src/index.ts");
-    const idx = src.indexOf('await import("./games/lock")');
+    const idx = src.indexOf('await import("./games/lock.js")');
     assert(idx !== -1, "withLock dynamic import exists");
     const slice = src.slice(Math.max(0, idx - 300), idx);
     assert(slice.includes("try {"), "dynamic import is inside a try block");

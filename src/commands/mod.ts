@@ -1,0 +1,1 @@
+export { createModerationCommand as createModCommand } from "./moderation";

@@ -6,7 +6,6 @@ import { createResetCommand } from "../src/commands/reset";
 import { createHelpCommand } from "../src/commands/help";
 import { createStatusCommand } from "../src/commands/status";
 import { createPromptCommand } from "../src/commands/prompt";
-import { createPersonalityCommand } from "../src/commands/personality";
 import { createSettingsCommand } from "../src/commands/settings";
 import { UsageManager } from "../src/ai/usage-manager";
 import {
@@ -43,8 +42,7 @@ try {
   const reset = createResetCommand(memory);
   const status = createStatusCommand(router, memory);
   const prompt = createPromptCommand();
-  const personality = createPersonalityCommand();
-  const help = createHelpCommand([ask, reset, status, prompt, personality]);
+  const help = createHelpCommand([ask, reset, status, prompt]);
   if (ask && ask.data.name === "ask" && typeof ask.execute === "function") {
     pass("/ask command factory");
   } else {
@@ -91,16 +89,6 @@ try {
     fail("/prompt command factory");
   }
 
-  if (
-    personality &&
-    personality.data.name === "personality" &&
-    typeof personality.execute === "function"
-  ) {
-    pass("/personality command factory");
-  } else {
-    fail("/personality command factory");
-  }
-
   // ─────────────────────────────────────
   // HIDDEN COMMANDS MUST NOT BE REGISTERED
   // ─────────────────────────────────────
@@ -111,7 +99,6 @@ try {
     help.data.name,
     status.data.name,
     prompt.data.name,
-    personality.data.name,
   ];
 
   const expectedNames = [
@@ -120,7 +107,6 @@ try {
     "help",
     "status",
     "prompt",
-    "personality",
   ];
 
   if (
@@ -451,20 +437,18 @@ try {
 
 import { InteractionContextType } from "discord.js";
 import { createSupportCommand } from "../src/commands/support";
-import { createModerationCommand } from "../src/commands/moderation";
-import { createAccessCommand } from "../src/commands/access";
+import { createModCommand } from "../src/commands/mod";
+import { createSendCommand } from "../src/commands/send";
 import { createServerCommand } from "../src/commands/server";
-import { createGameCommand } from "../src/commands/game";
 
 try {
   const guildOnly: Array<[string, { data: { toJSON(): unknown } }]> = [
     ["settings", createSettingsCommand()],
     ["support", createSupportCommand()],
-    ["moderation", createModerationCommand()],
-    ["access", createAccessCommand()],
+    ["mod", createModCommand()],
+    ["send", createSendCommand()],
     ["server", createServerCommand()],
     ["prompt", createPromptCommand()],
-    ["personality", createPersonalityCommand()],
   ];
   for (const [name, cmd] of guildOnly) {
     const json: any = cmd.data.toJSON();
@@ -486,7 +470,6 @@ try {
     ["ask", createAskCommand(dmRouter, dmMemory, dmUsage)],
     ["reset", createResetCommand(dmMemory)],
     ["status", createStatusCommand(dmRouter, dmMemory)],
-    ["game", createGameCommand()],
     ["help", createHelpCommand([])],
   ];
   for (const [name, cmd] of dmAllowed) {

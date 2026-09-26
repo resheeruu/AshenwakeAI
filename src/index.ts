@@ -104,7 +104,7 @@ import {
   clearPendingAction,
 } from "./discord/action-confirmations";
 import { createServerCommand } from "./commands/server";
-import { createModerationCommand } from "./commands/moderation";
+import { createModCommand } from "./commands/mod";
 import { createSupportCommand } from "./commands/support";
 import { createAccessCommand } from "./commands/access";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
@@ -263,7 +263,7 @@ const commands: AshenCommand[] = [
   createResetCommand(memory),
   createStatusCommand(router, memory, agentManager),
   createServerCommand(),
-  createModerationCommand(),
+  createModCommand(),
   createSupportCommand(),
   createAccessCommand(),
   createPromptCommand(),
@@ -2301,7 +2301,7 @@ client.on(
     // Serialize message processing per session to prevent race conditions
     // on session.pendingPlan, session.serverState, and DB writes
     try {
-      const { withLock } = await import("./games/lock");
+      const { withLock } = await import("./games/lock.js");
       const sessionLockKey = `builder-process:${session.guildId}:${session.userId}`;
 
       await withLock(sessionLockKey, async () => {

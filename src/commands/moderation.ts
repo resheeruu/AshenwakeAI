@@ -32,7 +32,7 @@ function checkModerationRateLimit(interaction: ChatInputCommandInteraction): boo
 
 export function createModerationCommand(): AshenCommand {
   const data = new SlashCommandBuilder()
-    .setName("moderation")
+    .setName("mod")
     .setDescription("Moderation tools for server management")
     .setContexts(InteractionContextType.Guild)
     .addSubcommand((sub) =>
