@@ -34,11 +34,10 @@ const COMMAND_METADATA: Record<string, { description: string; category: string; 
   ask:    { description: "Ask AshenAI anything", category: "ai" },
   reset:  { description: "Reset your conversation memory", category: "ai" },
   prompt: { description: "AI-powered server builder — describe what you want in natural language", category: "server" },
-  personality: { description: "Set your custom AI personality prompt for this server", category: "ai", adminOnly: true },
   server: { description: "Server info, member info, and role management", category: "server" },
-  moderation: { description: "Warn, timeout, and manage members", category: "moderation", modOnly: true },
+  mod: { description: "Warn, timeout, and manage members", category: "moderation", modOnly: true },
   support: { description: "Tickets, reports, appeals, and case management", category: "support" },
-  access: { description: "Manage trusted users and send messages as AshenAI", category: "access" },
+  send: { description: "Send a message as AshenAI (trusted users, owners)", category: "system" },
   settings: { description: "Server settings panel", category: "system", adminOnly: true },
   status:  { description: "Show system status and your AI usage", category: "system" },
 };
@@ -64,7 +63,6 @@ const CATEGORY_DEFS: CategoryDef[] = [
   },
   { id: "moderation", name: "Moderation", emoji: "🛡️", description: "Keep the server safe and manage members." },
   { id: "support", name: "Support", emoji: "🎫", description: "Tickets, reports, appeals, and case management." },
-  { id: "access", name: "Access Control", emoji: "🔑", description: "Trusted users and permission management." },
   { id: "social", name: "Social", emoji: "💬", description: "Anime reactions and social interactions.",
     features: [
       { name: "Ash actions", description: "Use ash <action> @user for reactions (hug, pat, bonk, etc.)" },

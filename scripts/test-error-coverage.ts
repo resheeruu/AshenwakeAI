@@ -216,23 +216,10 @@ assertIncludes(confirmContent, "content: sanitizeResultMessage", "confirmation-h
 assertIncludes(confirmContent, "content: sanitizeToolError", "confirmation-handler sanitizes error content");
 
 /* ================================================================
- * SECTION D: Game, Task Commands (40+ assertions)
+ * SECTION D: Task Commands
  * ================================================================ */
 
-console.log("\nSection D: Game, Task Commands");
-
-// D1-D7: Game commands (7 locations)
-const gameContent = readFile("src/commands/game.ts");
-assertIncludes(gameContent, "Failed to set pet. The issue has been logged.", "game.ts pet error sanitized");
-assertIncludes(gameContent, "Failed to create party. The issue has been logged.", "game.ts party error sanitized");
-assertIncludes(gameContent, "Failed to start dungeon. The issue has been logged.", "game.ts dungeon error sanitized");
-assertIncludes(gameContent, "Failed. The issue has been logged.", "game.ts generic error sanitized");
-assertIncludes(gameContent, "Failed to claim reward. The issue has been logged.", "game.ts reward error sanitized");
-assertIncludes(gameContent, "Cannot attack world boss. The issue has been logged.", "game.ts world boss error sanitized");
-assertIncludes(gameContent, "Casino error. The issue has been logged.", "game.ts casino error sanitized");
-
-// Verify no raw error.message in game.ts catch blocks
-assertNotIncludes(gameContent, "error instanceof Error ? error.message", "game.ts has no raw error.message in catch blocks");
+console.log("\nSection D: Task Commands");
 
 /* ================================================================
  * SECTION E: Cross-Cutting Verification (50+ assertions)
@@ -249,7 +236,6 @@ const allModifiedFiles = [
   "src/ai/tools/discord/inspect-ai-config.ts",
   "src/ai/tools/discord/health-check.ts",
   "src/discord/interactions/confirmation-handler.ts",
-  "src/commands/game.ts",
 ];
 
 for (const file of allModifiedFiles) {
