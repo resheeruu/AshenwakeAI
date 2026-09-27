@@ -7,6 +7,7 @@ import { runHealthCheck } from "../core/health-checker";
 import { scanAshenAI } from "../diagnostics/health-scanner";
 import { generateOptimizations } from "../diagnostics/optimizer";
 import { getAuditLogDB } from "../database";
+import { getDataDir, getDataPath } from "../config/data-dir";
 import {
   SeraphStatus,
   SeraphDoctorResult,
@@ -19,16 +20,17 @@ import {
 } from "./types";
 
 const SERAPH_VERSION = "1.0.0";
-const DATA_DIR = path.join(process.cwd(), "data");
-const INVESTIGATIONS_DIR = path.join(DATA_DIR, "seraph-investigations");
-const REPORTS_DIR = path.join(DATA_DIR, "seraph-reports");
+const INVESTIGATIONS_DIR = getDataPath("seraph-investigations");
+const REPORTS_DIR = getDataPath("seraph-reports");
+const HEALTH_FILE = getDataPath("provider-health.json");
 
 let lastCheck = 0;
 let cachedStatus: SeraphStatus | null = null;
 
 function ensureDirs(): void {
-  try { fs.mkdirSync(INVESTIGATIONS_DIR, { recursive: true }); } catch { /* */ }
-  try { fs.mkdirSync(REPORTS_DIR, { recursive: true }); } catch { /* */ }
+  try { fs.mkdirSync(getDataDir(), { recursive: true }); } catch { /* */ }
+  try { fs.mkdirSync(getDataPath("seraph-investigations"), { recursive: true }); } catch { /* */ }
+  try { fs.mkdirSync(getDataPath("seraph-reports"), { recursive: true }); } catch { /* */ }
 }
 
 export function getStatus(): SeraphStatus {
@@ -56,14 +58,13 @@ function checkComponents(): SeraphStatus["components"] {
   const components: SeraphStatus["components"] = [];
 
   components.push(checkComponent("ai_router", () => {
-    const healthFile = path.join(DATA_DIR, "provider-health.json");
-    if (!fs.existsSync(healthFile)) return { status: "degraded", message: "No provider health data" };
+    if (!fs.existsSync(HEALTH_FILE)) return { status: "degraded", message: "No provider health data" };
     return { status: "operational" };
   }));
 
   components.push(checkComponent("data_store", () => {
-    if (!fs.existsSync(DATA_DIR)) return { status: "offline", message: "Data directory missing" };
-    const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json"));
+    if (!fs.existsSync(getDataDir())) return { status: "offline", message: "Data directory missing" };
+    const files = fs.readdirSync(getDataDir()).filter((f) => f.endsWith(".json"));
     return { status: files.length > 0 ? "operational" : "degraded", message: `${files.length} data files` };
   }));
 
@@ -191,9 +192,8 @@ export function runInvestigation(problem: string): SeraphInvestigation {
     }
 
     if (problem.toLowerCase().includes("provider") || problem.toLowerCase().includes("ai")) {
-      const healthFile = path.join(DATA_DIR, "provider-health.json");
-      if (fs.existsSync(healthFile)) {
-        const data = JSON.parse(fs.readFileSync(healthFile, "utf8"));
+      if (fs.existsSync(HEALTH_FILE)) {
+        const data = JSON.parse(fs.readFileSync(HEALTH_FILE, "utf8"));
         const disabled = Object.entries(data).filter(([_, v]: [string, any]) => v.disabledUntil > Date.now());
         if (disabled.length > 0) {
           investigation.findings.push({

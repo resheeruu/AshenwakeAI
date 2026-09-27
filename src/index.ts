@@ -667,6 +667,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    // Prevent another user's button from controlling this game.
+    if (game.playerId !== interaction.user.id) {
+      await interaction.reply({
+        content: "❌ This Blackjack game belongs to another player.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     if (interaction.customId === "ashen_blackjack_hit") {
       hitBlackjack(game);
 
@@ -1423,7 +1432,26 @@ async function handleRivalryOpponentResponse(
     if (session.turn >= session.maxTurns) {
       const endText = generateSessionEnd(session);
       if ("send" in message.channel) {
-        await message.channel.send(endText);
+        try {
+          await message.channel.send(endText);
+        } catch (sendError) {
+          logger.warn(
+            "⚠️ Failed to send rivalry session end message:",
+            sendError instanceof Error ? sendError.message : String(sendError)
+          );
+          // Try to inform the user via reply as fallback
+          try {
+            await message.reply(
+              truncateForDiscord(`❌ Session ended but could not send final message: ${endText}`)
+            );
+          } catch {
+            // If both fail, log structured failure
+            logger.error(
+              "❌ Failed to deliver rivalry session end notification",
+              { sessionId: session.guildId, channelId: session.channelId }
+            );
+          }
+        }
       }
       endSession(
         session.guildId,
@@ -1592,6 +1620,9 @@ client.on(
           await handleAnimeAction(message, client);
         } catch (error) {
           logger.warn("Anime action error:", error instanceof Error ? error.message : String(error));
+          try {
+            await message.reply({ content: "⚠️ An unexpected error occurred while processing your action. Please try again.", allowedMentions: { parse: [] } });
+          } catch { /* unable to deliver fallback */ }
         }
         return;
       }

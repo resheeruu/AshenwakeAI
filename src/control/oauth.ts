@@ -88,6 +88,12 @@ function getDiscordConfig() {
   return { clientId, clientSecret, redirectUri };
 }
 
+/** True only when the full Discord OAuth handshake can complete. */
+export function isDiscordOAuthConfigured(): boolean {
+  const { clientId, clientSecret, redirectUri } = getDiscordConfig();
+  return Boolean(clientId && clientSecret && redirectUri);
+}
+
 export function getDiscordAuthUrl(state: string): string | null {
   const { clientId, redirectUri } = getDiscordConfig();
   if (!clientId || !redirectUri) return null;
@@ -400,6 +406,12 @@ function getGoogleConfig() {
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
   return { clientId, clientSecret, redirectUri };
+}
+
+/** True only when the full Google OAuth handshake can complete. */
+export function isGoogleOAuthConfigured(): boolean {
+  const { clientId, clientSecret, redirectUri } = getGoogleConfig();
+  return Boolean(clientId && clientSecret && redirectUri);
 }
 
 export function getGoogleAuthUrl(state: string): string | null {

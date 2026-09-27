@@ -4,20 +4,124 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Terms of Service — AshenAI</title>
-<meta name="description" content="Terms of use for AshenAI.">
+<meta name="description" content="Terms of use for AshenAI: acceptable use, administrator responsibilities, third-party providers and liability.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
-<header class="site-header"><div class="container"><nav class="main-nav"><a href="/" class="logo">AshenAI</a><ul class="nav-links"><li><a href="/" class="nav-link">Home</a></li><li><a href="/features" class="nav-link">Features</a></li></ul><a href="/dashboard" class="btn btn-secondary cta-button">Open Dashboard</a></nav></div></header>
-<main class="features-hero"><div class="container"><div class="features-hero-content"><h1>Terms of Service</h1><p>Terms of use for AshenAI.</p></div></div></main>
-<section class="features-section"><div class="container">
-<div class="card"><h3>Acceptable Use</h3><p>AshenAI is provided for lawful use only. Users must not use the platform for malicious purposes, spam, or to violate any provider terms of service.</p></div>
-<div class="card"><h3>Administrator Responsibilities</h3><p>Server administrators are responsible for configuring their servers, managing access, and ensuring compliance with applicable laws and regulations.</p></div>
-<div class="card"><h3>Third-Party Providers</h3><p>AshenAI interfaces with third-party AI providers. These providers have their own terms of service. AshenAI does not guarantee availability of any specific provider.</p></div>
-<div class="card"><h3>Limitation of Liability</h3><p>AshenAI is provided "as is" without warranties. Use of the platform is at your own risk.</p></div>
-</div></section>
-<footer class="site-footer"><div class="container"><div class="footer-bottom"><p>&copy; 2026 AshenAI. All rights reserved.</p></div></div></footer>
+
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <nav class="main-nav" aria-label="Primary">
+      <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/features">Features</a></li>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/status">Status</a></li>
+        <li><a href="/support">Support</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<div class="mobile-nav" id="mobileNav">
+  <a href="/">Home</a>
+  <a href="/features">Features</a>
+  <a href="/docs">Docs</a>
+  <a href="/status">Status</a>
+  <a href="/support">Support</a>
+  <a href="/dashboard" class="btn btn-primary btn-block">Open Dashboard</a>
+</div>
+
+<main>
+
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow">Legal</p>
+      <h1 class="display">Terms of Service</h1>
+      <p class="lede">Terms of use for AshenAI and the operators who run it.</p>
+    </div>
+  </section>
+
+  <section class="container">
+    <div class="prose">
+      <p class="updated">Last updated 2026</p>
+
+      <h2>Acceptable use</h2>
+      <p>AshenAI is provided for lawful use only. You must not use the platform for malicious purposes, spam, or in a way that violates any provider's terms of service.</p>
+
+      <h2>Administrator responsibilities</h2>
+      <p>Server administrators are responsible for configuring their servers, managing access, and ensuring compliance with applicable laws and regulations. Role assignments made in the dashboard take effect immediately, so access should be reviewed when staff change.</p>
+
+      <h2>Third-party providers</h2>
+      <p>AshenAI interfaces with third-party AI providers. Those providers have their own terms of service and availability commitments. AshenAI does not guarantee the availability of any specific provider, model, or free-tier quota.</p>
+
+      <h2>Automation and moderation</h2>
+      <p>Automation rules, moderation thresholds, and game economy values you configure are applied by the bot to your server. You are responsible for setting them at levels appropriate for your community. Rules are stored server-side and executed by the bot — the web dashboard does not run them itself.</p>
+
+      <h2>Limitation of liability</h2>
+      <p>AshenAI is provided "as is" without warranties of any kind, express or implied. Use of the platform is at your own risk.</p>
+
+      <p><a href="/privacy">Privacy Policy</a> · <a href="/support">Support</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+        <p>Intelligent infrastructure for Discord communities.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/status">Status</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/support">Support</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+          <li><a href="/terms">Terms</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/resheeruu/AshenwakeAI">GitHub</a></li>
+          <li><a href="/docs#api">API</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 AshenAI. All rights reserved.</p>
+      <div class="fb-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/support">Support</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/escape.js"></script>
+<script src="js/base.js"></script>
 </body>
 </html>

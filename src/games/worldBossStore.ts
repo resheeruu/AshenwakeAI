@@ -6,15 +6,13 @@ import {
   getWorldBoss,
   isWorldBossActive,
 } from "./worldBosses";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const FILE = path.join(DATA_DIR, "world-boss.json");
+import { getDataDir, getDataPath, getWorldBossPath } from "../config/data-dir";
 
 async function ensureStore(): Promise<void> {
-  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+  await fs.promises.mkdir(getDataDir(), { recursive: true });
 
-  if (!fs.existsSync(FILE)) {
-    await fs.promises.writeFile(FILE, "null", "utf8");
+  if (!fs.existsSync(getWorldBossPath())) {
+    await fs.promises.writeFile(getWorldBossPath(), "null", "utf8");
   }
 }
 
@@ -22,7 +20,7 @@ export async function loadWorldBoss(): Promise<WorldBossState | null> {
   await ensureStore();
 
   try {
-    const raw = await fs.promises.readFile(FILE, "utf8");
+    const raw = await fs.promises.readFile(getWorldBossPath(), "utf8");
     const parsed = JSON.parse(raw);
 
     if (!parsed || typeof parsed !== "object") {
@@ -40,7 +38,7 @@ export async function saveWorldBoss(
 ): Promise<void> {
   await ensureStore();
 
-  const temporary = `${FILE}.tmp`;
+  const temporary = `${getWorldBossPath()}.tmp`;
 
   await fs.promises.writeFile(
     temporary,
@@ -48,14 +46,14 @@ export async function saveWorldBoss(
     "utf8",
   );
 
-  await fs.promises.rename(temporary, FILE);
+  await fs.promises.rename(temporary, getWorldBossPath());
 }
 
 export async function clearWorldBoss(): Promise<void> {
   await ensureStore();
 
   await fs.promises.writeFile(
-    FILE,
+    getWorldBossPath(),
     "null",
     "utf8",
   );

@@ -4,7 +4,7 @@ import { GamePlayer } from "./types";
 import { withGlobalLock } from "./lock";
 import { logger } from "../logger";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = process.env.ASHENAI_DATA_DIR ?? path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "game-players.json");
 
 async function ensureStore(): Promise<void> {

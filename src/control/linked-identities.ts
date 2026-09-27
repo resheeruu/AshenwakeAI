@@ -2,9 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const IDENTITIES_FILE = path.join(DATA_DIR, "linked-identities.json");
+import { getDataDir, getDataPath } from "../config/data-dir";
 
 export type IdentityProvider = "discord" | "google";
 
@@ -22,16 +20,17 @@ export interface LinkedIdentity {
 let identities: LinkedIdentity[] = [];
 
 function ensureDataDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
 }
 
 function loadIdentities(): void {
   try {
-    if (!fs.existsSync(IDENTITIES_FILE)) {
+    const identitiesPath = getDataPath("linked-identities.json");
+    if (!fs.existsSync(identitiesPath)) {
       identities = [];
       return;
     }
-    const raw = fs.readFileSync(IDENTITIES_FILE, "utf8");
+    const raw = fs.readFileSync(identitiesPath, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       identities = [];
@@ -54,9 +53,10 @@ function loadIdentities(): void {
 function saveIdentities(): void {
   try {
     ensureDataDir();
-    const tmpPath = IDENTITIES_FILE + ".tmp";
+    const identitiesPath = getDataPath("linked-identities.json");
+    const tmpPath = identitiesPath + ".tmp";
     fs.writeFileSync(tmpPath, JSON.stringify(identities, null, 2), "utf8");
-    fs.renameSync(tmpPath, IDENTITIES_FILE);
+    fs.renameSync(tmpPath, identitiesPath);
   } catch (error) {
     logger.warn(
       `⚠️ Could not save linked identities: ${error instanceof Error ? error.message : String(error)}`,

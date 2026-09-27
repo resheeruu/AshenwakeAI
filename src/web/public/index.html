@@ -3,181 +3,615 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AshenAI — Intelligent Infrastructure for Discord Communities</title>
-<meta name="description" content="AshenAI provides multi-provider AI routing, moderation, automation, and social features for Discord communities. Professional, secure, and fully configurable through the web dashboard.">
+<title>AshenAI — Intelligent infrastructure for Discord communities</title>
+<meta name="description" content="AshenAI routes conversations across 30 AI providers, enforces automod policy, stores per-server automation rules, and keeps a full audit trail — all from one Discord control plane.">
+<meta name="theme-color" content="#06070a">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/landing.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
-<body>
-<header class="site-header">
+<body class="page-home">
+
+<header class="site-header" id="siteHeader">
   <div class="container">
-    <nav class="main-nav">
-      <a href="/" class="logo">AshenAI</a>
+    <nav class="main-nav" aria-label="Primary">
+      <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
       <ul class="nav-links">
-        <li><a href="#features" class="nav-link">Features</a></li>
-        <li><a href="/docs" class="nav-link">Docs</a></li>
-        <li><a href="/status" class="nav-link">Status</a></li>
-        <li><a href="/privacy" class="nav-link">Privacy</a></li>
-        <li><a href="/terms" class="nav-link">Terms</a></li>
+        <li><a href="#platform">Platform</a></li>
+        <li><a href="#moderation">Moderation</a></li>
+        <li><a href="#automation">Automation</a></li>
+        <li><a href="#ecosystem">Ecosystem</a></li>
+        <li><a href="#games">Games</a></li>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/status">Status</a></li>
       </ul>
-      <a href="/dashboard" class="btn btn-secondary cta-button">Open Dashboard</a>
+      <div class="nav-actions">
+        <a href="/support" class="btn btn-ghost">Support</a>
+        <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
+      </div>
     </nav>
   </div>
 </header>
 
-<main class="hero">
-  <div class="container">
-    <div class="hero-content">
-      <h1>AshenAI</h1>
-      <p>Intelligent infrastructure for Discord communities. Multi-provider AI, moderation, automation, and social features in one platform.</p>
-      <div class="hero-buttons">
-        <a href="/dashboard" class="btn btn-primary cta-button">Open Dashboard</a>
-        <a href="#features" class="btn btn-outline cta-button">View Features</a>
+<div class="mobile-nav" id="mobileNav">
+  <a href="#platform">Platform</a>
+  <a href="#moderation">Moderation</a>
+  <a href="#automation">Automation</a>
+  <a href="#ecosystem">Ecosystem</a>
+  <a href="#games">Games</a>
+  <a href="#security">Security</a>
+  <a href="/docs">Docs</a>
+  <a href="/status">Status</a>
+  <a href="/support">Support</a>
+  <a href="/dashboard" class="btn btn-primary btn-block">Open Dashboard</a>
+</div>
+
+<main>
+
+  <!-- ==================== HERO ==================== -->
+  <section class="hero" id="top">
+    <div class="container">
+      <div class="hero-inner">
+        <div class="hero-copy reveal">
+          <div class="status-pill" id="healthPill" role="status">
+            <span class="pulse" aria-hidden="true"></span>
+            <span id="healthText">Checking system status…</span>
+          </div>
+          <h1 class="hero-title">
+            Run your Discord community like <em class="gradient-text">infrastructure</em>.
+          </h1>
+          <p class="hero-lede">
+            Intelligent infrastructure for Discord communities. Multi-provider AI routing,
+            policy-driven moderation, per-server automation, memory and social systems —
+            wired together behind one authenticated control plane.
+          </p>
+          <div class="hero-cta">
+            <a href="/dashboard" class="btn btn-primary btn-lg">Open Dashboard</a>
+            <a href="#platform" class="btn btn-outline btn-lg">See how it routes</a>
+          </div>
+          <div class="hero-meta">
+            <div class="hero-meta-item"><span class="k">43</span><span class="l">AI tools</span></div>
+            <div class="hero-meta-item"><span class="k">10</span><span class="l">Slash commands</span></div>
+            <div class="hero-meta-item"><span class="k">30</span><span class="l">Providers</span></div>
+            <div class="hero-meta-item"><span class="k">32</span><span class="l">Anime actions</span></div>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal" data-reveal="right">
+          <div class="chat-mock">
+            <div class="chat-bar">
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              <span class="chan">general</span>
+            </div>
+            <div class="chat-body" id="heroThread">
+              <div class="msg">
+                <div class="msg-avatar">RK</div>
+                <div class="msg-main">
+                  <div class="msg-head"><span class="msg-name">rkeller</span><span class="msg-time">14:02</span></div>
+                  <div class="msg-text">what changed in the raid policy?</div>
+                </div>
+              </div>
+              <div class="msg is-bot">
+                <div class="msg-avatar">A</div>
+                <div class="msg-main">
+                  <div class="msg-head"><span class="msg-name">AshenAI</span><span class="msg-time">14:02</span></div>
+                  <div class="msg-text">
+                    Raid mode now trips at <strong>5 messages / 5s</strong>. Anti-invite and
+                    anti-scam stay on; caps filtering stays opt-in per server.
+                  </div>
+                  <span class="msg-tool">read guild config · automod</span>
+                </div>
+              </div>
+              <div class="msg">
+                <div class="msg-avatar">MT</div>
+                <div class="msg-main">
+                  <div class="msg-head"><span class="msg-name">m.torres</span><span class="msg-time">14:03</span></div>
+                  <div class="msg-text">route that to a cheaper model, we're burning quota</div>
+                </div>
+              </div>
+              <div class="msg is-bot">
+                <div class="msg-avatar">A</div>
+                <div class="msg-main">
+                  <div class="msg-head"><span class="msg-name">AshenAI</span><span class="msg-time">14:03</span></div>
+                  <div class="msg-text">Routing policy updated for this server. Fallback chain unchanged.</div>
+                  <span class="msg-tool">PUT /ai/routing · owner + CSRF</span>
+                </div>
+              </div>
+            </div>
+            <div class="msg-input"><span>Message #general</span><span class="caret" aria-hidden="true"></span></div>
+            <div class="chat-badge">fallback <b>engaged</b></div>
+            <div class="chat-badge chat-badge-2">latency <b>p95 412ms</b></div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
+
+  <!-- ==================== METRICS ==================== -->
+  <section class="metrics-strip" aria-label="Platform figures">
+    <div class="container">
+      <div class="metrics-grid">
+        <div class="metric reveal"><span class="m-val">43</span><span class="m-key">Discord AI tools</span></div>
+        <div class="metric reveal"><span class="m-val">10</span><span class="m-key">Slash commands</span></div>
+        <div class="metric reveal"><span class="m-val">30</span><span class="m-key">Provider catalog</span></div>
+        <div class="metric reveal"><span class="m-val">32</span><span class="m-key">Anime actions</span></div>
+        <div class="metric reveal"><span class="m-val">5</span><span class="m-key">Arcade games</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 01 ROUTING ==================== -->
+  <section class="section story" id="platform">
+    <div class="container">
+      <div class="split">
+        <div class="split-copy reveal" data-reveal="left">
+          <div class="story-index"><span class="story-num">01</span><span class="bar"></span><span>ROUTING</span></div>
+          <h2 class="h2">One request. Every provider. A measured way out.</h2>
+          <p class="lede">
+            Every message is classified, budgeted, routed and observed before a single token
+            leaves the box. When a provider degrades, the chain falls through instead of
+            failing the channel — and the decision is logged either way.
+          </p>
+          <div class="feature-list">
+            <div class="feature-item">
+              <span class="fi-icon" aria-hidden="true">◎</span>
+              <div><div class="fi-title">Classify before you spend</div><div class="fi-desc">Tone, intent and tool demand are decided first so the cheapest capable model answers routine traffic.</div></div>
+            </div>
+            <div class="feature-item">
+              <span class="fi-icon" aria-hidden="true">⇄</span>
+              <div><div class="fi-title">Fallback that is actually wired</div><div class="fi-desc">Provider health feeds the router; a degraded upstream rotates to the next candidate instead of erroring.</div></div>
+            </div>
+            <div class="feature-item">
+              <span class="fi-icon" aria-hidden="true">▤</span>
+              <div><div class="fi-title">Budgets are per server</div><div class="fi-desc">Daily, monthly and per-minute limits live in the guild config, enforced before dispatch.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="reveal" data-reveal="right">
+          <div class="pipeline">
+            <div class="pipeline-head">
+              <span class="pipeline-title">request path</span>
+              <span class="badge badge-accent">live</span>
+            </div>
+            <div class="pipeline-flow">
+              <div class="pipe-step is-active">
+                <span class="pipe-node">01</span>
+                <div class="pipe-body">
+                  <div class="pipe-title">Inbound message</div>
+                  <div class="pipe-desc">Prefix <code class="code-inline">ash</code> or slash command enters the agent with guild context attached.</div>
+                </div>
+                <span class="pipe-tag ok">accepted</span>
+              </div>
+              <div class="pipe-step">
+                <span class="pipe-node">02</span>
+                <div class="pipe-body">
+                  <div class="pipe-title">Policy + budget check</div>
+                  <div class="pipe-desc">Rate limit, burst limit and remaining daily quota are evaluated before any provider is touched.</div>
+                </div>
+                <span class="pipe-tag ok">within limit</span>
+              </div>
+              <div class="pipe-step">
+                <span class="pipe-node">03</span>
+                <div class="pipe-body">
+                  <div class="pipe-title">Model selection</div>
+                  <div class="pipe-desc">Routing rules pick a candidate from the configured chain; capabilities are matched to the task.</div>
+                </div>
+                <span class="pipe-tag">routed</span>
+              </div>
+              <div class="pipe-step is-fallback">
+                <span class="pipe-node">04</span>
+                <div class="pipe-body">
+                  <div class="pipe-title">Fallback</div>
+                  <div class="pipe-desc">Timeout or degraded health advances to the next provider. The original failure is preserved in the log.</div>
+                </div>
+                <span class="pipe-tag warn">on failure</span>
+              </div>
+              <div class="pipe-step">
+                <span class="pipe-node">05</span>
+                <div class="pipe-body">
+                  <div class="pipe-title">Tool execution</div>
+                  <div class="pipe-desc">Up to 43 Discord tools run under confirmation gates, rate limits and an audit record.</div>
+                </div>
+                <span class="pipe-tag ok">gated</span>
+              </div>
+              <div class="pipe-step">
+                <span class="pipe-node">06</span>
+                <div class="pipe-body">
+                  <div class="pipe-title">Deliver + record</div>
+                  <div class="pipe-desc">The reply posts to Discord; usage counters and the correlation ID are written for analytics.</div>
+                </div>
+                <span class="pipe-tag ok">recorded</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 02 MODERATION ==================== -->
+  <section class="section story" id="moderation">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="story-index"><span class="story-num">02</span><span class="bar"></span><span>MODERATION</span></div>
+        <h2 class="h2">Policy first. The bot enforces what you wrote down.</h2>
+        <p class="lede">Automod settings are plain, versioned configuration — readable in the
+          dashboard, auditable on every change, and applied per server with no global surprises.</p>
+      </div>
+
+      <div class="bento">
+        <div class="bento-cell span-3 reveal">
+          <span class="bc-icon" aria-hidden="true">⛨</span>
+          <h3>Automod that stays in its lane</h3>
+          <p>Spam, flood, mention abuse, invites, scams, links, caps and zalgo each carry their own
+            toggle and threshold. Nothing runs that you did not switch on.</p>
+          <div class="bc-list"><span>anti-spam</span><span>anti-flood</span><span>anti-invite</span><span>anti-scam</span><span>anti-link</span><span>anti-caps</span><span>anti-zalgo</span></div>
+        </div>
+        <div class="bento-cell span-3 hl reveal" data-reveal="right">
+          <span class="bc-icon" aria-hidden="true">◷</span>
+          <h3>Raid mode with real thresholds</h3>
+          <p>Messages-per-window and mention ceilings are explicit numbers in config —
+            <code class="code-inline">5 messages / 5000ms</code> by default — not a hidden heuristic.</p>
+          <div class="bc-list"><span>maxMentions 5</span><span>maxMessages 5</span><span>5s window</span></div>
+        </div>
+        <div class="bento-cell reveal">
+          <span class="bc-icon" aria-hidden="true">⏱</span>
+          <h3>Timeouts and warns</h3>
+          <p>Default timeout minutes, warn ceiling before action, and an optional auto-ban at the limit.</p>
+        </div>
+        <div class="bento-cell reveal">
+          <span class="bc-icon" aria-hidden="true">⌗</span>
+          <h3>Channel targets</h3>
+          <p>Assistant, log, welcome and ticket categories are IDs you pick — never guessed by the bot.</p>
+        </div>
+        <div class="bento-cell reveal">
+          <span class="bc-icon" aria-hidden="true">⚑</span>
+          <h3>Role-aware</h3>
+          <p>Staff role IDs decide who reads the queue and who can act on it inside Discord.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 03 AUTOMATION ==================== -->
+  <section class="section story" id="automation">
+    <div class="container">
+      <div class="split reverse">
+        <div class="split-copy reveal" data-reveal="right">
+          <div class="story-index"><span class="story-num">03</span><span class="bar"></span><span>AUTOMATION</span></div>
+          <h2 class="h2">Rules you can read back.</h2>
+          <p class="lede">
+            Every rule is a trigger, a bounded condition set and a bounded action set — stored per
+            server, written only by an owner with a CSRF token, and deleted cleanly when you are done.
+          </p>
+          <div class="feature-list">
+            <div class="feature-item">
+              <span class="fi-icon" aria-hidden="true">✓</span>
+              <div><div class="fi-title">Owner-only writes</div><div class="fi-desc">Create, update and delete all require <code class="code-inline">owner</code> plus a validated CSRF header.</div></div>
+            </div>
+            <div class="feature-item">
+              <span class="fi-icon" aria-hidden="true">▦</span>
+              <div><div class="fi-title">Bounded by construction</div><div class="fi-desc">At most 50 conditions and 50 actions per rule, validated before anything is persisted.</div></div>
+            </div>
+            <div class="feature-item">
+              <span class="fi-icon" aria-hidden="true">✗</span>
+              <div><div class="fi-title">No shadow execution</div><div class="fi-desc">Rules are authored and stored here. AshenAI does not silently fire them in the background — what you store is exactly what exists.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="reveal" data-reveal="left">
+          <div class="rule-anatomy">
+            <div class="ra-head">
+              <span class="ra-name">Anti-raid escalation</span>
+              <span class="badge badge-green">enabled</span>
+            </div>
+            <div class="ra-body">
+              <div class="ra-col trigger">
+                <h4>Trigger</h4>
+                <div class="ra-item"><span class="bullet">›</span><span>message.created</span></div>
+                <div class="ra-item"><span class="bullet">›</span><span>guild.member.joined</span></div>
+              </div>
+              <div class="ra-col conditions">
+                <h4>Conditions</h4>
+                <div class="ra-item"><span class="bullet">›</span><span>mentions &gt; 5</span></div>
+                <div class="ra-item"><span class="bullet">›</span><span>window ≤ 5000ms</span></div>
+                <div class="ra-item"><span class="bullet">›</span><span>sender account age &lt; 7d</span></div>
+              </div>
+              <div class="ra-col actions">
+                <h4>Actions</h4>
+                <div class="ra-item"><span class="bullet">›</span><span>timeout member</span></div>
+                <div class="ra-item"><span class="bullet">›</span><span>post to log channel</span></div>
+                <div class="ra-item"><span class="bullet">›</span><span>record audit entry</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="info-note warn-note">Rules are stored per server and written only by an owner. AshenAI does not claim background execution for them.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 04 MEMORY ==================== -->
+  <section class="section story" id="memory">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="story-index"><span class="story-num">04</span><span class="bar"></span><span>MEMORY &amp; PERSONALITY</span></div>
+        <h2 class="h2">The bot remembers this server, not the last one.</h2>
+        <p class="lede">Conversation memory, tone and custom instructions are scoped to a guild — and
+          the memory window is a number you can change.</p>
+      </div>
+      <div class="grid grid-4">
+        <div class="card reveal">
+          <span class="mono-label">memory.enabled</span>
+          <div class="stat-value">On</div>
+          <div class="stat-label">Per-server memory</div>
+          <p class="small muted">Off means every turn starts cold. No hidden carry-over between guilds.</p>
+        </div>
+        <div class="card reveal">
+          <span class="mono-label">memory.maxMessages</span>
+          <div class="stat-value">20</div>
+          <div class="stat-label">Turns retained</div>
+          <p class="small muted">Default window. Raising it spends context; the UI shows the trade.</p>
+        </div>
+        <div class="card reveal">
+          <span class="mono-label">personality.tone</span>
+          <div class="stat-value">Friendly</div>
+          <div class="stat-label">Default tone</div>
+          <p class="small muted">Tone, name and custom instructions are edited in the AI section.</p>
+        </div>
+        <div class="card reveal">
+          <span class="mono-label">personality.name</span>
+          <div class="stat-value">AshenAI</div>
+          <div class="stat-label">Display identity</div>
+          <p class="small muted">Rename it per server so members know who is answering.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 05 ECOSYSTEM ==================== -->
+  <section class="section story" id="ecosystem">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="story-index"><span class="story-num">05</span><span class="bar"></span><span>ECOSYSTEM</span></div>
+        <h2 class="h2">Bring your own key. Or bring none.</h2>
+        <p class="lede">Thirty catalogued providers across five pricing classes. Connect one, connect
+          six — the router treats them as one chain.</p>
+      </div>
+      <div class="tier-grid">
+        <div class="tier reveal">
+          <span class="t-tag">class · free-tier</span>
+          <div class="t-count">14<small>providers</small></div>
+          <h3>Free tier</h3>
+          <p>Generous limits with your own API key. The default path for a community that wants AI without a bill.</p>
+        </div>
+        <div class="tier reveal">
+          <span class="t-tag">class · paid</span>
+          <div class="t-count">6<small>providers</small></div>
+          <h3>Paid</h3>
+          <p>Frontier models when the task deserves them. Route selectively instead of paying for every message.</p>
+        </div>
+        <div class="tier reveal">
+          <span class="t-tag">class · local</span>
+          <div class="t-count">2<small>providers</small></div>
+          <h3>Local</h3>
+          <p>Ollama and llama.cpp endpoints. No key, no egress — the traffic never leaves your machine.</p>
+        </div>
+        <div class="tier reveal">
+          <span class="t-tag">class · trial + custom</span>
+          <div class="t-count">8<small>providers</small></div>
+          <h3>Trial &amp; custom</h3>
+          <p>Credit-based trials plus any OpenAI-compatible endpoint you want to point at.</p>
+        </div>
+      </div>
+      <div class="info-note reveal">Pricing classes only — provider credentials stay server-side and are never rendered into the public site.</div>
+    </div>
+  </section>
+
+  <!-- ==================== 06 GAMES & MEDIA ==================== -->
+  <section class="section story" id="games">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="story-index"><span class="story-num">06</span><span class="bar"></span><span>GAMES &amp; MEDIA</span></div>
+        <h2 class="h2">The parts members actually open the server for.</h2>
+        <p class="lede">Five arcade games and thirty-two anime actions, all prefixed and all cooldown-guarded.</p>
+      </div>
+      <div class="game-grid">
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">⛏</div><h3>Mines</h3><p>Grid sweep with a cash-out decision every tile.</p><span class="g-cmd">ash mine</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">⚔</div><h3>Battle</h3><p>Turn-based duel with crit, dodge and defend.</p><span class="g-cmd">ash battle</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🎟</div><h3>Lottery</h3><p>Ticket draw with tiered prize payouts.</p><span class="g-cmd">ash lottery</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🏹</div><h3>Hunt</h3><p>Rare encounters, loot drops, XP and death penalties.</p><span class="g-cmd">ash hunt</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🎰</div><h3>Slots</h3><p>Wager, spin, settle — economy-first.</p><span class="g-cmd">ash slots</span></div>
+      </div>
+
+      <div class="action-marquee" aria-hidden="true">
+        <div class="action-track">
+          <span>hug</span><span>pat</span><span>slap</span><span>poke</span><span>blush</span><span>cry</span><span>laugh</span><span>angry</span><span>wink</span><span>kiss</span><span>bite</span><span>cuddle</span><span>yeet</span><span>bonk</span><span>smug</span><span>facepalm</span>
+          <span>hug</span><span>pat</span><span>slap</span><span>poke</span><span>blush</span><span>cry</span><span>laugh</span><span>angry</span><span>wink</span><span>kiss</span><span>bite</span><span>cuddle</span><span>yeet</span><span>bonk</span><span>smug</span><span>facepalm</span>
+        </div>
+      </div>
+      <p class="tiny dim">32 anime actions in total — the strip shows a sample. Every action carries its own cooldown and respects the server's <code class="code-inline">social.animeActions</code> flag.</p>
+    </div>
+  </section>
+
+  <!-- ==================== 07 SECURITY ==================== -->
+  <section class="section story" id="security">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="story-index"><span class="story-num">07</span><span class="bar"></span><span>SECURITY</span></div>
+        <h2 class="h2">Assume the session is hostile.</h2>
+        <p class="lede">The dashboard is a thin client over a gated API. Nothing renders because the
+          page asked for it — it renders because a validated session and role said so.</p>
+      </div>
+      <div class="sec-grid">
+        <div class="sec-card reveal">
+          <div class="s-num">L1 / SESSION</div>
+          <h3>Sessions that rotate</h3>
+          <p>HttpOnly, SameSite=Lax, Secure in production, 24-hour lifetime with idle rotation every hour.</p>
+          <ul><li>ashenai_owner_sid</li><li>idle rotation 1h</li><li>server-side revocation</li></ul>
+        </div>
+        <div class="sec-card reveal">
+          <div class="s-num">L2 / CSRF</div>
+          <h3>Every mutation is signed</h3>
+          <p>POST, PUT and DELETE demand a per-session token in <code class="code-inline">X-CSRF-Token</code>. GET never mutates.</p>
+          <ul><li>per-session token</li><li>header-bound</li><li>logout is CSRF-guarded</li></ul>
+        </div>
+        <div class="sec-card reveal">
+          <div class="s-num">L3 / ACCESS</div>
+          <h3>Roles all the way down</h3>
+          <p>Owner, admin and user are enforced in middleware — not by hiding buttons in the browser.</p>
+          <ul><li>requireAuth</li><li>requireRole</li><li>requireGuildAuth</li></ul>
+        </div>
+        <div class="sec-card reveal">
+          <div class="s-num">L4 / ACCOUNT</div>
+          <h3>MFA and OAuth</h3>
+          <p>TOTP with recovery codes, Discord and Google sign-in, and account linking that never puts identifiers in a URL.</p>
+          <ul><li>TOTP + recovery</li><li>OAuth link flow</li><li>password reset tokens</li></ul>
+        </div>
+        <div class="sec-card reveal">
+          <div class="s-num">L5 / OUTPUT</div>
+          <h3>Nothing renders raw</h3>
+          <p>One shared escape helper covers every API-sourced string, and secrets are redacted before they reach a log line.</p>
+          <ul><li>escapeHtml everywhere</li><li>redact() on logs</li><li>secret scan on save</li></ul>
+        </div>
+        <div class="sec-card reveal">
+          <div class="s-num">L6 / TRANSPORT</div>
+          <h3>CSP without unsafe-inline</h3>
+          <p>Nonce-only script policy, no inline handlers, no inline styles. The page you see is the page we shipped.</p>
+          <ul><li>nonce-based scripts</li><li>no style attributes</li><li>no inline handlers</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 08 PREVIEW ==================== -->
+  <section class="section story" id="preview">
+    <div class="container">
+      <div class="section-head center-head reveal">
+        <div class="story-index"><span class="story-num">08</span><span class="bar"></span><span>CONTROL PLANE</span></div>
+        <h2 class="h2">Twelve sections. One server selector. No guesswork.</h2>
+        <p class="lede">Overview, AI, Moderation, Automation, Memory, Games, Media, Analytics, Logs,
+          Integrations, Settings and Security — each bound to the endpoints that actually exist.</p>
+      </div>
+
+      <div class="cockpit reveal" data-reveal="scale">
+        <div class="cockpit-bar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="cb-title">ashenai — dashboard</span>
+        </div>
+        <div class="cockpit-body">
+          <div class="cockpit-side">
+            <div class="cs-group">Control</div>
+            <div class="cs-item active">Overview</div>
+            <div class="cs-item">AI</div>
+            <div class="cs-item">Moderation</div>
+            <div class="cs-item">Automation</div>
+            <div class="cs-group">Engage</div>
+            <div class="cs-item">Memory</div>
+            <div class="cs-item">Games</div>
+            <div class="cs-item">Media</div>
+            <div class="cs-group">Insights</div>
+            <div class="cs-item">Analytics</div>
+            <div class="cs-item">Logs</div>
+            <div class="cs-group">System</div>
+            <div class="cs-item">Integrations</div>
+            <div class="cs-item">Settings</div>
+            <div class="cs-item">Security</div>
+          </div>
+          <div class="cockpit-main">
+            <div class="cockpit-topline">
+              <span class="ct-title">Overview</span>
+              <span class="badge badge-accent">owner session</span>
+            </div>
+            <div class="cockpit-stats">
+              <div class="cockpit-stat"><div class="v">43</div><div class="k">Tools</div></div>
+              <div class="cockpit-stat"><div class="v">30</div><div class="k">Providers</div></div>
+              <div class="cockpit-stat"><div class="v">20</div><div class="k">Memory turns</div></div>
+              <div class="cockpit-stat"><div class="v">100</div><div class="k">Daily limit</div></div>
+            </div>
+            <div class="cockpit-rows">
+              <div class="cockpit-row"><span class="cr-left"><span class="status-dot status-dot-green"></span><span>Provider health</span></span><span class="cr-id">GET /api/providers/status</span></div>
+              <div class="cockpit-row"><span class="cr-left"><span class="status-dot status-dot-green"></span><span>Guild config</span></span><span class="cr-id">GET /api/guilds/:id/settings</span></div>
+              <div class="cockpit-row"><span class="cr-left"><span class="status-dot status-dot-yellow"></span><span>Automation rules</span></span><span class="cr-id">GET /api/guilds/:id/automation/rules</span></div>
+              <div class="cockpit-row"><span class="cr-left"><span class="status-dot status-dot-green"></span><span>System usage</span></span><span class="cr-id">GET /api/usage/system</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CTA ==================== -->
+  <section class="section section-tight">
+    <div class="container">
+      <div class="cta-band reveal">
+        <h2 class="h2">Put the control plane in front of your moderators.</h2>
+        <p class="lede">Sign in, pick a server, and read back exactly what the bot is configured to do.</p>
+        <div class="hero-cta">
+          <a href="/dashboard" class="btn btn-primary btn-lg">Open Dashboard</a>
+          <a href="/docs" class="btn btn-outline btn-lg">Read the docs</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
-
-<section id="features" class="features-section">
-  <div class="container">
-    <div class="section-header">
-      <h2>Features</h2>
-      <p>A complete platform for Discord communities.</p>
-    </div>
-    <div class="features-grid">
-      <div class="feature-card">
-        <h3>AI Chat</h3>
-        <p>Conversational AI with multi-provider routing and automatic fallback across 30+ providers.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Multi-Provider AI</h3>
-        <p>Access Google Gemini, Groq, OpenRouter, Anthropic, and local models with intelligent routing.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Custom Personality</h3>
-        <p>Configure AI tone, style, and behavior per server with validation and audit logging.</p>
-      </div>
-      <div class="feature-card">
-        <h3>AI Moderation</h3>
-        <p>Spam detection, link filtering, and toxicity prevention with role-aware controls.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Automation</h3>
-        <p>Welcome messages, role assignment, event triggers, and safe predefined actions.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Social/Debate</h3>
-        <p>Rivalry sessions and configurable social behavior with cooldown management.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Provider Ecosystem</h3>
-        <p>Free, free-tier, trial, paid, and local providers. Connect via the provider wizard.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Security</h3>
-        <p>SSRF protection, CSRF, session security, MFA, OAuth, and credential-first classification.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="ai-infrastructure">
-  <div class="container">
-    <div class="section-header">
-      <h2>AI Infrastructure</h2>
-      <p>Professional-grade AI orchestration with full control.</p>
-    </div>
-    <div class="card-grid">
-      <div class="stat-card"><div class="stat-value">30+</div><div class="stat-label">Providers</div></div>
-      <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Auth Tiers</div></div>
-      <div class="stat-card green"><div class="stat-value">0</div><div class="stat-label">High Vulns</div></div>
-      <div class="stat-card"><div class="stat-value">36</div><div class="stat-label">Test Suites</div></div>
-    </div>
-  </div>
-</section>
-
-<section class="provider-ecosystem">
-  <div class="container">
-    <div class="section-header">
-      <h2>Provider Ecosystem</h2>
-      <p>Connect the providers you need with the provider wizard.</p>
-    </div>
-    <div class="features-grid">
-      <div class="feature-card">
-        <h3>Free Tier</h3>
-        <p>Google Gemini, Groq, OpenRouter — generous free access with API keys.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Paid</h3>
-        <p>Anthropic Claude, OpenAI — premium models with full capabilities.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Local</h3>
-        <p>Ollama, Local LLM — run models locally with no external API.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Custom</h3>
-        <p>Any OpenAI-compatible endpoint with custom configuration.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="cta-section">
-  <div class="container">
-    <div class="section-header">
-      <h2>Get Started</h2>
-      <p>Add AshenAI to your Discord server and manage everything from the dashboard.</p>
-    </div>
-    <div class="hero-buttons" style="justify-content:center">
-      <a href="/dashboard" class="btn btn-primary cta-button">Open Dashboard</a>
-      <a href="/docs" class="btn btn-outline cta-button">Read Docs</a>
-    </div>
-  </div>
-</section>
 
 <footer class="site-footer">
   <div class="container">
     <div class="footer-grid">
-      <div class="footer-col">
-        <h4>AshenAI</h4>
+      <div class="footer-brand">
+        <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
         <p>Intelligent infrastructure for Discord communities.</p>
       </div>
       <div class="footer-col">
         <h4>Product</h4>
         <ul>
-          <li><a href="/">Website</a></li>
+          <li><a href="/">Home</a></li>
           <li><a href="/features">Features</a></li>
-          <li><a href="/docs">Docs</a></li>
           <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/status">Status</a></li>
         </ul>
       </div>
       <div class="footer-col">
         <h4>Resources</h4>
         <ul>
-          <li><a href="/status">Status</a></li>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/support">Support</a></li>
           <li><a href="/privacy">Privacy</a></li>
           <li><a href="/terms">Terms</a></li>
         </ul>
       </div>
       <div class="footer-col">
-        <h4>Community</h4>
+        <h4>Project</h4>
         <ul>
-          <li><a href="/dashboard">Dashboard</a></li>
           <li><a href="https://github.com/resheeruu/AshenwakeAI">GitHub</a></li>
+          <li><a href="#security">Security</a></li>
+          <li><a href="/docs#api">API</a></li>
         </ul>
       </div>
     </div>
     <div class="footer-bottom">
       <p>&copy; 2026 AshenAI. All rights reserved.</p>
+      <div class="fb-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/support">Support</a>
+      </div>
     </div>
   </div>
 </footer>
 
 <script src="js/escape.js"></script>
+<script src="js/reveal.js"></script>
 <script src="js/base.js"></script>
+<script src="js/landing.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

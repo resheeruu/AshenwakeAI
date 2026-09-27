@@ -28,6 +28,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src/web/public ./dist/web/public
+COPY --from=builder /app/assets ./assets
 
 # Create writable data volume only for application data
 RUN mkdir -p data backups && chown -R ashenu:ashenu /app/data /app/backups

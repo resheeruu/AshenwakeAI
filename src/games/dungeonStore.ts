@@ -1,15 +1,13 @@
 import fs from "fs";
 import path from "path";
 import { DungeonState } from "./dungeons";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const FILE = path.join(DATA_DIR, "dungeons.json");
+import { getDataDir, getDataPath, getDungeonPath } from "../config/data-dir";
 
 async function ensureStore(): Promise<void> {
-  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+  await fs.promises.mkdir(getDataDir(), { recursive: true });
 
-  if (!fs.existsSync(FILE)) {
-    await fs.promises.writeFile(FILE, "{}", "utf8");
+  if (!fs.existsSync(getDungeonPath())) {
+    await fs.promises.writeFile(getDungeonPath(), "{}", "utf8");
   }
 }
 
@@ -17,7 +15,7 @@ export async function loadDungeons(): Promise<Record<string, DungeonState>> {
   await ensureStore();
 
   try {
-    const raw = await fs.promises.readFile(FILE, "utf8");
+    const raw = await fs.promises.readFile(getDungeonPath(), "utf8");
     const parsed = JSON.parse(raw);
 
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -31,7 +29,7 @@ export async function saveDungeons(
 ): Promise<void> {
   await ensureStore();
 
-  const temporary = `${FILE}.tmp`;
+  const temporary = `${getDungeonPath()}.tmp`;
 
   await fs.promises.writeFile(
     temporary,
@@ -39,7 +37,7 @@ export async function saveDungeons(
     "utf8",
   );
 
-  await fs.promises.rename(temporary, FILE);
+  await fs.promises.rename(temporary, getDungeonPath());
 }
 
 export async function getDungeonState(

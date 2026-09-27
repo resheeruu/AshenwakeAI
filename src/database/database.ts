@@ -1,10 +1,7 @@
 import Database from "better-sqlite3";
-import path from "path";
 import fs from "fs";
+import { getDataDir, getDatabasePath, ensureDataDir } from "../config/data-dir";
 import { logger } from "../logger";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "ashenai.db");
 
 let db: Database.Database | null = null;
 
@@ -15,12 +12,12 @@ let db: Database.Database | null = null;
 export function getDatabase(): Database.Database {
   if (db) return db;
 
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureDataDir();
 
   // Build the handle locally and only publish it after migrations succeed —
   // a migration failure must not leave a half-initialized singleton that
   // every later call would accept without ever retrying migrations.
-  const instance = new Database(DB_PATH);
+  const instance = new Database(getDatabasePath());
 
   // WAL mode for better concurrent read performance
   instance.pragma("journal_mode = WAL");
@@ -50,7 +47,7 @@ export function getDatabase(): Database.Database {
   }
 
   db = instance;
-  logger.info("📦 SQLite database initialized: " + DB_PATH);
+  logger.info("📦 SQLite database initialized: " + getDatabasePath());
 
   return db;
 }
@@ -565,6 +562,6 @@ export function closeDatabase(): void {
 export function getDatabaseStats(): { tables: number; size: number } {
   const database = getDatabase();
   const tables = database.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'").get() as any;
-  const size = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+  const size = fs.existsSync(getDatabasePath()) ? fs.statSync(getDatabasePath()).size : 0;
   return { tables: tables.count, size };
 }

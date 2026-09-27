@@ -5,26 +5,132 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Features — AshenAI</title>
 <meta name="description" content="AI chat, moderation, automation, personality, social features, and multi-provider AI in one Discord-native platform.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
-<header class="site-header"><div class="container"><nav class="main-nav"><a href="/" class="logo">AshenAI</a><ul class="nav-links"><li><a href="/" class="nav-link">Home</a></li><li><a href="/docs" class="nav-link">Docs</a></li><li><a href="/status" class="nav-link">Status</a></li></ul><a href="/dashboard" class="btn btn-secondary cta-button">Open Dashboard</a></nav></div></header>
-<main class="features-hero"><div class="container"><div class="features-hero-content"><h1>Features</h1><p>AI chat, moderation, automation, personality, social features, and multi-provider AI in one Discord-native platform.</p></div></div></main>
-<section id="features" class="features-section"><div class="container"><div class="section-header"><h2>Features</h2><p>Every feature is designed for real Discord server management.</p></div>
-<div class="features-grid">
-<div class="feature-card"><h3>AI Chat</h3><p>Conversational AI with multi-provider routing, automatic fallback, and intelligent model selection.</p></div>
-<div class="feature-card"><h3>Multi-Provider AI</h3><p>Access Google Gemini, Groq, OpenRouter, Mistral, Anthropic, OpenAI, and 20+ more providers.</p></div>
-<div class="feature-card"><h3>Custom Personality</h3><p>Configure AI tone, style, and behavior per server with validation and audit logging.</p></div>
-<div class="feature-card"><h3>AI Moderation</h3><p>Spam detection, link filtering, anti-invite, anti-scam, and configurable moderation actions.</p></div>
-<div class="feature-card"><h3>Automation</h3><p>Welcome messages, role assignment, event triggers with safe predefined actions only.</p></div>
-<div class="feature-card"><h3>Social/Debate</h3><p>Rivalry sessions, decision systems, and configurable social behavior with cooldowns.</p></div>
-<div class="feature-card"><h3>Anime Actions</h3><p>Custom emoji provisioning and anime-style interactions for community engagement.</p></div>
-<div class="feature-card"><h3>Analytics</h3><p>Real AI request tracking, provider health metrics, and usage statistics.</p></div>
-<div class="feature-card"><h3>Provider Management</h3><p>Full lifecycle management with the provider wizard, credential rotation, and model discovery.</p></div>
-<div class="feature-card"><h3>Security</h3><p>SSRF protection, CSRF, session security, MFA, OAuth, and credential-first classification.</p></div>
-</div></div></section>
-<footer class="site-footer"><div class="container"><div class="footer-bottom"><p>&copy; 2026 AshenAI. All rights reserved.</p></div></div></footer>
+
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <nav class="main-nav" aria-label="Primary">
+      <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/features">Features</a></li>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/status">Status</a></li>
+        <li><a href="/support">Support</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<div class="mobile-nav" id="mobileNav">
+  <a href="/">Home</a>
+  <a href="/features">Features</a>
+  <a href="/docs">Docs</a>
+  <a href="/status">Status</a>
+  <a href="/support">Support</a>
+  <a href="/dashboard" class="btn btn-primary btn-block">Open Dashboard</a>
+</div>
+
+<main>
+
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow">Product</p>
+      <h1 class="display">Everything the control plane ships.</h1>
+      <p class="lede">
+        AI chat, moderation, automation, personality, social features, and multi-provider
+        routing — one Discord-native platform, one authenticated dashboard.
+      </p>
+    </div>
+  </section>
+
+  <section class="container">
+    <div class="grid grid-3 page-section">
+      <div class="card"><h3>AI Chat</h3><p class="card-body">Conversational AI with multi-provider routing, automatic fallback, and intelligent model selection.</p></div>
+      <div class="card"><h3>Multi-Provider AI</h3><p class="card-body">Thirty catalogued providers — Gemini, Groq, OpenRouter, Mistral, Anthropic, OpenAI, and more — behind one interface.</p></div>
+      <div class="card"><h3>Custom Personality</h3><p class="card-body">Configure AI tone, style, and behaviour per server with validation and audit logging.</p></div>
+      <div class="card"><h3>AI Moderation</h3><p class="card-body">Spam detection, link filtering, anti-invite, anti-scam, and configurable moderation actions.</p></div>
+      <div class="card"><h3>Automation</h3><p class="card-body">Welcome messages, role assignment, and event triggers with safe predefined actions only.</p></div>
+      <div class="card"><h3>Social &amp; Debate</h3><p class="card-body">Rivalry sessions, decision systems, and configurable social behaviour with cooldowns.</p></div>
+      <div class="card"><h3>Anime Actions</h3><p class="card-body">Custom emoji provisioning and anime-style interactions for community engagement.</p></div>
+      <div class="card"><h3>Analytics</h3><p class="card-body">Real AI request tracking, provider health metrics, and usage statistics.</p></div>
+      <div class="card"><h3>Provider Management</h3><p class="card-body">Full lifecycle management with the provider wizard, credential rotation, and model discovery.</p></div>
+      <div class="card"><h3>Security</h3><p class="card-body">SSRF protection, CSRF, session security, MFA, OAuth, and credential-first classification.</p></div>
+      <div class="card"><h3>Games &amp; Economy</h3><p class="card-body">Levels, economy, combat, pets, dungeons, and casino games with compiled-in tuning.</p></div>
+      <div class="card"><h3>Support Desk</h3><p class="card-body">Ticket cases, reports, and appeals with status transitions and staff assignment.</p></div>
+    </div>
+
+    <div class="prose">
+      <p class="updated">Honest scope</p>
+      <p>
+        Automation rules are stored and evaluated by the bot — the dashboard never executes
+        them, so a compromised session cannot start a shadow job. Support cases are created in
+        Discord and only their status is edited from the web. Everything you change in the
+        dashboard is written through a role-gated, CSRF-protected API and recorded in an audit
+        trail.
+      </p>
+      <p><a href="/docs">Read the documentation</a> · <a href="/status">Check system status</a> · <a href="/support">Get support</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+        <p>Intelligent infrastructure for Discord communities.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/status">Status</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/support">Support</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+          <li><a href="/terms">Terms</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/resheeruu/AshenwakeAI">GitHub</a></li>
+          <li><a href="/docs#api">API</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 AshenAI. All rights reserved.</p>
+      <div class="fb-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/support">Support</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/escape.js"></script>
+<script src="js/base.js"></script>
 </body>
 </html>

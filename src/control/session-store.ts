@@ -3,9 +3,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 import { encrypt, decrypt, isEncryptionAvailable } from "../security/encrypt";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+import { getDataDir, getDataPath } from "../config/data-dir";
 
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 const SESSION_ROTATION_MS = 60 * 60 * 1000;
@@ -29,16 +27,17 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let encryptionWarningLogged = false;
 
 function ensureDataDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
 }
 
 function loadSessions(): void {
   try {
-    if (!fs.existsSync(SESSIONS_FILE)) {
+    const sessionsPath = getDataPath("sessions.json");
+    if (!fs.existsSync(sessionsPath)) {
       sessionStore = new Map();
       return;
     }
-    const raw = fs.readFileSync(SESSIONS_FILE, "utf8");
+    const raw = fs.readFileSync(sessionsPath, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       sessionStore = new Map();
@@ -76,9 +75,10 @@ function saveSessions(): void {
     const encryptedArr = arr.map((s) => ({
       data: encrypt(JSON.stringify(s)),
     }));
-    const tmpPath = SESSIONS_FILE + ".tmp";
+    const sessionsPath = getDataPath("sessions.json");
+    const tmpPath = sessionsPath + ".tmp";
     fs.writeFileSync(tmpPath, JSON.stringify(encryptedArr, null, 2), "utf8");
-    fs.renameSync(tmpPath, SESSIONS_FILE);
+    fs.renameSync(tmpPath, sessionsPath);
   } catch (error) {
     logger.warn(
       `⚠️ Could not save sessions: ${error instanceof Error ? error.message : String(error)}`,

@@ -830,7 +830,7 @@ function testLegacyPersistedFileEndToEnd(): void {
         cwd: tmp,
         encoding: "utf8",
         timeout: 60_000,
-        env: { ...process.env, NODE_OPTIONS: "" },
+        env: { ...process.env, NODE_OPTIONS: "", ASHENAI_DATA_DIR: undefined },
       });
     } catch (error) {
       const err = error as { stdout?: unknown; stderr?: unknown; message?: string };

@@ -41,6 +41,7 @@ export interface HardenedFetchRequest {
   maxRedirects?: number;
   maxResponseBytes?: number;
   policy?: OutboundPolicy;
+  requireHttps?: boolean;
 }
 
 export interface HardenedFetchResult {
@@ -298,7 +299,7 @@ export async function hardenedFetch(
       throw new Error(`Blocked: too many redirects for ${startUrl}`);
     }
 
-    const target = validateRedirectTarget(location, currentUrl);
+    const target = validateRedirectTarget(location, currentUrl, { requireHttps: init.requireHttps });
     if (!target.valid || !target.url) {
       logger.warn(`🌐 SSRF blocked: redirect target rejected (${target.reason})`);
       throw new Error(`Blocked: redirect target rejected (${target.reason})`);

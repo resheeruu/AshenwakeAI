@@ -7,6 +7,7 @@
  * ================================================================ */
 
 import type { Message, Client } from "discord.js";
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { UserRateLimiter } from "../../security/rate-limit";
 import { logger } from "../../logger";
 import { loadGuildConfig } from "../../core/guild-config";
@@ -19,6 +20,8 @@ import { playSlots } from "../../games/games/slots";
 import { playBattle } from "../../games/games/battle";
 import { playLottery } from "../../games/games/lottery";
 import { startMines, getMinesGame, cashOutMines, cancelMines, revealMinesTile, MINES_MIN_BET, MINES_MAX_BET, MINES_GRID_SIZE, MINES_COUNT } from "../../games/games/mines";
+import { startBlackjack, getBlackjackGame, hitBlackjack, standBlackjack, handText, calculateTotal } from "../../games/games/blackjack";
+import { startQuickDraw, getQuickDraw } from "../../games/games/quickdraw";
 import type { GamePlayer } from "../../games/types";
 
 const PREFIX = "ash ";
@@ -91,6 +94,24 @@ function buildActionsHelp(): string {
 }
 
 /* ================================================================
+ * GAME HELP — derived from the real GAME_NAMES registry
+ * ================================================================ */
+
+function buildGamesHelp(): string {
+  const lines: string[] = ["**GAMES**", ""];
+  for (const game of GAME_NAMES) {
+    lines.push(`\`ash ${game}\` — ${game === "mine" ? "play Ashen Mines" : game === "battle" ? "fight a foe" : game === "lottery" ? "buy a lottery ticket" : game === "hunt" ? "go hunting" : "spin the reels"}`);
+  }
+  lines.push("");
+  lines.push("**Usage:**");
+  lines.push("  `ash games` — list reachable games");
+  lines.push("  `ash games <game>` — show usage for a game");
+  lines.push("  `ash <game> [args]` — start a game");
+  lines.push("");
+  return lines.join("\n");
+}
+
+/* ================================================================
  * SAFE REPLIES
  *
  * Every reply echoes user-controlled text (action names, display
@@ -101,12 +122,35 @@ function buildActionsHelp(): string {
 
 export async function safeReply(
   message: Message,
-  content: string | { content?: string; files?: unknown },
-): Promise<void> {
+  content: string | { content?: string; files?: unknown; components?: unknown },
+  surface = "prefix",
+  command = "action",
+): Promise<boolean> {
   const payload = typeof content === "string" ? { content } : { ...content };
-  await message
-    .reply({ ...payload, allowedMentions: { parse: [] } } as never)
-    .catch(() => {});
+  const guildId = message.guildId ?? null;
+  const meta = `surface=${surface} command=${command} guildId=${guildId ?? "dm"} author=${message.author?.id ?? "unknown"}`;
+  logger.debug(`DISCORD_SEND_STARTED ${meta} sendType=reply`);
+  try {
+    await message.reply({ ...payload, allowedMentions: { parse: [] } } as never);
+    logger.debug(`DISCORD_SEND_SUCCESS ${meta} sendType=reply`);
+    return true;
+  } catch (err) {
+    logger.warn(
+      `DISCORD_SEND_FAILURE ${meta} sendType=reply reason=${err instanceof Error ? err.message : "unknown"}`,
+    );
+    try {
+      const textContent = typeof content === "string" ? content : (content.content ?? "");
+      const fallback = textContent.length > 2000 ? textContent.slice(0, 2000) + "…" : textContent;
+      await (message.channel as any).send(fallback || "⚠️ Your action could not be delivered.");
+      logger.debug(`DISCORD_SEND_SUCCESS ${meta} sendType=fallback`);
+      return true;
+    } catch (fallbackErr) {
+      logger.warn(
+        `DISCORD_SEND_FAILURE ${meta} sendType=fallback reason=${fallbackErr instanceof Error ? fallbackErr.message : "unknown"}`,
+      );
+      return false;
+    }
+  }
 }
 
 /* ================================================================
@@ -190,7 +234,7 @@ export function isAnimeActionPrefix(content: string): boolean {
   return trimmed === "ash" || trimmed.startsWith("ash ");
 }
 
-const GAME_NAMES = ["mine", "battle", "lottery", "hunt", "slots"] as const;
+const GAME_NAMES = ["mine", "battle", "lottery", "hunt", "slots", "blackjack", "quickdraw"] as const;
 export type GameCommandName = (typeof GAME_NAMES)[number];
 
 const GAME_HELP =
@@ -208,7 +252,7 @@ function isGameCommand(content: string): boolean {
   const afterPrefix = trimmed.slice(4).trim();
   if (!afterPrefix) return false;
   const cmd = afterPrefix.split(/\s+/)[0];
-  return GAME_NAMES.includes(cmd as GameCommandName);
+  return GAME_NAMES.includes(cmd as GameCommandName) || cmd === "games" || cmd === "help";
 }
 
 async function handleGameCommand(
@@ -220,6 +264,109 @@ async function handleGameCommand(
   const botId = client.user?.id ?? "";
 
   const player = await getPlayer(authorId, message.author.username);
+
+  const rateLimit = actionRateLimiter.check(message.author.id);
+  if (!rateLimit.allowed) {
+    const retrySeconds = Math.ceil((rateLimit.retryAfterMs ?? 1000) / 1000);
+    await safeReply(message, `Slow down! Try again in ${retrySeconds}s.`);
+    return true;
+  }
+
+  if (message.guildId) {
+    try {
+      const cfg = loadGuildConfig(message.guildId);
+      const flag = cfg?.social?.animeActions;
+      const enabled = flag === undefined || flag === null ? true : flag === true;
+      if (!enabled) {
+        await safeReply(
+          message,
+          "🚫 Games are disabled in this server. A server admin can enable them in `/settings panel` (AI Social → Anime Actions).",
+        );
+        return true;
+      }
+    } catch {
+      await safeReply(message, "🚫 Games are currently unavailable in this server.");
+      return true;
+    }
+  }
+
+  if ((game as string) === "games" || (game as string) === "help") {
+    if (rest.length > 0) {
+      const requested = rest[0].toLowerCase();
+      if (GAME_NAMES.includes(requested as GameCommandName)) {
+        await safeReply(message, `\`ash ${requested}\` — see \`ash games\` for full list.`);
+      } else {
+        await safeReply(message, `Unknown game: \`${requested}\`. Type \`ash games\` for the list.`);
+      }
+    } else {
+      await safeReply(message, buildGamesHelp());
+    }
+    return true;
+  }
+
+  /* ================================================================
+   * INTERACTIVE BUTTON BUILDERS
+   * ================================================================ */
+
+  function buildMinesButtonsLocal(revealed: Set<number>): ActionRowBuilder<ButtonBuilder>[] {
+    const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+    for (let row = 0; row < 4; row++) {
+      const buttons = new ActionRowBuilder<ButtonBuilder>();
+      for (let col = 0; col < 4; col++) {
+        const tile = row * 4 + col;
+        const isRevealed = revealed.has(tile);
+        buttons.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`ashen_mines:reveal:${tile}`)
+            .setLabel(isRevealed ? "✅" : `${tile + 1}`)
+            .setStyle(isRevealed ? ButtonStyle.Secondary : ButtonStyle.Primary)
+            .setDisabled(isRevealed),
+        );
+      }
+      rows.push(buttons);
+    }
+    rows.push(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ashen_mines:cashout")
+          .setLabel("Cash Out")
+          .setEmoji("💰")
+          .setStyle(ButtonStyle.Success),
+      ),
+    );
+    return rows;
+  }
+
+  function buildBlackjackButtonsLocal(): ActionRowBuilder<ButtonBuilder>[] {
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("ashen_blackjack_hit")
+        .setLabel("Hit")
+        .setEmoji("🟢")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId("ashen_blackjack_stand")
+        .setLabel("Stand")
+        .setEmoji("🔴")
+        .setStyle(ButtonStyle.Danger),
+    );
+    return [row];
+  }
+
+  function buildQuickDrawButtonLocal(): ActionRowBuilder<ButtonBuilder>[] {
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("ashen_quickdraw:draw")
+        .setLabel("⚡ Draw!")
+        .setEmoji("⚡")
+        .setStyle(ButtonStyle.Primary),
+    );
+    return [row];
+  }
+
+  /* ================================================================
+   * GAME COMMAND DISPATCH
+   * ================================================================ */
 
   switch (game) {
     case "mine": {
@@ -302,10 +449,10 @@ async function handleGameCommand(
           return true;
         }
         const started = await startMines(player, bet);
-        await safeReply(
-          message,
-          `💣 **Ashen Mines** started!\n\nBet: **${bet} coins**\nGrid: ${MINES_GRID_SIZE} tiles, ${MINES_COUNT} mines\nType \`ash mine reveal <tile>\` to reveal, \`ash mine cashout\` to cash out.\n\nFirst 3 tiles revealed automatically are safe!`,
-        );
+        await safeReply(message, {
+          content: `💣 **Ashen Mines** started!\n\nBet: **${bet} coins**\nGrid: ${MINES_GRID_SIZE} tiles, ${MINES_COUNT} mines\nClick a tile to reveal, or 💰 Cash Out.\n\nFirst 3 tiles revealed automatically are safe!`,
+          components: buildMinesButtonsLocal(started.revealed),
+        });
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg === "NOT_ENOUGH_COINS") {
@@ -391,6 +538,107 @@ async function handleGameCommand(
         } else {
           await safeReply(message, `🎰 ${msg}`);
         }
+      }
+      return true;
+    }
+
+    case "blackjack": {
+      const subcmd = rest[0];
+      if (subcmd === "hit" || subcmd === "stand") {
+        const existing = getBlackjackGame(player.userId);
+        if (!existing) {
+          await safeReply(message, "🃏 You don't have an active Blackjack game. Type `ash blackjack <bet>` to start.");
+          return true;
+        }
+        if (existing.playerId !== player.userId) {
+          await safeReply(message, "🃏 This Blackjack game belongs to another player.");
+          return true;
+        }
+        try {
+          if (subcmd === "hit") {
+            hitBlackjack(existing);
+            const playerTotal = calculateTotal(existing.playerCards);
+            if (playerTotal > 21) {
+              const result = await standBlackjack(player, existing);
+              const embed = new EmbedBuilder()
+                .setTitle("🃏 Ashen Blackjack")
+                .setDescription(
+                  `**Your Cards**\n${handText(existing.playerCards)}\n**Total:** ${result.playerTotal}\n\n**Dealer Cards**\n${handText(existing.dealerCards)}\n**Total:** ${result.dealerTotal}`,
+                )
+                .addFields(
+                  { name: "🏆 Result", value: result.result === "blackjack" ? "🎉 **BLACKJACK!**" : result.result },
+                  { name: "💰 Payout", value: `+${result.payout} coins`, inline: true },
+                  { name: "✨ XP", value: `+${result.xp}`, inline: true },
+                  { name: "🪙 Balance", value: `${player.coins}`, inline: true },
+                );
+              await safeReply(message, `🃏 ${result.result === "blackjack" ? "🎉 BLACKJACK!" : "💀 Bust!"}`);
+              return true;
+            }
+            await safeReply(message, `🃏 Hit! Total: ${playerTotal}. ${handText(existing.playerCards)}`);
+          } else {
+            const result = await standBlackjack(player, existing);
+            const embed = new EmbedBuilder()
+              .setTitle("🃏 Ashen Blackjack")
+              .setDescription(
+                `**Your Cards**\n${handText(existing.playerCards)}\n**Total:** ${result.playerTotal}\n\n**Dealer Cards**\n${handText(existing.dealerCards)}\n**Total:** ${result.dealerTotal}`,
+              )
+              .addFields(
+                { name: "🏆 Result", value: result.result === "blackjack" ? "🎉 **BLACKJACK!**" : result.result },
+                { name: "💰 Payout", value: `+${result.payout} coins`, inline: true },
+                { name: "✨ XP", value: `+${result.xp}`, inline: true },
+                { name: "🪙 Balance", value: `${player.coins}`, inline: true },
+              );
+            await safeReply(message, `🃏 **Result:** ${result.result}. Payout: ${result.payout} coins.`);
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          await safeReply(message, `🃏 ${msg}`);
+        }
+        return true;
+      }
+
+      const bet = rest[0] ? Number(rest[0]) : 20;
+      try {
+        if (!Number.isInteger(bet) || bet < 10) {
+          await safeReply(message, "🃏 Blackjack bet must be at least 10 coins.");
+          return true;
+        }
+        const { game, immediateResult } = await startBlackjack(player, bet);
+        if (immediateResult) {
+          await safeReply(message, `🃏 Blackjack result: ${immediateResult.result}. ${immediateResult.result === "blackjack" ? "🎉 BLACKJACK!" : ""}`);
+          return true;
+        }
+        await safeReply(message, {
+          content: `🃏 **Ashen Blackjack** started!\n\nBet: **${bet} coins**\nYour cards: ${handText(game.playerCards)}\nTotal: ${calculateTotal(game.playerCards)}\nDealer: ${handText([game.dealerCards[0]])} ❓\n\nClick the buttons below to play.`,
+          components: buildBlackjackButtonsLocal(),
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg === "NOT_ENOUGH_COINS") {
+          await safeReply(message, "🃏 Not enough coins to play Blackjack (cost: 10+ coins).");
+        } else if (msg === "BLACKJACK_ALREADY_ACTIVE") {
+          await safeReply(message, "🃏 You already have an active Blackjack game.");
+        } else {
+          await safeReply(message, `🃏 ${msg}`);
+        }
+      }
+      return true;
+    }
+
+    case "quickdraw": {
+      try {
+        if (getQuickDraw(player.userId)) {
+          await safeReply(message, "⚡ You already have an active QuickDraw game.");
+          return true;
+        }
+        const game = startQuickDraw(player.userId);
+        await safeReply(message, {
+          content: `⚡ **QuickDraw** started!\n\nThe draw signal fires in ${Math.round((game.drawAt - game.startedAt) / 1000)}s.\nClick ⚡ to draw before it's too late!`,
+          components: buildQuickDrawButtonLocal(),
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        await safeReply(message, `⚡ ${msg}`);
       }
       return true;
     }
@@ -580,19 +828,20 @@ export async function handleAnimeAction(
     return true;
   }
 
-  const runner = deps.runAction ?? executeAction;
-  const result = await runner(action.name, message, targetId, botId);
-  if (!result) {
-    await safeReply(message, `Unknown action: \`${actionName}\`.`);
-    return true;
-  }
-
+  let result: ActionResult | null = null;
   try {
+    const runner = deps.runAction ?? executeAction;
+    result = await runner(action.name, message, targetId, botId);
+    if (!result) {
+      await safeReply(message, `Unknown action: \`${actionName}\`.`);
+      return true;
+    }
+
     const response = await buildDiscordResponse(result);
     await safeReply(message, response);
   } catch (error) {
     logger.warn(`Anime action failed: ${error instanceof Error ? error.message : String(error)}`);
-    await safeReply(message, result.text);
+    await safeReply(message, result?.text ?? "An error occurred while processing your action. Please try again.");
   }
 
   return true;

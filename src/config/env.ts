@@ -350,7 +350,7 @@ export function validateSecurityConfig(): void {
   try {
     const fs = require("fs");
     const path = require("path");
-    const accountsFile = path.join(process.cwd(), "data", "accounts.json");
+    const accountsFile = require("../config/data-dir").getAccountsPath();
     if (fs.existsSync(accountsFile)) {
       const raw = fs.readFileSync(accountsFile, "utf8");
       const parsed = JSON.parse(raw);

@@ -3,211 +3,515 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AshenAI - Dashboard</title>
+<title>AshenAI — Control Center</title>
+<meta name="description" content="AshenAI control center: AI routing, moderation, automation, memory, analytics and security for your Discord servers.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/dashboard.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
-<body>
+<body class="auth-body">
+
 <div id="toastContainer"></div>
 
-<div id="loginScreen" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px">
-  <div class="login-box">
-    <h1>AshenAI</h1>
-    <p>Control Center</p>
-    <div id="oauthButtons" style="display:none">
-      <button class="btn btn-outline" id="discordBtn" style="width:100%;margin-bottom:6px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:9px;font-size:12px" onclick="window.location.href='/auth/discord'">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+<noscript>
+  <div class="auth-screen open">
+    <div class="auth-card">
+      <div class="auth-brand"><div class="auth-mark">A</div><div><h1>AshenAI</h1><div class="auth-sub">Control Center</div></div></div>
+      <div class="info-note">JavaScript is required to run the AshenAI control center. Enable it, or read the <a href="/docs">documentation</a> instead.</div>
+    </div>
+  </div>
+</noscript>
+
+<!-- ==================== BOOT ==================== -->
+<div class="auth-screen open" id="bootScreen">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-mark" aria-hidden="true">A</div>
+      <div><h1>AshenAI</h1><div class="auth-sub">Control Center</div></div>
+    </div>
+    <div class="loading"><span class="spinner" aria-hidden="true"></span> Restoring your session…</div>
+  </div>
+</div>
+
+<!-- ==================== LOGIN ==================== -->
+<div class="auth-screen" id="loginScreen">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-mark" aria-hidden="true">A</div>
+      <div><h1>AshenAI</h1><div class="auth-sub">Sign in to the control center</div></div>
+    </div>
+
+    <div class="oauth-stack" id="oauthButtons" hidden>
+      <button class="oauth-btn" id="discordBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
         Sign in with Discord
       </button>
-      <button class="btn btn-outline" id="googleBtn" style="width:100%;margin-bottom:12px;display:none;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);padding:9px;font-size:12px" onclick="window.location.href='/auth/google'">
-        <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      <button class="oauth-btn" id="googleBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
         Sign in with Google
       </button>
     </div>
-    <div style="text-align:center;color:var(--dim);font-size:11px;margin-bottom:12px" id="loginDivider">or</div>
-    <form id="loginForm">
-      <input type="text" id="loginUser" class="input" placeholder="Username" autocomplete="username" required aria-label="Username">
-      <input type="password" id="loginPass" class="input" placeholder="Password" autocomplete="current-password" required aria-label="Password">
-      <button type="submit" id="loginBtn">Sign In</button>
-      <div class="login-error" id="loginError" role="alert"></div>
+
+    <div class="auth-divider" id="loginDivider">or</div>
+
+    <form class="auth-form" id="loginForm" novalidate>
+      <div class="field">
+        <label class="label" for="loginUser">Username</label>
+        <input class="input" type="text" id="loginUser" name="username" autocomplete="username" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label class="label" for="loginPass">Password</label>
+        <input class="input" type="password" id="loginPass" name="password" autocomplete="current-password" required>
+      </div>
+      <button class="auth-submit" type="submit" id="loginBtn">Sign in</button>
+      <div class="auth-error" id="loginError" role="alert"></div>
     </form>
-    <div class="login-hint">Local accounts use an AshenAI username and password. OAuth accounts can be linked later.</div>
-  </div>
-</div>
 
-<div id="mfaChallengeScreen" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px">
-  <div class="login-box">
-    <h1>MFA Verification</h1>
-    <p id="mfaChallengeSubtitle">Enter the code from your authenticator app</p>
-    <input type="text" id="mfaCode" class="input" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:18px;letter-spacing:4px" aria-label="MFA code">
-    <div id="mfaRecoverySection" style="margin-top:12px;display:none">
-      <div style="text-align:center;color:var(--dim);font-size:11px;margin-bottom:6px">or use a recovery code</div>
-      <input type="text" id="mfaRecoveryCode" class="input" placeholder="Recovery code" style="text-transform:uppercase" aria-label="Recovery code">
+    <div class="auth-hint">
+      Local accounts use an AshenAI username and password. Discord and Google accounts can be
+      linked after you sign in.
     </div>
-    <button class="btn btn-primary" style="width:100%" id="mfaVerifyBtn" onclick="verifyMfaChallenge()">Verify</button>
-    <div class="login-error" id="mfaError" role="alert"></div>
   </div>
 </div>
 
-<div id="app" style="display:none;min-height:100vh">
+<!-- ==================== MFA CHALLENGE ==================== -->
+<div class="auth-screen" id="mfaChallengeScreen">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-mark" aria-hidden="true">A</div>
+      <div><h1>Two-factor check</h1><div class="auth-sub" id="mfaChallengeSubtitle">Enter the code from your authenticator app</div></div>
+    </div>
+
+    <div class="auth-form">
+      <div class="field">
+        <label class="label" for="mfaCode">Authenticator code</label>
+        <input class="input mfa-code" type="text" id="mfaCode" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
+      </div>
+      <div class="mfa-recovery" id="mfaRecoverySection" hidden>
+        <span class="mfa-recovery-label">or use a recovery code</span>
+        <div class="field">
+          <label class="label" for="mfaRecoveryCode">Recovery code</label>
+          <input class="input" type="text" id="mfaRecoveryCode" autocomplete="one-time-code" spellcheck="false" placeholder="XXXX-XXXX">
+        </div>
+      </div>
+      <button class="auth-submit" type="button" id="mfaVerifyBtn">Verify</button>
+      <div class="auth-error" id="mfaError" role="alert"></div>
+      <div class="auth-extra"><a href="/login" id="mfaCancelLink">Back to sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== APPLICATION ==================== -->
+<div id="app">
+  <h1 class="sr-only">AshenAI control center</h1>
+
   <header class="topbar">
     <div class="topbar-brand">
-      <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle navigation">&#9776;</button>
-      <div class="topbar-logo">AW</div>
+      <button class="hamburger" id="sidebarToggle" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">☰</button>
+      <div class="topbar-logo" aria-hidden="true">A</div>
       <div>
         <div class="topbar-title">AshenAI</div>
         <div class="topbar-sub" id="topRoleLabel">Control Center</div>
       </div>
     </div>
     <div class="topbar-right">
-      <select id="serverSelector" class="select" style="font-size:11px;padding:4px 28px 4px 8px" aria-label="Select server">
-        <option value="">Select Server</option>
-      </select>
-      <span class="role-badge" id="topRoleBadge"></span>
-      <div class="topbar-status"><span class="dot"></span> <span id="topStatus">Online</span></div>
-      <button class="btn-logout" onclick="logout()">Sign Out</button>
+      <div class="server-select">
+        <label class="ss-label" for="serverSelector">Server</label>
+        <select id="serverSelector">
+          <option value="">Select server</option>
+        </select>
+      </div>
+      <span class="role-badge role-user hidden" id="topRoleBadge"></span>
+      <div class="topbar-status" id="topStatusPill"><span class="dot" aria-hidden="true"></span><span id="topStatus">Online</span></div>
+      <button class="btn-logout" id="logoutBtn" type="button">Sign out</button>
     </div>
   </header>
 
+  <div class="sidebar-scrim" id="sidebarScrim"></div>
+
   <div class="layout">
-    <nav class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="#overview" class="nav-link active" data-section="overview"><span class="nav-icon">&#9673;</span><span class="nav-label">Overview</span></a>
+    <nav class="sidebar" id="sidebar" aria-label="Dashboard sections">
 
-      <div class="nav-section">AI</div>
-      <a href="#ai-control" class="nav-link" data-section="ai-control"><span class="nav-icon">&#9889;</span><span class="nav-label">AI Control</span></a>
-      <a href="#providers" class="nav-link" data-section="providers"><span class="nav-icon">&#9889;</span><span class="nav-label">Providers</span></a>
-      <a href="#models" class="nav-link" data-section="models"><span class="nav-icon">&#128196;</span><span class="nav-label">Models</span></a>
-      <a href="#personality" class="nav-link" data-section="personality"><span class="nav-icon">&#127912;</span><span class="nav-label">Personality</span></a>
+      <div class="nav-section">Control</div>
+      <a href="#overview" class="nav-link active" data-section="overview"><span class="nav-icon" aria-hidden="true">◉</span><span class="nav-label">Overview</span></a>
+      <a href="#ai" class="nav-link" data-section="ai"><span class="nav-icon" aria-hidden="true">⚡</span><span class="nav-label">AI</span></a>
+      <a href="#moderation" class="nav-link" data-section="moderation"><span class="nav-icon" aria-hidden="true">⚑</span><span class="nav-label">Moderation</span></a>
+      <a href="#automation" class="nav-link" data-section="automation"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Automation</span></a>
 
-      <div class="nav-section">SERVER</div>
-      <a href="#server-settings" class="nav-link" data-section="server-settings"><span class="nav-icon">&#9878;</span><span class="nav-label">General</span></a>
-      <a href="#channels" class="nav-link" data-section="channels"><span class="nav-icon">#</span><span class="nav-label">Channels</span></a>
-      <a href="#roles" class="nav-link" data-section="roles"><span class="nav-icon">&#9733;</span><span class="nav-label">Roles</span></a>
-      <a href="#moderation" class="nav-link" data-section="moderation"><span class="nav-icon">&#128274;</span><span class="nav-label">Moderation</span></a>
+      <div class="nav-section">Engage</div>
+      <a href="#memory" class="nav-link" data-section="memory"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-label">Memory</span></a>
+      <a href="#games" class="nav-link" data-section="games"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-label">Games</span></a>
+      <a href="#media" class="nav-link" data-section="media"><span class="nav-icon" aria-hidden="true">♪</span><span class="nav-label">Media</span></a>
 
-      <div class="nav-section">COMMUNITY</div>
-      <a href="#social" class="nav-link" data-section="social"><span class="nav-icon">&#9883;</span><span class="nav-label">Social</span></a>
-      <a href="#automation" class="nav-link" data-section="automation"><span class="nav-icon">&#9881;</span><span class="nav-label">Automation</span></a>
-      <a href="#support" class="nav-link" data-section="support"><span class="nav-icon">&#128172;</span><span class="nav-label">Support</span></a>
+      <div class="nav-section">Insights</div>
+      <a href="#analytics" class="nav-link" data-section="analytics"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-label">Analytics</span><span class="nav-badge neutral">admin</span></a>
+      <a href="#logs" class="nav-link" data-section="logs"><span class="nav-icon" aria-hidden="true">≣</span><span class="nav-label">Logs</span><span class="nav-badge neutral">admin</span></a>
 
-      <div class="nav-section">INSIGHTS</div>
-      <a href="#analytics" class="nav-link" data-section="analytics"><span class="nav-icon">&#128200;</span><span class="nav-label">Analytics</span></a>
-      <a href="#audit" class="nav-link" data-section="audit"><span class="nav-icon">&#128220;</span><span class="nav-label">Audit Logs</span></a>
+      <div class="nav-section">System</div>
+      <a href="#integrations" class="nav-link" data-section="integrations"><span class="nav-icon" aria-hidden="true">⧉</span><span class="nav-label">Integrations</span></a>
+      <a href="#settings" class="nav-link" data-section="settings"><span class="nav-icon" aria-hidden="true">⚒</span><span class="nav-label">Settings</span></a>
+      <a href="#security" class="nav-link" data-section="security"><span class="nav-icon" aria-hidden="true">⛉</span><span class="nav-label">Security</span></a>
 
-      <div class="nav-section">SYSTEM</div>
-      <a href="#security" class="nav-link" data-section="security"><span class="nav-icon">&#128274;</span><span class="nav-label">Security</span></a>
-      <a href="#settings" class="nav-link" data-section="settings"><span class="nav-icon">&#9881;</span><span class="nav-label">Settings</span></a>
+      <div class="sidebar-foot">
+        <span class="sf-k">Session</span>
+        <span id="sidebarUser">Not signed in</span>
+      </div>
     </nav>
 
     <main class="main" id="mainContent">
-      <div class="section-page active" id="sec-overview">
-        <div class="section-title">&#9673; Overview</div>
-        <div class="card-grid" id="overviewStats"></div>
-        <div class="card"><h3>Provider Health</h3><div id="overviewProviders"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-        <div class="card"><h3>Recent Activity</h3><div id="overviewActivity"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
 
-      <div class="section-page" id="sec-ai-control">
-        <div class="section-title">&#9889; AI Control</div>
-        <div class="card"><h3>General</h3><div id="aiGeneral"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-        <div class="card"><h3>Routing</h3><div id="aiRouting"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-        <div class="card"><h3>Models</h3><div id="aiModels"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ OVERVIEW ============ -->
+      <section class="section-page active" id="sec-overview" aria-labelledby="ttl-overview">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-overview"><span class="st-icon" aria-hidden="true">◉</span>Overview</h2>
+            <p class="section-desc">Health of the platform and of the currently selected server.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="overview">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="card-grid" id="overviewStats"></div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Provider health</div><div class="card-sub">Upstream availability feeding the router</div></div></div>
+            <div id="overviewProviderHealth"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Recent activity</div><div class="card-sub">Latest entries from the system log</div></div></div>
+            <div id="overviewActivity"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-providers">
-        <div class="section-title">&#9889; Providers</div>
-        <div class="card"><h3>Provider Registry</h3><div id="providerList"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ AI ============ -->
+      <section class="section-page" id="sec-ai" aria-labelledby="ttl-ai">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-ai"><span class="st-icon" aria-hidden="true">⚡</span>AI</h2>
+            <p class="section-desc">Personality, routing policy, budgets and the discovered model list for this server.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="ai">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="aiPermNote" data-perm="owner" hidden></div>
+          <div class="grid-2-1">
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">Personality</div><div class="card-sub">Name, tone and custom instructions scoped to this guild</div></div></div>
+              <div id="aiPersonality"></div>
+            </div>
+            <div class="stack-cards">
+              <div class="card">
+                <div class="card-head"><div><div class="card-title">Routing policy</div><div class="card-sub">How requests pick a provider</div></div></div>
+                <div id="aiRouting"></div>
+              </div>
+              <div class="card">
+                <div class="card-head"><div><div class="card-title">Budgets &amp; limits</div><div class="card-sub">Enforced before dispatch</div></div></div>
+                <div id="aiLimits"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Discovered models</div><div class="card-sub">Returned by the connected providers</div></div></div>
+            <div id="aiModels"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-models">
-        <div class="section-title">&#128196; Models</div>
-        <div class="card"><h3>Discovered Models</h3><div id="modelList"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ MODERATION ============ -->
+      <section class="section-page" id="sec-moderation" aria-labelledby="ttl-moderation">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-moderation"><span class="st-icon" aria-hidden="true">⚑</span>Moderation</h2>
+            <p class="section-desc">Automod thresholds and the action policy your moderators agreed on.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="moderation">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="moderationPermNote" data-perm="owner" hidden></div>
+          <div class="grid-2-1">
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">Automod switches</div><div class="card-sub">Nothing runs that you have not enabled</div></div></div>
+              <div id="moderationAutomod"></div>
+            </div>
+            <div class="stack-cards">
+              <div class="card">
+                <div class="card-head"><div><div class="card-title">Thresholds</div><div class="card-sub">Explicit numbers, not heuristics</div></div></div>
+                <div id="moderationThresholds"></div>
+              </div>
+              <div class="card">
+                <div class="card-head"><div><div class="card-title">Action policy</div><div class="card-sub">Warnings and timeouts</div></div></div>
+                <div id="moderationPolicy"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-personality">
-        <div class="section-title">&#127912; Personality</div>
-        <div class="card"><h3>Personality Editor</h3><div id="personalityEditor"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ AUTOMATION ============ -->
+      <section class="section-page" id="sec-automation" aria-labelledby="ttl-automation">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-automation"><span class="st-icon" aria-hidden="true">⚙</span>Automation</h2>
+            <p class="section-desc">Rules stored for this server. Create, edit and delete are owner-only writes.</p>
+          </div>
+          <div class="section-actions">
+            <button class="btn btn-outline btn-sm" type="button" data-refresh="automation">Refresh</button>
+            <button class="btn btn-primary btn-sm" type="button" id="automationCreateBtn">New rule</button>
+          </div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="automationPermNote" data-perm="owner" hidden></div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Rule store</div><div class="card-sub">Bounded to 50 conditions and 50 actions per rule</div></div></div>
+            <div id="automationRules"></div>
+          </div>
+          <div class="info-note">AshenAI persists rules and exposes them to Discord. It does not run them in the background — there is no hidden executor.</div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-server-settings">
-        <div class="section-title">&#9878; Server Settings</div>
-        <div class="card"><h3>General Configuration</h3><div id="serverConfig"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ MEMORY ============ -->
+      <section class="section-page" id="sec-memory" aria-labelledby="ttl-memory">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-memory"><span class="st-icon" aria-hidden="true">◍</span>Memory</h2>
+            <p class="section-desc">Conversation recall for this guild and the platform-wide memory pool.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="memory">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="memoryPermNote" data-perm="owner" hidden></div>
+          <div class="card-grid" id="memoryStats"></div>
+          <div class="grid-2-1">
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">Recall settings</div><div class="card-sub">Scoped to this guild only</div></div></div>
+              <div id="memoryConfig"></div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">How it behaves</div></div></div>
+              <div class="field-line"><div class="fl-text"><div class="fl-title">Isolated per server</div><div class="fl-desc">Context never bleeds between guilds.</div></div></div>
+              <div class="field-line"><div class="fl-text"><div class="fl-title">Window is a number</div><div class="fl-desc">Turns retained are exactly memory.maxMessages.</div></div></div>
+              <div class="field-line"><div class="fl-text"><div class="fl-title">Off means off</div><div class="fl-desc">Disabling memory starts every conversation cold.</div></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-channels">
-        <div class="section-title"># Channels</div>
-        <div class="card"><h3>Channel Configuration</h3><div id="channelConfig"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ GAMES ============ -->
+      <section class="section-page" id="sec-games" aria-labelledby="ttl-games">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-games"><span class="st-icon" aria-hidden="true">◇</span>Games</h2>
+            <p class="section-desc">The five prefix games and the economy settings that govern them.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="games">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="grid-3-cards">
+            <div class="card"><div class="card-title">Mines</div><div class="card-sub">Grid sweep with a cash-out decision per tile</div><span class="code-inline">ash mine</span></div>
+            <div class="card"><div class="card-title">Battle</div><div class="card-sub">Turn-based duel with crit, dodge and defend</div><span class="code-inline">ash battle</span></div>
+            <div class="card"><div class="card-title">Lottery</div><div class="card-sub">Ticket draw with tiered prize payouts</div><span class="code-inline">ash lottery</span></div>
+            <div class="card"><div class="card-title">Hunt</div><div class="card-sub">Rare encounters, loot drops and death penalties</div><span class="code-inline">ash hunt</span></div>
+            <div class="card"><div class="card-title">Slots</div><div class="card-sub">Wager, spin and settle against the economy</div><span class="code-inline">ash slots</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Economy policy</div><div class="card-sub">Read from the shared game configuration</div></div></div>
+            <div id="gamesConfig"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-roles">
-        <div class="section-title">&#9733; Roles</div>
-        <div class="card"><h3>Role Management</h3><div id="roleConfig"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ MEDIA ============ -->
+      <section class="section-page" id="sec-media" aria-labelledby="ttl-media">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-media"><span class="st-icon" aria-hidden="true">♪</span>Media</h2>
+            <p class="section-desc">Anime actions and the social switches that gate them.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="media">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="mediaPermNote" data-perm="owner" hidden></div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Social switches</div><div class="card-sub">Persisted under the guild social config</div></div></div>
+            <div id="mediaConfig"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Anime actions</div><div class="card-sub">32 actions, each with its own cooldown</div></div></div>
+            <div id="mediaActions"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-moderation">
-        <div class="section-title">&#128274; Moderation</div>
-        <div class="card"><h3>Moderation Controls</h3><div id="moderationControls"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ ANALYTICS ============ -->
+      <section class="section-page" id="sec-analytics" aria-labelledby="ttl-analytics">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-analytics"><span class="st-icon" aria-hidden="true">▥</span>Analytics</h2>
+            <p class="section-desc">Request counters maintained by the usage manager.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="analytics">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="analyticsPermNote" data-perm="staff" hidden></div>
+          <div class="card-grid" id="analyticsStats"></div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Breakdown</div><div class="card-sub">Guild-level and system-level counters</div></div></div>
+            <div id="analyticsDetail"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-social">
-        <div class="section-title">&#9883; Social</div>
-        <div class="card"><h3>Social & Anime</h3><div id="socialConfig"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ LOGS ============ -->
+      <section class="section-page" id="sec-logs" aria-labelledby="ttl-logs">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-logs"><span class="st-icon" aria-hidden="true">≣</span>Logs</h2>
+            <p class="section-desc">System log stream plus the owner-only audit trail. Secrets are redacted before render.</p>
+          </div>
+          <div class="section-actions">
+            <button class="btn btn-outline btn-sm" type="button" data-refresh="logs">Refresh</button>
+            <button class="btn btn-secondary btn-sm" type="button" id="logsLiveBtn" aria-pressed="false">Live tail</button>
+          </div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="logsPermNote" data-perm="staff" hidden></div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">System log</div><div class="card-sub">Newest first</div></div><span class="badge badge-muted" id="logsLiveBadge">snapshot</span></div>
+            <div id="logsList"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Audit trail</div><div class="card-sub">Who changed what, and when</div></div></div>
+            <div id="auditList"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-automation">
-        <div class="section-title">&#9881; Automation</div>
-        <div class="card"><h3>Automation Builder</h3><div id="automationBuilder"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ INTEGRATIONS ============ -->
+      <section class="section-page" id="sec-integrations" aria-labelledby="ttl-integrations">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-integrations"><span class="st-icon" aria-hidden="true">⧉</span>Integrations</h2>
+            <p class="section-desc">Connected providers, their health, and the catalog available to add.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="integrations">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="integrationsPermNote" data-perm="staff" hidden></div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Connected providers</div><div class="card-sub">Configured on this instance</div></div></div>
+            <div id="integrationProviders"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Health</div><div class="card-sub">Reported by the provider service</div></div></div>
+            <div id="integrationHealth"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Catalog</div><div class="card-sub" id="catalogCount">30 entries — filter by pricing class</div></div></div>
+            <div class="tabs" role="tablist" id="catalogFilters">
+              <button class="tab active" type="button" data-pricing="all">All</button>
+              <button class="tab" type="button" data-pricing="free-tier">Free tier</button>
+              <button class="tab" type="button" data-pricing="paid">Paid</button>
+              <button class="tab" type="button" data-pricing="trial">Trial</button>
+              <button class="tab" type="button" data-pricing="local">Local</button>
+              <button class="tab" type="button" data-pricing="custom">Custom</button>
+            </div>
+            <div class="provider-card-grid" id="providerCatalogList"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-support">
-        <div class="section-title">&#128172; Support</div>
-        <div class="card"><h3>Support Cases</h3><div id="supportCases"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ SETTINGS ============ -->
+      <section class="section-page" id="sec-settings" aria-labelledby="ttl-settings">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-settings"><span class="st-icon" aria-hidden="true">⚒</span>Settings</h2>
+            <p class="section-desc">General configuration, channel targets, staff roles and open support cases.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="settings">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="settingsPermNote" data-perm="owner" hidden></div>
+          <div class="grid-2-1">
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">General</div><div class="card-sub">Server name and master switch</div></div></div>
+              <div id="settingsGeneral"></div>
+            </div>
+            <div class="stack-cards">
+              <div class="card">
+                <div class="card-head"><div><div class="card-title">Channels</div><div class="card-sub">Where the bot is allowed to speak</div></div></div>
+                <div id="settingsChannels"></div>
+              </div>
+              <div class="card">
+                <div class="card-head"><div><div class="card-title">Staff roles</div><div class="card-sub">Who can act on moderation queues</div></div></div>
+                <div id="settingsRoles"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Support cases</div><div class="card-sub">Cases opened for this server</div></div></div>
+            <div id="settingsSupport"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-analytics">
-        <div class="section-title">&#128200; Analytics</div>
-        <div class="card-grid" id="analyticsStats"></div>
-        <div class="card"><h3>Request Analytics</h3><div id="analyticsChart"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
+      <!-- ============ SECURITY ============ -->
+      <section class="section-page" id="sec-security" aria-labelledby="ttl-security">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-security"><span class="st-icon" aria-hidden="true">⛉</span>Security</h2>
+            <p class="section-desc">Your account credentials, active sessions and linked sign-in providers.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="security">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="grid-2-1">
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">Authentication</div><div class="card-sub">What protects this account</div></div></div>
+              <div id="securityAuth"></div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">Change password</div><div class="card-sub">Requires your current password</div></div></div>
+              <div id="securityPassword"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Active sessions</div><div class="card-sub">Revoking one forces that browser to sign in again</div></div></div>
+            <div id="securitySessions"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Linked providers</div><div class="card-sub">OAuth identities bound to this account</div></div></div>
+            <div id="securityIdentities"></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="section-page" id="sec-audit">
-        <div class="section-title">&#128220; Audit Logs</div>
-        <div class="card"><h3>Audit Trail</h3><div id="auditList"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
-
-      <div class="section-page" id="sec-security">
-        <div class="section-title">&#128274; Security</div>
-        <div class="card"><h3>Authentication</h3><div id="securityAuth"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-        <div class="card"><h3>Sessions</h3><div id="securitySessions"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
-
-      <div class="section-page" id="sec-settings">
-        <div class="section-title">&#9881; Settings</div>
-        <div class="card"><h3>Application Settings</h3><div id="appSettings"><div class="loading"><span class="spinner"></span> Loading...</div></div></div>
-      </div>
     </main>
   </div>
 </div>
 
 <script src="js/escape.js"></script>
+<script src="js/components/toast.js"></script>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/navigation.js"></script>
 <script src="js/dashboard.js"></script>
-<script src="js/providers.js"></script>
-<script src="js/models.js"></script>
 <script src="js/personality.js"></script>
+<script src="js/models.js"></script>
 <script src="js/moderation.js"></script>
 <script src="js/automation.js"></script>
-<script src="js/support.js"></script>
+<script src="js/memory.js"></script>
+<script src="js/games.js"></script>
+<script src="js/media.js"></script>
 <script src="js/analytics.js"></script>
+<script src="js/logs.js"></script>
+<script src="js/providers.js"></script>
+<script src="js/providers-catalog.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/support.js"></script>
 <script src="js/security.js"></script>
-<script src="js/components/toast.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

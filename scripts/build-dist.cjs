@@ -110,6 +110,14 @@ if (fs.existsSync(publicSrc)) {
   log("copied src/web/public -> dist/web/public");
 }
 
+// Copy game/emoji assets needed at runtime by emoji-provisioner.ts
+const assetsSrc = path.join(ROOT, "assets");
+const assetsDest = path.join(DIST_DIR, "assets");
+if (fs.existsSync(assetsSrc)) {
+  copyDirRecursive(assetsSrc, assetsDest);
+  log("copied assets/ -> dist/assets/");
+}
+
 if (!fs.existsSync(path.join(DIST_DIR, "index.js"))) {
   fail("build completed but dist/index.js was not produced.");
 }

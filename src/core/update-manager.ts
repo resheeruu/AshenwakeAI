@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { logger } from "../logger";
+import { getDataPath, getDataDir, getDatabasePath } from "../config/data-dir";
 
 /* ================================================================
  * SAFE AUTOMATIC UPDATE MANAGER WITH REAL ROLLBACK
@@ -65,8 +66,8 @@ export interface UpdateManagerConfig {
 const DEFAULT_CONFIG: UpdateManagerConfig = {
   branch: "main",
   checkIntervalMs: 5 * 60 * 1000,
-  lockFile: path.join(process.cwd(), "data", ".update-lock"),
-  recordFile: path.join(process.cwd(), "data", "update-record.json"),
+  lockFile: getDataPath(".update-lock"),
+  recordFile: getDataPath("update-record.json"),
   maxRollbackAttempts: 2,
   healthCheckDelayMs: 15_000,
   gitTimeoutMs: 15_000,
@@ -342,7 +343,7 @@ function runNodeAsync(bin: string, args: string[], timeoutMs: number, env?: Node
 
 function runPostStartHealthCheck(): { healthy: boolean; reason: string } {
   try {
-    const dbPath = path.join(process.cwd(), "data", "ashenai.db");
+    const dbPath = getDatabasePath();
     if (!existsSync(dbPath)) {
       return { healthy: false, reason: "database file missing" };
     }
@@ -359,7 +360,7 @@ function runPostStartHealthCheck(): { healthy: boolean; reason: string } {
       return { healthy: false, reason: "node_modules missing" };
     }
 
-    const dataDir = path.join(process.cwd(), "data");
+    const dataDir = getDataDir();
     if (existsSync(dataDir)) {
       try {
         const testFile = path.join(dataDir, ".health-test");

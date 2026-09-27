@@ -4,20 +4,135 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Support — AshenAI</title>
-<meta name="description" content="Get help with AshenAI.">
+<meta name="description" content="Get help with AshenAI: support cases, documentation, community and bug reports.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
-<header class="site-header"><div class="container"><nav class="main-nav"><a href="/" class="logo">AshenAI</a><ul class="nav-links"><li><a href="/" class="nav-link">Home</a></li><li><a href="/features" class="nav-link">Features</a></li><li><a href="/docs" class="nav-link">Docs</a></li></ul><a href="/dashboard" class="btn btn-secondary cta-button">Open Dashboard</a></nav></div></header>
-<main class="features-hero"><div class="container"><div class="features-hero-content"><h1>Support</h1><p>Get help with AshenAI.</p></div></div></main>
-<section class="features-section"><div class="container">
-<div class="card"><h3>Open Support Cases</h3><p>View and manage your support cases through the dashboard.</p></div>
-<div class="card"><h3>Documentation</h3><p>Refer to the <a href="/docs">Documentation</a> page for guides and references.</p></div>
-<div class="card"><h3>Community</h3><p>Join the community through Discord for real-time support.</p></div>
-<div class="card"><h3>Bug Reports</h3><p>Report issues via the GitHub repository.</p></div>
-</div></section>
-<footer class="site-footer"><div class="container"><div class="footer-bottom"><p>&copy; 2026 AshenAI. All rights reserved.</p></div></div></footer>
+
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <nav class="main-nav" aria-label="Primary">
+      <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/features">Features</a></li>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/status">Status</a></li>
+        <li><a href="/support">Support</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<div class="mobile-nav" id="mobileNav">
+  <a href="/">Home</a>
+  <a href="/features">Features</a>
+  <a href="/docs">Docs</a>
+  <a href="/status">Status</a>
+  <a href="/support">Support</a>
+  <a href="/dashboard" class="btn btn-primary btn-block">Open Dashboard</a>
+</div>
+
+<main>
+
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow">Help</p>
+      <h1 class="display">Support</h1>
+      <p class="lede">Open a case from Discord, track it in the dashboard, or read the documentation first.</p>
+      <div class="hero-cta">
+        <a href="/dashboard" class="btn btn-primary btn-lg">Open Dashboard</a>
+        <a href="/docs" class="btn btn-outline btn-lg">Read the docs</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container">
+    <div class="grid grid-2 page-section">
+      <div class="card">
+        <h3>Open a support case</h3>
+        <p class="card-body">Cases are created in Discord with the bot's support command. Staff respond in the ticket channel, and the dashboard shows the case status, summary and last update.</p>
+      </div>
+      <div class="card">
+        <h3>Track cases in the dashboard</h3>
+        <p class="card-body">Administrators can follow every open, escalated and resolved case for their servers under Settings → Support, and change status with an audited transition.</p>
+      </div>
+      <div class="card">
+        <h3>Documentation</h3>
+        <p class="card-body">Setup, providers, authentication and deployment guides live in the <a href="/docs">documentation</a>. Most configuration questions are answered there.</p>
+      </div>
+      <div class="card">
+        <h3>Bug reports</h3>
+        <p class="card-body">Report issues through the GitHub repository, including the version shown on the <a href="/status">status page</a> and the steps to reproduce.</p>
+      </div>
+    </div>
+
+    <div class="prose">
+      <h2>Before you open a case</h2>
+      <ul>
+        <li>Check the <a href="/status">status page</a> — a degraded health gate explains most outages.</li>
+        <li>Confirm which server and section you were changing when it failed.</li>
+        <li>Include the exact error text; messages are redacted of secrets before they are logged, so it is safe to paste.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+        <p>Intelligent infrastructure for Discord communities.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/status">Status</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/support">Support</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+          <li><a href="/terms">Terms</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/resheeruu/AshenwakeAI">GitHub</a></li>
+          <li><a href="/docs#api">API</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 AshenAI. All rights reserved.</p>
+      <div class="fb-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/support">Support</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/escape.js"></script>
+<script src="js/base.js"></script>
 </body>
 </html>

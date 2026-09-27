@@ -1,13 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { AgentHandoff } from "./types";
+import { getDataDir, getDataPath } from "../config/data-dir";
 
-const ROOT = process.cwd();
-const DATA_DIR = path.join(ROOT, "data");
-const HANDOFF_FILE = path.join(DATA_DIR, "coding-agent-handoffs.json");
+const HANDOFF_FILE = getDataPath("coding-agent-handoffs.json");
 
 async function ensureStore(): Promise<void> {
-  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+  await fs.promises.mkdir(getDataDir(), { recursive: true });
 
   if (!fs.existsSync(HANDOFF_FILE)) {
     await fs.promises.writeFile(

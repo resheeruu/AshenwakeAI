@@ -16,19 +16,14 @@ import type {
   InspectionResult,
   PolicyStatus,
 } from "./policy-schema";
-
-/* ================================================================
- * PERSISTENCE
- * ================================================================ */
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const POLICIES_DIR = path.join(DATA_DIR, "governance-policies");
-
-function getPolicyPath(guildId: string): string {
-  return path.join(POLICIES_DIR, `${guildId}.json`);
-}
+import { getDataDir, getDataPath } from "../../../config/data-dir";
 
 const CURRENT_VERSION = 1;
+
+function getPolicyPath(guildId: string): string {
+  const policiesDir = path.join(getDataDir(), "governance-policies");
+  return path.join(policiesDir, `${guildId}.json`);
+}
 
 function defaultPolicyConfig(guildId: string): PolicyConfig {
   return {
@@ -65,7 +60,8 @@ export function loadPolicyConfig(guildId: string): PolicyConfig {
 
 export function savePolicyConfig(config: PolicyConfig): void {
   try {
-    fs.mkdirSync(POLICIES_DIR, { recursive: true });
+    const policiesDir = path.join(getDataDir(), "governance-policies");
+    fs.mkdirSync(policiesDir, { recursive: true });
     config.updatedAt = Date.now();
     const filePath = getPolicyPath(config.guildId);
     const tmpPath = filePath + ".tmp";

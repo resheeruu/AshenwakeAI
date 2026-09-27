@@ -8,6 +8,7 @@ import type {
   DenialReason,
   ToolAuditEntry,
 } from "./types";
+import { getDataDir, getDataPath, ensureDataDir } from "../../config/data-dir";
 
 /* ================================================================
  * TOOL AUDIT LOG
@@ -17,16 +18,15 @@ import type {
  * private credentials, raw AI secrets, or full user messages.
  * ================================================================ */
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const AUDIT_FILE = path.join(DATA_DIR, "tool-audit.json");
+const AUDIT_FILE = getDataPath("tool-audit.json");
 const MAX_ENTRIES = 5000;
 
 let auditLog: ToolAuditEntry[] = [];
 
 function loadAudit(): void {
   try {
-    if (!fs.existsSync(AUDIT_FILE)) return;
-    const raw = fs.readFileSync(AUDIT_FILE, "utf8");
+    if (!fs.existsSync(getDataPath("tool-audit.json"))) return;
+    const raw = fs.readFileSync(getDataPath("tool-audit.json"), "utf8");
     auditLog = JSON.parse(raw) as ToolAuditEntry[];
   } catch {
     auditLog = [];
@@ -35,13 +35,13 @@ function loadAudit(): void {
 
 function saveAudit(): void {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+    ensureDataDir();
     if (auditLog.length > MAX_ENTRIES) {
       auditLog = auditLog.slice(-MAX_ENTRIES);
     }
-    const tmpPath = AUDIT_FILE + ".tmp";
+    const tmpPath = getDataPath("tool-audit.json") + ".tmp";
     fs.writeFileSync(tmpPath, JSON.stringify(auditLog, null, 2), "utf8");
-    fs.renameSync(tmpPath, AUDIT_FILE);
+    fs.renameSync(tmpPath, getDataPath("tool-audit.json"));
   } catch (error) {
     logger.warn(
       `Could not save tool audit log: ${error instanceof Error ? error.message : String(error)}`,

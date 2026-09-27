@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
 import { loadGuildConfig } from "./guild-config";
+import { getDataDir } from "../config/data-dir";
 
 export interface HealthReport {
   overall: "healthy" | "degraded" | "unhealthy";
@@ -49,7 +50,7 @@ function checkCriticalFiles(): HealthCheck {
 }
 
 function checkDataDirectory(): HealthCheck {
-  const dataDir = path.join(process.cwd(), "data");
+  const dataDir = getDataDir();
   const exists = fs.existsSync(dataDir);
   if (!exists) return { name: "data_directory", status: "warn", message: "Data directory does not exist yet" };
   try {

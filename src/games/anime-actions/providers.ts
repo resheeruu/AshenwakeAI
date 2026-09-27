@@ -61,6 +61,8 @@ const PROVIDER_MAX_RESPONSE_BYTES = 64 * 1024;
 const PROVIDER_MAX_REDIRECTS = 3;
 /** Longest animation URL we are willing to consider. */
 const MAX_ANIMATION_URL_LENGTH = 2048;
+/** Global deadline for the entire media operation (provider lookup + fetch + validation). */
+const MEDIA_GLOBAL_DEADLINE_MS = 12_000;
 
 /* ================================================================
  * TRANSPORT SEAM
@@ -76,6 +78,7 @@ export interface AnimeHttpRequest {
   url: string;
   timeoutMs: number;
   maxBytes: number;
+  signal?: AbortSignal;
 }
 
 export interface AnimeHttpResponse {
@@ -100,13 +103,14 @@ function describeFailure(error: unknown): AnimeHttpFailure {
   return "network";
 }
 
-const hardenedAnimeHttpClient: AnimeHttpClient = async ({ url, timeoutMs, maxBytes }) => {
+const hardenedAnimeHttpClient: AnimeHttpClient = async ({ url, timeoutMs, maxBytes, signal }) => {
   try {
     const { response } = await hardenedFetch(url, {
       timeoutMs,
       maxRedirects: PROVIDER_MAX_REDIRECTS,
       maxResponseBytes: maxBytes,
       policy: "public",
+      signal,
     });
 
     if (!response.ok) {
@@ -331,73 +335,81 @@ export async function fetchAnimation(
   action: string,
   options: FetchAnimationOptions = {},
 ): Promise<AnimationResult | null> {
-  // 1) LOCAL FIRST — validated on disk, never cached in the remote URL cache.
-  if (options.localGifs !== null) {
-    try {
-      const resolver = options.localGifs?.resolve ?? resolveLocalGif;
-      const local = await resolver(`actions:${action}`);
-      if (local) {
-        logger.debug(
-          `anime_action action=${action} provider=local result=local_hit license=${local.license}`,
+  const ac = new AbortController();
+  const deadline = setTimeout(() => ac.abort(), MEDIA_GLOBAL_DEADLINE_MS);
+  try {
+    // 1) LOCAL FIRST — validated on disk, never cached in the remote URL cache.
+    if (options.localGifs !== null) {
+      try {
+        const resolver = options.localGifs?.resolve ?? resolveLocalGif;
+        const local = await resolver(`actions:${action}`);
+        if (local) {
+          logger.debug(
+            `anime_action action=${action} provider=local result=local_hit license=${local.license}`,
+          );
+          return { localAsset: local, source: "local" };
+        }
+      } catch (error) {
+        // Local provider failure must never break the chain.
+        logger.warn(
+          `anime_action action=${action} provider=local result=local_error detail=${error instanceof Error ? error.message : "unknown"} fallback=remote`,
         );
-        return { localAsset: local, source: "local" };
       }
-    } catch (error) {
-      // Local provider failure must never break the chain.
-      logger.warn(
-        `anime_action action=${action} provider=local result=local_error detail=${error instanceof Error ? error.message : "unknown"} fallback=remote`,
+    }
+
+    const cacheKey = `anime:${action}`;
+    const cached = cache.get(cacheKey);
+
+    // 2) Remote cache — returns a random URL from the pool for variety.
+    if (cached && cached.urls.length > 0) {
+      const idx = Math.floor(Math.random() * cached.urls.length);
+      logger.debug(
+        `anime_action action=${action} provider=cache source=${cached.source} result=cache_hit elapsed=0ms`,
       );
+      return { url: cached.urls[idx], source: cached.source };
     }
-  }
 
-  const cacheKey = `anime:${action}`;
-  const cached = cache.get(cacheKey);
+    const httpClient = options.httpClient ?? ((req: AnimeHttpRequest) => hardenedAnimeHttpClient({ ...req, signal: ac.signal }));
+    const providers = buildProviders(httpClient);
+    const startedAt = Date.now();
 
-  // 2) Remote cache — returns a random URL from the pool for variety.
-  if (cached && cached.urls.length > 0) {
-    const idx = Math.floor(Math.random() * cached.urls.length);
-    logger.debug(
-      `anime_action action=${action} provider=cache source=${cached.source} result=cache_hit elapsed=0ms`,
+    // Fetch from providers and collect results
+    const collectedUrls: string[] = [];
+    let source = "none";
+
+    for (let i = 0; i < providers.length; i++) {
+      if (ac.signal.aborted) break;
+      const provider = providers[i];
+      const fallback = providers[i + 1]?.name ?? "text";
+
+      const attempt = await provider.fetch(action);
+      logAttempt(action, attempt, fallback);
+
+      if (attempt.animation?.url) {
+        collectedUrls.push(attempt.animation.url);
+        source = attempt.provider;
+        if (collectedUrls.length >= MAX_RESULTS_PER_ACTION) break;
+      }
+    }
+
+    if (collectedUrls.length > 0) {
+      const unique = [...new Set(collectedUrls)];
+      cache.set(cacheKey, { urls: unique, source, timestamp: Date.now() });
+      const idx = Math.floor(Math.random() * unique.length);
+      return { url: unique[idx], source };
+    }
+
+    /*
+     * Every provider failed. The engine still returns a deterministic
+     * text response — Discord must never receive an empty reply.
+     */
+    logger.warn(
+      `anime_action action=${action} provider=none result=text_fallback elapsed=${Date.now() - startedAt}ms fallback=text`,
     );
-    return { url: cached.urls[idx], source: cached.source };
+    return null;
+  } finally {
+    clearTimeout(deadline);
   }
-
-  const providers = buildProviders(options.httpClient ?? hardenedAnimeHttpClient);
-  const startedAt = Date.now();
-
-  // Fetch from providers and collect results
-  const collectedUrls: string[] = [];
-  let source = "none";
-
-  for (let i = 0; i < providers.length; i++) {
-    const provider = providers[i];
-    const fallback = providers[i + 1]?.name ?? "text";
-
-    const attempt = await provider.fetch(action);
-    logAttempt(action, attempt, fallback);
-
-    if (attempt.animation?.url) {
-      collectedUrls.push(attempt.animation.url);
-      source = attempt.provider;
-      if (collectedUrls.length >= MAX_RESULTS_PER_ACTION) break;
-    }
-  }
-
-  if (collectedUrls.length > 0) {
-    const unique = [...new Set(collectedUrls)];
-    cache.set(cacheKey, { urls: unique, source, timestamp: Date.now() });
-    const idx = Math.floor(Math.random() * unique.length);
-    return { url: unique[idx], source };
-  }
-
-  /*
-   * Every provider failed. The engine still returns a deterministic
-   * text response — Discord must never receive an empty reply.
-   */
-  logger.warn(
-    `anime_action action=${action} provider=none result=text_fallback elapsed=${Date.now() - startedAt}ms fallback=text`,
-  );
-  return null;
 }
 
 export function clearAnimationCache(): void {

@@ -22,6 +22,18 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
 ]);
 
+const MAGIC_BYTES: Record<string, number[]> = {
+  "image/gif": [0x47, 0x49, 0x46, 0x38],
+  "image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  "image/jpeg": [0xff, 0xd8, 0xff],
+};
+
+function validateMediaMagicBytes(buffer: Buffer, contentType: string): boolean {
+  const sig = MAGIC_BYTES[contentType];
+  if (!sig) return true;
+  return buffer.compare(Buffer.from(sig), 0, sig.length) === 0;
+}
+
 const MAX_MEDIA_SIZE = 8 * 1024 * 1024; // 8 MB — generous for animated GIFs
 const MEDIA_TIMEOUT_MS = 10_000;
 
@@ -92,21 +104,27 @@ export async function safeMediaFetch(
       maxRedirects: 5,
       maxResponseBytes: MAX_MEDIA_SIZE,
       policy: "public",
+      requireHttps: true,
     });
 
     if (!response.ok) return null;
 
     const contentType = response.headers.get("content-type") ?? "";
-    if (!ALLOWED_CONTENT_TYPES.has(contentType.split(";")[0].trim().toLowerCase())) {
+    const normalizedType = contentType.split(";")[0].trim().toLowerCase();
+    if (!ALLOWED_CONTENT_TYPES.has(normalizedType)) {
       return null;
     }
 
     const buffer = await readLimitedBytes(response, MAX_MEDIA_SIZE);
-    if (buffer.byteLength > MAX_MEDIA_SIZE) return null;
+    if (buffer.byteLength === 0 || buffer.byteLength > MAX_MEDIA_SIZE) return null;
+
+    if (!validateMediaMagicBytes(buffer, normalizedType)) {
+      return null;
+    }
 
     return {
       buffer,
-      contentType: contentType.split(";")[0].trim().toLowerCase(),
+      contentType: normalizedType,
     };
   } catch {
     return null;

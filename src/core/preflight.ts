@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../logger";
 import type { HealthState } from "../ai/types";
+import { getDataDir } from "../config/data-dir";
 
 /* =====================================================
    UNIFIED PREFLIGHT — Aggregation Layer
@@ -148,7 +149,7 @@ function checkRuntime(): PreflightCheck[] {
   });
 
   // Data directory
-  const dataDir = path.join(cwd, "data");
+  const dataDir = getDataDir();
   const dataDirExists = fs.existsSync(dataDir);
   checks.push({
     name: "data_directory",

@@ -7,6 +7,7 @@ import { logger } from "../logger";
 import { redact } from "../security/redact";
 import { startTrace, endSpan, endSpanError } from "./traces";
 import { insertAIUsageDB } from "../database/ai-usage-repo";
+import { getDataPath, getDataDir } from "../config/data-dir";
 
 import {
   AIProvider,
@@ -175,15 +176,7 @@ export function restoreHealthStateFromLegacyJson(data: SavedProviderHealth): Hea
   return HealthState.CONFIGURED;
 }
 
-const DATA_DIR = path.join(
-  process.cwd(),
-  "data"
-);
-
-const HEALTH_FILE = path.join(
-  DATA_DIR,
-  "provider-health.json"
-);
+const HEALTH_FILE = getDataPath("provider-health.json");
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -454,7 +447,7 @@ export class AIRouter {
 
     try {
       fs.mkdirSync(
-        DATA_DIR,
+        getDataDir(),
         {
           recursive: true,
         }

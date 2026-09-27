@@ -68,7 +68,7 @@ function readSource(rel: string): string {
   );
 }
 
-const PLAYERS_FILE = path.join(process.cwd(), "data", "game-players.json");
+const PLAYERS_FILE = path.join(process.env.ASHENAI_DATA_DIR ?? path.join(process.cwd(), "data"), "game-players.json");
 const TEST_PREFIX = "audit40-";
 
 async function runTests() {

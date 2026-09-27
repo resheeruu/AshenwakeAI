@@ -1,6 +1,7 @@
 import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
+import { getDataDir } from "../config/data-dir";
 
 // ============================================================
 // U19: Resource Profile — hosting-aware resource classification
@@ -91,7 +92,7 @@ export function buildResourceProfile(): ResourceProfile {
   // Data directory size
   let dataDirMB = 0;
   try {
-    const dataDir = path.join(process.cwd(), "data");
+    const dataDir = getDataDir();
     const entries = fs.readdirSync(dataDir);
     for (const entry of entries) {
       try {

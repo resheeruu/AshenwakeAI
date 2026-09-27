@@ -4,24 +4,143 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Documentation — AshenAI</title>
-<meta name="description" content="Getting started with AshenAI.">
+<meta name="description" content="Getting started with AshenAI: setup, dashboard, authentication, providers, deployment and security.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
-<header class="site-header"><div class="container"><nav class="main-nav"><a href="/" class="logo">AshenAI</a><ul class="nav-links"><li><a href="/" class="nav-link">Home</a></li><li><a href="/features" class="nav-link">Features</a></li><li><a href="/status" class="nav-link">Status</a></li></ul><a href="/dashboard" class="btn btn-secondary cta-button">Open Dashboard</a></nav></div></header>
-<main class="features-hero"><div class="container"><div class="features-hero-content"><h1>Documentation</h1><p>Getting started with AshenAI.</p></div></div></main>
-<section class="features-section"><div class="container">
-<div class="card"><h3>Getting Started</h3><p>Add AshenAI to your Discord server and configure it through the dashboard. Use the provider wizard to add new providers.</p></div>
-<div class="card"><h3>Dashboard</h3><p>Manage your server settings, AI providers, models, and configurations through the web dashboard.</p></div>
-<div class="card"><h3>Authentication</h3><p>Login with username/password or link Discord/Google OAuth. MFA is supported for enhanced security.</p></div>
-<div class="card"><h3>Provider Management</h3><p>Configure AI providers including Google Gemini, Groq, OpenRouter, and local models. Use the provider wizard to add new providers.</p></div>
-<div class="card"><h3>Free AI Mode</h3><p>Prefer providers/models legitimately available under free or no-cost access. Free access may be subject to provider quotas.</p></div>
-<div class="card"><h3>Provider Categories</h3><p>Free, Free-tier, Trial/Credit, Paid, Local, and Custom providers are supported.</p></div>
-<div class="card"><h3>Deployment</h3><p>Deploy on Render, Docker, Wispbyte, VPS, or Termux. See the <a href="/docs">deployment guide</a> for host-specific configuration.</p></div>
-<div class="card"><h3>Security</h3><p>SSRF protection via shared network-boundary, credential-first classification, CSRF, session security, MFA, and audit logging.</p></div>
-</div></section>
-<footer class="site-footer"><div class="container"><div class="footer-bottom"><p>&copy; 2026 AshenAI. All rights reserved.</p></div></div></footer>
+
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <nav class="main-nav" aria-label="Primary">
+      <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/features">Features</a></li>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/status">Status</a></li>
+        <li><a href="/support">Support</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<div class="mobile-nav" id="mobileNav">
+  <a href="/">Home</a>
+  <a href="/features">Features</a>
+  <a href="/docs">Docs</a>
+  <a href="/status">Status</a>
+  <a href="/support">Support</a>
+  <a href="/dashboard" class="btn btn-primary btn-block">Open Dashboard</a>
+</div>
+
+<main>
+
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow">Documentation</p>
+      <h1 class="display">Getting started with AshenAI.</h1>
+      <p class="lede">Install the bot, sign in to the dashboard, connect a provider, then tighten who can change what.</p>
+    </div>
+  </section>
+
+  <section class="container">
+    <div class="prose">
+      <p class="updated">Reference · updated 2026</p>
+
+      <h2>Getting started</h2>
+      <p>Add AshenAI to your Discord server, then open the dashboard. Sign in with a username and password, or link Discord or Google OAuth. The first account you create becomes the owner and is the only role that can grant or revoke staff access.</p>
+      <ul>
+        <li>Invite the bot and pick the servers it may manage.</li>
+        <li>Sign in at <code>/login</code> and select a server from the server picker.</li>
+        <li>Enable multi-factor authentication while the account is still new.</li>
+      </ul>
+
+      <h2>Dashboard</h2>
+      <p>Each server has its own section for settings, providers, models, moderation, automation, memory, games, analytics and logs. A read-only session still sees everything that role may see — writes are disabled rather than hidden, so operators can audit without being able to change anything.</p>
+
+      <h2>Authentication</h2>
+      <p>Sessions are HTTP-only cookies with CSRF protection on every mutation. Owner and admin accounts can add an authenticator app for multi-factor authentication; recovery codes are shown once at enrolment and can be regenerated with your password.</p>
+
+      <h2>Provider management</h2>
+      <p>Configure AI providers through the wizard: Google Gemini, Groq, OpenRouter, Mistral, Anthropic, OpenAI, and local models. Credentials are stored server-side and never returned to the browser.</p>
+      <ul>
+        <li>Providers are health-checked and can be disabled without deleting them.</li>
+        <li>Models are bound per provider and can be marked as the default.</li>
+        <li>Credential rotation happens in the dashboard; old keys are discarded.</li>
+      </ul>
+
+      <h2>Free AI mode</h2>
+      <p>The catalog prefers providers and models legitimately available under free or no-cost access. Free access may be subject to provider quotas and can change without notice.</p>
+
+      <h2 id="api">API</h2>
+      <p>Every dashboard action maps to an authenticated HTTP endpoint under <code>/api</code>. Requests carry a CSRF header, and role checks run on the server before any handler executes. Unknown API paths return JSON errors, never an HTML page.</p>
+
+      <h2>Deployment</h2>
+      <p>Deploy on Render, Docker, Wispbyte, VPS, or Termux. Host-specific configuration — ports, health checks, and build commands — is documented per host.</p>
+
+      <h2>Security</h2>
+      <p>SSRF protection via a shared network boundary, credential-first classification, CSRF, session hardening, multi-factor authentication, and audit logging. Content security policy is nonce-based: no inline scripts and no inline styles are served.</p>
+
+      <p><a href="/features">Features</a> · <a href="/status">Status</a> · <a href="/support">Support</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+        <p>Intelligent infrastructure for Discord communities.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/status">Status</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/support">Support</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+          <li><a href="/terms">Terms</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/resheeruu/AshenwakeAI">GitHub</a></li>
+          <li><a href="/docs#api">API</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 AshenAI. All rights reserved.</p>
+      <div class="fb-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/support">Support</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/escape.js"></script>
+<script src="js/base.js"></script>
 </body>
 </html>

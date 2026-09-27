@@ -3,6 +3,7 @@ import path from "path";
 import { GamePlayer } from "./types";
 import { GAME_CONFIG } from "./config";
 import { loadPlayers } from "./store";
+import { getDataDir, getDataPath, getSeasonsPath, getCurrentSeasonPath } from "../config/data-dir";
 
 export type SeasonConfig = {
   id: string;
@@ -39,19 +40,15 @@ export type ArchivedSeason = {
   }>;
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const SEASONS_FILE = path.join(DATA_DIR, "seasons.json");
-const CURRENT_SEASON_FILE = path.join(DATA_DIR, "current-season.json");
-
 async function ensureSeasonStore(): Promise<void> {
-  await fs.promises.mkdir(DATA_DIR, { recursive: true });
+  await fs.promises.mkdir(getDataDir(), { recursive: true });
 
-  if (!fs.existsSync(SEASONS_FILE)) {
-    await fs.promises.writeFile(SEASONS_FILE, "[]", "utf8");
+  if (!fs.existsSync(getSeasonsPath())) {
+    await fs.promises.writeFile(getSeasonsPath(), "[]", "utf8");
   }
 
-  if (!fs.existsSync(CURRENT_SEASON_FILE)) {
-    await fs.promises.writeFile(CURRENT_SEASON_FILE, "null", "utf8");
+  if (!fs.existsSync(getCurrentSeasonPath())) {
+    await fs.promises.writeFile(getCurrentSeasonPath(), "null", "utf8");
   }
 }
 
@@ -59,7 +56,7 @@ export async function getCurrentSeason(): Promise<SeasonConfig | null> {
   await ensureSeasonStore();
 
   try {
-    const raw = await fs.promises.readFile(CURRENT_SEASON_FILE, "utf8");
+    const raw = await fs.promises.readFile(getCurrentSeasonPath(), "utf8");
     const parsed = JSON.parse(raw);
 
     if (!parsed || typeof parsed !== "object") return null;
@@ -100,7 +97,7 @@ export async function startNewSeason(
   };
 
   await fs.promises.writeFile(
-    CURRENT_SEASON_FILE,
+    getCurrentSeasonPath(),
     JSON.stringify(season, null, 2),
     "utf8",
   );
@@ -124,17 +121,17 @@ export async function endCurrentSeason(): Promise<ArchivedSeason | null> {
     playerSnapshots: snapshots,
   };
 
-  const raw = await fs.promises.readFile(SEASONS_FILE, "utf8");
+  const raw = await fs.promises.readFile(getSeasonsPath(), "utf8");
   const seasons: ArchivedSeason[] = JSON.parse(raw);
   seasons.push(archived);
 
   await fs.promises.writeFile(
-    SEASONS_FILE,
+    getSeasonsPath(),
     JSON.stringify(seasons, null, 2),
     "utf8",
   );
 
-  await fs.promises.writeFile(CURRENT_SEASON_FILE, "null", "utf8");
+  await fs.promises.writeFile(getCurrentSeasonPath(), "null", "utf8");
 
   return archived;
 }
@@ -233,7 +230,7 @@ export async function getArchivedSeasons(): Promise<ArchivedSeason[]> {
   await ensureSeasonStore();
 
   try {
-    const raw = await fs.promises.readFile(SEASONS_FILE, "utf8");
+    const raw = await fs.promises.readFile(getSeasonsPath(), "utf8");
     return JSON.parse(raw);
   } catch {
     return [];

@@ -15,8 +15,9 @@ import path from "path";
 import { getDatabase, safeDbOperation } from "../../database";
 import { logger } from "../../logger";
 import type { AgentTask, TaskStatus } from "./types";
+import { getDataPath } from "../../config/data-dir";
 
-const TASK_FILE = path.join(process.cwd(), "data", "agent-tasks.json");
+const TASK_FILE = getDataPath("agent-tasks.json");
 const STALE_TASK_THRESHOLD_MS = 5 * 60_000; // 5 minutes
 const MAX_RETRY_COUNT = 10;
 

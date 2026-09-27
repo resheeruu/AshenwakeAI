@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
+import { getDataDir, getDataPath, ensureDataDir } from "../config/data-dir";
 
 export type ToneLevel = "low" | "medium" | "high";
 export type UserLanguage = "en" | "fil" | "taglish";
@@ -24,8 +25,7 @@ export interface UserProfile {
 
 type StoredProfiles = Record<string, UserProfile>;
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const PROFILE_FILE = path.join(DATA_DIR, "user-profiles.json");
+const PROFILE_FILE = getDataPath("user-profiles.json");
 const MAX_PROFILES = 10_000;
 const STALE_DAYS = 90;
 
@@ -106,7 +106,7 @@ export class UserProfileMemory {
     if (!this.dirty) return;
     this.dirty = false;
     try {
-      fs.mkdirSync(DATA_DIR, {
+      fs.mkdirSync(getDataDir(), {
         recursive: true,
       });
 

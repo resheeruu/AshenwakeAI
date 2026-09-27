@@ -4,10 +4,8 @@ import path from "path";
 import { logger } from "../logger";
 import { hashPassword, verifyPassword } from "../utils/password-hash";
 import { encryptMFA, decryptMFA, isEncryptionAvailable } from "../security/encrypt";
+import { getDataDir, getDataPath, getAccountsPath } from "../config/data-dir";
 export { hashPassword, verifyPassword };
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const ACCOUNTS_FILE = path.join(DATA_DIR, "accounts.json");
 
 export interface Account {
   id: string;
@@ -44,16 +42,17 @@ export interface SanitizedAccount {
 let accounts: Account[] = [];
 
 function ensureDataDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
 }
 
 function loadAccounts(): void {
   try {
-    if (!fs.existsSync(ACCOUNTS_FILE)) {
+    const accountsPath = getAccountsPath();
+    if (!fs.existsSync(accountsPath)) {
       accounts = [];
       return;
     }
-    const raw = fs.readFileSync(ACCOUNTS_FILE, "utf8");
+    const raw = fs.readFileSync(accountsPath, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       logger.warn("⚠️ accounts.json is not an array, resetting");
@@ -94,9 +93,10 @@ function saveAccounts(): void {
       }
       return a;
     });
-    const tmpPath = ACCOUNTS_FILE + ".tmp";
+    const accountsPath = getAccountsPath();
+    const tmpPath = accountsPath + ".tmp";
     fs.writeFileSync(tmpPath, JSON.stringify(accountsToSave, null, 2), "utf8");
-    fs.renameSync(tmpPath, ACCOUNTS_FILE);
+    fs.renameSync(tmpPath, accountsPath);
   } catch (error) {
     logger.warn(
       `⚠️ Could not save accounts: ${error instanceof Error ? error.message : String(error)}`,

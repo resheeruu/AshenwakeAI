@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { getDataDir, getDataPath } from "../../config/data-dir";
 
 export type AuditLevel =
   | "info"
@@ -15,12 +16,10 @@ export interface AuditEntry {
   details?: string;
 }
 
-const ROOT = process.cwd();
-const LOG_DIR = path.join(ROOT, "data", "agent-logs");
-const LOG_FILE = path.join(LOG_DIR, "agent-audit.jsonl");
+const LOG_FILE = getDataPath("agent-logs", "agent-audit.jsonl");
 
 function ensureLogDirectory(): void {
-  fs.mkdirSync(LOG_DIR, { recursive: true });
+  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
 }
 
 export function audit(

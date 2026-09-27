@@ -2,9 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { logger } from "../logger";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const RESET_TOKENS_FILE = path.join(DATA_DIR, "password-reset-tokens.json");
+import { getDataDir, getDataPath } from "../config/data-dir";
 
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
@@ -20,16 +18,17 @@ export interface PasswordResetToken {
 let tokens: PasswordResetToken[] = [];
 
 function ensureDataDir(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
 }
 
 function loadTokens(): void {
   try {
-    if (!fs.existsSync(RESET_TOKENS_FILE)) {
+    const tokensPath = getDataPath("password-reset-tokens.json");
+    if (!fs.existsSync(tokensPath)) {
       tokens = [];
       return;
     }
-    const raw = fs.readFileSync(RESET_TOKENS_FILE, "utf8");
+    const raw = fs.readFileSync(tokensPath, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       tokens = [];
@@ -54,9 +53,10 @@ function loadTokens(): void {
 function saveTokens(): void {
   try {
     ensureDataDir();
-    const tmpPath = RESET_TOKENS_FILE + ".tmp";
+    const tokensPath = getDataPath("password-reset-tokens.json");
+    const tmpPath = tokensPath + ".tmp";
     fs.writeFileSync(tmpPath, JSON.stringify(tokens, null, 2), "utf8");
-    fs.renameSync(tmpPath, RESET_TOKENS_FILE);
+    fs.renameSync(tmpPath, tokensPath);
   } catch (error) {
     logger.warn(
       `⚠️ Could not save reset tokens: ${error instanceof Error ? error.message : String(error)}`,

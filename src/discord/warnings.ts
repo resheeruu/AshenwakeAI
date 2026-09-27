@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../logger";
+import { getDataDir, getDataPath } from "../config/data-dir";
 
 export interface WarningRecord {
   id: string;
@@ -11,16 +12,15 @@ export interface WarningRecord {
   createdAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "warnings.json");
+const DATA_FILE = getDataPath("warnings.json");
 
 function ensureStorage(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(getDataDir())) {
+    fs.mkdirSync(getDataDir(), { recursive: true });
   }
 
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, "[]", "utf8");
+  if (!fs.existsSync(getDataPath("warnings.json"))) {
+    fs.writeFileSync(getDataPath("warnings.json"), "[]", "utf8");
   }
 }
 
@@ -29,7 +29,7 @@ function readWarnings(): WarningRecord[] {
 
   let raw: string;
   try {
-    raw = fs.readFileSync(DATA_FILE, "utf8");
+    raw = fs.readFileSync(getDataPath("warnings.json"), "utf8");
   } catch (error) {
     // Read failure (permissions/IO): fail the operation loudly instead of
     // returning an empty store that a subsequent write would persist.

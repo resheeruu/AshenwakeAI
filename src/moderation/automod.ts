@@ -120,17 +120,38 @@ export async function handleAutomodResult(
 ): Promise<void> {
   if (!result.flagged || !message.guild) return;
 
+  let success = true;
+  const failures: string[] = [];
+
   try {
     if (result.action === "delete") {
-      await message.delete().catch(() => {});
+      try {
+        await message.delete();
+      } catch (err) {
+        success = false;
+        failures.push(`delete:${err instanceof Error ? err.message : "unknown"}`);
+        logger.warn(`AutoMod: could not delete message in ${message.channel.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     if (result.action === "timeout") {
-      await member.timeout(5 * 60 * 1000, `AshenAI AutoMod: ${result.reason}`).catch(() => {});
+      try {
+        await member.timeout(5 * 60 * 1000, `AshenAI AutoMod: ${result.reason}`);
+      } catch (err) {
+        success = false;
+        failures.push(`timeout:${err instanceof Error ? err.message : "unknown"}`);
+        logger.warn(`AutoMod: could not timeout ${member.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     if (result.action === "kick") {
-      await member.kick(`AshenAI AutoMod: ${result.reason}`).catch(() => {});
+      try {
+        await member.kick(`AshenAI AutoMod: ${result.reason}`);
+      } catch (err) {
+        success = false;
+        failures.push(`kick:${err instanceof Error ? err.message : "unknown"}`);
+        logger.warn(`AutoMod: could not kick ${member.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     const logChannel = message.guild.channels.cache.find(
@@ -138,17 +159,39 @@ export async function handleAutomodResult(
     );
 
     if (logChannel && "send" in logChannel) {
-      await logChannel.send({
-        content: `🛡️ **AutoMod** | ${result.action?.toUpperCase() || "FLAGGED"}\n**User:** <@${member.id}>\n**Reason:** ${result.reason}\n**Detail:** ${result.detail || "N/A"}\n**Channel:** <#${message.channel.id}>`,
-      }).catch(() => {});
+      try {
+        await logChannel.send({
+          content: `🛡️ **AutoMod** | ${result.action?.toUpperCase() || "FLAGGED"}\n**User:** <@${member.id}>\n**Reason:** ${result.reason}\n**Detail:** ${result.detail || "N/A"}\n**Channel:** <#${message.channel.id}>`,
+        });
+      } catch (err) {
+        failures.push(`log:${err instanceof Error ? err.message : "unknown"}`);
+        logger.warn(`AutoMod: could not send to log channel: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     recordAudit({
-      who: "automod", what: `AutoMod: ${result.action} - ${result.reason}`,
-      where: "discord", guildId: message.guild.id, result: "success",
-      details: `User: ${member.id}, Channel: ${message.channel.id}`,
+      who: "automod",
+      what: `AutoMod: ${result.action} - ${result.reason}`,
+      where: "discord",
+      guildId: message.guild.id,
+      result: success ? "success" : "failure",
+      details: `User: ${member.id}, Channel: ${message.channel.id}${failures.length ? ` failures=${failures.join(";")}` : ""}`,
     });
+
+    if (!success) {
+      logger.warn(`AutoMod: ${result.action} completed with failures: ${failures.join("; ")}`);
+    }
   } catch (error) {
     logger.error(`❌ AutoMod handler failed: ${error instanceof Error ? error.message : String(error)}`);
+    try {
+      recordAudit({
+        who: "automod",
+        what: `AutoMod: ${result.action} - ${result.reason}`,
+        where: "discord",
+        guildId: message.guild.id,
+        result: "failure",
+        details: `handler-error: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } catch { /* audit itself failed */ }
   }
 }

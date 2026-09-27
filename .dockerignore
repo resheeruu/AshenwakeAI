@@ -7,8 +7,6 @@ dist
 .env.*
 data/
 backups/
-assets/emojis/*.png
-assets/emojis/*.svg
 scripts/test-*.ts
 scripts/run-all-tests.ts
 scripts/diagnose-*.ts

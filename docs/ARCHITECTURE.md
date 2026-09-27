@@ -64,13 +64,7 @@ Important principles:
 - progression
 - casino/game logic
 - **Ash prefix namespace** (`ash mine`, `ash battle`, `ash lottery`, `ash hunt`, `ash slots`) — games use the `ash` prefix; see `src/games/anime-actions/prefix-handler.ts` for the unified Ash parser
-- **Result-authority guarantee** — animations are purely visual; all game outcomes are computed by engines and stored in the database before any animation is displayed (`src/games/animation/index.ts`)
-
-### `src/games/animation/`
-
-Game animation framework.
-
-Provides safe, deterministic animation playback for Ash games. The animation layer is read-only and cannot modify game state, coin balances, or XP values. Flow: engine computes outcome → database updated → animation displayed.
+- **Result-authority guarantee** — all game outcomes are computed by engines and stored in the database before any visual is displayed
 
 ### `src/security/`
 

@@ -371,6 +371,7 @@ export function validateTrustedLocalProviderUrl(
 export function validateRedirectTarget(
   location: string,
   baseUrl: string,
+  options: { requireHttps?: boolean } = {},
 ): { valid: boolean; reason?: string; url?: string } {
   let resolved: URL;
   try {
@@ -378,7 +379,7 @@ export function validateRedirectTarget(
   } catch {
     return { valid: false, reason: "Invalid redirect target" };
   }
-  const check = validateOutboundUrl(resolved.toString());
+  const check = validateOutboundUrl(resolved.toString(), options);
   if (!check.valid) {
     return { valid: false, reason: check.reason ?? "Redirect target rejected" };
   }

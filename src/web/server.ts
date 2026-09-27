@@ -52,6 +52,8 @@ import {
   handleDiscordCallback,
   getGoogleAuthUrl,
   handleGoogleCallback,
+  isDiscordOAuthConfigured,
+  isGoogleOAuthConfigured,
 } from "../control/oauth";
 import {
   generateResetToken,
@@ -343,6 +345,38 @@ app.get("/api/health", (_req: Request, res: Response) => {
   });
 });
 
+/*
+ * Game tuning constants are compiled into the build (src/games/config.ts).
+ * The dashboard shows them read-only so the UI can never drift from the
+ * numbers the games actually use.
+ */
+app.get("/api/games/config", requireAuth, (_req: Request, res: Response) => {
+  try {
+    const { GAME_CONFIG } = require("../games/config");
+    res.json({ ok: true, config: GAME_CONFIG });
+  } catch {
+    res.status(500).json({ ok: false, error: "Game configuration unavailable" });
+  }
+});
+
+/* Same reasoning: the dashboard lists the real action catalog, not a copy. */
+app.get("/api/games/anime-actions", requireAuth, (_req: Request, res: Response) => {
+  try {
+    const { getAllActions } = require("../games/anime-actions");
+    const actions = getAllActions().map((a: any) => ({
+      name: a.name,
+      description: a.description,
+      category: a.category,
+      emoji: a.emoji,
+      cooldownMs: a.cooldownMs,
+      targetRequired: a.targetRequired,
+    }));
+    res.json({ ok: true, actions, total: actions.length });
+  } catch {
+    res.status(500).json({ ok: false, error: "Anime action catalog unavailable" });
+  }
+});
+
 /* ==================== AUTH ==================== */
 
 app.post("/auth/login", (req: Request, res: Response) => {
@@ -436,6 +470,20 @@ app.get("/api/me", (req: Request, res: Response) => {
     authenticated: true,
     user: { username: account.username, role: session.role },
     csrfToken: session.csrfToken,
+  });
+});
+
+/*
+ * Capability discovery for the sign-in screen. Returns booleans only — no
+ * client IDs, secrets or redirect URIs — so the UI can show exactly the
+ * OAuth buttons that would actually complete instead of a dead button that
+ * 503s mid-navigation.
+ */
+app.get("/api/auth/methods", (_req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    discord: isDiscordOAuthConfigured(),
+    google: isGoogleOAuthConfigured(),
   });
 });
 
@@ -1882,8 +1930,50 @@ app.get("/terms", (_req: Request, res: Response) => {
 
 /* ==================== DASHBOARD ==================== */
 
-app.get("/dashboard", requireAuth, (_req: Request, res: Response) => {
+/*
+ * The dashboard shell is static markup (no data, no tokens) and is also
+ * reachable at /dashboard.html through express.static, so gating it behind
+ * requireAuth bought nothing but a JSON body. What matters is that
+ * GET /dashboard never answers 200 to an anonymous visitor: the unauthenticated
+ * answer is a302 to /login (asserted by test-web-platform + test-web-e2e).
+ * Every piece of real data stays behind requireAuth/requireRole/requireCsrf.
+ */
+function hasLiveDashboardSession(req: Request, res: Response): boolean {
+  const sessionId = getSessionFromCookie(req.headers.cookie);
+  if (!sessionId) return false;
+
+  const rotated = rotateSession(sessionId);
+  if (rotated && rotated.newSessionId !== sessionId) {
+    setSessionCookie(res, rotated.newSessionId, rotated.expiresAt);
+  }
+
+  const session = validateSession(rotated?.newSessionId || sessionId);
+  if (!session) {
+    clearSessionCookie(res);
+    return false;
+  }
+
+  const account = getAccountById(session.accountId);
+  if (!account || !account.enabled || account.role !== session.role) {
+    return false;
+  }
+  return true;
+}
+
+app.get("/dashboard", (req: Request, res: Response) => {
+  if (!hasLiveDashboardSession(req, res)) {
+    res.redirect(302, "/login");
+    return;
+  }
   res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
+
+app.get("/login", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
+
+app.get("/support", (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, "public", "support.html"));
 });
 
 /* ==================== DASHBOARD API ==================== */

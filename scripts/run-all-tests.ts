@@ -9,8 +9,15 @@
  * ================================================================ */
 
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
+
+const TEST_DATA_DIR = path.join(os.tmpdir(), `ashenai-test-data-${Date.now()}`);
+mkdirSync(TEST_DATA_DIR, { recursive: true });
+writeFileSync(path.join(TEST_DATA_DIR, "game-players.json"), "{}", "utf8");
+mkdirSync(path.join(TEST_DATA_DIR, "anime-gifs"), { recursive: true });
+mkdirSync(path.join(TEST_DATA_DIR, "backups"), { recursive: true });
 
 interface TestSuite {
   name: string;
@@ -90,10 +97,10 @@ const MANDATORY_SUITES: TestSuite[] = [
 
   // AI Social & Personality
   { name: "AI Social", file: "scripts/test-ai-social.ts", category: "core" },
-  { name: "Personality", file: "scripts/test-personality.ts", category: "core" },
 
   // Anime Actions
   { name: "Anime Actions", file: "scripts/test-anime-actions.ts", category: "core" },
+  { name: "Data Isolation", file: "scripts/test-data-isolation.ts", category: "core" },
 
   // AFK (prefix-only) + local GIF provider security
   { name: "AFK", file: "scripts/test-afk.ts", category: "core" },
@@ -110,6 +117,8 @@ const MANDATORY_SUITES: TestSuite[] = [
 
 const OPTIONAL_SUITES: TestSuite[] = [
   { name: "Remediation", file: "scripts/test-remediation.ts", category: "security", optional: true, tier: "CORE", reason: "Final production remediation regressions (run explicitly in verification)" },
+  { name: "Personality", file: "scripts/test-personality.ts", category: "core", optional: true, tier: "EXTENDED", reason: "Personality tests — file not present in this branch" },
+  { name: "Ash Games", file: "scripts/test-ash-games.ts", category: "core", optional: true, tier: "EXTENDED", reason: "Uses live player state; register once DATA_DIR isolation is added" },
   { name: "Dashboard Mutation Security", file: "scripts/test-dashboard-mutation-security.ts", category: "security", optional: true, tier: "CORE", reason: "Dashboard mutation security matrix (run explicitly in verification)" },
   { name: "Web Platform", file: "scripts/test-web-platform.ts", category: "web", optional: true, tier: "EXTENDED", reason: "Requires running web server" },
   { name: "Providers", file: "scripts/test-providers.ts", category: "core", optional: true, tier: "LIVE", reason: "Requires live API keys" },
@@ -142,20 +151,26 @@ const results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; duration:
 function runSuite(suite: TestSuite): boolean {
   const fullPath = path.resolve(suite.file);
   if (!existsSync(fullPath)) {
-    console.log(`  ⚠️  SKIP: ${suite.name} (${suite.file} not found)`);
-    results.push({ name: suite.name, status: "SKIP", duration: 0, category: suite.category });
-    totalSkipped++;
-    return true;
+    if (suite.optional) {
+      console.log(`  ⚠️  SKIP: ${suite.name} (${suite.file} not found)`);
+      results.push({ name: suite.name, status: "SKIP", duration: 0, category: suite.category });
+      totalSkipped++;
+      return true;
+    }
+    console.log(`  ❌ FAIL: ${suite.name} (${suite.file} not found — mandatory suite missing)`);
+    results.push({ name: suite.name, status: "FAIL", duration: 0, category: suite.category });
+    totalFailed++;
+    return false;
   }
 
-  const start = Date.now();
-  try {
-    execSync(`${TSX} ${suite.file}`, {
-      cwd: process.cwd(),
-      stdio: "pipe",
-      timeout: 120_000,
-      env: { ...process.env, NODE_OPTIONS: "" },
-    });
+    const start = Date.now();
+    try {
+      execSync(`${TSX} ${suite.file}`, {
+        cwd: process.cwd(),
+        stdio: "pipe",
+        timeout: 120_000,
+        env: { ...process.env, NODE_OPTIONS: "", ASHENAI_DATA_DIR: TEST_DATA_DIR },
+      });
     const duration = Date.now() - start;
     console.log(`  ✅ PASS: ${suite.name} (${duration}ms)`);
     results.push({ name: suite.name, status: "PASS", duration, category: suite.category });
@@ -241,3 +256,6 @@ console.log(`  ${totalFailed === 0 ? "🎉 ALL MANDATORY TESTS PASSED" : "❌ SO
 if (totalFailed > 0) {
   process.exit(1);
 }
+
+// Clean up isolated test data dir
+try { rmSync(TEST_DATA_DIR, { recursive: true, force: true }); } catch {}

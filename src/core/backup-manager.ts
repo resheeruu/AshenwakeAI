@@ -5,6 +5,7 @@ import { logger } from "../logger";
 import { readJSON, writeJSON, dataPath } from "./data-store";
 import { getDatabase } from "../database/database";
 import { encrypt, decrypt, isEncryptionAvailable } from "../security/encrypt";
+import { getDataDir, getDataPath, getBackupsDir, getDatabasePath } from "../config/data-dir";
 
 const ENCRYPTION_AVAILABLE = isEncryptionAvailable() && process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32;
 
@@ -31,7 +32,7 @@ export interface BackupEntry {
   integrityChecksum: string;
 }
 
-const BACKUPS_DIR = path.join(process.cwd(), "backups");
+const BACKUPS_DIR = getBackupsDir();
 const BACKUP_INDEX = "backup-index.json";
 
 /** Backup IDs are machine-generated: `backup-` + base36 timestamp. */
@@ -113,7 +114,7 @@ async function backupSqliteDatabase(destPath: string): Promise<void> {
   } catch {
     // best effort
   }
-  const src = path.join(process.cwd(), "data", "ashenai.db");
+  const src = getDatabasePath();
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, destPath);
   }
@@ -131,12 +132,12 @@ export async function createBackup(
   }
   fs.mkdirSync(backupDir, { recursive: true });
 
-  const dataDir = path.join(process.cwd(), "data");
+  const dataDir = getDataDir();
   const filesToBackup = ["ashenai.db", "provider-health.json", "mod-cases.json", "tickets.json", "xp-data.json", "knowledge-data.json", "game-players.json", "warnings.json"];
 
   const backupFiles: BackupFileEntry[] = [];
   for (const file of filesToBackup) {
-    const src = path.join(dataDir, file);
+    const src = getDataPath(file);
     try {
       if (file === "ashenai.db") {
         if (fs.existsSync(src)) {
@@ -250,7 +251,7 @@ export function restoreBackup(id: string): { success: boolean; message: string }
     return { success: false, message: "Backup index entry not found" };
   }
 
-  const dataDir = path.join(process.cwd(), "data");
+  const dataDir = getDataDir();
   fs.mkdirSync(dataDir, { recursive: true });
 
   try {
@@ -263,7 +264,7 @@ export function restoreBackup(id: string): { success: boolean; message: string }
         continue;
       }
       const src = path.join(backupDir, file);
-      const dest = path.resolve(dataDir, file);
+      const dest = getDataPath(file);
       if (dest !== path.resolve(dataDir) && !dest.startsWith(path.resolve(dataDir) + path.sep)) {
         continue;
       }

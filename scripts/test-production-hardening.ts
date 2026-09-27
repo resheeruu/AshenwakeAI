@@ -28,6 +28,7 @@ import {
   resolveAndValidateHost,
 } from "../src/security/outbound-fetch";
 import { resolveBackupDir } from "../src/core/backup-manager";
+import { getBackupsDir } from "../src/core";
 import { sanitizeToolError, isErrorMessageSafe } from "../src/security/sanitize";
 import {
   getDiscordOAuthStatus,
@@ -250,8 +251,9 @@ console.log("\nSection B: Backup ID path traversal");
 const validId = `backup-${Date.now().toString(36)}`;
 const validDir = resolveBackupDir(validId);
 assert(validDir !== null, "valid backup id resolves");
+const expectedBackupsDir = path.resolve(getBackupsDir());
 assert(
-  validDir !== null && path.dirname(path.resolve(validDir)) === path.resolve(path.join(ROOT, "backups")),
+  validDir !== null && path.dirname(path.resolve(validDir)) === expectedBackupsDir,
   "valid backup id stays under backups/",
 );
 

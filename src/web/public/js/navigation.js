@@ -1,63 +1,180 @@
-/* ==================== NAVIGATION MODULE ==================== */
+/* ==================== NAVIGATION / APP SHELL ==================== */
 
-document.addEventListener('DOMContentLoaded', function() {
-  initNavigation();
-  initSidebarToggle();
+const AshenSections = Object.create(null);
+let AshenCurrentSection = 'overview';
+let AshenCurrentUnmounts = null;
+let AshenMountedOnce = false;
+
+/*
+ * A section can be contributed to by several files (the AI panel is written by
+ * both personality.js and models.js), so registration merges instead of
+ * overwriting. Modules call this at evaluation time:
+ *   AshenSection('ai', { mount, unmount })
+ */
+function AshenSection(id, definition) {
+  if (!AshenSections[id]) AshenSections[id] = { mounts: [], unmounts: [] };
+  const slot = AshenSections[id];
+  if (definition && typeof definition.mount === 'function') slot.mounts.push(definition.mount);
+  if (definition && typeof definition.unmount === 'function') slot.unmounts.push(definition.unmount);
+}
+window.AshenSection = AshenSection;
+
+const AshenShell = {
+  current() { return AshenCurrentSection; },
+
+  list() {
+    return Object.keys(AshenSections);
+  },
+
+  go(id, options) {
+    const opts = options || {};
+    const requested = document.getElementById('sec-' + id) ? id : 'overview';
+    const activePage = document.getElementById('sec-' + requested);
+    if (!activePage) return;
+
+    if (requested === AshenCurrentSection && AshenMountedOnce && !opts.force) return;
+
+    this._teardown();
+
+    document.querySelectorAll('.sidebar .nav-link').forEach((link) => {
+      link.classList.toggle('active', link.getAttribute('data-section') === requested);
+    });
+    document.querySelectorAll('.section-page').forEach((sec) => {
+      sec.classList.toggle('active', sec === activePage);
+    });
+
+    AshenCurrentSection = requested;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', '#' + requested);
+    }
+    this.closeSidebar();
+    Ashen.emit('section:change', requested);
+    this._mount(requested, activePage, opts.force === true);
+  },
+
+  refresh() {
+    const page = document.getElementById('sec-' + AshenCurrentSection);
+    if (!page) return;
+    this._teardown();
+    this._mount(AshenCurrentSection, page, true);
+  },
+
+  /* Re-mount the active section after the selected server changes. */
+  reloadForGuild() {
+    const page = document.getElementById('sec-' + AshenCurrentSection);
+    if (!page) return;
+    this._teardown();
+    this._mount(AshenCurrentSection, page, true);
+  },
+
+  _teardown() {
+    if (AshenCurrentUnmounts) {
+      AshenCurrentUnmounts.forEach((fn) => {
+        try { fn(); } catch (err) { console.error('section unmount failed', err); }
+      });
+      AshenCurrentUnmounts = null;
+    }
+  },
+
+  _mount(id, page, force) {
+    const slot = AshenSections[id];
+    AshenMountedOnce = true;
+    if (!slot || !slot.mounts.length) {
+      page.innerHTML = '';
+      return;
+    }
+    const ctx = {
+      id: id,
+      root: page,
+      guildId: Ashen.guildId,
+      role: Ashen.role,
+      canEdit: Ashen.canEdit(),
+      isStaff: Ashen.isStaff(),
+      isOwner: Ashen.isOwner(),
+      force: !!force,
+      stale: function () { return AshenCurrentSection !== id; }
+    };
+    const unmounts = [];
+    slot.mounts.forEach((mount) => {
+      try {
+        const result = mount(ctx);
+        if (result && typeof result.then === 'function') {
+          result.catch((err) => console.error('section ' + id + ' failed to load', err));
+        }
+      } catch (err) {
+        console.error('section ' + id + ' threw', err);
+      }
+    });
+    slot.unmounts.forEach((fn) => unmounts.push(fn));
+    AshenCurrentUnmounts = unmounts;
+  },
+
+  openSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const scrim = document.getElementById('sidebarScrim');
+    const toggle = document.getElementById('sidebarToggle');
+    if (sidebar) sidebar.classList.add('open');
+    if (scrim) scrim.classList.add('open');
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+  },
+
+  closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const scrim = document.getElementById('sidebarScrim');
+    const toggle = document.getElementById('sidebarToggle');
+    if (sidebar) sidebar.classList.remove('open');
+    if (scrim) scrim.classList.remove('open');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  }
+};
+window.AshenShell = AshenShell;
+
+/* ---------- Shell wiring ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  initSectionNav();
+  initSidebarChrome();
   initServerSelector();
+  initRefreshButtons();
+  initSectionChangeBadge();
 });
 
-function initNavigation() {
-  const navLinks = document.querySelectorAll('.sidebar .nav-link');
-  const sectionPages = document.querySelectorAll('.section-page');
-
-  navLinks.forEach(link => {
-    link.addEventListener('click', function(e) {
-      const target = this.getAttribute('href');
-      const sectionId = target.replace('#', '');
-
+function initSectionNav() {
+  document.querySelectorAll('.sidebar .nav-link').forEach((link) => {
+    link.addEventListener('click', function (e) {
       e.preventDefault();
-
-      navLinks.forEach(l => l.classList.remove('active'));
-      this.classList.add('active');
-
-      sectionPages.forEach(page => page.classList.remove('active'));
-      const targetPage = document.getElementById(`sec-${sectionId}`);
-      if (targetPage) {
-        targetPage.classList.add('active');
-      }
-
-      // Load section data
-      if (typeof loadSection === 'function') {
-        loadSection(sectionId);
-      }
+      const id = this.getAttribute('data-section');
+      if (id) AshenShell.go(id);
     });
   });
 
-  // Hash-based navigation on load
-  const hash = window.location.hash;
-  if (hash) {
-    const targetPage = document.querySelector(`[data-section="${hash.replace('#', '')}"]`);
-    if (targetPage) targetPage.click();
+  /* Section mounting waits for a confirmed session — never render data
+     behind the sign-in screen. Auth.enter() performs the first go(). */
+  if (typeof Ashen !== 'undefined' && !Ashen.authenticated) return;
+
+  const hash = (window.location.hash || '').replace('#', '');
+  if (hash && document.getElementById('sec-' + hash)) {
+    AshenShell.go(hash);
   }
 }
 
-function initSidebarToggle() {
-  const hamburger = document.querySelector('.hamburger');
-  const sidebar = document.getElementById('sidebar');
+function initSidebarChrome() {
+  const toggle = document.getElementById('sidebarToggle');
+  const scrim = document.getElementById('sidebarScrim');
+  if (toggle) {
+    toggle.addEventListener('click', function () {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar && sidebar.classList.contains('open')) AshenShell.closeSidebar();
+      else AshenShell.openSidebar();
+    });
+  }
+  if (scrim) scrim.addEventListener('click', () => AshenShell.closeSidebar());
 
-  if (!hamburger || !sidebar) return;
-
-  hamburger.addEventListener('click', function() {
-    sidebar.classList.toggle('open');
-    const isOpen = sidebar.classList.contains('open');
-    this.setAttribute('aria-expanded', isOpen);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') AshenShell.closeSidebar();
   });
 
-  // Close sidebar when clicking on a nav link (mobile)
-  sidebar.querySelectorAll('.nav-link').forEach(link => {
-    link.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-    });
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 1024) AshenShell.closeSidebar();
   });
 }
 
@@ -65,302 +182,234 @@ function initServerSelector() {
   const selector = document.getElementById('serverSelector');
   if (!selector) return;
 
-  selector.addEventListener('change', function() {
-    const guildId = this.value;
-    if (guildId) {
-      // Navigate to the section with the server context
-      showToast(`Server selected: ${this.options[this.selectedIndex].text}`, 'info');
-      loadGuildData(guildId);
-    }
+  selector.addEventListener('change', function () {
+    Ashen.rememberGuild(this.value);
+    Ashen.setGuild(this.value);
+    AshenShell.reloadForGuild();
+  });
+
+  Ashen.on('guilds', function () { paintServerSelector(); });
+  Ashen.on('session', function () { paintServerSelector(); });
+}
+
+function paintServerSelector() {
+  const selector = document.getElementById('serverSelector');
+  if (!selector) return;
+  const wrap = selector.closest('.server-select');
+  if (wrap) wrap.hidden = !Ashen.isStaff();
+  if (!Ashen.isStaff()) return;
+
+  const placeholder = Ashen.guilds.length ? 'Select server' : 'No servers authorized';
+
+  let html = '<option value="">' + escapeHtml(placeholder) + '</option>';
+  Ashen.guilds.forEach((g) => {
+    const id = String(g.guildId || '');
+    const label = g.guildName || id;
+    const selected = id === Ashen.guildId ? ' selected' : '';
+    html += '<option value="' + escapeHtml(id) + '"' + selected + '>' + escapeHtml(label) + '</option>';
+  });
+  selector.innerHTML = html;
+  selector.disabled = !Ashen.guilds.length;
+  selector.value = Ashen.guildId || '';
+}
+
+function initRefreshButtons() {
+  document.querySelectorAll('[data-refresh]').forEach((btn) => {
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      AshenShell.refresh();
+      window.setTimeout(() => { btn.disabled = false; }, 600);
+    });
   });
 }
 
-async function loadGuildData(guildId) {
-  try {
-    const data = await API.get(`/api/guilds/${guildId}`);
-    // Update UI with guild data
-    if (data.ok && data.config) {
-      showToast('Server loaded', 'success');
-    }
-  } catch (error) {
-    showToast('Failed to load server data.', 'error');
-  }
+/* Reflect read-only / no-access state in each section header so an admin
+ * never stares at disabled controls without knowing why. */
+function initSectionChangeBadge() {
+  Ashen.on('section:change', function () { paintPermissionNotes(); });
+  Ashen.on('session', function () { paintPermissionNotes(); });
 }
 
-function loadSection(sectionId) {
-  switch (sectionId) {
-    case 'overview': loadOverview(); break;
-    case 'providers': loadProviders(); break;
-    case 'models': loadModels(); break;
-    case 'personality': loadPersonality(); break;
-    case 'analytics': loadAnalytics(); break;
-    case 'audit': loadAudit(); break;
-    case 'security': loadSecurity(); break;
-    case 'moderation': loadModeration(); break;
-    case 'social': loadSocial(); break;
-    case 'automation': loadAutomation(); break;
-    case 'support': if (typeof loadSupport === 'function') loadSupport(); break;
-    default: break;
-  }
+function paintPermissionNotes() {
+  const ownerOnly = Ashen.role === 'owner';
+  const staff = Ashen.isStaff();
+
+  document.querySelectorAll('[data-perm="owner"]').forEach((el) => {
+    el.hidden = ownerOnly;
+    el.className = 'perm-note ro';
+    el.innerHTML = ownerOnly ? '' :
+      '<strong>Read-only.</strong> <span>Configuration writes require the owner role; your role is ' +
+      escapeHtml(Ashen.role || 'user') + '.</span>';
+  });
+
+  document.querySelectorAll('[data-perm="staff"]').forEach((el) => {
+    el.hidden = staff;
+    el.className = 'perm-note ro';
+    el.innerHTML = staff ? '' :
+      '<strong>Staff only.</strong> <span>This view is available to admin and owner accounts.</span>';
+  });
 }
 
-async function loadOverview() {
-  try {
-    const stats = await API.get('/api/system/status');
-    const providers = await API.get('/api/providers/status');
+window.AshenPaintPermissionNotes = paintPermissionNotes;
 
-    // Render overview stats
-    const statsEl = document.getElementById('overviewStats');
-    if (statsEl && stats.ok) {
-      const status = stats.status || {};
-      statsEl.innerHTML = `
-        <div class="stat-card green"><div class="stat-value">${status.discordReady ? 'Yes' : 'No'}</div><div class="stat-label">Discord</div></div>
-        <div class="stat-card purple"><div class="stat-value">${escapeHtml(providers.providers?.length || 0)}</div><div class="stat-label">Providers</div></div>
-        <div class="stat-card yellow"><div class="stat-value">Online</div><div class="stat-label">Status</div></div>
-      `;
-    }
+/* ==================== SHARED RENDER HELPERS ==================== */
 
-    // Render provider health
-    const providersEl = document.getElementById('overviewProviders');
-    if (providersEl && providers.ok && providers.providers) {
-      providersEl.innerHTML = providers.providers.map(p => `
-        <div class="provider-card">
-          <h4><span class="status-dot ${p.health?.healthState === 'HEALTHY' ? 'status-dot-green' : 'status-dot-yellow'}"></span>${escapeHtml(p.displayName || p.name)}</h4>
-          <div class="provider-meta">
-            <span class="badge ${p.health?.healthState === 'HEALTHY' ? 'badge-green' : 'badge-yellow'}">${escapeHtml(p.health?.healthState || 'UNKNOWN')}</span>
-            <span>${escapeHtml(p.modelCount || 0)} models</span>
-          </div>
-        </div>
-      `).join('');
-    }
-  } catch (error) {
-    document.getElementById('overviewStats').innerHTML = '<div class="empty-state"><div class="empty-title">Failed to load</div><p>Please try again.</p></div>';
-  }
-}
+const AshenUI = {
+  esc: function (value) {
+    return escapeHtml(value == null ? '' : value);
+  },
 
-async function loadProviders() {
-  try {
-    const data = await API.get('/api/providers/manage');
-    const listEl = document.getElementById('providerList');
-    if (listEl && data.ok && data.providers) {
-      listEl.innerHTML = data.providers.map(p => `
-        <div class="provider-card">
-          <h4>${escapeHtml(p.displayName || p.name)} <span class="badge ${p.enabled ? 'badge-green' : 'badge-muted'}">${p.enabled ? 'HEALTHY' : 'DISABLED'}</span></h4>
-          <div class="provider-meta">
-            <span>${escapeHtml(p.protocol || 'N/A')}</span>
-            <span>${escapeHtml(p.health?.healthState || 'N/A')}</span>
-            <span>${escapeHtml(p.modelCount || 0)} models</span>
-          </div>
-          <div class="step-actions" style="margin-top:8px">
-            <button class="btn btn-sm btn-outline" data-action="test" data-id="${escapeHtml(p.id)}">Test</button>
-            <button class="btn btn-sm btn-outline" data-action="toggle" data-id="${escapeHtml(p.id)}" data-enabled="${p.enabled ? 'true' : 'false'}">${p.enabled ? 'Disable' : 'Enable'}</button>
-          </div>
-        </div>
-      `).join('');
-      listEl.querySelectorAll('button[data-action="test"]').forEach(btn => {
-        btn.addEventListener('click', () => testProvider(btn.getAttribute('data-id')));
+  loading: function (label) {
+    return '<div class="loading"><span class="spinner" aria-hidden="true"></span>' +
+      this.esc(label || 'Loading…') + '</div>';
+  },
+
+  skeleton: function (rows) {
+    let html = '<div class="skeleton-row">';
+    for (let i = 0; i < (rows || 3); i++) html += '<div class="skeleton"></div>';
+    return html + '</div>';
+  },
+
+  empty: function (title, desc, icon) {
+    return '<div class="empty-state empty-compact">' +
+      '<div class="empty-icon" aria-hidden="true">' + this.esc(icon || '◇') + '</div>' +
+      '<div class="empty-title">' + this.esc(title) + '</div>' +
+      (desc ? '<div class="empty-desc">' + this.esc(desc) + '</div>' : '') +
+      '</div>';
+  },
+
+  failure: function (err, what) {
+    const message = Ashen.describeError(err);
+    return '<div class="empty-state empty-compact">' +
+      '<div class="empty-icon" aria-hidden="true">!</div>' +
+      '<div class="empty-title">' + this.esc(what || 'Could not load') + '</div>' +
+      '<div class="empty-desc">' + this.esc(message) + '</div>' +
+      '</div>';
+  },
+
+  denied: function (detail) {
+    return '<div class="unauthorized"><div>' +
+      '<div class="ua-title">Not available for your role</div>' +
+      '<div class="ua-desc">' + this.esc(detail || 'Ask an owner or admin for access.') + '</div>' +
+      '</div></div>';
+  },
+
+  kvCell: function (label, value) {
+    const text = value === undefined || value === null ? '-' : String(value);
+    return '<div class="kv-cell"><div class="kv-k">' + this.esc(label) + '</div>' +
+      '<div class="kv-v">' + this.esc(text) + '</div></div>';
+  },
+
+  stat: function (value, label, tone, note) {
+    return '<div class="stat-card ' + (tone || '') + '">' +
+      '<div class="stat-value">' + this.esc(value) + '</div>' +
+      '<div class="stat-label">' + this.esc(label) + '</div>' +
+      (note ? '<div class="stat-delta">' + this.esc(note) + '</div>' : '') +
+      '</div>';
+  },
+
+  row: function (title, desc, rightHtml) {
+    return '<div class="field-line">' +
+      '<div class="fl-text"><div class="fl-title">' + this.esc(title) + '</div>' +
+      (desc ? '<div class="fl-desc">' + this.esc(desc) + '</div>' : '') + '</div>' +
+      (rightHtml === undefined ? '' : rightHtml) +
+      '</div>';
+  },
+
+  badge: function (label, tone) {
+    return '<span class="badge ' + (tone || '') + '">' + this.esc(label) + '</span>';
+  },
+
+  toggle: function (id, title, desc, checked, disabled) {
+    return '<div class="field-line">' +
+      '<div class="fl-text"><label class="fl-title" for="' + this.esc(id) + '">' + this.esc(title) + '</label>' +
+      (desc ? '<div class="fl-desc">' + this.esc(desc) + '</div>' : '') + '</div>' +
+      '<label class="toggle"><input type="checkbox" id="' + this.esc(id) + '"' +
+      (checked ? ' checked' : '') + (disabled ? ' disabled' : '') +
+      '><span class="toggle-slider"></span></label>' +
+      '</div>';
+  },
+
+  number: function (id, title, desc, value, attrs) {
+    const parts = this.inputAttrs(attrs, 'number');
+    return '<div class="field-line">' +
+      '<div class="fl-text"><label class="fl-title" for="' + this.esc(id) + '">' + this.esc(title) + '</label>' +
+      (desc ? '<div class="fl-desc">' + this.esc(desc) + '</div>' : '') + '</div>' +
+      '<input class="input input-num" type="' + this.esc(parts.type) + '" id="' + this.esc(id) +
+      '" value="' + this.esc(value == null ? '' : value) + '"' + parts.rest + '>' +
+      '</div>';
+  },
+
+  /* Splits a type="..." out of an attrs string so duplicate type attributes
+     never reach the DOM (the browser keeps the first one and ignores the rest). */
+  inputAttrs: function (attrs, defaultType) {
+    const extra = attrs || '';
+    const match = extra.match(/\btype="([^"]+)"/);
+    if (!match) return { type: defaultType || 'text', rest: extra };
+    return { type: match[1], rest: extra.replace(match[0], '') };
+  },
+
+  text: function (id, title, desc, value, attrs) {
+    const parts = this.inputAttrs(attrs);
+    return '<div class="field-line">' +
+      '<div class="fl-text"><label class="fl-title" for="' + this.esc(id) + '">' + this.esc(title) + '</label>' +
+      (desc ? '<div class="fl-desc">' + this.esc(desc) + '</div>' : '') + '</div>' +
+      '<input class="input input-text" type="' + this.esc(parts.type) + '" id="' + this.esc(id) +
+      '" value="' + this.esc(value == null ? '' : value) + '"' + parts.rest + '>' +
+      '</div>';
+  },
+
+  select: function (id, title, desc, value, options, disabled) {
+    let html = '<div class="field-line">' +
+      '<div class="fl-text"><label class="fl-title" for="' + this.esc(id) + '">' + this.esc(title) + '</label>' +
+      (desc ? '<div class="fl-desc">' + this.esc(desc) + '</div>' : '') + '</div>' +
+      '<select class="select input-text" id="' + this.esc(id) + '"' + (disabled ? ' disabled' : '') + '>';
+    options.forEach((opt) => {
+      const val = typeof opt === 'string' ? opt : opt.value;
+      const label = typeof opt === 'string' ? opt : opt.label;
+      html += '<option value="' + this.esc(val) + '"' + (String(value) === String(val) ? ' selected' : '') + '>' +
+        this.esc(label) + '</option>';
+    });
+    return html + '</select></div>';
+  },
+
+  textarea: function (id, title, desc, value, attrs) {
+    return '<div class="field">' +
+      '<label class="label" for="' + this.esc(id) + '">' + this.esc(title) + '</label>' +
+      '<textarea class="input" id="' + this.esc(id) + '"' + (attrs || '') + '>' + this.esc(value) + '</textarea>' +
+      (desc ? '<div class="hint">' + this.esc(desc) + '</div>' : '') +
+      '</div>';
+  },
+
+  formActions: function (label, gate, note, disabled) {
+    return '<div class="form-actions">' +
+      '<button class="btn btn-primary btn-sm" type="button" data-save="' + this.esc(gate) + '"' +
+      (disabled ? ' disabled' : '') + '>' + this.esc(label || 'Save changes') + '</button>' +
+      (note ? '<span class="fa-note">' + this.esc(note) + '</span>' : '') +
+      '</div>';
+  },
+
+  /* Wire every [data-save] button inside a container to a handler. */
+  bindSave: function (container, handler) {
+    if (!container) return;
+    container.querySelectorAll('[data-save]').forEach((btn) => {
+      btn.addEventListener('click', async function () {
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          await handler(btn.getAttribute('data-save'));
+        } catch (err) {
+          showToast(Ashen.describeError(err), 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
       });
-      listEl.querySelectorAll('button[data-action="toggle"]').forEach(btn => {
-        btn.addEventListener('click', () => toggleProvider(btn.getAttribute('data-id'), btn.getAttribute('data-enabled') === 'true'));
-      });
-    }
-  } catch (error) {
-    const listEl = document.getElementById('providerList');
-    if (listEl) listEl.innerHTML = '<div class="empty-state"><div class="empty-title">No providers</div><p>Add your first AI provider.</p></div>';
-  }
-}
+    });
+  },
 
-async function loadModels() {
-  try {
-    const data = await API.get('/api/providers/manage');
-    const listEl = document.getElementById('modelList');
-    if (listEl && data.ok && data.providers) {
-      let allModels = [];
-      for (const p of data.providers) {
-        if (p.models) allModels.push(...p.models);
-      }
-      if (allModels.length === 0) {
-        listEl.innerHTML = '<div class="empty-state"><div class="empty-title">No models discovered</div><p>Discover models from a configured provider.</p></div>';
-        return;
-      }
-      listEl.innerHTML = allModels.map(m => `
-        <div class="model-card">
-          <h4>${escapeHtml(m.displayName || m.modelId || m.id)}</h4>
-          <div class="provider-meta"><span>${escapeHtml(m.provider || 'N/A')}</span></div>
-        </div>
-      `).join('');
-    }
-  } catch (error) {
-    const listEl = document.getElementById('modelList');
-    if (listEl) listEl.innerHTML = '<div class="empty-state"><div class="empty-title">Failed to load models</div></div>';
-  }
-}
+  readOnly: function () { return !Ashen.canEdit(); }
+};
 
-async function loadPersonality() {
-  const editorEl = document.getElementById('personalityEditor');
-  if (!editorEl) return;
-
-  editorEl.innerHTML = `
-    <div class="field"><label class="label">Name</label><input class="input" placeholder="My AI Personality" id="personalityName"></div>
-    <div class="field"><label class="label">Tone</label><select class="select" id="personalityTone"><option>Friendly</option><option>Professional</option><option>Casual</option><option>Technical</option></select></div>
-    <div class="field"><label class="label">Style</label><select class="select" id="personalityStyle"><option>Default</option><option>Creative</option><option>Concise</option><option>Detailed</option></select></div>
-    <div class="field"><label class="label">Humor (0-100)</label><input type="range" class="input" id="personalityHumor" min="0" max="100" value="50"></div>
-    <div class="field"><label class="label">Creativity (0-100)</label><input type="range" class="input" id="personalityCreativity" min="0" max="100" value="50"></div>
-    <div class="field"><label class="label">Verbosity (0-100)</label><input type="range" class="input" id="personalityVerbosity" min="0" max="100" value="50"></div>
-    <button class="btn btn-primary" onclick="savePersonality()">Save Personality</button>
-  `;
-}
-
-async function loadAnalytics() {
-  try {
-    const stats = await API.get('/api/usage/system');
-    const statsEl = document.getElementById('analyticsStats');
-    if (statsEl && stats.ok && stats.systemUsage) {
-      const usage = stats.systemUsage;
-      statsEl.innerHTML = `
-        <div class="stat-card purple"><div class="stat-value">${escapeHtml(usage.requests || 0)}</div><div class="stat-label">Requests</div></div>
-        <div class="stat-card green"><div class="stat-value">${escapeHtml(usage.successfulRequests || 0)}</div><div class="stat-label">Successful</div></div>
-        <div class="stat-card red"><div class="stat-value">${escapeHtml(usage.failedRequests || 0)}</div><div class="stat-label">Failed</div></div>
-        <div class="stat-card yellow"><div class="stat-value">${escapeHtml(usage.activeUsers || 0)}</div><div class="stat-label">Active Users</div></div>
-      `;
-    }
-  } catch (error) {
-    const statsEl = document.getElementById('analyticsStats');
-    if (statsEl) statsEl.innerHTML = '<div class="empty-state"><div class="empty-title">No analytics data</div></div>';
-  }
-}
-
-async function loadAudit() {
-  try {
-    const data = await API.get('/api/audit');
-    const listEl = document.getElementById('auditList');
-    if (listEl && data.ok && data.entries) {
-      listEl.innerHTML = `
-        <div class="log-list">
-          ${data.entries.map(e => `
-            <div class="log-entry">
-              <span class="log-ts">${escapeHtml(new Date(e.timestamp).toLocaleString())}</span>
-              <span class="log-level info">${escapeHtml(e.result || 'info')}</span>
-              <span>${escapeHtml(redact(e.what || 'Unknown'))}</span>
-              <span style="color:var(--dim)">- ${escapeHtml(e.who || 'unknown')}</span>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-  } catch (error) {
-    const listEl = document.getElementById('auditList');
-    if (listEl) listEl.innerHTML = '<div class="empty-state"><div class="empty-title">No audit logs</div></div>';
-  }
-}
-
-async function loadSecurity() {
-  try {
-    const data = await API.get('/api/account/security');
-    const authEl = document.getElementById('securityAuth');
-    if (authEl && data.ok && data.security) {
-      const sec = data.security;
-      authEl.innerHTML = `
-        <div class="provider-row"><span class="provider-name">Password</span><span class="badge ${sec.hasPassword ? 'badge-green' : 'badge-red'}">${sec.hasPassword ? 'Set' : 'Not set'}</span></div>
-        <div class="provider-row"><span class="provider-name">MFA</span><span class="badge ${sec.mfaEnabled ? 'badge-green' : 'badge-yellow'}">${sec.mfaEnabled ? 'Enabled' : 'Disabled'}</span></div>
-        <div class="provider-row"><span class="provider-name">Email</span><span class="badge ${sec.emailVerified ? 'badge-green' : 'badge-muted'}">${sec.emailVerified ? 'Verified' : 'Unverified'}</span></div>
-      `;
-    }
-
-    const sessions = await API.get('/api/account/sessions');
-    const sessionsEl = document.getElementById('securitySessions');
-    if (sessionsEl && sessions.ok && sessions.sessions) {
-      sessionsEl.innerHTML = `
-        <div style="margin-bottom:8px"><button class="btn btn-danger btn-sm" onclick="revokeAllSessions()">Revoke All Other Sessions</button></div>
-        ${sessions.sessions.map(s => `
-          <div class="provider-row"><span class="provider-name">Session ${escapeHtml(s.sessionId)}</span><span class="badge ${s.isCurrent ? 'badge-green' : 'badge-muted'}">${s.isCurrent ? 'Current' : 'Other'}</span></div>
-        `).join('')}
-      `;
-    }
-  } catch (error) {
-    // Silently handle
-  }
-}
-
-async function loadModeration() {
-  const controlsEl = document.getElementById('moderationControls');
-  if (!controlsEl) return;
-
-  controlsEl.innerHTML = `
-    <div class="field"><label class="label">Enable AI Moderation</label><label class="toggle"><input type="checkbox" id="moderationEnabled"><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Spam Detection</label><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Message Filtering</label><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Link Filtering</label><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Mention Abuse Detection</label><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Toxicity Detection</label><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Moderator Alerts</label><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Logging</label><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-    <button class="btn btn-primary" onclick="saveModeration()">Save Moderation</button>
-  `;
-}
-
-async function loadSocial() {
-  const socialEl = document.getElementById('socialConfig');
-  if (!socialEl) return;
-
-  socialEl.innerHTML = `
-    <div class="field"><label class="label">Anime Actions</label><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Custom Reactions</label><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Custom Emoji</label><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Rivalry Mode</label><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label></div>
-    <div class="field"><label class="label">Debates</label><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label></div>
-  `;
-}
-
-async function loadAutomation() {
-  const builderEl = document.getElementById('automationBuilder');
-  if (!builderEl) return;
-
-  builderEl.innerHTML = `
-    <div class="empty-state"><div class="empty-icon">&#9881;</div><div class="empty-title">No automations</div><p>Create an automation to get started.</p></div>
-    <div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="showToast('Automation builder coming soon', 'info')">+ Create Automation</button></div>
-  `;
-}
-
-async function testProvider(id) {
-  try {
-    showToast('Testing provider...', 'info');
-    await API.post(`/api/providers/manage/${id}/test`, {});
-    showToast('Provider test initiated.', 'success');
-  } catch (error) {
-    showToast('Failed to test provider.', 'error');
-  }
-}
-
-async function toggleProvider(id, enabled) {
-  try {
-    await API.post(`/api/providers/manage/${id}/toggle`, { enabled });
-    showToast(`Provider ${enabled ? 'enabled' : 'disabled'}.`, 'success');
-    loadProviders();
-  } catch (error) {
-    showToast('Failed to toggle provider.', 'error');
-  }
-}
-
-function savePersonality() {
-  const name = document.getElementById('personalityName')?.value;
-  if (!name) {
-    showToast('Please enter a personality name.', 'error');
-    return;
-  }
-  showToast('Personality saved!', 'success');
-}
-
-function saveModeration() {
-  showToast('Moderation settings saved!', 'success');
-}
-
-async function revokeAllSessions() {
-  try {
-    await API.post('/api/account/sessions/revoke-all', {});
-    showToast('All other sessions revoked.', 'success');
-    loadSecurity();
-  } catch (error) {
-    showToast('Failed to revoke sessions.', 'error');
-  }
-}
+window.AshenUI = AshenUI;

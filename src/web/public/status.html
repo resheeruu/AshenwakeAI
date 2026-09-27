@@ -3,15 +3,137 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AshenAI - Status</title>
+<title>Status — AshenAI</title>
+<meta name="description" content="Live operational status for the AshenAI dashboard, database and startup preflight.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
-<header class="site-header"><div class="container"><nav class="main-nav"><a href="/" class="logo">AshenAI</a><ul class="nav-links"><li><a href="/" class="nav-link">Home</a></li><li><a href="/features" class="nav-link">Features</a></li><li><a href="/docs" class="nav-link">Docs</a></li></ul><a href="/dashboard" class="btn btn-secondary cta-button">Open Dashboard</a></nav></div></header>
-<main class="features-hero"><div class="container"><div class="features-hero-content"><h1>Status</h1><p>Current system status for AshenAI.</p></div></div></main>
-<section class="features-section"><div class="container"><div class="card"><h3>AshenAI</h3><div class="status-dot status-dot-green"></div> <strong>Operational</strong></div><div class="card"><h3>Discord Bot</h3><div class="status-dot status-dot-green"></div> <strong>Operational</strong></div><div class="card"><h3>HTTP Dashboard</h3><div class="status-dot status-dot-green"></div> <strong>Operational</strong></div><div class="card"><h3>AI Router</h3><div class="status-dot status-dot-green"></div> <strong>Operational</strong></div><div class="card"><h3>Provider System</h3><div class="status-dot status-dot-green"></span> <strong>Operational</strong></div></div></section>
-<footer class="site-footer"><div class="container"><div class="footer-bottom"><p>&copy; 2026 AshenAI. All rights reserved.</p></div></div></footer>
+
+<header class="site-header" id="siteHeader">
+  <div class="container">
+    <nav class="main-nav" aria-label="Primary">
+      <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/features">Features</a></li>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/status">Status</a></li>
+        <li><a href="/support">Support</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<div class="mobile-nav" id="mobileNav">
+  <a href="/">Home</a>
+  <a href="/features">Features</a>
+  <a href="/docs">Docs</a>
+  <a href="/status">Status</a>
+  <a href="/support">Support</a>
+  <a href="/dashboard" class="btn btn-primary btn-block">Open Dashboard</a>
+</div>
+
+<main>
+
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow">Live</p>
+      <h1 class="display">System status.</h1>
+      <p class="lede">Reported by the same health endpoint the dashboard and the deployment health check use.</p>
+      <div class="status-pill" id="statusPill" role="status">
+        <span class="pulse" aria-hidden="true"></span>
+        <span id="statusPillText">Checking system status…</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="container">
+    <div class="prose">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Components</div>
+            <div class="card-sub">Only what the health endpoint actually reports</div>
+          </div>
+          <button class="btn btn-outline btn-sm" type="button" id="statusRetry">Re-check</button>
+        </div>
+        <div id="statusRows"><div class="hint">Checking…</div></div>
+        <div class="hint" id="statusMeta"></div>
+      </div>
+
+      <h2>What this means</h2>
+      <p>
+        <strong>Overall</strong> is the health gate: it passes when the database is reachable and
+        startup preflight did not block. A degraded overall status means the API returns
+        <code>503</code> with a JSON body rather than silently claiming to be healthy.
+      </p>
+      <p>
+        Discord gateway health is intentionally not shown here because the public health endpoint
+        does not measure it. Authenticated operators can see the full component breakdown inside
+        the dashboard.
+      </p>
+
+      <p><a href="/docs">Documentation</a> · <a href="/support">Support</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
+        <p>Intelligent infrastructure for Discord communities.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/status">Status</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/support">Support</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+          <li><a href="/terms">Terms</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/resheeruu/AshenwakeAI">GitHub</a></li>
+          <li><a href="/docs#api">API</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 AshenAI. All rights reserved.</p>
+      <div class="fb-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/support">Support</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/escape.js"></script>
+<script src="js/base.js"></script>
+<script src="js/status.js"></script>
 </body>
 </html>

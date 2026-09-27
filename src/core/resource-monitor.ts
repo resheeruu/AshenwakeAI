@@ -1,6 +1,7 @@
 import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
+import { getDataDir } from "../config/data-dir";
 import { logger } from "../logger";
 
 // ============================================================
@@ -166,7 +167,7 @@ function generateRecommendations(snap: ResourceSnapshot): string[] {
 export function takeSnapshot(): ResourceSnapshot {
   const mem = process.memoryUsage();
   const cpu = process.cpuUsage();
-  const dataDir = path.join(process.cwd(), "data");
+  const dataDir = getDataDir();
   const disk = measureDiskUsage(dataDir);
 
   const snap: ResourceSnapshot = {
@@ -256,7 +257,7 @@ export function getResourceStatus(): {
 
 /** Cleanup stale temp files in data/. Safe, bounded, non-destructive. */
 export function cleanupTempFiles(): { removed: number; freedKB: number } {
-  const dataDir = path.join(process.cwd(), "data");
+  const dataDir = getDataDir();
   let removed = 0;
   let freedKB = 0;
   const now = Date.now();

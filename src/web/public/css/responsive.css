@@ -1,30 +1,83 @@
-/* ==================== RESPONSIVE STYLES ==================== */
-@media (max-width: 1024px) {
-  .nav-links { display: none; }
-  .hero { padding: 140px 20px 60px; }
-  .hero-content h1 { font-size: 36px; }
-  .section-header { margin-bottom: 40px; }
-  .section-header h2 { font-size: 28px; }
+/* ==================== PUBLIC RESPONSIVE ==================== */
+
+@media (max-width: 1120px) {
+  .hero-inner { gap: 40px; }
+  .game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .metric:nth-child(3) { border-right: 0; }
+  .metric:nth-child(n + 4) { border-top: 1px solid var(--border); }
 }
 
-@media (max-width: 768px) {
-  .site-header { padding: 0 16px; }
-  .main-nav { height: 56px; }
-  .logo { font-size: 18px; }
-  .nav-links { display: none; }
-  .cta-button { padding: 10px 20px; font-size: 12px; }
-  .hero { padding: 120px 16px 40px; }
-  .hero-content h1 { font-size: 30px; }
-  .hero-content p { font-size: 16px; }
-  .hero-buttons { flex-direction: column; align-items: center; }
-  .hero-buttons .btn { width: 100%; }
-  .features-section { padding: 60px 16px; }
-  .ai-infrastructure { padding: 60px 16px; }
-  .provider-ecosystem { padding: 60px 16px; }
-  .footer-grid { grid-template-columns: 1fr; gap: 30px; }
+@media (max-width: 980px) {
+  .section { padding: 76px 0; }
+  .hero { padding: calc(var(--header-h) + 56px) 0 72px; }
+  .hero-inner { grid-template-columns: minmax(0, 1fr); gap: 44px; }
+  .hero-copy { max-width: none; }
+  .split { grid-template-columns: minmax(0, 1fr); gap: 34px; }
+  .split.reverse > *:first-child { order: 0; }
+  .split-copy { max-width: none; }
+  .bento { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .bento-cell { grid-column: span 2; }
+  .bento-cell.span-3, .bento-cell.span-4 { grid-column: span 4; }
+  .bento-cell.span-6 { grid-column: span 4; }
+  .sec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .note-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cockpit-body { grid-template-columns: minmax(0, 1fr); }
+  .cockpit-side { display: none; }
+  .ra-body { grid-template-columns: minmax(0, 1fr); }
+  .ra-col { border-right: 0; border-bottom: 1px solid var(--border); }
+  .ra-col:last-child { border-bottom: 0; }
+  .chat-badge { display: none; }
+  .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+  .footer-brand { grid-column: span 2; }
 }
 
-@media (max-width: 480px) {
-  .section-header h2 { font-size: 24px; }
-  .tag { padding: 4px 8px; font-size: 10px; }
+@media (max-width: 760px) {
+  .nav-links, .nav-actions .btn-outline { display: none; }
+  .nav-toggle { display: grid; }
+  .main-nav { gap: 12px; }
+  .nav-actions { margin-left: auto; }
+
+  .hero-title { font-size: clamp(32px, 9vw, 48px); }
+  .hero-cta .btn { flex: 1 1 100%; }
+  .hero-meta { gap: 14px 22px; }
+
+  .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric { border-right: 1px solid var(--border); border-top: 1px solid var(--border); }
+  .metric:nth-child(2n) { border-right: 0; }
+  .metric:nth-child(-n + 2) { border-top: 0; }
+
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bento-cell, .bento-cell.span-3, .bento-cell.span-4, .bento-cell.span-6 { grid-column: span 2; }
+  .sec-grid { grid-template-columns: minmax(0, 1fr); }
+  .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tier-grid { grid-template-columns: minmax(0, 1fr); }
+  .note-grid { grid-template-columns: minmax(0, 1fr); }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: minmax(0, 1fr); }
+  .section-head { margin-bottom: 36px; }
+  .cta-band { padding: 40px 22px; }
+  .prose { padding-top: 40px; }
+  .kv { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .kv dd { margin-bottom: 10px; }
+}
+
+@media (max-width: 560px) {
+  .container { padding: 0 18px; }
+  .section { padding: 60px 0; }
+  .metrics-grid { grid-template-columns: minmax(0, 1fr); }
+  .metric { border-right: 0; }
+  .metric:nth-child(-n + 2) { border-top: 1px solid var(--border); }
+  .metric:first-child { border-top: 0; }
+  .game-grid { grid-template-columns: minmax(0, 1fr); }
+  .footer-grid { grid-template-columns: minmax(0, 1fr); }
+  .footer-brand { grid-column: span 1; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .chat-body { min-height: 220px; padding: 15px 13px 16px; }
+  .cockpit-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cockpit-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .hero-cta { flex-direction: column; }
+  .hero-cta .btn { width: 100%; }
 }
