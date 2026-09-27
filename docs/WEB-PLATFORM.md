@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AshenWakeAI Web Platform provides a professional control plane for Discord server management.
+The AshenAI Web Platform provides a professional control plane for Discord server management.
 
 ```
 Public Website → Authenticated Dashboard → Discord/Guild Control → AI Orchestration → Provider Runtime → Model/Inference

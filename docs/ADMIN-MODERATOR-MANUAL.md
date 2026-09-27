@@ -4,11 +4,12 @@
 
 AshenAI is a secure Discord AI assistant and server management bot. It provides:
 - AI-powered chat and question answering
-- Server moderation tools (warn, timeout, kick, ban)
+- Server moderation tools (warn, timeout, untimeout)
 - Channel management (create, edit, delete, rename)
 - Server protection (protect channels/categories from modification)
 - Governance and policy enforcement
-- Casino games and RPG adventure system
+- Ash games (mines, battle, lottery, hunt, slots)
+- Ash anime actions (fictional roleplay interactions)
 - Task automation for safe autonomous operations
 
 ## 2. Permission Levels
@@ -17,8 +18,8 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 |------|-----|-----------------|
 | **Owner** | The bot owner (set via env vars) | Full control. Bypasses all rate limits and risk checks. Web dashboard access. |
 | **Admin** | Discord members with Administrator permission or listed in `ADMIN_DISCORD_IDS` | Channel management, moderation, governance, protection tools |
-| **Moderator** | Discord members with ModerateMembers permission | Warn, timeout, untimeout, view warnings, purge messages. Read-only governance tools. |
-| **Member** | Any Discord server member | Ask AI questions, play games |
+| **Moderator** | Discord members with ModerateMembers permission | Warn, timeout, untimeout, view warnings. Read-only governance tools. |
+| **Member** | Any Discord server member | Ask AI questions, play Ash games, use anime actions |
 | **Guest** | Discord members without any role | Limited AI chat only |
 
 ## 3. Slash Commands
@@ -26,7 +27,6 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 ### AI Commands
 - `/ask <question>` - Ask AshenAI anything. Rate-limited per user.
 - `/reset` - Clear your conversation history with AshenAI.
-- `/personality <text>` - Set your custom AI personality prompt for this server (Admin+).
 
 ### Server Management Commands
 - `/server info` - View server information and stats.
@@ -35,10 +35,10 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 - `/prompt <request>` - AI-powered server builder — describe what you want in natural language.
 
 ### Moderation Commands (Moderator+)
-- `/moderation warn <user> <reason>` - Issue a formal warning to a member.
-- `/moderation warnings <user>` - View warnings for a member.
-- `/moderation timeout <user> <minutes> <reason>` - Timeout a member (1-40320 minutes).
-- `/moderation untimeout <user> <reason>` - Remove timeout from a member.
+- `/mod warn <user> <reason>` - Issue a formal warning to a member.
+- `/mod warnings <user>` - View warnings for a member.
+- `/mod timeout <user> <minutes> <reason>` - Timeout a member (1-40320 minutes).
+- `/mod untimeout <user> <reason>` - Remove timeout from a member.
 
 ### Support Commands
 - `/support ticket` - Create a support ticket.
@@ -46,20 +46,20 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 - `/support appeal` - Appeal a ban or moderation action.
 - `/support case view/list/assign/status/stats` - Manage support cases.
 
-### Access Control Commands (Admin+)
-- `/access add <user>` - Add a trusted user.
-- `/access remove <user>` - Remove a trusted user.
-- `/access list` - List all trusted users.
-- `/access send <message>` - Send a message as AshenAI (trusted only).
+### Send Command (Owner/Trusted Users)
+- `/send <message>` - Send a message as AshenAI (trusted users, server owner, bot owner).
 
 ### System Commands
 - `/status` - Show system status and AI usage.
 - `/settings panel` - Interactive server settings panel (Admin+).
-- `/settings update <category> <setting> <value>` - Update a specific setting (Admin+).
 - `/help` - Show all available commands.
 
-### Games (Any member)
-- `/game` - Play AshenAI games (includes dice, coinflip, rps, duel, slots, casino, and more).
+### Ash Games (Any member)
+- `ash mine [bet]` — Play Ashen Mines
+- `ash battle` — Fight a foe
+- `ash lottery` — Buy a lottery ticket
+- `ash hunt` — Go hunting
+- `ash slots` — Spin the reels
 
 ### Anime Actions (prefix command, any member)
 - `ash <action> @user` - Fictional roleplay interactions (32 actions,
@@ -72,9 +72,9 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
   cooldown (5–10s).
 
 ### Which commands work in DMs
-- **DMs allowed**: `/ask`, `/game`, `/reset`, `/status`, `/help`.
-- **Servers only** (hidden in DMs): `/settings`, `/support`, `/moderation`,
-  `/access`, `/server`, `/prompt`, `/personality` — these resolve server
+- **DMs allowed**: `/ask`, `/reset`, `/status`, `/help`.
+- **Servers only** (hidden in DMs): `/settings`, `/support`, `/mod`,
+  `/send`, `/server`, `/prompt` — these resolve server
   configuration and are rejected outside a server.
 
 ## 4. Confirmation-Required Actions
@@ -90,8 +90,6 @@ High-risk actions require explicit confirmation via Discord button interaction:
 | Create/edit guild policy | Medium | Admin+ |
 | Apply policy template | High | Admin+ |
 | Timeout user | High | Moderator+ |
-| Kick user | High | Admin+ |
-| Ban user | Critical | Admin+ |
 | Purge messages | High | Moderator+ |
 
 When you invoke a confirmation-required action, AshenAI will show an **Action Plan** with a Confirm/Cancel button. The plan expires after 5 minutes.
@@ -201,10 +199,10 @@ Use the `view_tool_audit` tool to see recent tool executions:
 |--------|-----------|
 | Warn members | Kick or ban members |
 | Timeout members (up to 28 days) | Edit server settings |
-| Remove timeouts | Delete channels |
-| View warnings | Manage permissions |
-| Purge messages | Create/edit policies |
-| View audit logs | Access web dashboard |
+| Remove timeouts | Edit channel permissions |
+| View warnings | Delete channels |
+| Purge messages | Manage permissions |
+| View audit logs | Create/edit policies |
 | Use AI chat tools in allowed channels | Bypass rate limits |
 
 ## 11. What Admins Can Do
@@ -285,7 +283,7 @@ Run these to verify AshenAI is healthy:
 7. **Monitor rate limits** - Watch for unusual traffic patterns
 8. **Protect critical channels** - Use protection tools for admin-only channels
 
-## 17. Configuration Reference
+## 16. Configuration Reference
 
 ### Required Environment Variables
 - `DISCORD_TOKEN` - Discord bot token

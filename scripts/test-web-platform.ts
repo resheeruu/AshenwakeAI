@@ -54,10 +54,13 @@ describe("Web Platform 2.0", () => {
   let sessionCookie: string | null = null;
 
   describe("Public Website", () => {
-    it("GET / returns 200 with HTML", async () => {
+    it("GET / returns 200 with HTML and AshenAI branding", async () => {
       const res = await request("GET", "/");
       assert.equal(res.status, 200);
-      assert.ok(res.body.toString().includes("AshenWakeAI") || res.body.toString().includes("<html"));
+      const html = res.body.toString();
+      assert.ok(html.includes("<html"), "response is not an HTML document");
+      assert.ok(html.includes("AshenAI"), "landing page is missing AshenAI branding");
+      assert.ok(!html.includes("AshenWakeAI"), "landing page has stale AshenWakeAI branding");
     });
 
     it("GET /features returns 200 with HTML", async () => {
@@ -126,7 +129,7 @@ describe("Web Platform 2.0", () => {
   describe("Auth Flow", () => {
     it("POST /auth/login with invalid credentials returns 401", async () => {
       const res = await request("POST", "/auth/login", { username: "nonexistent", password: "wrong" });
-      assert.equal(res.status, 200);
+      assert.equal(res.status, 401);
       const body = res.body as { ok: boolean };
       assert.equal(body.ok, false);
     });

@@ -1886,10 +1886,6 @@ app.get("/dashboard", requireAuth, (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, "public", "dashboard.html"));
 });
 
-app.get("/{*splat}", (_req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
 /* ==================== DASHBOARD API ==================== */
 
 // Provider connection test
@@ -2534,6 +2530,19 @@ app.get("/api/providers/discover", requireAuth, requireRole("admin"), async (req
     const msg = err instanceof Error ? err.message : String(err);
     res.json({ ok: false, error: msg });
   }
+});
+
+/* ==================== 404 (terminal, after all routes) ==================== */
+
+app.use((req: Request, res: Response) => {
+  if (req.path === "/api" || req.path.startsWith("/api/") || req.path.startsWith("/auth/") || req.path.startsWith("/action/")) {
+    res.status(404).json({ ok: false, error: "Not found" });
+    return;
+  }
+  res.status(404).type("text/html").send(
+    '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>404 — Not Found</title></head>' +
+      '<body><h1>404 — Not Found</h1><p>The requested page could not be found.</p><p><a href="/">Back to home</a></p></body></html>',
+  );
 });
 
 /* ==================== ERROR HANDLER ==================== */
