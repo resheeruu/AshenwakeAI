@@ -6,38 +6,37 @@ const MAX_ENTRIES = 5000;
 
 /**
  * Insert an audit entry into SQLite.
+ * Throws on failure to ensure chain integrity.
  */
 export function insertAuditEntryDB(entry: AuditEntry): void {
-  safeDbOperation(() => {
-    const db = getDatabase();
-    db.prepare(`
-      INSERT INTO audit_log (id, timestamp, who, who_name, what, "where", guild_id, reason, result, details, signature, prev_hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      entry.id,
-      entry.timestamp,
-      entry.who,
-      entry.whoName ?? null,
-      entry.what,
-      entry.where,
-      entry.guildId ?? null,
-      entry.reason ?? null,
-      entry.result,
-      entry.details ?? null,
-      entry.signature ?? null,
-      entry.prevHash ?? null,
-    );
+  const db = getDatabase();
+  db.prepare(`
+    INSERT INTO audit_log (id, timestamp, who, who_name, what, "where", guild_id, reason, result, details, signature, prev_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    entry.id,
+    entry.timestamp,
+    entry.who,
+    entry.whoName ?? null,
+    entry.what,
+    entry.where,
+    entry.guildId ?? null,
+    entry.reason ?? null,
+    entry.result,
+    entry.details ?? null,
+    entry.signature ?? null,
+    entry.prevHash ?? null,
+  );
 
-    // Trim old entries if over limit
-    const count = db.prepare("SELECT COUNT(*) as c FROM audit_log").get() as any;
-    if (count.c > MAX_ENTRIES) {
-      db.prepare(`
-        DELETE FROM audit_log WHERE id IN (
-          SELECT id FROM audit_log ORDER BY timestamp ASC LIMIT ?
-        )
-      `).run(count.c - MAX_ENTRIES);
-    }
-  }, undefined, "insertAuditEntry");
+  // Trim old entries if over limit
+  const count = db.prepare("SELECT COUNT(*) as c FROM audit_log").get() as any;
+  if (count.c > MAX_ENTRIES) {
+    db.prepare(`
+      DELETE FROM audit_log WHERE id IN (
+        SELECT id FROM audit_log ORDER BY timestamp ASC LIMIT ?
+      )
+    `).run(count.c - MAX_ENTRIES);
+  }
 }
 
 /**

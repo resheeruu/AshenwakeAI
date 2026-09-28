@@ -682,7 +682,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const playerTotal = calculateTotal(game.playerCards);
 
       if (playerTotal > 21) {
-        const result = await standBlackjack(player, game);
+        const result = await standBlackjack(interaction.user.id, interaction.user.username, game);
 
         const embed = new EmbedBuilder()
           .setTitle("🃏 Ashen Blackjack")
@@ -755,7 +755,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    const result = await standBlackjack(player, game);
+    const result = await standBlackjack(interaction.user.id, interaction.user.username, game);
 
     const embed = new EmbedBuilder()
       .setTitle("🃏 Ashen Blackjack")
@@ -912,7 +912,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       if (interaction.customId === "ashen_mines:cashout") {
-        const result = await cashOutMines(player, game);
+        const result = await cashOutMines(interaction.user.id, interaction.user.username, game);
 
         const embed = new EmbedBuilder()
           .setTitle("💣 Ashen Mines")
@@ -957,7 +957,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const tile = Number(parts[2]);
 
       const result = await revealMinesTile(
-        player,
+        interaction.user.id,
+        interaction.user.username,
         game,
         tile,
       );
@@ -1024,7 +1025,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const result = await reactQuickDraw(
-      player,
+      interaction.user.id,
+      interaction.user.username,
       quickDraw,
     );
 

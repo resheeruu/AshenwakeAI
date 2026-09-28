@@ -211,6 +211,15 @@ export function updateAccount(
     if (!["owner", "admin", "user"].includes(updates.role)) {
       return { success: false, error: "Invalid role." };
     }
+    // Prevent demoting the last enabled owner
+    if (account.role === "owner" && updates.role !== "owner") {
+      const otherEnabledOwners = accounts.filter(
+        (a) => a.role === "owner" && a.enabled && a.id !== id,
+      );
+      if (otherEnabledOwners.length === 0) {
+        return { success: false, error: "Cannot demote the last enabled owner account." };
+      }
+    }
     account.role = updates.role;
   }
 
@@ -275,9 +284,11 @@ export function deleteAccount(id: string): { success: boolean; error?: string } 
   }
 
   if (account.role === "owner") {
-    const otherOwners = accounts.filter((a) => a.role === "owner" && a.id !== id);
-    if (otherOwners.length === 0) {
-      return { success: false, error: "Cannot delete the last owner account." };
+    const otherEnabledOwners = accounts.filter(
+      (a) => a.role === "owner" && a.enabled && a.id !== id,
+    );
+    if (otherEnabledOwners.length === 0) {
+      return { success: false, error: "Cannot delete the last enabled owner account." };
     }
   }
 

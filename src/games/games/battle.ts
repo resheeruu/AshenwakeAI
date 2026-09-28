@@ -1,5 +1,5 @@
 import { GamePlayer } from "../types";
-import { updatePlayer } from "../store";
+import { mutatePlayer } from "../store";
 import { applyLevelUp, updateAchievements, awardResult } from "../rewards";
 
 export interface BattleResult {
@@ -29,74 +29,77 @@ const ENEMY_NAMES = [
   "Toxic Bloom", "Rust Bat", "Mire Walker",
 ];
 
-export async function playBattle(player: GamePlayer): Promise<BattleResult> {
-  if (player.coins < BASE_COST) {
-    throw new Error("NOT_ENOUGH_COINS");
-  }
-
-  player.coins -= BASE_COST;
-
-  const playerAttack = Math.floor(Math.random() * 20) + player.level * 2 + 1;
-  const enemyAttack = Math.floor(Math.random() * 20) + 5;
-  const playerHp = 100 + player.level * 10;
-  const enemyHp = 80 + Math.floor(Math.random() * 20);
-
-  let pHp = playerHp;
-  let eHp = enemyHp;
-
-  while (pHp > 0 && eHp > 0) {
-    eHp -= playerAttack;
-    if (eHp <= 0) break;
-    pHp -= enemyAttack;
-    if (pHp <= 0) break;
-  }
-
-  const outcome: "win" | "loss" | "draw" =
-    pHp > 0 && eHp <= 0 ? "win" :
-    pHp <= 0 && eHp > 0 ? "loss" : "draw";
-
-  const enemyName = ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
-
-  const result = await awardResult(player, outcome);
-
-  const coinsEarned = outcome === "win" ? WIN_COINS : outcome === "loss" ? LOSE_COINS : DRAW_COINS;
-  const xpEarned = outcome === "win" ? WIN_XP : outcome === "loss" ? LOSE_XP : DRAW_XP;
-
-  player.gamesPlayed++;
-
-  if (outcome === "win") {
-    player.wins++;
-    player.streak++;
-    if (player.streak > player.bestStreak) {
-      player.bestStreak = player.streak;
+export async function playBattle(userId: string, username: string): Promise<BattleResult> {
+  const { result } = await mutatePlayer(userId, async (player: GamePlayer) => {
+    if (player.coins < BASE_COST) {
+      throw new Error("NOT_ENOUGH_COINS");
     }
-  } else if (outcome === "loss") {
-    player.losses++;
-    player.streak = 0;
-  } else {
-    player.draws++;
-  }
 
-  if (outcome === "win" && enemyHp > 60) {
-    if (!player.achievements.includes("battle_elite")) {
-      player.achievements.push("battle_elite");
+    player.coins -= BASE_COST;
+
+    const playerAttack = Math.floor(Math.random() * 20) + player.level * 2 + 1;
+    const enemyAttack = Math.floor(Math.random() * 20) + 5;
+    const playerHp = 100 + player.level * 10;
+    const enemyHp = 80 + Math.floor(Math.random() * 20);
+
+    let pHp = playerHp;
+    let eHp = enemyHp;
+
+    while (pHp > 0 && eHp > 0) {
+      eHp -= playerAttack;
+      if (eHp <= 0) break;
+      pHp -= enemyAttack;
+      if (pHp <= 0) break;
     }
-  }
 
-  updateAchievements(player);
-  await updatePlayer(player);
+    const outcome: "win" | "loss" | "draw" =
+      pHp > 0 && eHp <= 0 ? "win" :
+      pHp <= 0 && eHp > 0 ? "loss" : "draw";
 
-  return {
-    outcome,
-    playerHp: pHp,
-    enemyHp: eHp,
-    playerAttack,
-    enemyAttack,
-    coinsEarned,
-    xpEarned,
-    levelUp: result.levelUp,
-    newAchievements: result.newAchievements,
-  };
+    const enemyName = ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
+
+    const result = await awardResult(player, outcome);
+
+    const coinsEarned = outcome === "win" ? WIN_COINS : outcome === "loss" ? LOSE_COINS : DRAW_COINS;
+    const xpEarned = outcome === "win" ? WIN_XP : outcome === "loss" ? LOSE_XP : DRAW_XP;
+
+    player.gamesPlayed++;
+
+    if (outcome === "win") {
+      player.wins++;
+      player.streak++;
+      if (player.streak > player.bestStreak) {
+        player.bestStreak = player.streak;
+      }
+    } else if (outcome === "loss") {
+      player.losses++;
+      player.streak = 0;
+    } else {
+      player.draws++;
+    }
+
+    if (outcome === "win" && enemyHp > 60) {
+      if (!player.achievements.includes("battle_elite")) {
+        player.achievements.push("battle_elite");
+      }
+    }
+
+    updateAchievements(player);
+
+    return {
+      outcome,
+      playerHp: pHp,
+      enemyHp: eHp,
+      playerAttack,
+      enemyAttack,
+      coinsEarned,
+      xpEarned,
+      levelUp: result.levelUp,
+      newAchievements: result.newAchievements,
+    };
+  }, username);
+
+  return result;
 }
 
 export function getEnemyNames(): string[] {

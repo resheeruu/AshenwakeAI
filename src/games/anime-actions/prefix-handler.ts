@@ -22,6 +22,7 @@ import { playLottery } from "../../games/games/lottery";
 import { startMines, getMinesGame, cashOutMines, cancelMines, revealMinesTile, MINES_MIN_BET, MINES_MAX_BET, MINES_GRID_SIZE, MINES_COUNT } from "../../games/games/mines";
 import { startBlackjack, getBlackjackGame, hitBlackjack, standBlackjack, handText, calculateTotal } from "../../games/games/blackjack";
 import { startQuickDraw, getQuickDraw } from "../../games/games/quickdraw";
+import { getAllGames, type GameDefinition } from "../../games/definitions";
 import type { GamePlayer } from "../../games/types";
 
 const PREFIX = "ash ";
@@ -234,17 +235,25 @@ export function isAnimeActionPrefix(content: string): boolean {
   return trimmed === "ash" || trimmed.startsWith("ash ");
 }
 
-const GAME_NAMES = ["mine", "battle", "lottery", "hunt", "slots", "blackjack", "quickdraw"] as const;
-export type GameCommandName = (typeof GAME_NAMES)[number];
+// GAME_NAMES and GameCommandName are now imported from ../../games/definitions
+import { GAME_NAMES, type GameCommandName } from "../../games/definitions";
 
-const GAME_HELP =
-  "**GAMES**\n\n" +
-  "`ash mine [bet]` — play Ashen Mines\n" +
-  "`ash battle` — fight a foe\n" +
-  "`ash lottery` — buy a lottery ticket\n" +
-  "`ash hunt` — go hunting\n" +
-  "`ash slots` — spin the reels\n\n" +
-  "Examples: `ash mine 50` • `ash battle` • `ash lottery` • `ash hunt` • `ash slots`";
+const GAME_HELP = (() => {
+  const lines: string[] = ["**GAMES**", ""];
+  const allGames = getAllGames();
+  for (const game of allGames) {
+    if (!game.enabled) continue;
+    const syntax = game.syntax.replace("ash ", "");
+    lines.push(`\`ash ${syntax}\` — ${game.description}`);
+  }
+  lines.push("");
+  lines.push("**Usage:**");
+  lines.push("  `ash games` — list reachable games");
+  lines.push("  `ash games <game>` — show usage for a game");
+  lines.push("  `ash <game> [args]` — start a game");
+  lines.push("");
+  return lines.join("\n");
+})();
 
 function isGameCommand(content: string): boolean {
   const trimmed = content.trim().toLowerCase();
@@ -399,7 +408,7 @@ async function handleGameCommand(
           return true;
         }
         try {
-          const result = await revealMinesTile(player, existing, tile);
+          const result = await revealMinesTile(player.userId, player.username, existing, tile);
           if (result.mine) {
             await safeReply(message, `💣 💥 MINE! Game over. You lost your ${existing.bet} coins.`);
           } else {
@@ -422,7 +431,7 @@ async function handleGameCommand(
           return true;
         }
         try {
-          const result = await cashOutMines(player, existing);
+          const result = await cashOutMines(player.userId, player.username, existing);
           await safeReply(
             message,
             `💣 **Cashed out!**\n\nMultiplier: **${existing.multiplier.toFixed(2)}x**\nPayout: ${result.payout} coins\nXP: ${result.xp}\n${result.levelUp ? "🎊 Level Up!" : ""}`,
@@ -448,7 +457,7 @@ async function handleGameCommand(
           await safeReply(message, "💣 You already have an active Mines game. Type `ash mine cancel` to abort.");
           return true;
         }
-        const started = await startMines(player, bet);
+        const started = await startMines(player.userId, player.username, bet);
         await safeReply(message, {
           content: `💣 **Ashen Mines** started!\n\nBet: **${bet} coins**\nGrid: ${MINES_GRID_SIZE} tiles, ${MINES_COUNT} mines\nClick a tile to reveal, or 💰 Cash Out.\n\nFirst 3 tiles revealed automatically are safe!`,
           components: buildMinesButtonsLocal(started.revealed),
@@ -468,7 +477,7 @@ async function handleGameCommand(
 
     case "battle": {
       try {
-        const result = await playBattle(player);
+        const result = await playBattle(player.userId, player.username);
         const emoji = result.outcome === "win" ? "⚔️ Victory" : result.outcome === "loss" ? "💀 Defeated" : "🤝 Draw";
         await safeReply(
           message,
@@ -487,7 +496,7 @@ async function handleGameCommand(
 
     case "lottery": {
       try {
-        const result = await playLottery(player);
+        const result = await playLottery(player.userId, player.username);
         const emoji = result.won ? "🎉" : "🗒️";
         await safeReply(
           message,
@@ -506,7 +515,7 @@ async function handleGameCommand(
 
     case "hunt": {
       try {
-        const result = await hunt(player);
+        const result = await hunt(player.userId, player.username);
         const emoji = result.rarity === "legendary" ? "👑" : result.rarity === "rare" ? "⭐" : "🎯";
         await safeReply(
           message,
@@ -526,7 +535,7 @@ async function handleGameCommand(
 
     case "slots": {
       try {
-        const result = await playSlots(player);
+        const result = await playSlots(player.userId, player.username);
         await safeReply(
           message,
           `🎰 **Slots Result**\n\n${result.message}\nCoins won: **${result.coinsWon}** | XP: ${result.xp}\n${result.levelUp ? "🎊 Level Up!" : ""}`,
@@ -559,7 +568,7 @@ async function handleGameCommand(
             hitBlackjack(existing);
             const playerTotal = calculateTotal(existing.playerCards);
             if (playerTotal > 21) {
-              const result = await standBlackjack(player, existing);
+              const result = await standBlackjack(player.userId, player.username, existing);
               const embed = new EmbedBuilder()
                 .setTitle("🃏 Ashen Blackjack")
                 .setDescription(
@@ -576,7 +585,7 @@ async function handleGameCommand(
             }
             await safeReply(message, `🃏 Hit! Total: ${playerTotal}. ${handText(existing.playerCards)}`);
           } else {
-            const result = await standBlackjack(player, existing);
+            const result = await standBlackjack(player.userId, player.username, existing);
             const embed = new EmbedBuilder()
               .setTitle("🃏 Ashen Blackjack")
               .setDescription(
@@ -603,7 +612,7 @@ async function handleGameCommand(
           await safeReply(message, "🃏 Blackjack bet must be at least 10 coins.");
           return true;
         }
-        const { game, immediateResult } = await startBlackjack(player, bet);
+        const { game, immediateResult } = await startBlackjack(player.userId, player.username, bet);
         if (immediateResult) {
           await safeReply(message, `🃏 Blackjack result: ${immediateResult.result}. ${immediateResult.result === "blackjack" ? "🎉 BLACKJACK!" : ""}`);
           return true;

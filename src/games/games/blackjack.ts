@@ -1,5 +1,5 @@
 import { GamePlayer } from "../types";
-import { updatePlayer } from "../store";
+import { mutatePlayer } from "../store";
 import {
   applyLevelUp,
   updateAchievements,
@@ -18,6 +18,7 @@ export type BlackjackGame = {
   dealerCards: Card[];
   bet: number;
   finished: boolean;
+  startedAt: number;
 };
 
 export type BlackjackResult = {
@@ -28,7 +29,6 @@ export type BlackjackResult = {
   playerTotal: number;
   dealerTotal: number;
 };
-
 
 const SUITS = ["♠️", "♥️", "♦️", "♣️"];
 
@@ -54,8 +54,9 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const SESSION_MAX_AGE_MS = 10 * 60 * 1000;
 
 const cleanupTimer = setInterval(() => {
+  const now = Date.now();
   for (const [id, game] of sessions) {
-    if (game.finished) {
+    if (game.finished || (now - game.startedAt) > SESSION_MAX_AGE_MS) {
       sessions.delete(id);
     }
   }
@@ -129,17 +130,26 @@ function blackjack(cards: Card[]): boolean {
 export function getBlackjackGame(
   playerId: string,
 ): BlackjackGame | undefined {
-  return sessions.get(playerId);
+  const game = sessions.get(playerId);
+  if (game && !game.finished) {
+    const now = Date.now();
+    if (game.startedAt && (now - game.startedAt) > SESSION_MAX_AGE_MS) {
+      sessions.delete(playerId);
+      return undefined;
+    }
+  }
+  return game;
 }
 
 export async function startBlackjack(
-  player: GamePlayer,
+  userId: string,
+  username: string,
   bet: number,
 ): Promise<{
   game: BlackjackGame;
   immediateResult?: BlackjackResult;
 }> {
-  if (sessions.has(player.userId)) {
+  if (sessions.has(userId)) {
     throw new Error("BLACKJACK_ALREADY_ACTIVE");
   }
 
@@ -151,45 +161,43 @@ export async function startBlackjack(
     throw new Error("BLACKJACK_BET_TOO_HIGH");
   }
 
-  if (player.coins < bet) {
-    throw new Error("NOT_ENOUGH_COINS");
-  }
-
   const deck = createDeck();
 
-  player.coins -= bet;
+  const { result: mutationResult } = await mutatePlayer(userId, async (p: GamePlayer) => {
+    if (p.coins < bet) {
+      throw new Error("NOT_ENOUGH_COINS");
+    }
 
-  const game: BlackjackGame = {
-    playerId: player.userId,
-    deck,
-    playerCards: [
-      draw(deck),
-      draw(deck),
-    ],
-    dealerCards: [
-      draw(deck),
-      draw(deck),
-    ],
-    bet,
-    finished: false,
-  };
+    p.coins -= bet;
 
-  sessions.set(player.userId, game);
-
-  if (blackjack(game.playerCards)) {
-    const result = await finishBlackjack(
-      player,
-      game,
-      "blackjack",
-    );
-
-    return {
-      game,
-      immediateResult: result,
+    const game: BlackjackGame = {
+      playerId: userId,
+      deck,
+      playerCards: [
+        draw(deck),
+        draw(deck),
+      ],
+      dealerCards: [
+        draw(deck),
+        draw(deck),
+      ],
+      bet,
+      finished: false,
+      startedAt: Date.now(),
     };
-  }
 
-  return { game };
+    sessions.set(userId, game);
+
+    if (blackjack(game.playerCards)) {
+      const result = await finishBlackjackInternal(p, game, "blackjack");
+      return result;
+    }
+
+    return undefined;
+  }, username);
+
+  const game = sessions.get(userId)!;
+  return { game, immediateResult: mutationResult };
 }
 
 export function hitBlackjack(
@@ -207,7 +215,8 @@ export function hitBlackjack(
 }
 
 export async function standBlackjack(
-  player: GamePlayer,
+  userId: string,
+  username: string,
   game: BlackjackGame,
 ): Promise<BlackjackResult> {
   if (game.finished) {
@@ -226,46 +235,28 @@ export async function standBlackjack(
   const dealerTotal =
     calculateTotal(game.dealerCards);
 
+  let resultType: "win" | "loss" | "push" | "blackjack" | "bust";
+
   if (playerTotal > 21) {
-    return finishBlackjack(
-      player,
-      game,
-      "bust",
-    );
+    resultType = "bust";
+  } else if (dealerTotal > 21) {
+    resultType = "win";
+  } else if (playerTotal > dealerTotal) {
+    resultType = "win";
+  } else if (playerTotal < dealerTotal) {
+    resultType = "loss";
+  } else {
+    resultType = "push";
   }
 
-  if (dealerTotal > 21) {
-    return finishBlackjack(
-      player,
-      game,
-      "win",
-    );
-  }
+  const { result } = await mutatePlayer(userId, async (p: GamePlayer) => {
+    return finishBlackjackInternal(p, game, resultType);
+  }, username);
 
-  if (playerTotal > dealerTotal) {
-    return finishBlackjack(
-      player,
-      game,
-      "win",
-    );
-  }
-
-  if (playerTotal < dealerTotal) {
-    return finishBlackjack(
-      player,
-      game,
-      "loss",
-    );
-  }
-
-  return finishBlackjack(
-    player,
-    game,
-    "push",
-  );
+  return result;
 }
 
-async function finishBlackjack(
+async function finishBlackjackInternal(
   player: GamePlayer,
   game: BlackjackGame,
   result:
@@ -291,7 +282,6 @@ async function finishBlackjack(
     xp = 15;
   }
 
-  // Casino accounting.
   player.casinoWagered =
     (player.casinoWagered ?? 0) + game.bet;
 
@@ -343,8 +333,6 @@ async function finishBlackjack(
   const levelUp = applyLevelUp(player);
 
   updateAchievements(player);
-
-  await updatePlayer(player);
 
   sessions.delete(player.userId);
 

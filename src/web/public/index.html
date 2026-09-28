@@ -21,10 +21,11 @@
       <a href="/" class="logo"><span class="logo-mark" aria-hidden="true">A</span><span class="logo-text">AshenAI</span></a>
       <ul class="nav-links">
         <li><a href="#platform">Platform</a></li>
+        <li><a href="#ash-actions">Ash Actions</a></li>
+        <li><a href="#games">Games</a></li>
         <li><a href="#moderation">Moderation</a></li>
         <li><a href="#automation">Automation</a></li>
         <li><a href="#ecosystem">Ecosystem</a></li>
-        <li><a href="#games">Games</a></li>
         <li><a href="/docs">Docs</a></li>
         <li><a href="/status">Status</a></li>
       </ul>
@@ -39,11 +40,13 @@
 
 <div class="mobile-nav" id="mobileNav">
   <a href="#platform">Platform</a>
+  <a href="#ash-actions">Ash Actions</a>
+  <a href="#games">Games</a>
   <a href="#moderation">Moderation</a>
   <a href="#automation">Automation</a>
   <a href="#ecosystem">Ecosystem</a>
-  <a href="#games">Games</a>
   <a href="#security">Security</a>
+  <a href="#preview">Control Plane</a>
   <a href="/docs">Docs</a>
   <a href="/status">Status</a>
   <a href="/support">Support</a>
@@ -139,7 +142,7 @@
         <div class="metric reveal"><span class="m-val">10</span><span class="m-key">Slash commands</span></div>
         <div class="metric reveal"><span class="m-val">30</span><span class="m-key">Provider catalog</span></div>
         <div class="metric reveal"><span class="m-val">32</span><span class="m-key">Anime actions</span></div>
-        <div class="metric reveal"><span class="m-val">5</span><span class="m-key">Arcade games</span></div>
+        <div class="metric reveal"><span class="m-val">7</span><span class="m-key">Games</span></div>
       </div>
     </div>
   </section>
@@ -412,22 +415,48 @@
       </div>
       <div class="info-note reveal">Pricing classes only — provider credentials stay server-side and are never rendered into the public site.</div>
     </div>
-  </section>
+</section>
 
-  <!-- ==================== 06 GAMES & MEDIA ==================== -->
-  <section class="section story" id="games">
+  <!-- ==================== 06 ASH ACTIONS ==================== -->
+  <section class="section story" id="ash-actions">
     <div class="container">
       <div class="section-head reveal">
-        <div class="story-index"><span class="story-num">06</span><span class="bar"></span><span>GAMES &amp; MEDIA</span></div>
-        <h2 class="h2">The parts members actually open the server for.</h2>
-        <p class="lede">Five arcade games and thirty-two anime actions, all prefixed and all cooldown-guarded.</p>
+        <div class="story-index"><span class="story-num">06</span><span class="bar"></span><span>ASH ACTIONS</span></div>
+        <h2 class="h2">Social roleplay with mechanical weight.</h2>
+        <p class="lede">Thirty-two prefixed actions across Affection, Combat, and Fun — each with its own cooldown, media key, and outcome system. Invoked via <code class="code-inline">ash <action> @user</code> or reply.</p>
       </div>
-      <div class="game-grid">
-        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">⛏</div><h3>Mines</h3><p>Grid sweep with a cash-out decision every tile.</p><span class="g-cmd">ash mine</span></div>
-        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">⚔</div><h3>Battle</h3><p>Turn-based duel with crit, dodge and defend.</p><span class="g-cmd">ash battle</span></div>
-        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🎟</div><h3>Lottery</h3><p>Ticket draw with tiered prize payouts.</p><span class="g-cmd">ash lottery</span></div>
-        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🏹</div><h3>Hunt</h3><p>Rare encounters, loot drops, XP and death penalties.</p><span class="g-cmd">ash hunt</span></div>
-        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🎰</div><h3>Slots</h3><p>Wager, spin, settle — economy-first.</p><span class="g-cmd">ash slots</span></div>
+
+      <div class="bento">
+        <div class="bento-cell span-4 reveal">
+          <span class="bc-icon" aria-hidden="true">❤️</span>
+          <h3>Affection</h3>
+          <p>Warm, fuzzy interactions for building rapport.</p>
+          <div class="bc-list">
+            <span>hug</span><span>cuddle</span><span>pat</span><span>headpat</span>
+            <span>kiss</span>
+          </div>
+        </div>
+        <div class="bento-cell span-4 reveal">
+          <span class="bc-icon" aria-hidden="true">⚔️</span>
+          <h3>Combat</h3>
+          <p>Cartoon violence with weighted outcomes (hit, miss, dodge, critical, counter).</p>
+          <div class="bc-list">
+            <span>punch</span><span>kick</span><span>slap</span><span>bonk</span>
+            <span>bite</span><span>hit</span><span>smack</span><span>throw</span>
+            <span>shoot</span><span>stab</span><span>kill</span><span>destroy</span><span>explode</span>
+          </div>
+        </div>
+        <div class="bento-cell span-4 reveal">
+          <span class="bc-icon" aria-hidden="true">🎉</span>
+          <h3>Fun</h3>
+          <p>Lighthearted self-expression and social play.</p>
+          <div class="bc-list">
+            <span>poke</span><span>wave</span><span>highfive</span><span>yeet</span>
+            <span>dance</span><span>laugh</span><span>cry</span><span>blush</span>
+            <span>smug</span><span>panic</span><span>sleep</span><span>celebrate</span>
+            <span>roast</span><span>simp</span>
+          </div>
+        </div>
       </div>
 
       <div class="action-marquee" aria-hidden="true">
@@ -436,15 +465,48 @@
           <span>hug</span><span>pat</span><span>slap</span><span>poke</span><span>blush</span><span>cry</span><span>laugh</span><span>angry</span><span>wink</span><span>kiss</span><span>bite</span><span>cuddle</span><span>yeet</span><span>bonk</span><span>smug</span><span>facepalm</span>
         </div>
       </div>
-      <p class="tiny dim">32 anime actions in total — the strip shows a sample. Every action carries its own cooldown and respects the server's <code class="code-inline">social.animeActions</code> flag.</p>
+      <p class="tiny dim">32 anime actions in total — the strip shows a sample. Every action carries its own cooldown, media key, and respects the server's <code class="code-inline">social.animeActions</code> flag.</p>
     </div>
   </section>
 
-  <!-- ==================== 07 SECURITY ==================== -->
+  <!-- ==================== 07 GAMES ==================== -->
+  <section class="section story" id="games">
+    <div class="container">
+      <div class="section-head reveal">
+        <div class="story-index"><span class="story-num">07</span><span class="bar"></span><span>GAMES</span></div>
+        <h2 class="h2">The parts members actually open the server for.</h2>
+        <p class="lede">Seven arcade and casino games with a shared economy — XP, levels, daily rewards, and a real economy.</p>
+      </div>
+      <div class="game-grid">
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">⛏</div><h3>Mines</h3><p>Grid sweep with a cash-out decision every tile.</p><span class="g-cmd">ash mine</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">⚔</div><h3>Battle</h3><p>Turn-based duel with crit, dodge and defend.</p><span class="g-cmd">ash battle</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🎟</div><h3>Lottery</h3><p>Ticket draw with tiered prize payouts.</p><span class="g-cmd">ash lottery</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🏹</div><h3>Hunt</h3><p>Rare encounters, loot drops, XP and death penalties.</p><span class="g-cmd">ash hunt</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🎰</div><h3>Slots</h3><p>Wager, spin, settle — economy-first.</p><span class="g-cmd">ash slots</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">🃏</div><h3>Blackjack</h3><p>Classic 21 with hit, stand, double, insurance.</p><span class="g-cmd">ash blackjack</span></div>
+        <div class="game-card reveal"><div class="g-glyph" aria-hidden="true">⚡</div><h3>QuickDraw</h3><p>Reaction-time duel — fastest draw wins.</p><span class="g-cmd">ash quickdraw</span></div>
+      </div>
+
+      <div class="economy-highlights">
+        <h3>Shared Economy</h3>
+        <div class="economy-grid">
+          <div class="econ-item"><span class="econ-label">Starting coins</span><span class="econ-value">100</span></div>
+          <div class="econ-item"><span class="econ-label">Daily coins</span><span class="econ-value">100</span></div>
+          <div class="econ-item"><span class="econ-label">Daily XP</span><span class="econ-value">25</span></div>
+          <div class="econ-item"><span class="econ-label">Daily streak</span><span class="econ-value">7 days max</span></div>
+          <div class="econ-item"><span class="econ-label">Crit chance</span><span class="econ-value">5%</span></div>
+          <div class="econ-item"><span class="econ-label">Crit multiplier</span><span class="econ-value">1.5×</span></div>
+        </div>
+      </div>
+      <p class="tiny dim">Seven games total — <code class="code-inline">ash games</code> lists them all. Every game shares the economy and respects the server's <code class="code-inline">social.animeActions</code> flag.</p>
+    </div>
+  </section>
+
+  <!-- ==================== 08 SECURITY ==================== -->
   <section class="section story" id="security">
     <div class="container">
       <div class="section-head reveal">
-        <div class="story-index"><span class="story-num">07</span><span class="bar"></span><span>SECURITY</span></div>
+        <div class="story-index"><span class="story-num">09</span><span class="bar"></span><span>SECURITY</span></div>
         <h2 class="h2">Assume the session is hostile.</h2>
         <p class="lede">The dashboard is a thin client over a gated API. Nothing renders because the
           page asked for it — it renders because a validated session and role said so.</p>
@@ -494,7 +556,7 @@
   <section class="section story" id="preview">
     <div class="container">
       <div class="section-head center-head reveal">
-        <div class="story-index"><span class="story-num">08</span><span class="bar"></span><span>CONTROL PLANE</span></div>
+        <div class="story-index"><span class="story-num">10</span><span class="bar"></span><span>CONTROL PLANE</span></div>
         <h2 class="h2">Twelve sections. One server selector. No guesswork.</h2>
         <p class="lede">Overview, AI, Moderation, Automation, Memory, Games, Media, Analytics, Logs,
           Integrations, Settings and Security — each bound to the endpoints that actually exist.</p>
@@ -591,7 +653,7 @@
       <div class="footer-col">
         <h4>Project</h4>
         <ul>
-          <li><a href="https://github.com/resheeruu/AshenwakeAI">GitHub</a></li>
+          <li><a href="https://github.com/resheeruu/AshenWaleAI">GitHub</a></li>
           <li><a href="#security">Security</a></li>
           <li><a href="/docs#api">API</a></li>
         </ul>

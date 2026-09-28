@@ -1,5 +1,5 @@
 import { GamePlayer } from "../types";
-import { updatePlayer } from "../store";
+import { mutatePlayer } from "../store";
 import {
   applyLevelUp,
   updateAchievements,
@@ -41,7 +41,15 @@ cleanupTimer.unref();
 export function getQuickDraw(
   playerId: string,
 ): QuickDrawGame | undefined {
-  return sessions.get(playerId);
+  const game = sessions.get(playerId);
+  if (game && !game.finished) {
+    const now = Date.now();
+    if ((now - game.startedAt) > SESSION_MAX_AGE_MS) {
+      sessions.delete(playerId);
+      return undefined;
+    }
+  }
+  return game;
 }
 
 export function startQuickDraw(
@@ -69,7 +77,8 @@ export function startQuickDraw(
 }
 
 export async function reactQuickDraw(
-  player: GamePlayer,
+  userId: string,
+  username: string,
   game: QuickDrawGame,
 ): Promise<QuickDrawResult> {
   if (game.finished) {
@@ -80,29 +89,32 @@ export async function reactQuickDraw(
 
   if (now < game.drawAt) {
     game.finished = true;
-    sessions.delete(player.userId);
+    sessions.delete(userId);
 
-    player.gamesPlayed++;
-    player.losses++;
-    player.streak = 0;
-    player.coins = Math.max(
-      0,
-      player.coins - 10,
-    );
-    player.xp += 5;
+    const { result } = await mutatePlayer(userId, async (p: GamePlayer) => {
+      p.gamesPlayed++;
+      p.losses++;
+      p.streak = 0;
+      p.coins = Math.max(
+        0,
+        p.coins - 10,
+      );
+      p.xp += 5;
 
-    const levelUp = applyLevelUp(player);
+      const levelUp = applyLevelUp(p);
 
-    updateAchievements(player);
-    await updatePlayer(player);
+      updateAchievements(p);
 
-    return {
-      won: false,
-      reactionTime: 0,
-      coins: -10,
-      xp: 5,
-      levelUp,
-    };
+      return {
+        won: false,
+        reactionTime: 0,
+        coins: -10,
+        xp: 5,
+        levelUp,
+      };
+    }, username);
+
+    return result;
   }
 
   const reactionTime =
@@ -124,39 +136,37 @@ export async function reactQuickDraw(
 
     coins = 25 + speedBonus;
     xp = 25;
-
-    player.wins++;
-    player.streak++;
-
-    player.bestStreak = Math.max(
-      player.bestStreak,
-      player.streak,
-    );
-  } else {
-    player.losses++;
-    player.streak = 0;
   }
 
-  player.gamesPlayed++;
-  player.coins += coins;
-  player.xp += xp;
+  const { result } = await mutatePlayer(userId, async (p: GamePlayer) => {
+    if (won) {
+      p.wins++;
+      p.streak++;
+
+      p.bestStreak = Math.max(
+        p.bestStreak,
+        p.streak,
+      );
+    } else {
+      p.losses++;
+      p.streak = 0;
+    }
+
+    p.gamesPlayed++;
+    p.coins += coins;
+    p.xp += xp;
+
+    const levelUp = applyLevelUp(p);
+
+    updateAchievements(p);
+
+    return { won, reactionTime, coins, xp, levelUp };
+  }, username);
 
   game.finished = true;
-  sessions.delete(player.userId);
+  sessions.delete(userId);
 
-  const levelUp = applyLevelUp(player);
-
-  updateAchievements(player);
-
-  await updatePlayer(player);
-
-  return {
-    won,
-    reactionTime,
-    coins,
-    xp,
-    levelUp,
-  };
+  return result;
 }
 
 export function cancelQuickDraw(

@@ -1,5 +1,5 @@
 import { GamePlayer } from "../types";
-import { updatePlayer } from "../store";
+import { mutatePlayer } from "../store";
 import { addItem, getLootForRarity } from "../loot";
 import { applyLevelUp, updateAchievements } from "../rewards";
 
@@ -87,7 +87,6 @@ function randomEvent(lucky = false) {
     return HUNT_EVENTS[4];
   }
 
-  // Lucky Token improves the odds of rare/legendary rewards.
   if (roll < 0.35) return HUNT_EVENTS[0];
   if (roll < 0.65) return HUNT_EVENTS[1];
   if (roll < 0.90) return HUNT_EVENTS[2];
@@ -112,95 +111,91 @@ export function getHuntCooldown(
   };
 }
 
-export async function hunt(
-  player: GamePlayer,
-): Promise<HuntResult> {
-  const cooldown = getHuntCooldown(player);
+export async function hunt(userId: string, username: string): Promise<HuntResult> {
+  const { result } = await mutatePlayer(userId, async (player: GamePlayer) => {
+    const cooldown = getHuntCooldown(player);
 
-  if (!cooldown.available) {
-    throw new Error(
-      `HUNT_COOLDOWN:${cooldown.remainingMs}`,
+    if (!cooldown.available) {
+      throw new Error(
+        `HUNT_COOLDOWN:${cooldown.remainingMs}`,
+      );
+    }
+
+    if (!player.inventory) {
+      player.inventory = {};
+    }
+
+    const xpBoostUsed = player.xpBoostActive === true;
+    const luckyTokenUsed = player.luckyTokenActive === true;
+
+    const event = randomEvent(luckyTokenUsed);
+
+    const earnedXp = xpBoostUsed
+      ? event.xp * 2
+      : event.xp;
+
+    player.xpBoostActive = false;
+    player.luckyTokenActive = false;
+
+    player.huntLastAt = Date.now();
+
+    player.huntsCompleted =
+      (player.huntsCompleted ?? 0) + 1;
+
+    player.huntStreak =
+      (player.huntStreak ?? 0) + 1;
+
+    if (
+      player.huntStreak >
+      (player.bestHuntStreak ?? 0)
+    ) {
+      player.bestHuntStreak = player.huntStreak;
+    }
+
+    player.gamesPlayed++;
+
+    const vipBadgeActive =
+      (player.inventory.vip_badge ?? 0) > 0;
+
+    const earnedCoins = vipBadgeActive
+      ? Math.floor(event.coins * 1.25)
+      : event.coins;
+
+    player.coins += earnedCoins;
+    player.xp += earnedXp;
+
+    const levelUp = applyLevelUp(player);
+
+    if (event.rarity === "legendary") {
+      player.legendaryHunts =
+        (player.legendaryHunts ?? 0) + 1;
+    }
+
+    const beforeAchievements = new Set(player.achievements);
+    updateAchievements(player);
+    const newAchievements = player.achievements.filter(
+      (id) => !beforeAchievements.has(id),
     );
-  }
 
-  if (!player.inventory) {
-    player.inventory = {};
-  }
+    const lootItem = getLootForRarity(event.rarity);
 
-  // Temporary effects are activated with /game use
-  // and consumed by the next successful hunt.
-  const xpBoostUsed = player.xpBoostActive === true;
-  const luckyTokenUsed = player.luckyTokenActive === true;
+    if (lootItem) {
+      addItem(player, lootItem);
+    }
 
-  const event = randomEvent(luckyTokenUsed);
+    return {
+      ...event,
+      coins: earnedCoins,
+      xp: earnedXp,
+      streak: player.huntStreak,
+      huntsCompleted: player.huntsCompleted,
+      levelUp,
+      xpBoostUsed,
+      luckyTokenUsed,
+      vipBadgeActive,
+      newAchievements,
+    };
+  }, username);
 
-  const earnedXp = xpBoostUsed
-    ? event.xp * 2
-    : event.xp;
-
-  // Consume temporary effects after the successful hunt.
-  player.xpBoostActive = false;
-  player.luckyTokenActive = false;
-
-  player.huntLastAt = Date.now();
-
-  player.huntsCompleted =
-    (player.huntsCompleted ?? 0) + 1;
-
-  player.huntStreak =
-    (player.huntStreak ?? 0) + 1;
-
-  if (
-    player.huntStreak >
-    (player.bestHuntStreak ?? 0)
-  ) {
-    player.bestHuntStreak = player.huntStreak;
-  }
-
-  player.gamesPlayed++;
-
-  const vipBadgeActive =
-    (player.inventory.vip_badge ?? 0) > 0;
-
-  const earnedCoins = vipBadgeActive
-    ? Math.floor(event.coins * 1.25)
-    : event.coins;
-
-  player.coins += earnedCoins;
-  player.xp += earnedXp;
-
-  const levelUp = applyLevelUp(player);
-
-  if (event.rarity === "legendary") {
-    player.legendaryHunts =
-      (player.legendaryHunts ?? 0) + 1;
-  }
-
-
-  const beforeAchievements = new Set(player.achievements);
-  updateAchievements(player);
-  const newAchievements = player.achievements.filter(
-    (id) => !beforeAchievements.has(id),
-  );
-
-  const lootItem = getLootForRarity(event.rarity);
-
-  if (lootItem) {
-    addItem(player, lootItem);
-  }
-
-  await updatePlayer(player);
-
-  return {
-    ...event,
-    coins: earnedCoins,
-    xp: earnedXp,
-    streak: player.huntStreak,
-    huntsCompleted: player.huntsCompleted,
-    levelUp,
-    xpBoostUsed,
-    luckyTokenUsed,
-    vipBadgeActive,
-    newAchievements,
-  };
+  return result;
 }

@@ -92,36 +92,43 @@ export function generateResetToken(accountId: string): string {
   return rawToken;
 }
 
+export function consumeResetToken(accountId: string, token: string): boolean {
+  const tokenHash = hashToken(token);
+  const now = Date.now();
+  const recordIndex = tokens.findIndex(
+    (t) =>
+      t.accountId === accountId &&
+      t.tokenHash === tokenHash &&
+      !t.used &&
+      t.expiresAt > now,
+  );
+
+  if (recordIndex === -1) return false;
+
+  tokens[recordIndex].used = true;
+  saveTokens();
+  return true;
+}
+
 export function validateResetToken(
   accountId: string,
   token: string,
 ): boolean {
   const tokenHash = hashToken(token);
+  const now = Date.now();
   const record = tokens.find(
     (t) =>
       t.accountId === accountId &&
       t.tokenHash === tokenHash &&
       !t.used &&
-      t.expiresAt > Date.now(),
+      t.expiresAt > now,
   );
   return !!record;
 }
 
 export function useResetToken(accountId: string, token: string): boolean {
-  const tokenHash = hashToken(token);
-  const record = tokens.find(
-    (t) =>
-      t.accountId === accountId &&
-      t.tokenHash === tokenHash &&
-      !t.used &&
-      t.expiresAt > Date.now(),
-  );
-
-  if (!record) return false;
-
-  record.used = true;
-  saveTokens();
-  return true;
+  // Legacy alias for consumeResetToken - kept for backwards compatibility
+  return consumeResetToken(accountId, token);
 }
 
 export function invalidateResetTokens(accountId: string): void {

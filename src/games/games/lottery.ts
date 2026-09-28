@@ -1,5 +1,5 @@
 import { GamePlayer } from "../types";
-import { updatePlayer } from "../store";
+import { mutatePlayer } from "../store";
 import { applyLevelUp, updateAchievements } from "../rewards";
 
 export interface LotteryResult {
@@ -31,49 +31,52 @@ function pickTier(): typeof TIERS[number] {
   return TIERS[0];
 }
 
-export async function playLottery(player: GamePlayer): Promise<LotteryResult> {
-  if (player.coins < TICKET_COST) {
-    throw new Error("NOT_ENOUGH_COINS");
-  }
-
-  player.coins -= TICKET_COST;
-  player.gamesPlayed++;
-
-  const tier = pickTier();
-  const won = tier.name === "mythic" || tier.name === "legendary" || Math.random() < 0.15;
-  const coinsWon = won ? Math.floor(TICKET_COST * tier.multiplier * (0.8 + Math.random() * 0.4)) : 0;
-
-  if (won) {
-    player.coins += coinsWon;
-    player.wins++;
-    player.streak++;
-    if (player.streak > player.bestStreak) {
-      player.bestStreak = player.streak;
+export async function playLottery(userId: string, username: string): Promise<LotteryResult> {
+  const { result } = await mutatePlayer(userId, async (player: GamePlayer) => {
+    if (player.coins < TICKET_COST) {
+      throw new Error("NOT_ENOUGH_COINS");
     }
-    if (coinsWon >= 1000 && !player.achievements.includes("lottery_elite")) {
-      player.achievements.push("lottery_elite");
+
+    player.coins -= TICKET_COST;
+    player.gamesPlayed++;
+
+    const tier = pickTier();
+    const won = tier.name === "mythic" || tier.name === "legendary" || Math.random() < 0.15;
+    const coinsWon = won ? Math.floor(TICKET_COST * tier.multiplier * (0.8 + Math.random() * 0.4)) : 0;
+
+    if (won) {
+      player.coins += coinsWon;
+      player.wins++;
+      player.streak++;
+      if (player.streak > player.bestStreak) {
+        player.bestStreak = player.streak;
+      }
+      if (coinsWon >= 1000 && !player.achievements.includes("lottery_elite")) {
+        player.achievements.push("lottery_elite");
+      }
+    } else {
+      player.losses++;
+      player.streak = 0;
     }
-  } else {
-    player.losses++;
-    player.streak = 0;
-  }
 
-  const levelUp = applyLevelUp(player);
-  const before = new Set(player.achievements);
-  updateAchievements(player);
-  const newAchievements = player.achievements.filter(
-    (id) => !before.has(id),
-  );
-  await updatePlayer(player);
+    const levelUp = applyLevelUp(player);
+    const before = new Set(player.achievements);
+    updateAchievements(player);
+    const newAchievements = player.achievements.filter(
+      (id) => !before.has(id),
+    );
 
-  return {
-    won,
-    prize: coinsWon,
-    coinsWon,
-    tier: tier.name,
-    levelUp,
-    newAchievements,
-  };
+    return {
+      won,
+      prize: coinsWon,
+      coinsWon,
+      tier: tier.name,
+      levelUp,
+      newAchievements,
+    };
+  }, username);
+
+  return result;
 }
 
 export function getTicketCost(): number {

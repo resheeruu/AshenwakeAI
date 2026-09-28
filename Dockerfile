@@ -8,6 +8,7 @@ RUN npm ci --include=dev
 COPY tsconfig.json ./
 COPY src/ src/
 COPY scripts/ scripts/
+COPY assets/ assets/
 
 RUN npm run build
 
@@ -27,7 +28,6 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/src/web/public ./dist/web/public
 COPY --from=builder /app/assets ./assets
 
 # Create writable data volume only for application data

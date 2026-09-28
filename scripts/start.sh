@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 export NODE_ENV="${NODE_ENV:-production}"
 
-echo "[start] AshenAI Generic Startup"
+echo "[start] AshenAI Production Startup"
 echo "[start] NODE_ENV=${NODE_ENV}"
 echo "[start] ROOT=${ROOT_DIR}"
 
@@ -20,8 +20,6 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
     echo "  No .env file found. Running setup..."
     echo ""
 
-    # Run setup with set +e so we can capture the exit code
-    # (set -e would exit the script before we can check)
     set +e
     npx tsx scripts/setup.ts
     SETUP_EXIT=$?
@@ -31,20 +29,7 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
     fi
 fi
 
-# PORT resolution — the application (src/web/server.ts) reads
-# process.env.PORT, then .env via dotenv (dotenv never overwrites an
-# already-exported variable), then falls back to 8080.
-#
-#   1. Host/panel-provided PORT always wins (Wispbyte Startup env,
-#      Docker -e PORT=..., Render, plain `PORT=9002 npm start`).
-#   2. PORT from .env — only reachable when the shell does NOT export a
-#      default first, otherwise dotenv is shadowed and .env PORT is lost.
-#   3. Documented local fallback 8080, exported only when there is no
-#      .env that could supply a port.
-#
-# Wispbyte does NOT auto-inject PORT: the allocated port must be set in
-# Startup -> Environment Variables (e.g. PORT=9002). When it is absent
-# the app keeps its 8080 fallback and will not match the panel port.
+# PORT resolution
 if [ -z "${PORT:-}" ] && [ ! -f "${ROOT_DIR}/.env" ]; then
     export PORT=8080
     echo "[start] PORT not set — using default ${PORT}"
@@ -72,27 +57,125 @@ command -v npm >/dev/null 2>&1 || {
 echo "[start] Node: $(node --version)"
 echo "[start] npm:  $(npm --version)"
 
-# Runtime requires node_modules and pre-built dist/.
-# Both must be deployed with the application — no install at startup.
+# --- Detect deployment mode ---
+# In Docker production image: src/ does not exist (only dist/ is copied from builder)
+# In normal deployment: src/ exists and we need to build
+if [[ -d "${ROOT_DIR}/src" ]]; then
+    DEPLOY_MODE="writable"
+    echo "[start] Source directory present — writable deployment mode"
+else
+    DEPLOY_MODE="readonly"
+    echo "[start] Source directory absent — read-only production container mode"
+fi
+
+# --- Dependency installation detection ---
+NEED_INSTALL=0
+
 if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
-    echo "[start] ERROR: node_modules missing."
-    echo "[start] Install dependencies during deployment before starting."
-    exit 1
+    echo "[start] node_modules not found — will install dependencies"
+    NEED_INSTALL=1
+else
+    # Check if package-lock.json is newer than node_modules
+    if [[ "${ROOT_DIR}/package-lock.json" -nt "${ROOT_DIR}/node_modules" ]]; then
+        echo "[start] package-lock.json changed since last install — will reinstall"
+        NEED_INSTALL=1
+    fi
+    # Check if package.json is newer than node_modules (new deps added)
+    if [[ "${ROOT_DIR}/package.json" -nt "${ROOT_DIR}/node_modules" ]]; then
+        echo "[start] package.json changed since last install — will reinstall"
+        NEED_INSTALL=1
+    fi
 fi
 
-if [[ ! -f "${ROOT_DIR}/dist/index.js" ]]; then
-    echo "[start] ERROR: dist/index.js not found."
-    echo "[start] Build the project before starting with: npm run build"
-    echo "[start] Or ensure a pre-built dist/ artifact is deployed."
-    exit 1
+if [[ $NEED_INSTALL -eq 1 ]]; then
+    if [[ "${DEPLOY_MODE}" == "readonly" ]]; then
+        echo "[start] ERROR: Dependencies need installation but running in read-only container"
+        echo "[start] Rebuild the Docker image to include updated dependencies"
+        exit 1
+    fi
+    echo "[start] Installing production dependencies (npm ci --omit=dev)..."
+    if ! npm ci --omit=dev; then
+        echo "[start] ERROR: npm ci failed"
+        exit 1
+    fi
+    echo "[start] Dependencies installed successfully"
+else
+    echo "[start] Dependencies up to date — skipping install"
 fi
 
-# Resource check: disk, RAM, CPU. Never crashes startup.
+# --- Production build (only in writable mode) ---
+if [[ "${DEPLOY_MODE}" == "writable" ]]; then
+    echo "[start] Building production artifacts (npm run build)..."
+    if ! npm run build; then
+        echo "[start] ERROR: Build failed — will not start stale artifacts"
+        exit 1
+    fi
+    echo "[start] Build completed successfully"
+else
+    echo "[start] Skipping build — using pre-built artifacts from Docker image"
+fi
+
+# --- Build artifact verification ---
+REQUIRED_ARTIFACTS=(
+    "dist/index.js"
+    "dist/cli.js"
+    "dist/web/server.js"
+    "dist/web/public/index.html"
+    "dist/web/public/dashboard.html"
+    "dist/web/public/css/base.css"
+    "dist/web/public/js/app.js"
+    "dist/assets/emojis/icon-metadata.json"
+)
+
+echo "[start] Verifying build artifacts..."
+for artifact in "${REQUIRED_ARTIFACTS[@]}"; do
+    if [[ ! -f "${ROOT_DIR}/${artifact}" ]]; then
+        echo "[start] ERROR: Required build artifact missing: ${artifact}"
+        exit 1
+    fi
+done
+echo "[start] All required build artifacts present"
+
+# --- Runtime asset verification ---
+REQUIRED_ASSETS=(
+    "dist/assets/emojis"
+    "dist/web/public/assets"
+)
+
+echo "[start] Verifying runtime assets..."
+for asset in "${REQUIRED_ASSETS[@]}"; do
+    if [[ ! -d "${ROOT_DIR}/${asset}" ]]; then
+        echo "[start] ERROR: Required asset directory missing: ${asset}"
+        exit 1
+    fi
+done
+echo "[start] All required asset directories present"
+
+# --- Resource check ---
 export APP_DIR="${ROOT_DIR}"
 if [[ -f "${ROOT_DIR}/scripts/check-resources.sh" ]]; then
     . "$APP_DIR/scripts/check-resources.sh"
 fi
 
+# --- Preflight validation (environment, database, config) ---
+echo "[start] Running preflight validation..."
+if ! npx tsx -e "
+const { validateRuntime, validateSecurityConfig } = require('./dist/config/env');
+try {
+    validateSecurityConfig();
+    validateRuntime();
+    console.log('[preflight] Environment validation passed');
+} catch (e) {
+    console.error('[preflight] ERROR:', e.message);
+    process.exit(1);
+}
+"; then
+    echo "[start] ERROR: Preflight validation failed"
+    exit 1
+fi
+echo "[start] Preflight validation passed"
+
+# --- Start application ---
 if [ -n "${PORT:-}" ]; then
     echo "[start] Starting AshenAI on port ${PORT}..."
 else

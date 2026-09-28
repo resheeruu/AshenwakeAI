@@ -659,21 +659,25 @@ assert(
 );
 
 /* ================================================================
- * SECTION I: start.sh deployment guard (Wispbyte — no npm ci at startup)
+ * SECTION I: start.sh dependency installation guard (canonical startup)
  * ================================================================ */
-console.log("\nSection I: start.sh deployment guard (Wispbyte)");
+console.log("\nSection I: start.sh dependency installation guard");
 
 const startSrc = fs.readFileSync(path.join(ROOT, "scripts/start.sh"), "utf-8");
 assertIncludes(startSrc, "node_modules", "start.sh checks node_modules");
 assertIncludes(startSrc, "dist/index.js", "start.sh checks dist/index.js");
-assertNotIncludes(startSrc, "npm ci", "start.sh does NOT run npm ci at startup");
-assertIncludes(startSrc, "Install dependencies during deployment", "start.sh instructs deployment install, not runtime npm ci");
-// Ensure node_modules and dist checks come before the node exec
+assertIncludes(startSrc, "npm ci", "start.sh runs npm ci when dependencies need installation");
+assertIncludes(startSrc, "NEED_INSTALL", "start.sh detects dependency state changes");
+assertIncludes(startSrc, "package-lock.json", "start.sh checks package-lock.json timestamp");
+assertIncludes(startSrc, "package.json", "start.sh checks package.json timestamp");
+assertIncludes(startSrc, "Dependencies up to date", "start.sh skips install when deps are current");
+assertIncludes(startSrc, "Installing production dependencies", "start.sh runs npm ci --omit=dev when needed");
+// Ensure dependency checks and build happen before node exec
 const nodeModulesIdx = startSrc.indexOf('if [[ ! -d "${ROOT_DIR}/node_modules" ]]');
-const distIdx = startSrc.indexOf('if [[ ! -f "${ROOT_DIR}/dist/index.js" ]]');
+const buildIdx = startSrc.indexOf("npm run build");
 const execIdx = startSrc.indexOf('exec node "${ROOT_DIR}/dist/index.js"');
-assert(nodeModulesIdx !== -1 && distIdx !== -1 && execIdx !== -1, "start.sh has node_modules, dist, and exec checks");
-assert(nodeModulesIdx < execIdx && distIdx < execIdx, "guard checks precede node exec");
+assert(nodeModulesIdx !== -1 && buildIdx !== -1 && execIdx !== -1, "start.sh has dependency check, build, and exec");
+assert(nodeModulesIdx < buildIdx && buildIdx < execIdx, "dependency check and build precede node exec");
 
 /* ================================================================
  * SECTION J: Error sanitization smoke (existing tool)
@@ -814,16 +818,17 @@ assert(!lock.packages?.["node_modules/typescript"]?.dev, "package-lock does not 
 const ensureDistPath = path.join(ROOT, "scripts/ensure-dist.mjs");
 assert(!fs.existsSync(ensureDistPath), "scripts/ensure-dist.mjs has been removed (no runtime build guard)");
 
-/* Verify start.sh has no runtime install/build compilation. */
-assertNotIncludes(startSh, "npm ci", "start.sh does NOT run npm ci at startup");
+/* Verify start.sh has correct runtime install/build behavior. */
+assertIncludes(startSh, "npm ci", "start.sh runs npm ci when dependencies need installation");
 assertNotIncludes(startSh, "npm install", "start.sh does NOT run npm install at startup");
 assertNotIncludes(startSh, "tsc", "start.sh does NOT run tsc at runtime");
 assertNotIncludes(startSh, "ensure-dist", "start.sh does NOT call ensure-dist.mjs at runtime");
 assertNotIncludes(startSh, "node_modules/.bin/tsx", "start.sh does NOT fall back to tsx for production");
 assertNotIncludes(startSh, "src/index.ts", "start.sh does NOT compile src/index.ts at runtime");
-assertIncludes(startSh, "dist/index.js", "start.sh requires pre-built dist/index.js");
-assertIncludes(startSh, "npm run build", "start.sh gives clear build instruction when dist missing");
-assertIncludes(startSh, "pre-built dist", "start.sh documents pre-built dist requirement");
+assertIncludes(startSh, "dist/index.js", "start.sh requires dist/index.js after build");
+assertIncludes(startSh, "npm run build", "start.sh always runs npm run build");
+assertIncludes(startSh, "Build completed successfully", "start.sh verifies build success");
+assertIncludes(startSh, "Dependencies up to date", "start.sh skips install when deps are current");
 
 console.log("  ✅ PORT honored with documented 8080 fallback");
 console.log("  ✅ server reads PORT from environment");
@@ -831,10 +836,10 @@ console.log("  ✅ .env.example documents Wispbyte PORT=9002");
 console.log("  ✅ tsx + typescript are runtime dependencies");
 console.log("  ✅ package-lock.json in sync (no dev:true for tsx/typescript)");
 console.log("  ✅ no prestart hook compiles TypeScript at runtime");
-console.log("  ✅ start.sh requires pre-built dist/index.js");
+console.log("  ✅ start.sh requires dist/index.js after build");
 console.log("  ✅ npm run build uses low-memory esbuild transpile");
 console.log("  ✅ ensure-dist.mjs removed from runtime startup");
-console.log("  ✅ start.sh has no npm ci, npm install, tsc, or tsx runtime fallback");
+console.log("  ✅ start.sh runs npm ci when needed, skips when current, never runs npm install/tsc/tsx at runtime");
 
 // P0-1: Graceful shutdown must clear all setInterval timers
 try {

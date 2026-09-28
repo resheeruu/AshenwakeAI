@@ -63,9 +63,12 @@ export function recordAudit(entry: Omit<AuditEntry, "id" | "timestamp" | "signat
   const { signature, prevHash } = signEntry(full as SignableAuditEntry, lastSignature);
   full.signature = signature;
   full.prevHash = prevHash;
-  lastSignature = signature;
 
+  // Persist to database FIRST, only then advance chain state
   insertAuditEntryDB(full);
+
+  // Only advance in-memory chain state after successful persistence
+  lastSignature = signature;
 
   logger.info(`📋 AUDIT: [${full.result}] ${full.what} by ${full.who} in ${full.where}`);
 

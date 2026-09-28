@@ -143,6 +143,7 @@
       <a href="#automation" class="nav-link" data-section="automation"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Automation</span></a>
 
       <div class="nav-section">Engage</div>
+      <a href="#ash-actions" class="nav-link" data-section="ash-actions"><span class="nav-icon" aria-hidden="true">⚔</span><span class="nav-label">Ash Actions</span></a>
       <a href="#memory" class="nav-link" data-section="memory"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-label">Memory</span></a>
       <a href="#games" class="nav-link" data-section="games"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-label">Games</span></a>
       <a href="#media" class="nav-link" data-section="media"><span class="nav-icon" aria-hidden="true">♪</span><span class="nav-label">Media</span></a>
@@ -295,6 +296,28 @@
               <div class="field-line"><div class="fl-text"><div class="fl-title">Window is a number</div><div class="fl-desc">Turns retained are exactly memory.maxMessages.</div></div></div>
               <div class="field-line"><div class="fl-text"><div class="fl-title">Off means off</div><div class="fl-desc">Disabling memory starts every conversation cold.</div></div></div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ASH ACTIONS ============ -->
+      <section class="section-page" id="sec-ash-actions" aria-labelledby="ttl-ash-actions">
+        <div class="section-head-row">
+          <div>
+            <h2 class="section-title" id="ttl-ash-actions"><span class="st-icon" aria-hidden="true">⚔</span>Ash Actions</h2>
+            <p class="section-desc">32 prefixed anime actions across Affection, Combat, and Fun. Each with cooldown, media, and outcome system.</p>
+          </div>
+          <div class="section-actions"><button class="btn btn-outline btn-sm" type="button" data-refresh="ash-actions">Refresh</button></div>
+        </div>
+        <div class="stack-cards">
+          <div class="perm-note" id="ashActionsPermNote" data-perm="owner" hidden></div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Social Switches</div><div class="card-sub">Master toggle and per-action toggles</div></div></div>
+            <div id="ashActionsSwitches"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">Action Catalog</div><div class="card-sub">All registered actions with cooldowns and metadata</div></div></div>
+            <div id="ashActionsCatalog"></div>
           </div>
         </div>
       </section>
@@ -504,6 +527,7 @@
 <script src="js/automation.js"></script>
 <script src="js/memory.js"></script>
 <script src="js/games.js"></script>
+<script src="js/ash-actions.js"></script>
 <script src="js/media.js"></script>
 <script src="js/analytics.js"></script>
 <script src="js/logs.js"></script>

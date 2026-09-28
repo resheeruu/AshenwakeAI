@@ -57,9 +57,9 @@ import {
 } from "../control/oauth";
 import {
   generateResetToken,
-  validateResetToken,
-  useResetToken,
+  consumeResetToken,
   invalidateResetTokens,
+  validateResetToken,
 } from "../control/password-reset";
 import {
   sendPasswordResetEmail,
@@ -370,10 +370,39 @@ app.get("/api/games/anime-actions", requireAuth, (_req: Request, res: Response) 
       emoji: a.emoji,
       cooldownMs: a.cooldownMs,
       targetRequired: a.targetRequired,
+      botTargetAllowed: a.botTargetAllowed,
+      selfTargetAllowed: a.selfTargetAllowed,
+      aliases: a.aliases,
     }));
     res.json({ ok: true, actions, total: actions.length });
   } catch {
     res.status(500).json({ ok: false, error: "Anime action catalog unavailable" });
+  }
+});
+
+/* Game catalog — single source of truth from the centralized definitions */
+app.get("/api/games/list", requireAuth, (_req: Request, res: Response) => {
+  try {
+    const { getAllGames } = require("../games/definitions");
+    const games = getAllGames().map((g: any) => ({
+      name: g.name,
+      displayName: g.displayName,
+      description: g.description,
+      category: g.category,
+      emoji: g.emoji,
+      syntax: g.syntax,
+      aliases: g.aliases,
+      minBet: g.minBet,
+      maxBet: g.maxBet,
+      cost: g.cost,
+      hasBetting: g.hasBetting,
+      cooldownMs: g.cooldownMs,
+      features: g.features,
+      enabled: g.enabled,
+    }));
+    res.json({ ok: true, games, total: games.length });
+  } catch {
+    res.status(500).json({ ok: false, error: "Game catalog unavailable" });
   }
 });
 
@@ -645,7 +674,8 @@ app.post("/auth/reset-password", (req: Request, res: Response) => {
     return;
   }
 
-  if (!validateResetToken(accountId, token)) {
+  // Atomically consume the reset token - validates and marks used in one operation
+  if (!consumeResetToken(accountId, token)) {
     res.status(400).json({ ok: false, error: "Invalid or expired reset token." });
     return;
   }
@@ -655,9 +685,6 @@ app.post("/auth/reset-password", (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: "Invalid reset token." });
     return;
   }
-
-  // Use the token (marks as used)
-  useResetToken(accountId, token);
 
   // Change password
   const { hash, salt } = hashPassword(newPassword);

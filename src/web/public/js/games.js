@@ -16,9 +16,11 @@ async function loadGames(ctx, host) {
 
   let gameConfig = null;
   let community = null;
+  let gameList = [];
 
   const jobs = [
-    API.get('/api/games/config').then((d) => { gameConfig = (d && d.config) || null; }).catch(() => { gameConfig = null; })
+    API.get('/api/games/config').then((d) => { gameConfig = (d && d.config) || null; }).catch(() => { gameConfig = null; }),
+    API.get('/api/games/list').then((d) => { gameList = (d && d.games) || []; }).catch(() => { gameList = []; })
   ];
   if (settingsBase) {
     jobs.push(API.get(settingsBase)
@@ -31,6 +33,21 @@ async function loadGames(ctx, host) {
 
   const readOnly = !ctx.canEdit;
   let html = '';
+
+  // Game cards from centralized definitions
+  if (gameList.length > 0) {
+    html += '<div class="grid-3-cards">';
+    for (const game of gameList) {
+      if (!game.enabled) continue;
+      const syntax = game.syntax.replace('ash ', '');
+      html += '<div class="card">' +
+        '<div class="card-title">' + game.emoji + ' ' + game.displayName + '</div>' +
+        '<div class="card-sub">' + escapeHtml(game.description) + '</div>' +
+        '<span class="code-inline">ash ' + escapeHtml(syntax) + '</span>' +
+      '</div>';
+    }
+    html += '</div>';
+  }
 
   if (!settingsBase) {
     html += AshenUI.empty('Select a server', 'XP and level settings are stored per server.', '◇');

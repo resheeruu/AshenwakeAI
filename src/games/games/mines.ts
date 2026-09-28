@@ -1,5 +1,5 @@
 import { GamePlayer } from "../types";
-import { updatePlayer } from "../store";
+import { mutatePlayer } from "../store";
 import {
   applyLevelUp,
   updateAchievements,
@@ -12,6 +12,7 @@ export type MinesGame = {
   revealed: Set<number>;
   multiplier: number;
   finished: boolean;
+  startedAt: number;
 };
 
 export type MinesRevealResult = {
@@ -31,10 +32,12 @@ const MAX_BET = 1000;
 const sessions = new Map<string, MinesGame>();
 
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const SESSION_MAX_AGE_MS = 10 * 60 * 1000;
 
 const cleanupTimer = setInterval(() => {
+  const now = Date.now();
   for (const [id, game] of sessions) {
-    if (game.finished) {
+    if (game.finished || (now - game.startedAt) > SESSION_MAX_AGE_MS) {
       sessions.delete(id);
     }
   }
@@ -56,14 +59,23 @@ function createMines(): Set<number> {
 export function getMinesGame(
   playerId: string,
 ): MinesGame | undefined {
-  return sessions.get(playerId);
+  const game = sessions.get(playerId);
+  if (game && !game.finished) {
+    const now = Date.now();
+    if ((now - game.startedAt) > SESSION_MAX_AGE_MS) {
+      sessions.delete(playerId);
+      return undefined;
+    }
+  }
+  return game;
 }
 
 export async function startMines(
-  player: GamePlayer,
+  userId: string,
+  username: string,
   bet: number,
 ): Promise<MinesGame> {
-  if (sessions.has(player.userId)) {
+  if (sessions.has(userId)) {
     throw new Error("MINES_ALREADY_ACTIVE");
   }
 
@@ -75,30 +87,33 @@ export async function startMines(
     throw new Error("INVALID_MINES_BET");
   }
 
-  if (player.coins < bet) {
-    throw new Error("NOT_ENOUGH_COINS");
-  }
+  const { player } = await mutatePlayer(userId, async (p: GamePlayer) => {
+    if (p.coins < bet) {
+      throw new Error("NOT_ENOUGH_COINS");
+    }
 
-  player.coins -= bet;
+    p.coins -= bet;
 
-  const game: MinesGame = {
-    playerId: player.userId,
-    bet,
-    mines: createMines(),
-    revealed: new Set(),
-    multiplier: 1,
-    finished: false,
-  };
+    const game: MinesGame = {
+      playerId: userId,
+      bet,
+      mines: createMines(),
+      revealed: new Set(),
+      multiplier: 1,
+      finished: false,
+      startedAt: Date.now(),
+    };
 
-  sessions.set(player.userId, game);
+    sessions.set(userId, game);
+    return { player: p };
+  }, username);
 
-  await updatePlayer(player);
-
-  return game;
+  return sessions.get(userId)!;
 }
 
 export async function revealMinesTile(
-  player: GamePlayer,
+  userId: string,
+  username: string,
   game: MinesGame,
   tile: number,
 ): Promise<MinesRevealResult> {
@@ -124,17 +139,19 @@ export async function revealMinesTile(
     game.finished = true;
     game.multiplier = 0;
 
-    player.gamesPlayed++;
-    player.losses++;
-    player.streak = 0;
-    player.xp += 5;
+    const { result } = await mutatePlayer(userId, async (p: GamePlayer) => {
+      p.gamesPlayed++;
+      p.losses++;
+      p.streak = 0;
+      p.xp += 5;
 
-    applyLevelUp(player);
-    updateAchievements(player);
+      applyLevelUp(p);
+      updateAchievements(p);
 
-    await updatePlayer(player);
+      return { payout: 0, levelUp: false };
+    }, username);
 
-    sessions.delete(player.userId);
+    sessions.delete(userId);
 
     return {
       tile,
@@ -162,7 +179,8 @@ export async function revealMinesTile(
 }
 
 export async function cashOutMines(
-  player: GamePlayer,
+  userId: string,
+  username: string,
   game: MinesGame,
 ): Promise<{
   payout: number;
@@ -188,30 +206,28 @@ export async function cashOutMines(
 
   game.finished = true;
 
-  player.coins += payout;
-  player.xp += xp;
-  player.gamesPlayed++;
-  player.wins++;
-  player.streak++;
+  const { result } = await mutatePlayer(userId, async (p: GamePlayer) => {
+    p.coins += payout;
+    p.xp += xp;
+    p.gamesPlayed++;
+    p.wins++;
+    p.streak++;
 
-  player.bestStreak = Math.max(
-    player.bestStreak,
-    player.streak,
-  );
+    p.bestStreak = Math.max(
+      p.bestStreak,
+      p.streak,
+    );
 
-  const levelUp = applyLevelUp(player);
+    const levelUp = applyLevelUp(p);
 
-  updateAchievements(player);
+    updateAchievements(p);
 
-  await updatePlayer(player);
+    return { payout, xp, levelUp };
+  }, username);
 
-  sessions.delete(player.userId);
+  sessions.delete(userId);
 
-  return {
-    payout,
-    xp,
-    levelUp,
-  };
+  return result;
 }
 
 export function cancelMines(
