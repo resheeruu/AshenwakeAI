@@ -239,7 +239,11 @@ async function loadManifest(
       continue;
     }
     const rec = entry as Record<string, unknown>;
-    if (typeof rec.path !== "string" || !isSafeRelPath(rec.path)) {
+    // Manifest producers (collect-real-gifs.ts, import-gifs.ts) key entries
+    // by `file`; accept it as an alias for `path` so license/source
+    // metadata actually reaches indexed assets. Same validation applies.
+    const relPath = typeof rec.path === "string" ? rec.path : rec.file;
+    if (typeof relPath !== "string" || !isSafeRelPath(relPath)) {
       // Absolute / traversal / malformed manifest paths are rejected here
       // and can never influence reads (assets come from the directory scan).
       result.warnings += 1;
@@ -252,7 +256,7 @@ async function loadManifest(
     if (source) meta.source = source;
     if (sourceUrl) meta.sourceUrl = sourceUrl;
     if (license) meta.license = license;
-    result.meta.set(rec.path, meta);
+    result.meta.set(relPath, meta);
   }
 
   return result;

@@ -27,6 +27,8 @@ import {
   clearAnimationCache,
   fetchAnimation,
   buildProviders,
+  getProviderHealth,
+  resetProviderHealth,
   type AnimeHttpClient,
 } from "../src/games/anime-actions/providers";
 import { executeAction, buildDiscordResponse } from "../src/games/anime-actions/engine";
@@ -1906,7 +1908,9 @@ async function flagStateTests(): Promise<void> {
 async function providerCacheTests(): Promise<void> {
   console.log("\n--- Providers, Fallback, Cache ---");
 
-  // P1: provider A fails → provider B supplies the URL.
+  // P1: provider A fails → chain continues; the last provider with a
+  // usable URL wins the remote-URL pool fallback (undownloadable
+  // earlier results are kept only as URL fallback).
   clearAnimationCache();
   {
     const client: AnimeHttpClient = async (req) => {
@@ -1914,8 +1918,8 @@ async function providerCacheTests(): Promise<void> {
       return { ok: true, status: 200, body: JSON.stringify({ url: "https://media.example.com/b.gif" }) };
     };
     const r = await fetchAnimation("hug", { httpClient: client });
-    if (r && r.source === "otakugifs" && r.url === "https://media.example.com/b.gif") {
-      pass("P1 provider A fails → fallback to provider B");
+    if (r && r.source === "nekoslife" && r.url === "https://media.example.com/b.gif") {
+      pass("P1 provider A fails → chain continues to last usable provider URL");
     } else {
       fail("P1 provider fallback", r);
     }
@@ -2004,8 +2008,8 @@ async function providerCacheTests(): Promise<void> {
     }
   }
 
-  // P8: no infinite retry — exactly one call per provider (2 total)
-  // when everything fails.
+  // P8: no infinite retry — exactly one call per MAPPED provider
+  // (throw maps only to gifukai+otakugifs: 2 total) when all fail.
   clearAnimationCache();
   {
     let calls = 0;
@@ -2015,7 +2019,7 @@ async function providerCacheTests(): Promise<void> {
     };
     await fetchAnimation("throw", { httpClient: counting });
     if (calls === 2) {
-      pass("P8 provider chain attempts each provider exactly once (no retry loop)");
+      pass("P8 provider chain attempts each mapped provider exactly once (no retry loop)");
     } else {
       fail("P8 no retry loop", calls);
     }
@@ -2086,6 +2090,202 @@ async function providerCacheTests(): Promise<void> {
       pass("P11 provider URL never appears in reply text (attachment field only)");
     } else {
       fail("P11 provider content isolated from text", result);
+    }
+  }
+}
+
+async function providerExpansionTests(): Promise<void> {
+  console.log("\n--- Provider Expansion (5-provider chain) ---");
+
+  // X1: registration + deterministic priority order.
+  {
+    const names = buildProviders().map((p) => p.name);
+    const expected = ["gifukai", "otakugifs", "nekosbest", "purrbot", "nekoslife"];
+    if (JSON.stringify(names) === JSON.stringify(expected)) {
+      pass("X1 5 providers registered in priority order");
+    } else {
+      fail("X1 provider registration/order", names);
+    }
+  }
+
+  // X2: NekosBest {results:[{url}]} shape parsed; identifying UA sent.
+  clearAnimationCache();
+  {
+    const seenUA: string[] = [];
+    const client: AnimeHttpClient = async (req) => {
+      if (req.url.includes("nekos.best")) {
+        seenUA.push(req.headers?.["User-Agent"] ?? "");
+        return { ok: true, status: 200, body: JSON.stringify({ results: [{ url: "https://media.example.com/nb.gif", anime_name: "Test Anime" }] }) };
+      }
+      return { ok: false, status: 0, body: "", failure: "network" };
+    };
+    const r = await fetchAnimation("hug", { httpClient: client });
+    if (r && r.url === "https://media.example.com/nb.gif" && r.source === "nekosbest" && seenUA.includes("AshenAI/1.0")) {
+      pass("X2 NekosBest results-shape parsed with identifying User-Agent");
+    } else {
+      fail("X2 NekosBest shape/UA", { r, seenUA });
+    }
+  }
+
+  // X3: PurrBot {link} shape parsed.
+  clearAnimationCache();
+  {
+    const client: AnimeHttpClient = async (req) => {
+      if (req.url.includes("purrbot")) {
+        return { ok: true, status: 200, body: JSON.stringify({ link: "https://media.example.com/pb.gif", error: false }) };
+      }
+      return { ok: false, status: 0, body: "", failure: "network" };
+    };
+    const r = await fetchAnimation("pat", { httpClient: client });
+    if (r && r.url === "https://media.example.com/pb.gif" && r.source === "purrbot") {
+      pass("X3 PurrBot link-shape parsed");
+    } else {
+      fail("X3 PurrBot shape", r);
+    }
+  }
+
+  // X4: nekos.life {url} shape parsed.
+  clearAnimationCache();
+  {
+    const client: AnimeHttpClient = async (req) => {
+      if (req.url.includes("nekos.life")) {
+        return { ok: true, status: 200, body: JSON.stringify({ url: "https://media.example.com/nl.gif" }) };
+      }
+      return { ok: false, status: 0, body: "", failure: "network" };
+    };
+    const r = await fetchAnimation("cry", { httpClient: client });
+    if (r && r.url === "https://media.example.com/nl.gif" && r.source === "nekoslife") {
+      pass("X4 nekos.life url-shape parsed");
+    } else {
+      fail("X4 nekos.life shape", r);
+    }
+  }
+
+  // X5: unmapped action skips new providers with zero HTTP (destroy).
+  clearAnimationCache();
+  {
+    let calls = 0;
+    const urls: string[] = [];
+    const client: AnimeHttpClient = async (req) => {
+      calls++;
+      urls.push(req.url);
+      return { ok: false, status: 0, body: "", failure: "network" };
+    };
+    await fetchAnimation("destroy", { httpClient: client });
+    const newProviderHit = urls.some((u) => u.includes("nekos.best") || u.includes("purrbot") || u.includes("nekos.life"));
+    if (calls === 2 && !newProviderHit) {
+      pass("X5 gap action skips unmapped providers (2 calls, no wasted requests)");
+    } else {
+      fail("X5 mapping skips", { calls, urls });
+    }
+  }
+
+  // X6: explicit headpat→pat alias honored by all three new providers.
+  clearAnimationCache();
+  {
+    const urls: string[] = [];
+    const client: AnimeHttpClient = async (req) => {
+      urls.push(req.url);
+      return { ok: false, status: 0, body: "", failure: "network" };
+    };
+    await fetchAnimation("headpat", { httpClient: client });
+    const nb = urls.find((u) => u.includes("nekos.best"));
+    const pb = urls.find((u) => u.includes("purrbot"));
+    const nl = urls.find((u) => u.includes("nekos.life"));
+    const newOnes = [nb, pb, nl];
+    if (nb?.endsWith("/pat") && pb?.endsWith("/pat/gif") && nl?.endsWith("/pat") && newOnes.every((u) => u && !u.includes("headpat"))) {
+      pass("X6 headpat→pat alias used by nekosbest/purrbot/nekoslife");
+    } else {
+      fail("X6 headpat alias", urls);
+    }
+  }
+
+  // X7: circuit breaker — 5 consecutive failures open the circuit;
+  // the 6th request makes zero HTTP calls. Uses hug (all 5 mapped).
+  clearAnimationCache();
+  resetProviderHealth();
+  {
+    let calls = 0;
+    const client: AnimeHttpClient = async () => {
+      calls++;
+      return { ok: false, status: 0, body: "", failure: "network" };
+    };
+    for (let i = 0; i < 5; i++) {
+      await fetchAnimation("hug", { httpClient: client });
+    }
+    const afterFive = calls;
+    await fetchAnimation("hug", { httpClient: client });
+    if (afterFive === 25 && calls === 25) {
+      pass("X7 circuit opens after 5 failures; 6th request makes zero calls");
+    } else {
+      fail("X7 circuit breaker", { afterFive, calls });
+    }
+  }
+
+  // X8: extended health counters are tracked per provider.
+  {
+    const health = getProviderHealth();
+    const names = health.map((h) => h.name).sort();
+    const gifukai = health.find((h) => h.name === "gifukai");
+    const complete =
+      JSON.stringify(names) === JSON.stringify(["gifukai", "nekosbest", "nekoslife", "otakugifs", "purrbot"]) &&
+      (gifukai?.requestAttempts || 0) >= 5 &&
+      (gifukai?.failedDownloads || 0) >= 5 &&
+      typeof gifukai?.timeouts === "number" &&
+      typeof gifukai?.invalidMedia === "number" &&
+      typeof gifukai?.downloadFailures === "number" &&
+      typeof gifukai?.cacheSuccesses === "number" &&
+      typeof gifukai?.totalLatencyMs === "number" &&
+      gifukai?.lastFailure !== null;
+    if (complete) {
+      pass("X8 provider health tracks attempts/failures/timeouts/invalid/downloads/latency");
+    } else {
+      fail("X8 provider health", health);
+    }
+  }
+
+  // X9: identical bytes from two providers share one URL-pool entry.
+  clearAnimationCache();
+  resetProviderHealth();
+  {
+    const same = "https://media.example.com/same.gif";
+    const client: AnimeHttpClient = async (req) => {
+      if (req.url.includes("nekos.best") || req.url.includes("purrbot")) {
+        return { ok: false, status: 0, body: "", failure: "network" };
+      }
+      return { ok: true, status: 200, body: JSON.stringify({ url: same }) };
+    };
+    const r = await fetchAnimation("kiss", { httpClient: client });
+    const stats = getAnimationCacheStats();
+    if (r && r.url === same && stats.size === 1) {
+      pass("X9 cross-provider duplicate URL shares one pool entry");
+    } else {
+      fail("X9 cross-provider dedup", { r, stats });
+    }
+  }
+
+  // X10: provider-first with 5 providers — local fallback only after
+  // all five are attempted (hug is mapped on every provider).
+  clearAnimationCache();
+  resetProviderHealth();
+  {
+    let calls = 0;
+    const client: AnimeHttpClient = async () => {
+      calls++;
+      return { ok: false, status: 0, body: "", failure: "network" };
+    };
+    const fake: LocalGifAsset = {
+      key: "actions:hug",
+      root: "/tmp/ashen-x10",
+      relPath: "actions/hug/ok.gif",
+      sizeBytes: 32,
+      license: "unspecified",
+    };
+    const r = await fetchAnimation("hug", { httpClient: client, localGifs: { resolve: async () => fake } });
+    if (r && r.localAsset === fake && r.source === "local" && calls === 5) {
+      pass("X10 5 providers attempted before local fallback");
+    } else {
+      fail("X10 provider-first x5", { r, calls });
     }
   }
 }
@@ -2508,7 +2708,7 @@ async function concurrencyRestartTests(): Promise<void> {
   }
 
   // K5: provider failure under concurrency → deterministic, bounded
-  // (2 provider calls per attempt, no crash).
+  // (5 provider calls per attempt, no crash).
   clearAnimationCache();
   {
     let calls = 0;
@@ -2519,8 +2719,8 @@ async function concurrencyRestartTests(): Promise<void> {
     const results = await Promise.all(
       Array.from({ length: 5 }, () => fetchAnimation("pat", { httpClient: client })),
     );
-    if (results.every((r) => r === null) && calls === 10) {
-      pass("K5 5 concurrent provider failures → all null, exactly 2 calls each (no flood)");
+    if (results.every((r) => r === null) && calls === 25) {
+      pass("K5 5 concurrent provider failures → all null, exactly 5 calls each (no flood)");
     } else {
       fail("K5 provider failure concurrency", { calls, results });
     }
@@ -2573,7 +2773,7 @@ async function concurrencyRestartTests(): Promise<void> {
     }
 
     // Definitions/provider config are code — intact regardless of DB state.
-    const providersOk = buildProviders().map((p) => p.name).join(",") === "gifukai,otakugifs";
+    const providersOk = buildProviders().map((p) => p.name).join(",") === "gifukai,otakugifs,nekosbest,purrbot,nekoslife";
     if (getAllActions().length === 32 && providersOk) {
       pass("R3 action definitions + provider chain intact (code-owned, restart-proof)");
     } else {
@@ -2745,8 +2945,8 @@ async function localMediaTests(): Promise<void> {
     }
   }
 
-  // Y3 — local hit wins: zero provider HTTP calls, nothing in the
-  // remote URL cache (local results are never cached remotely).
+  // Y3 — PROVIDER-FIRST: local asset exists but provider chain is
+  // still attempted; when all providers fail we fall back to local.
   clearAnimationCache();
   {
     let calls = 0;
@@ -2756,10 +2956,10 @@ async function localMediaTests(): Promise<void> {
     };
     const r = await fetchAnimation("hug", { httpClient: client });
     const stats = getAnimationCacheStats();
-    if (r && r.source === "local" && r.localAsset && !r.url && calls === 0 && stats.size === 0) {
-      pass("Y3 local hit: source=local, zero provider calls, remote cache untouched");
+    if (r && r.source === "local" && r.localAsset && !r.url && calls === 5 && stats.size === 0) {
+      pass("Y3 provider-first: providers attempted, local fallback used, remote cache untouched");
     } else {
-      fail("Y3 local first", { r, calls, cacheSize: stats.size });
+      fail("Y3 provider-first", { r, calls, cacheSize: stats.size });
     }
   }
 
@@ -2772,8 +2972,8 @@ async function localMediaTests(): Promise<void> {
       return { ok: true, status: 200, body: JSON.stringify({ url: "https://media.example.com/remote.gif" }) };
     };
     const r = await fetchAnimation("punch", { httpClient: client });
-    if (r && r.url === "https://media.example.com/remote.gif" && !r.localAsset && r.source !== "local" && calls === 2) {
-      pass("Y4 local miss → remote chain (both providers called, URL returned)");
+    if (r && r.url === "https://media.example.com/remote.gif" && !r.localAsset && r.source !== "local" && calls === 4) {
+      pass("Y4 local miss → remote chain (all mapped providers called, URL returned)");
     } else {
       fail("Y4 remote fallback", { r, calls });
     }
@@ -2789,14 +2989,16 @@ async function localMediaTests(): Promise<void> {
       return { ok: true, status: 200, body: JSON.stringify({ url: "https://media.example.com/remote.gif" }) };
     };
     const r = await fetchAnimation("hug", { httpClient: client, localGifs: null });
-    if (r && !r.localAsset && r.url === "https://media.example.com/remote.gif" && calls === 2) {
+    if (r && !r.localAsset && r.url === "https://media.example.com/remote.gif" && calls === 5) {
       pass("Y5 localGifs:null seam disables local lookup (remote chain used)");
     } else {
       fail("Y5 localGifs:null seam", { r, calls });
     }
   }
 
-  // Y6 — injected resolver seam: deterministic asset, zero HTTP.
+  // Y6 — injected resolver seam: provider chain attempted first;
+  // when providers fail, deterministic local fallback asset is used.
+  clearAnimationCache();
   {
     let calls = 0;
     const client: AnimeHttpClient = async () => {
@@ -2811,8 +3013,8 @@ async function localMediaTests(): Promise<void> {
       license: "unspecified",
     };
     const r = await fetchAnimation("hug", { httpClient: client, localGifs: { resolve: async () => fake } });
-    if (r && r.localAsset === fake && r.source === "local" && calls === 0) {
-      pass("Y6 injected localGifs resolver seam honoured (zero HTTP)");
+    if (r && r.localAsset === fake && r.source === "local" && calls === 5) {
+      pass("Y6 provider-first with injected localGifs fallback (providers attempted)");
     } else {
       fail("Y6 injected resolver", { r, calls });
     }
@@ -2881,8 +3083,8 @@ async function localMediaTests(): Promise<void> {
     }
   }
 
-  // Y10 — end to end through the prefix handler: the local GIF is
-  // served as an attachment with no remote fetch involved.
+  // Y10 — end to end through the prefix handler: provider-first
+  // acquisition with local cache fallback, served as an attachment.
   const y10Guild = "guild-y10-local";
   try {
     const cfg = { ...loadGuildConfig(y10Guild) } as any;
@@ -2914,7 +3116,7 @@ async function localMediaTests(): Promise<void> {
       payload.files[0]?.name === "anime.gif" &&
       !payload.content.includes(rootY)
     ) {
-      pass("Y10 prefix handler end-to-end: local GIF attached, no remote fetch");
+      pass("Y10 prefix handler end-to-end: GIF attached via provider-first chain");
     } else {
       fail("Y10 end-to-end local attach", t.raw);
     }
@@ -2939,6 +3141,7 @@ primeLocalMedia()
   .then(() => flagStateTests())
   .then(() => botPolicyTests())
   .then(() => providerCacheTests())
+  .then(() => providerExpansionTests())
   .then(() => engineBoundaryTests())
   .then(() => mentionSafetyTests())
   .then(() => moderationSpyTests())

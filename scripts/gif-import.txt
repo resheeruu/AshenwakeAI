@@ -1,0 +1,22 @@
+# AshenAI Manual GIF Import Input
+# Format: ACTION|GIF_URL|LICENSE|SOURCE_URL|CREATOR
+#
+# Lines starting with # are comments
+# Blank lines are ignored
+#
+# LICENSE must be one of: CC0, Public Domain, CC BY, CC BY-SA
+# Other values will be treated as UNVERIFIED and NOT counted as licensed production
+#
+# Example entries (replace with real verified assets):
+#
+# hug|https://example.com/hug.gif|CC0|https://opengameart.org/content/...|Artist Name
+# pat|https://example.com/pat.gif|CC-BY-4.0|https://opengameart.org/content/...|Artist Name
+# destroy|https://example.com/destroy.gif|CC0|https://example.com/page|Creator Name
+#
+# For discovery/testing without license metadata (will NOT become licensed production):
+# punch|https://example.com/punch.gif
+#
+# Supported actions (32 total):
+# affection: hug, cuddle, pat, headpat, kiss
+# combat: punch, kick, slap, bonk, bite, hit, smack, throw, shoot, stab, kill, destroy, explode
+# fun: poke, wave, highfive, yeet, dance, laugh, cry, blush, smug, panic, sleep, celebrate, roast, simp

@@ -31,7 +31,9 @@
     "icons:update": "tsx scripts/icons.ts update",
     "icons:validate": "tsx scripts/icons.ts validate",
     "test:no-unicode-emoji": "tsx scripts/test-no-unicode-emojis.ts",
-    "release:check": "bash scripts/release-check.sh"
+    "release:check": "bash scripts/release-check.sh",
+    "import:gifs": "tsx scripts/import-gifs.ts scripts/gif-import.txt",
+    "validate:gifs": "tsx scripts/validate-gifs.ts"
   },
   "license": "MIT",
   "keywords": [
