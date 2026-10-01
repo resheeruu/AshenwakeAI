@@ -3,6 +3,12 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "
 import path from "node:path";
 import { logger } from "../logger";
 import { getDataPath, getDataDir, getDatabasePath } from "../config/data-dir";
+import { beginUpdateLifecycle, endUpdateLifecycle } from "./update-lifecycle";
+import {
+  suspendSelfHealer,
+  resumeSelfHealer,
+  waitForSelfHealIdle,
+} from "../agent/selfHeal";
 
 /* ================================================================
  * SAFE AUTOMATIC UPDATE MANAGER WITH REAL ROLLBACK
@@ -78,6 +84,96 @@ let checkTimer: NodeJS.Timeout | null = null;
 let currentVersion = "";
 let isUpdating = false;
 let updateState: UpdateState = "IDLE";
+
+/* ================================================================
+ * SELF-HEALER COORDINATION
+ *
+ * The old flow let the Self-Healer (10s poll) scan while this module
+ * was pulling / validating / rolling back: typecheck + full test runs
+ * + possible AI source repairs then overlapped git, and rollbacks
+ * blacklisted SHAs the healer had just broken. Now every update:
+ *
+ *   beginUpdateLifecycle()  — sets the shared in-memory flag
+ *   suspendSelfHealer()     — stops polling + drops queued work
+ *   waitForSelfHealIdle()   — quiesces in-flight scans/repairs
+ *   ... git + validation ...
+ *   finally                 — end flag + resume ONLY if the process
+ *                             keeps running (failure paths); on the
+ *                             success path the process exits with the
+ *                             flag still set, successor starts clean.
+ * ================================================================ */
+
+const SELF_HEAL_QUIESCE_MS = 120_000;
+const SELF_HEAL_ROLLBACK_QUIESCE_MS = 30_000;
+
+/* ================================================================
+ * TEST SEAMS — injected only by scripts/test-selfheal-update-race.ts
+ * ================================================================ */
+
+export interface UpdateRunners {
+  getRemoteHead: () => Promise<string | null>;
+  getShortCommit: () => Promise<string>;
+  gitPull: () => Promise<boolean>;
+  gitCheckout: (commit: string) => Promise<boolean>;
+  installDepsIfNeeded: () => Promise<boolean>;
+  runTypecheck: () => Promise<boolean>;
+  runBuild: () => Promise<boolean>;
+  runCriticalTests: () => Promise<boolean>;
+}
+
+const defaultRunners: UpdateRunners = {
+  getRemoteHead,
+  getShortCommit,
+  gitPull,
+  gitCheckout,
+  installDepsIfNeeded,
+  runTypecheck,
+  runBuild,
+  runCriticalTests,
+};
+
+let runners: UpdateRunners = { ...defaultRunners };
+
+export function __setUpdateRunnersForTests(
+  overrides?: Partial<UpdateRunners>,
+): void {
+  runners = { ...defaultRunners, ...overrides };
+}
+
+type RestartScheduler = (
+  delayMs: number,
+  fn: () => void,
+) => void;
+
+const defaultRestartScheduler: RestartScheduler = (
+  delayMs,
+  fn,
+) => {
+  setTimeout(fn, delayMs);
+};
+
+let restartScheduler: RestartScheduler =
+  defaultRestartScheduler;
+
+export function __setRestartSchedulerForTests(
+  scheduler?: RestartScheduler,
+): void {
+  restartScheduler =
+    scheduler ?? defaultRestartScheduler;
+}
+
+/**
+ * Test-only: force the manager back to a clean idle state
+ * (a successful update intentionally keeps the update flag set
+ * until the scheduled process exit).
+ */
+export function __resetUpdateManagerForTests(): void {
+  isUpdating = false;
+  updateState = "IDLE";
+  releaseLock();
+  endUpdateLifecycle();
+  resumeSelfHealer();
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -443,7 +539,8 @@ export async function postStartValidation(): Promise<void> {
  * ROLLBACK
  * ================================================================ */
 
-async function triggerRollback(record: UpdateRecord): Promise<void> {
+/** Exported for regression tests (scripts/test-selfheal-update-race.ts). */
+export async function triggerRollback(record: UpdateRecord): Promise<void> {
   if (record.rollbackAttempt >= config.maxRollbackAttempts) {
     record.state = "ROLLBACK_FAILED";
     record.healthResult = "failed";
@@ -469,72 +566,99 @@ async function triggerRollback(record: UpdateRecord): Promise<void> {
     record.failedTargets.push(record.targetCommit);
   }
 
-  record.state = "ROLLING_BACK";
-  record.rollbackAttempt++;
-  record.healthResult = "failed";
-  saveRecord(record);
+  // Everything from here mutates the source tree (git checkout,
+  // npm ci, tsc): suspend the Self-Healer for the whole window.
+  beginUpdateLifecycle();
+  suspendSelfHealer();
 
-  logger.info(
-    `[UpdateManager] ROLLING BACK: ${record.targetCommit} -> ${previousCommit} (attempt ${record.rollbackAttempt}/${config.maxRollbackAttempts})`
-  );
-
-  if (!(await gitCheckout(previousCommit))) {
-    record.state = "ROLLBACK_FAILED";
-    record.rollbackResult = "failed";
-    record.error = `git checkout ${previousCommit} failed`;
+  try {
+    record.state = "ROLLING_BACK";
+    record.rollbackAttempt++;
+    record.healthResult = "failed";
     saveRecord(record);
-    logger.error(`[UpdateManager] ${record.error}`);
-    return;
-  }
 
-  if (!(await installDepsIfNeeded())) {
-    record.state = "ROLLBACK_FAILED";
-    record.rollbackResult = "failed";
-    record.error = "dependency installation failed during rollback";
+    logger.info(
+      `[UpdateManager] ROLLING BACK: ${record.targetCommit} -> ${previousCommit} (attempt ${record.rollbackAttempt}/${config.maxRollbackAttempts})`
+    );
+
+    const idle = await waitForSelfHealIdle(SELF_HEAL_ROLLBACK_QUIESCE_MS);
+    if (!idle) {
+      // Rollback correctness beats strict quiesce here: the fresh
+      // process has no in-flight repairs in practice, and the source
+      // must be restored even if something is stuck.
+      logger.warn(
+        "[UpdateManager] self-healer still busy during rollback quiesce — proceeding with rollback"
+      );
+    }
+
+    if (!(await runners.gitCheckout(previousCommit))) {
+      record.state = "ROLLBACK_FAILED";
+      record.rollbackResult = "failed";
+      record.error = `git checkout ${previousCommit} failed`;
+      saveRecord(record);
+      logger.error(`[UpdateManager] ${record.error}`);
+      return;
+    }
+
+    if (!(await runners.installDepsIfNeeded())) {
+      record.state = "ROLLBACK_FAILED";
+      record.rollbackResult = "failed";
+      record.error = "dependency installation failed during rollback";
+      saveRecord(record);
+      logger.error(`[UpdateManager] ${record.error}`);
+      return;
+    }
+
+    if (!(await runners.runBuild())) {
+      record.state = "ROLLBACK_FAILED";
+      record.rollbackResult = "failed";
+      record.error = "build failed during rollback";
+      saveRecord(record);
+      logger.error(`[UpdateManager] ${record.error}`);
+      return;
+    }
+
+    record.state = "HEALTH_CHECKING";
+    record.rollbackResult = "pending";
     saveRecord(record);
-    logger.error(`[UpdateManager] ${record.error}`);
-    return;
+
+    logger.info(
+      `[UpdateManager] rollback to ${previousCommit} built successfully. Restarting in 5s...`
+    );
+
+    // Success path: this process exits in 5s. The lifecycle flag and
+    // the suspension stay set until then (no source work may start
+    // in that window); the successor process starts clean.
+    restartScheduler(5_000, () => {
+      releaseLock();
+      process.exit(0);
+    });
+  } finally {
+    if (record.state !== "HEALTH_CHECKING") {
+      endUpdateLifecycle();
+      resumeSelfHealer();
+    }
   }
-
-  if (!(await runBuild())) {
-    record.state = "ROLLBACK_FAILED";
-    record.rollbackResult = "failed";
-    record.error = "build failed during rollback";
-    saveRecord(record);
-    logger.error(`[UpdateManager] ${record.error}`);
-    return;
-  }
-
-  record.state = "HEALTH_CHECKING";
-  record.rollbackResult = "pending";
-  saveRecord(record);
-
-  logger.info(
-    `[UpdateManager] rollback to ${previousCommit} built successfully. Restarting in 5s...`
-  );
-
-  setTimeout(() => {
-    releaseLock();
-    process.exit(0);
-  }, 5_000);
 }
 
 /* ================================================================
  * MAIN UPDATE FLOW
  * ================================================================ */
 
-async function performUpdate(): Promise<boolean> {
+export async function performUpdate(options?: {
+  quiesceTimeoutMs?: number;
+}): Promise<boolean> {
   if (isUpdating) {
     logger.warn("[UpdateManager] update already in progress");
     return false;
   }
 
-  const remoteCommit = await getRemoteHead();
+  const remoteCommit = await runners.getRemoteHead();
   if (!remoteCommit) {
     return false;
   }
 
-  const localCommit = await getShortCommit();
+  const localCommit = await runners.getShortCommit();
   if (remoteCommit === localCommit || remoteCommit.slice(0, 7) === localCommit) {
     return false;
   }
@@ -558,6 +682,10 @@ async function performUpdate(): Promise<boolean> {
   isUpdating = true;
   updateState = "UPDATING";
 
+  // Coordinate with the Self-Healer BEFORE any source mutation.
+  beginUpdateLifecycle();
+  suspendSelfHealer();
+
   const record: UpdateRecord = {
     previousKnownGoodCommit: localCommit,
     targetCommit: remoteCommit.slice(0, 7),
@@ -575,8 +703,22 @@ async function performUpdate(): Promise<boolean> {
   };
 
   try {
+    // Quiesce: no scan in flight, no drain in flight, no file being
+    // repaired. If the healer cannot go idle in time the update is
+    // aborted cleanly (no record write, nothing persisted) and will
+    // be retried on the next check — never over a busy healer.
+    const idle = await waitForSelfHealIdle(
+      options?.quiesceTimeoutMs ?? SELF_HEAL_QUIESCE_MS
+    );
+    if (!idle) {
+      logger.warn(
+        "[UpdateManager] self-healer still busy after quiesce timeout — aborting update, will retry next check"
+      );
+      return false;
+    }
+
     logger.info("[UpdateManager] pulling changes...");
-    if (!(await gitPull())) {
+    if (!(await runners.gitPull())) {
       record.state = "FAILED";
       record.error = "git pull failed";
       saveRecord(record);
@@ -584,7 +726,7 @@ async function performUpdate(): Promise<boolean> {
     }
 
     logger.info("[UpdateManager] checking dependencies...");
-    if (!(await installDepsIfNeeded())) {
+    if (!(await runners.installDepsIfNeeded())) {
       record.state = "FAILED";
       record.error = "dependency installation failed";
       saveRecord(record);
@@ -594,35 +736,35 @@ async function performUpdate(): Promise<boolean> {
     updateState = "VALIDATING";
     record.state = "VALIDATING";
     logger.info("[UpdateManager] running typecheck...");
-    record.validationResult = (await runTypecheck()) ? "passed" : "failed";
+    record.validationResult = (await runners.runTypecheck()) ? "passed" : "failed";
     if (record.validationResult === "failed") {
       record.state = "FAILED";
       record.error = "typecheck failed - keeping current version";
       saveRecord(record);
       logger.error("[UpdateManager] typecheck failed, aborting update");
-      await gitCheckout(record.previousKnownGoodCommit);
+      await runners.gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
 
     logger.info("[UpdateManager] running build...");
-    record.buildResult = (await runBuild()) ? "passed" : "failed";
+    record.buildResult = (await runners.runBuild()) ? "passed" : "failed";
     if (record.buildResult === "failed") {
       record.state = "FAILED";
       record.error = "build failed - keeping current version";
       saveRecord(record);
       logger.error("[UpdateManager] build failed, aborting update");
-      await gitCheckout(record.previousKnownGoodCommit);
+      await runners.gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
 
     logger.info("[UpdateManager] running critical tests...");
-    record.testResult = (await runCriticalTests()) ? "passed" : "failed";
+    record.testResult = (await runners.runCriticalTests()) ? "passed" : "failed";
     if (record.testResult === "failed") {
       record.state = "FAILED";
       record.error = "tests failed - keeping current version";
       saveRecord(record);
       logger.error("[UpdateManager] tests failed, aborting update");
-      await gitCheckout(record.previousKnownGoodCommit);
+      await runners.gitCheckout(record.previousKnownGoodCommit);
       return false;
     }
 
@@ -635,12 +777,14 @@ async function performUpdate(): Promise<boolean> {
       `[UpdateManager] all validation passed. Restarting in 5s... (previous=${record.previousKnownGoodCommit}, target=${record.targetCommit})`
     );
 
-    setTimeout(() => {
+    // Success path: keep lifecycle flag + suspension set until this
+    // process exits in 5s; the successor process starts clean.
+    restartScheduler(5_000, () => {
       record.restartResult = "success";
       saveRecord(record);
       releaseLock();
       process.exit(0);
-    }, 5_000);
+    });
 
     return true;
   } catch (error) {
@@ -648,13 +792,18 @@ async function performUpdate(): Promise<boolean> {
     record.error = error instanceof Error ? error.message : String(error);
     saveRecord(record);
     logger.error(`[UpdateManager] update failed: ${record.error}`);
-    await gitCheckout(record.previousKnownGoodCommit);
+    await runners.gitCheckout(record.previousKnownGoodCommit);
     return false;
   } finally {
     if (record.state !== "RESTART_PENDING") {
       isUpdating = false;
       updateState = "IDLE";
       releaseLock();
+      // The process keeps running: close the lifecycle window and
+      // let the healer re-baseline (never over a half-rolled-back tree
+      // — the gitCheckout above ran inside this try block).
+      endUpdateLifecycle();
+      resumeSelfHealer();
     }
   }
 }
