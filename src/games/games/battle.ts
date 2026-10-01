@@ -1,6 +1,6 @@
 import { GamePlayer } from "../types";
 import { mutatePlayer } from "../store";
-import { applyLevelUp, updateAchievements, awardResult } from "../rewards";
+import { applyAward } from "../rewards";
 
 export interface BattleResult {
   outcome: "win" | "loss" | "draw";
@@ -15,12 +15,6 @@ export interface BattleResult {
 }
 
 const BASE_COST = 15;
-const WIN_COINS = 30;
-const LOSE_COINS = 5;
-const DRAW_COINS = 10;
-const WIN_XP = 25;
-const LOSE_XP = 10;
-const DRAW_XP = 15;
 
 const ENEMY_NAMES = [
   "Shadow Creep", "Stone Golem", "Venom Spider",
@@ -58,33 +52,20 @@ export async function playBattle(userId: string, username: string): Promise<Batt
 
     const enemyName = ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
 
-    const result = await awardResult(player, outcome);
-
-    const coinsEarned = outcome === "win" ? WIN_COINS : outcome === "loss" ? LOSE_COINS : DRAW_COINS;
-    const xpEarned = outcome === "win" ? WIN_XP : outcome === "loss" ? LOSE_XP : DRAW_XP;
-
-    player.gamesPlayed++;
-
-    if (outcome === "win") {
-      player.wins++;
-      player.streak++;
-      if (player.streak > player.bestStreak) {
-        player.bestStreak = player.streak;
-      }
-    } else if (outcome === "loss") {
-      player.losses++;
-      player.streak = 0;
-    } else {
-      player.draws++;
-    }
+    /*
+     * applyAward is the store-safe award path: mutatePlayer already holds
+     * the game-players-store lock and persists after the mutator returns.
+     * The previous `awardResult` call re-acquired that non-reentrant lock
+     * and every battle died with LOCK_TIMEOUT after 15s.
+     */
+    const award = applyAward(player, outcome);
 
     if (outcome === "win" && enemyHp > 60) {
       if (!player.achievements.includes("battle_elite")) {
         player.achievements.push("battle_elite");
+        award.newAchievements.push("battle_elite");
       }
     }
-
-    updateAchievements(player);
 
     return {
       outcome,
@@ -92,10 +73,10 @@ export async function playBattle(userId: string, username: string): Promise<Batt
       enemyHp: eHp,
       playerAttack,
       enemyAttack,
-      coinsEarned,
-      xpEarned,
-      levelUp: result.levelUp,
-      newAchievements: result.newAchievements,
+      coinsEarned: award.coins,
+      xpEarned: award.xp,
+      levelUp: award.levelUp,
+      newAchievements: award.newAchievements,
     };
   }, username);
 

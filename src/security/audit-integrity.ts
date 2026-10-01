@@ -6,7 +6,8 @@
  * entry's signature forming a chain. Tampering with any entry breaks the chain.
  *
  * U13: Audit log integrity with backward compatibility for pre-U13 entries.
- * U15: Production requires strong SESSION_SECRET; startup fails if missing.
+ * U15: Production requires strong SESSION_SECRET; first use of audit
+ * integrity fails if missing (lazy validation on first key access).
  */
 
 import crypto from "node:crypto";

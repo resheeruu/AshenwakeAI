@@ -1,5 +1,5 @@
 import type { ButtonInteraction, Client } from "discord.js";
-import { PermissionFlagsBits, ChannelType } from "discord.js";
+import { PermissionFlagsBits, ChannelType, MessageFlags } from "discord.js";
 import { logger } from "../../logger";
 import { resolveRole } from "../../security/permissions";
 import { config } from "../../config/env";
@@ -309,7 +309,7 @@ async function handleTemplateConfirm(
   if (!guild) {
     await interaction.reply({
       content: "❌ Could not fetch guild information.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -318,7 +318,7 @@ async function handleTemplateConfirm(
   if (!requesterMember) {
     await interaction.reply({
       content: "❌ You are not a member of this server.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -335,7 +335,7 @@ async function handleTemplateConfirm(
     );
     await interaction.reply({
       content: "❌ You no longer have ManageChannels permission.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -353,7 +353,7 @@ async function handleTemplateConfirm(
     );
     await interaction.reply({
       content: "❌ Bot no longer has ManageChannels permission.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -508,7 +508,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
   if (!plan) {
     await interaction.reply({
       content: "❌ This confirmation has expired or is invalid.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -525,7 +525,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     );
     await interaction.reply({
       content: "⏱️ This action has expired. Please ask AshenAI to create a new action plan.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -544,7 +544,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
         message = "❌ This action belongs to a different server.";
       }
     }
-    await interaction.reply({ content: message, ephemeral: true });
+    await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -564,7 +564,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
     removePendingPlan(planId);
     await interaction.reply({
       content: "❌ This tool is no longer available.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -574,7 +574,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
   if (!guild) {
     await interaction.reply({
       content: "❌ Could not fetch guild information.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -583,7 +583,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
   if (!requesterMember) {
     await interaction.reply({
       content: "❌ You are not a member of this server.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -599,7 +599,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
       startTime,
       false,
     );
-    await interaction.reply({ content: result.message, ephemeral: true });
+    await interaction.reply({ content: result.message, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -615,7 +615,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
       startTime,
       false,
     );
-    await interaction.reply({ content: result.message, ephemeral: true });
+    await interaction.reply({ content: result.message, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -653,7 +653,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
       startTime,
       false,
     );
-    await interaction.reply({ content: result.message, ephemeral: true });
+    await interaction.reply({ content: result.message, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -689,7 +689,7 @@ async function handleConfirm(interaction: ButtonInteraction): Promise<void> {
           startTime,
           false,
         );
-        await interaction.reply({ content: result.message, ephemeral: true });
+        await interaction.reply({ content: result.message, flags: MessageFlags.Ephemeral });
         return;
       }
     }
@@ -794,7 +794,7 @@ async function handleCancel(interaction: ButtonInteraction): Promise<void> {
   if (!plan) {
     await interaction.reply({
       content: "❌ This confirmation has expired or is invalid.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -803,7 +803,7 @@ async function handleCancel(interaction: ButtonInteraction): Promise<void> {
   if (plan.requesterId !== interaction.user.id) {
     await interaction.reply({
       content: "❌ Only the original requester can cancel this action.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -812,7 +812,7 @@ async function handleCancel(interaction: ButtonInteraction): Promise<void> {
   if (plan.guildId !== (interaction.guildId || "")) {
     await interaction.reply({
       content: "❌ This action belongs to a different server.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -834,7 +834,7 @@ async function handleCancel(interaction: ButtonInteraction): Promise<void> {
 
   await interaction.reply({
     content: "❌ Action cancelled.",
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 
   logger.info(

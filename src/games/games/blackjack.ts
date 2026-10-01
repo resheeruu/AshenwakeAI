@@ -164,6 +164,16 @@ export async function startBlackjack(
   const deck = createDeck();
 
   const { result: mutationResult } = await mutatePlayer(userId, async (p: GamePlayer) => {
+    /*
+     * Re-check under the store lock: the fast check above runs before the
+     * first await, so two near-simultaneous starts could both pass it and
+     * both debit. The session is created inside this mutator, so checking
+     * here closes the race without a second debit.
+     */
+    if (sessions.has(userId)) {
+      throw new Error("BLACKJACK_ALREADY_ACTIVE");
+    }
+
     if (p.coins < bet) {
       throw new Error("NOT_ENOUGH_COINS");
     }
@@ -223,37 +233,51 @@ export async function standBlackjack(
     throw new Error("BLACKJACK_FINISHED");
   }
 
-  while (
-    calculateTotal(game.dealerCards) < 17
-  ) {
-    game.dealerCards.push(draw(game.deck));
+  /*
+   * Claim the game SYNCHRONOUSLY before the first await. `finished` used
+   * to be set only inside the settle mutator (after lock acquisition and
+   * a file read), so a second Stand click during that window passed the
+   * guard above and the payout was credited twice. Reset on failure so a
+   * transient store error leaves the game playable instead of stranded.
+   */
+  game.finished = true;
+
+  try {
+    while (
+      calculateTotal(game.dealerCards) < 17
+    ) {
+      game.dealerCards.push(draw(game.deck));
+    }
+
+    const playerTotal =
+      calculateTotal(game.playerCards);
+
+    const dealerTotal =
+      calculateTotal(game.dealerCards);
+
+    let resultType: "win" | "loss" | "push" | "blackjack" | "bust";
+
+    if (playerTotal > 21) {
+      resultType = "bust";
+    } else if (dealerTotal > 21) {
+      resultType = "win";
+    } else if (playerTotal > dealerTotal) {
+      resultType = "win";
+    } else if (playerTotal < dealerTotal) {
+      resultType = "loss";
+    } else {
+      resultType = "push";
+    }
+
+    const { result } = await mutatePlayer(userId, async (p: GamePlayer) => {
+      return finishBlackjackInternal(p, game, resultType);
+    }, username);
+
+    return result;
+  } catch (error) {
+    game.finished = false;
+    throw error;
   }
-
-  const playerTotal =
-    calculateTotal(game.playerCards);
-
-  const dealerTotal =
-    calculateTotal(game.dealerCards);
-
-  let resultType: "win" | "loss" | "push" | "blackjack" | "bust";
-
-  if (playerTotal > 21) {
-    resultType = "bust";
-  } else if (dealerTotal > 21) {
-    resultType = "win";
-  } else if (playerTotal > dealerTotal) {
-    resultType = "win";
-  } else if (playerTotal < dealerTotal) {
-    resultType = "loss";
-  } else {
-    resultType = "push";
-  }
-
-  const { result } = await mutatePlayer(userId, async (p: GamePlayer) => {
-    return finishBlackjackInternal(p, game, resultType);
-  }, username);
-
-  return result;
 }
 
 async function finishBlackjackInternal(

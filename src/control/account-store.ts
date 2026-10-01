@@ -95,7 +95,7 @@ function saveAccounts(): void {
     });
     const accountsPath = getAccountsPath();
     const tmpPath = accountsPath + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(accountsToSave, null, 2), "utf8");
+    fs.writeFileSync(tmpPath, JSON.stringify(accountsToSave, null, 2), { encoding: "utf8", mode: 0o600 });
     fs.renameSync(tmpPath, accountsPath);
   } catch (error) {
     logger.warn(

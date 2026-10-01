@@ -272,7 +272,7 @@ export function getRecentAuditEntries(
   guildId: string,
   limit = 20,
 ): AuditLogEntry[] {
-  const entries = getAuditLog({ guildId, limit });
+  const entries = getAuditLog({ guildId, limit, verifyIntegrity: true });
   return entries.map((e) => ({
     id: e.id,
     timestamp: e.timestamp,

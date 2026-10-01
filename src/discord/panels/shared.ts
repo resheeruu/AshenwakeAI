@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  MessageFlags,
 } from "discord.js";
 
 export const BRAND = 0x7c3aed;
@@ -82,12 +83,12 @@ export interface PanelResponder {
 }
 
 export function makeInteractionResponder(interaction: {
-  reply: (p: { content: string; ephemeral: true }) => Promise<unknown>;
+  reply: (p: { content: string; flags: MessageFlags.Ephemeral }) => Promise<unknown>;
   update: (p: unknown) => Promise<unknown>;
 }): PanelResponder {
   return {
     deny: async (content) => {
-      await interaction.reply({ content, ephemeral: true });
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral });
     },
     show: async (payload) => {
       await interaction.update(payload);

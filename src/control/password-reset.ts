@@ -55,7 +55,7 @@ function saveTokens(): void {
     ensureDataDir();
     const tokensPath = getDataPath("password-reset-tokens.json");
     const tmpPath = tokensPath + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(tokens, null, 2), "utf8");
+    fs.writeFileSync(tmpPath, JSON.stringify(tokens, null, 2), { encoding: "utf8", mode: 0o600 });
     fs.renameSync(tmpPath, tokensPath);
   } catch (error) {
     logger.warn(

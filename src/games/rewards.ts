@@ -81,15 +81,23 @@ export function applyLevelUp(player: GamePlayer): boolean {
   return player.level > oldLevel;
 }
 
-export async function awardResult(
+/**
+ * Synchronous award application: updates stats, coins, XP, level and
+ * achievements IN PLACE on the given player object without touching the
+ * store. Safe to call from inside a `mutatePlayer` mutator (which already
+ * holds the store lock and persists afterwards) — calling `awardResult`
+ * from there would re-enter the non-reentrant `game-players-store` lock
+ * and reject with LOCK_TIMEOUT.
+ */
+export function applyAward(
   player: GamePlayer,
   result: "win" | "loss" | "draw",
-): Promise<{
+): {
   coins: number;
   xp: number;
   levelUp: boolean;
   newAchievements: string[];
-}> {
+} {
   let coins = 0;
   let xp = 0;
 
@@ -128,14 +136,32 @@ export async function awardResult(
     (id) => !before.has(id),
   );
 
-  await updatePlayer(player);
-
   return {
     coins,
     xp,
     levelUp,
     newAchievements,
   };
+}
+
+/**
+ * Apply an award AND persist it. Only safe OUTSIDE a `mutatePlayer`
+ * mutator (e.g. daily reward); inside one, use `applyAward` instead.
+ */
+export async function awardResult(
+  player: GamePlayer,
+  result: "win" | "loss" | "draw",
+): Promise<{
+  coins: number;
+  xp: number;
+  levelUp: boolean;
+  newAchievements: string[];
+}> {
+  const outcome = applyAward(player, result);
+
+  await updatePlayer(player);
+
+  return outcome;
 }
 
 export async function awardDailyReward(

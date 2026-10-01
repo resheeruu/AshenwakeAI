@@ -552,5 +552,5 @@ export async function executeAction(request: ActionRequest, operatorId: string, 
 }
 
 export function getAuditEntries(limit = 100, guildId?: string) {
-  return getAuditLog({ limit, guildId });
+  return getAuditLog({ limit, guildId, verifyIntegrity: true });
 }

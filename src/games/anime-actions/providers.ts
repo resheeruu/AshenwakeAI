@@ -237,7 +237,7 @@ async function downloadAndCacheRemoteGif(
   const hash = crypto.createHash("sha256").update(buffer).digest("hex");
 
   logger.info(
-    `anime_action provider=${sourceProvider} action=${mediaKey} stage=download sha256=${hash.slice(0,16)}... size=${buffer.length}ms`
+    `anime_action provider=${sourceProvider} action=${mediaKey} stage=download sha256=${hash.slice(0,16)}... bytes=${buffer.length} elapsedMs=${Date.now() - startedAt}`
   );
 
   // 4. Check for duplicates

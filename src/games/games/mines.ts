@@ -88,6 +88,16 @@ export async function startMines(
   }
 
   const { player } = await mutatePlayer(userId, async (p: GamePlayer) => {
+    /*
+     * Re-check under the store lock: the fast check above runs before the
+     * first await, so two near-simultaneous starts could both pass it and
+     * both debit. The session is created inside this mutator, so checking
+     * here closes the race without a second debit.
+     */
+    if (sessions.has(userId)) {
+      throw new Error("MINES_ALREADY_ACTIVE");
+    }
+
     if (p.coins < bet) {
       throw new Error("NOT_ENOUGH_COINS");
     }

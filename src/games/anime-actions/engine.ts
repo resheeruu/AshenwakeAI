@@ -124,7 +124,7 @@ export async function buildDiscordResponse(
 
       // Structured logging for Discord delivery tracking
       logger.info(
-        `DISCORD_SEND_STARTED action=${result.animationSource ?? "unknown"} source=local mediaKey=${result.localMediaAsset.key} sha256=${result.localMediaAsset.relPath} bytes=${local.buffer.byteLength} contentType=${local.contentType}`
+        `ANIME_MEDIA_PREPARED action=${result.animationSource ?? "unknown"} source=local mediaKey=${result.localMediaAsset.key} sha256=${result.localMediaAsset.relPath} bytes=${local.buffer.byteLength} contentType=${local.contentType}`
       );
 
       return { content: result.text, files: [attachment] };
@@ -172,7 +172,7 @@ export async function buildDiscordResponse(
 
   // Structured logging for Discord delivery tracking
   logger.info(
-    `DISCORD_SEND_STARTED action=${result.animationSource ?? "unknown"} source=remote mediaUrl=${result.animationUrl} bytes=${media.buffer.byteLength} contentType=${media.contentType}`
+    `ANIME_MEDIA_PREPARED action=${result.animationSource ?? "unknown"} source=remote mediaUrl=${result.animationUrl} bytes=${media.buffer.byteLength} contentType=${media.contentType}`
   );
 
   return {

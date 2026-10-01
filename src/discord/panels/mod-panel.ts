@@ -153,13 +153,13 @@ function buildActionModal(verb: "warn" | "timeout" | "untimeout", targetId: stri
  */
 async function gatePanelAction(interaction: any): Promise<GuildMember | null> {
   if (!interaction.guild || !interaction.guildId) {
-    await interaction.reply({ content: "❌ This command can only be used inside a server.", ephemeral: true });
+    await interaction.reply({ content: "❌ This command can only be used inside a server.", flags: MessageFlags.Ephemeral });
     return null;
   }
 
   const rate = moderationRateLimiter.check(interaction.user.id);
   if (!rate.allowed) {
-    await interaction.reply({ content: rateLimitMessage(rate.retryAfterMs), ephemeral: true });
+    await interaction.reply({ content: rateLimitMessage(rate.retryAfterMs), flags: MessageFlags.Ephemeral });
     return null;
   }
 
@@ -167,14 +167,14 @@ async function gatePanelAction(interaction: any): Promise<GuildMember | null> {
   try {
     requester = (await interaction.guild.members.fetch(interaction.user.id)) as GuildMember;
   } catch {
-    await interaction.reply({ content: "❌ I couldn't resolve your member record.", ephemeral: true });
+    await interaction.reply({ content: "❌ I couldn't resolve your member record.", flags: MessageFlags.Ephemeral });
     return null;
   }
 
   if (!canModerate(requester, PermissionFlagsBits.ModerateMembers)) {
     await interaction.reply({
       content: "❌ You don't have permission to use moderation commands.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return null;
   }
@@ -214,7 +214,7 @@ function handleComponentError(interaction: any, error: unknown): void {
     if (interaction.deferred && !interaction.replied) {
       void interaction.editReply("❌ Something went wrong. Please try again.");
     } else if (!interaction.replied) {
-      void interaction.reply({ content: "❌ Something went wrong. Please try again.", ephemeral: true });
+      void interaction.reply({ content: "❌ Something went wrong. Please try again.", flags: MessageFlags.Ephemeral });
     }
   } catch {
     // Interaction may have expired
@@ -252,7 +252,7 @@ export async function handleModComponent(interaction: any): Promise<void> {
         if (!PROMPT_TEXT[action]) return;
         const targetId = interaction.values?.[0];
         if (!targetId) {
-          await interaction.reply({ content: "❌ No member selected.", ephemeral: true });
+          await interaction.reply({ content: "❌ No member selected.", flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -286,10 +286,10 @@ export async function handleModComponent(interaction: any): Promise<void> {
         // history
         const target = await fetchTarget(interaction, targetId);
         if (!target) {
-          await interaction.reply({ content: "❌ I couldn't find that member.", ephemeral: true });
+          await interaction.reply({ content: "❌ I couldn't find that member.", flags: MessageFlags.Ephemeral });
           return;
         }
-        const entries = getAuditLog({ guildId: interaction.guildId, limit: 200 })
+        const entries = getAuditLog({ guildId: interaction.guildId, limit: 200, verifyIntegrity: true })
           .filter((e) => e.what.includes(targetId) || e.what.includes(target.user.tag))
           .slice(-15)
           .reverse();
@@ -328,7 +328,7 @@ export async function handleModComponent(interaction: any): Promise<void> {
 export async function handleModModal(interaction: any): Promise<void> {
   try {
     if (!interaction.guildId || !interaction.guild) {
-      await interaction.reply({ content: "❌ Must be used in a server.", ephemeral: true });
+      await interaction.reply({ content: "❌ Must be used in a server.", flags: MessageFlags.Ephemeral });
       return;
     }
     const parts = String(interaction.customId).split(":");

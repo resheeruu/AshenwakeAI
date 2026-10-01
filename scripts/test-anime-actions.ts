@@ -2476,6 +2476,7 @@ async function moderationSpyTests(): Promise<void> {
   // W1: message-level guard — ANY Discord API access outside the
   // handler's allowlist throws and fails the test.
   const base: any = {
+    id: "msg-w",
     content: "",
     guildId: "guild-w",
     author: { id: "user-w", username: "tester" },
@@ -2497,7 +2498,8 @@ async function moderationSpyTests(): Promise<void> {
   for (const name of COMBAT_ACTIONS) {
     base.__replies = [];
     const msg = { ...base, content: `ash ${name} <@777777777777777777>` } as any;
-    const { proxy, accesses } = guarded<Message>(`handler:${name}`, [], msg);
+    const allowed = ["content", "guildId", "author", "mentions", "reference", "channel", "guild", "member", "reply", "id"];
+    const { proxy, accesses } = guarded<Message>(`handler:${name}`, allowed, msg);
     const uid = `user-w-${name}`;
     (proxy as any).author = { id: uid, username: "tester" };
     try {
@@ -2506,7 +2508,6 @@ async function moderationSpyTests(): Promise<void> {
       wFailures.push(`${name}: ${e instanceof Error ? e.message : e}`);
     }
     if (!spyExecs.includes(name)) wFailures.push(`${name}: never executed`);
-    const allowed = ["content", "guildId", "author", "mentions", "reference", "channel", "guild", "member", "reply"];
     const bad = accesses.filter((a) => !allowed.includes(a));
     if (bad.length > 0) wFailures.push(`${name}: unexpected access ${bad.join(",")}`);
   }
@@ -3086,6 +3087,22 @@ async function localMediaTests(): Promise<void> {
   // Y10 — end to end through the prefix handler: provider-first
   // acquisition with local cache fallback, served as an attachment.
   const y10Guild = "guild-y10-local";
+  const y10Root = makeTmpRoot("ashenai-gifs-y10-");
+  const y10HugDir = path.join(y10Root, "actions", "hug");
+  fs.mkdirSync(y10HugDir, { recursive: true });
+  fs.writeFileSync(path.join(y10HugDir, "ok.gif"), gifBytes(1, 1));
+  resetLocalGifsForTests();
+  await initializeLocalGifs({ root: y10Root });
+
+  // Mock HTTP client that makes all providers fail fast (network error)
+  // so the chain falls back to local GIF quickly.
+  const mockHttpClient: AnimeHttpClient = async () => ({
+    ok: false,
+    status: 0,
+    body: "",
+    failure: "network",
+  });
+
   try {
     const cfg = { ...loadGuildConfig(y10Guild) } as any;
     cfg.social = {
@@ -3104,7 +3121,10 @@ async function localMediaTests(): Promise<void> {
     invalidateGuildConfigCache();
 
     const t = mkAshMessage("ash hug <@777777777777777777>", y10Guild, "user-y10", { guildMode: "plain" });
-    await handleAnimeAction(t.msg, p23Client);
+    await handleAnimeAction(t.msg, p23Client, { runAction: async (name, msg, targetId, botId) => {
+      const { executeAction } = await import("../src/games/anime-actions/engine");
+      return executeAction(name, msg, targetId, botId, { httpClient: mockHttpClient });
+    } });
     const payload = t.raw[0];
     if (
       payload &&
@@ -3114,7 +3134,7 @@ async function localMediaTests(): Promise<void> {
       Array.isArray(payload.files) &&
       payload.files.length === 1 &&
       payload.files[0]?.name === "anime.gif" &&
-      !payload.content.includes(rootY)
+      !payload.content.includes(y10Root)
     ) {
       pass("Y10 prefix handler end-to-end: GIF attached via provider-first chain");
     } else {

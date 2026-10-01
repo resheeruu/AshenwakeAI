@@ -15,6 +15,7 @@ import {
   ChannelType as DiscordChannelType,
   type ModalSubmitInteraction,
   InteractionContextType,
+  MessageFlags,
 } from "discord.js";
 import { AshenCommand } from "../commands/definitions";
 import { loadGuildConfig } from "../core/guild-config";
@@ -404,17 +405,17 @@ function buildStringModal(setting: SettingDescriptor, currentValue: unknown): Mo
 async function handleToggle(interaction: any, settingId: string, guildId: string): Promise<void> {
   const session = resolveSession(interaction, guildId);
   const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
-  if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
+  if (deny) { await interaction.reply({ content: deny, flags: MessageFlags.Ephemeral }); return; }
   const descriptor = getSettingById(settingId);
   if (!descriptor || descriptor.type !== "boolean") {
-    await interaction.reply({ content: "Invalid setting.", ephemeral: true });
+    await interaction.reply({ content: "Invalid setting.", flags: MessageFlags.Ephemeral });
     return;
   }
   const config = loadGuildConfig(guildId);
   ensureConfigSections(config);
   const currentValue = applySettingValue(config, settingId);
   if (currentValue === null || currentValue === undefined) {
-    await interaction.reply({ content: "Failed to read setting.", ephemeral: true });
+    await interaction.reply({ content: "Failed to read setting.", flags: MessageFlags.Ephemeral });
     return;
   }
   const newValue = !currentValue;
@@ -430,9 +431,9 @@ async function handleToggle(interaction: any, settingId: string, guildId: string
 async function handleChannelSelect(interaction: any, settingId: string, guildId: string): Promise<void> {
   const session = resolveSession(interaction, guildId);
   const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
-  if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
+  if (deny) { await interaction.reply({ content: deny, flags: MessageFlags.Ephemeral }); return; }
   const descriptor = getSettingById(settingId);
-  if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+  if (!descriptor) { await interaction.reply({ content: "Invalid setting.", flags: MessageFlags.Ephemeral }); return; }
   const config = loadGuildConfig(guildId);
   ensureConfigSections(config);
   const newValue = interaction.values?.[0] || undefined;
@@ -449,7 +450,7 @@ async function handleChannelSelect(interaction: any, settingId: string, guildId:
 async function handleRoleSelect(interaction: any, guildId: string): Promise<void> {
   const session = resolveSession(interaction, guildId);
   const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
-  if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
+  if (deny) { await interaction.reply({ content: deny, flags: MessageFlags.Ephemeral }); return; }
   const config = loadGuildConfig(guildId);
   ensureConfigSections(config);
   const selectedRoles = (interaction.values ?? []).filter((id: string) => id !== guildId);
@@ -466,13 +467,13 @@ async function handleRoleSelect(interaction: any, guildId: string): Promise<void
 async function handleNumberModalSubmit(interaction: ModalSubmitInteraction, settingId: string, guildId: string): Promise<void> {
   const session = resolveSession(interaction, guildId);
   const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
-  if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
+  if (deny) { await interaction.reply({ content: deny, flags: MessageFlags.Ephemeral }); return; }
   const descriptor = getSettingById(settingId);
-  if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+  if (!descriptor) { await interaction.reply({ content: "Invalid setting.", flags: MessageFlags.Ephemeral }); return; }
   const rawValue = interaction.fields.getTextInputValue("value");
-  if (!rawValue) { await interaction.reply({ content: "No value provided.", ephemeral: true }); return; }
+  if (!rawValue) { await interaction.reply({ content: "No value provided.", flags: MessageFlags.Ephemeral }); return; }
   const validation = validateSettingValue(descriptor, rawValue, guildId);
-  if (!validation.valid) { await interaction.reply({ content: validation.error ?? "Invalid value.", ephemeral: true }); return; }
+  if (!validation.valid) { await interaction.reply({ content: validation.error ?? "Invalid value.", flags: MessageFlags.Ephemeral }); return; }
   const config = loadGuildConfig(guildId);
   ensureConfigSections(config);
   const currentValue = applySettingValue(config, settingId);
@@ -482,19 +483,19 @@ async function handleNumberModalSubmit(interaction: ModalSubmitInteraction, sett
     oldValue: currentValue, newValue: validation.normalized, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
   }, interaction.user.id, interaction.user.tag);
   if (session) session.currentCategory = descriptor.category;
-  await interaction.reply({ ...buildFullMessage(descriptor.category, guildId), ephemeral: true });
+  await interaction.reply({ ...buildFullMessage(descriptor.category, guildId), flags: MessageFlags.Ephemeral });
 }
 
 async function handleStringModalSubmit(interaction: ModalSubmitInteraction, settingId: string, guildId: string): Promise<void> {
   const session = resolveSession(interaction, guildId);
   const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
-  if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
+  if (deny) { await interaction.reply({ content: deny, flags: MessageFlags.Ephemeral }); return; }
   const descriptor = getSettingById(settingId);
-  if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+  if (!descriptor) { await interaction.reply({ content: "Invalid setting.", flags: MessageFlags.Ephemeral }); return; }
   const rawValue = interaction.fields.getTextInputValue("value");
-  if (!rawValue) { await interaction.reply({ content: "No value provided.", ephemeral: true }); return; }
+  if (!rawValue) { await interaction.reply({ content: "No value provided.", flags: MessageFlags.Ephemeral }); return; }
   const validation = validateSettingValue(descriptor, rawValue, guildId);
-  if (!validation.valid) { await interaction.reply({ content: validation.error ?? "Invalid value.", ephemeral: true }); return; }
+  if (!validation.valid) { await interaction.reply({ content: validation.error ?? "Invalid value.", flags: MessageFlags.Ephemeral }); return; }
   const config = loadGuildConfig(guildId);
   ensureConfigSections(config);
   const currentValue = applySettingValue(config, settingId);
@@ -504,7 +505,7 @@ async function handleStringModalSubmit(interaction: ModalSubmitInteraction, sett
     oldValue: currentValue, newValue: validation.normalized, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
   }, interaction.user.id, interaction.user.tag);
   if (session) session.currentCategory = descriptor.category;
-  await interaction.reply({ ...buildFullMessage(descriptor.category, guildId), ephemeral: true });
+  await interaction.reply({ ...buildFullMessage(descriptor.category, guildId), flags: MessageFlags.Ephemeral });
 }
 
 export function createSettingsCommand(): AshenCommand {
@@ -551,13 +552,13 @@ export async function handleSettingsComponent(interaction: any): Promise<void> {
   try {
     const guildId = interaction.guildId as string | null;
     if (!guildId) {
-      await interaction.reply({ content: "Must be used in a server.", ephemeral: true });
+      await interaction.reply({ content: "Must be used in a server.", flags: MessageFlags.Ephemeral });
       return;
     }
     const customId: string = interaction.customId;
     const session = resolveSession(interaction, guildId);
     const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
-    if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
+    if (deny) { await interaction.reply({ content: deny, flags: MessageFlags.Ephemeral }); return; }
 
     // Nav first: `as:home`/`as:back`/`as:close` share the `as:` prefix.
     if (customId === "as:close") {
@@ -588,7 +589,7 @@ export async function handleSettingsComponent(interaction: any): Promise<void> {
     if (customId.startsWith(`${P.num}:`)) {
       const settingId = customId.slice(P.num.length + 1);
       const descriptor = getSettingById(settingId);
-      if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+      if (!descriptor) { await interaction.reply({ content: "Invalid setting.", flags: MessageFlags.Ephemeral }); return; }
       const config = loadGuildConfig(guildId);
       const currentValue = applySettingValue(config, settingId);
       await interaction.showModal(buildNumberModal(descriptor, currentValue));
@@ -597,7 +598,7 @@ export async function handleSettingsComponent(interaction: any): Promise<void> {
     if (customId.startsWith(`${P.str}:`)) {
       const settingId = customId.slice(P.str.length + 1);
       const descriptor = getSettingById(settingId);
-      if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+      if (!descriptor) { await interaction.reply({ content: "Invalid setting.", flags: MessageFlags.Ephemeral }); return; }
       const config = loadGuildConfig(guildId);
       const currentValue = applySettingValue(config, settingId);
       await interaction.showModal(buildStringModal(descriptor, currentValue));
@@ -615,7 +616,7 @@ async function replyPanelError(interaction: { replied?: boolean; deferred?: bool
     if (interaction.deferred && !interaction.replied) {
       await interaction.editReply?.("An error occurred.");
     } else if (!interaction.replied) {
-      await interaction.reply?.({ content: "An error occurred.", ephemeral: true });
+      await interaction.reply?.({ content: "An error occurred.", flags: MessageFlags.Ephemeral });
     }
   } catch {
     // Interaction may have expired
@@ -635,14 +636,14 @@ export async function handleSettingsModalSubmit(interaction: ModalSubmitInteract
     if (customId.startsWith(`${P.str}:`)) {
       const settingId = customId.slice(P.str.length + 1);
       const guildId = interaction.guildId;
-      if (!guildId) { await interaction.reply({ content: "Must be used in a server.", ephemeral: true }); return; }
+      if (!guildId) { await interaction.reply({ content: "Must be used in a server.", flags: MessageFlags.Ephemeral }); return; }
       await handleStringModalSubmit(interaction, settingId, guildId);
       return;
     }
     if (!customId.startsWith(`${P.num}:`)) return;
     const settingId = customId.slice(P.num.length + 1);
     const guildId = interaction.guildId;
-    if (!guildId) { await interaction.reply({ content: "Must be used in a server.", ephemeral: true }); return; }
+    if (!guildId) { await interaction.reply({ content: "Must be used in a server.", flags: MessageFlags.Ephemeral }); return; }
     await handleNumberModalSubmit(interaction, settingId, guildId);
   } catch (error) {
     logger.error("Settings modal error:", error instanceof Error ? error.message : String(error));

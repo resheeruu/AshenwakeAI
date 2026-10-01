@@ -687,7 +687,9 @@ export async function handleAnimeAction(
   client: Client,
   deps: AnimeActionDeps = {},
 ): Promise<boolean> {
+  const requestId = `${message.id}-${Date.now()}`;
   const content = message.content.trim();
+  logger.info(`ANIME_ACTION_START requestId=${requestId} content=${content.slice(0, 50)}`);
   if (!isAnimeActionPrefix(content)) return false;
 
   if (isGameCommand(content)) {
@@ -757,6 +759,7 @@ export async function handleAnimeAction(
 
   const action = getAction(actionName);
   if (!action) {
+    logger.warn(`ANIME_ACTION_UNKNOWN requestId=${requestId} actionName=${actionName}`);
     await safeReply(
       message,
       `Unknown action: \`${actionName}\`. Type \`ash actions\` to see available actions.`,
@@ -764,6 +767,7 @@ export async function handleAnimeAction(
     return true;
   }
 
+  logger.info(`ANIME_ACTION_RESOLVED requestId=${requestId} action=${action.name} mediaKey=${action.mediaKey} targetRequired=${action.targetRequired}`);
   const cooldown = checkCooldown(message.author.id, action.name, action.cooldownMs);
   if (!cooldown.allowed) {
     const retrySeconds = Math.ceil((cooldown.retryAfterMs ?? 1000) / 1000);
@@ -837,19 +841,36 @@ export async function handleAnimeAction(
     return true;
   }
 
+  logger.info(`ANIME_ACTION_EXECUTE requestId=${requestId} action=${action.name} targetId=${targetId ?? "none"}`);
   let result: ActionResult | null = null;
   try {
     const runner = deps.runAction ?? executeAction;
     result = await runner(action.name, message, targetId, botId);
     if (!result) {
+      logger.warn(`ANIME_ACTION_NO_RESULT requestId=${requestId} action=${action.name}`);
       await safeReply(message, `Unknown action: \`${actionName}\`.`);
       return true;
     }
 
+    logger.info(`ANIME_ACTION_RESULT requestId=${requestId} action=${action.name} hasMedia=${!!result.animationUrl || !!result.localMediaAsset} source=${result.animationSource ?? "unknown"}`);
     const response = await buildDiscordResponse(result);
-    await safeReply(message, response);
+    const hasMedia = Array.isArray(response.files) && response.files.length > 0;
+    if (hasMedia) {
+      logger.info(
+        `DISCORD_MEDIA_SEND_STARTED requestId=${requestId} action=${action.name} mediaKey=${action.mediaKey} source=${result.animationSource ?? "unknown"}`
+      );
+    }
+    const sendOk = await safeReply(message, response);
+    if (hasMedia) {
+      if (sendOk) {
+        logger.info(`DISCORD_MEDIA_SEND_SUCCESS requestId=${requestId} action=${action.name}`);
+      } else {
+        logger.warn(`DISCORD_MEDIA_SEND_FAILURE requestId=${requestId} action=${action.name}`);
+      }
+    }
+    logger.info(`ANIME_ACTION_COMPLETE requestId=${requestId} action=${action.name} sendOk=${sendOk}`);
   } catch (error) {
-    logger.warn(`Anime action failed: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(`ANIME_ACTION_ERROR requestId=${requestId} action=${action.name} error=${error instanceof Error ? error.message : String(error)}`);
     await safeReply(message, result?.text ?? "An error occurred while processing your action. Please try again.");
   }
 

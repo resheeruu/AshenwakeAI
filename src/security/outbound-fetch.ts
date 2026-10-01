@@ -129,8 +129,9 @@ export async function resolveAndValidateHost(
 /**
  * Validating dns.lookup used at connect time so a hostname cannot rebind
  * between pre-validation and the TCP connect.
+ * Exported for use by other HTTP clients that need the same SSRF protection.
  */
-function createValidatingLookup(policy: OutboundPolicy) {
+export function createValidatingLookup(policy: OutboundPolicy) {
   return function validatingLookup(
     hostname: string,
     options: unknown,

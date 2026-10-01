@@ -12,7 +12,10 @@ import {
   validateOutboundUrl,
   validateRedirectTarget,
 } from "../security/network-boundary";
-import { resolveAndValidateHost as boundaryResolveAndValidate } from "../security/outbound-fetch";
+import {
+  resolveAndValidateHost as boundaryResolveAndValidate,
+  createValidatingLookup,
+} from "../security/outbound-fetch";
 
 export interface FetchedPage {
   url: string;
@@ -127,6 +130,9 @@ const agent = new Agent({
   keepAliveMaxTimeout: 60_000,
   connections: 10,
   pipelining: 1,
+  connect: {
+    lookup: createValidatingLookup("public"),
+  },
 });
 
 function isRetryableError(error: unknown): boolean {

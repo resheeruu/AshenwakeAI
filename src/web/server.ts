@@ -116,9 +116,9 @@ const app = express();
 const TRUST_PROXY_MAX = 3;
 const trustProxySetting = (() => {
   const raw = process.env.TRUST_PROXY;
-  if (!raw) return 0;
+  if (!raw) return 1;
   const parsed = parseInt(raw, 10);
-  if (Number.isNaN(parsed) || parsed < 0 || parsed > TRUST_PROXY_MAX) return 0;
+  if (Number.isNaN(parsed) || parsed < 0 || parsed > TRUST_PROXY_MAX) return 1;
   return parsed;
 })();
 app.set("trust proxy", trustProxySetting);

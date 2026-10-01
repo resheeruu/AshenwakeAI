@@ -77,7 +77,7 @@ function saveSessions(): void {
     }));
     const sessionsPath = getDataPath("sessions.json");
     const tmpPath = sessionsPath + ".tmp";
-    fs.writeFileSync(tmpPath, JSON.stringify(encryptedArr, null, 2), "utf8");
+    fs.writeFileSync(tmpPath, JSON.stringify(encryptedArr, null, 2), { encoding: "utf8", mode: 0o600 });
     fs.renameSync(tmpPath, sessionsPath);
   } catch (error) {
     logger.warn(

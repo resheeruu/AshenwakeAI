@@ -818,7 +818,7 @@ async function handleComponentError(interaction: any, error: unknown): Promise<v
     if (interaction.deferred && !interaction.replied) {
       await interaction.editReply("❌ Something went wrong. Please try again.");
     } else if (!interaction.replied) {
-      await interaction.reply({ content: "❌ Something went wrong. Please try again.", ephemeral: true });
+      await interaction.reply({ content: "❌ Something went wrong. Please try again.", flags: MessageFlags.Ephemeral });
     }
   } catch {
     // Interaction may have expired
@@ -828,7 +828,7 @@ async function handleComponentError(interaction: any, error: unknown): Promise<v
 export async function handleSupportComponent(interaction: any): Promise<void> {
   try {
     if (!interaction.guild || !interaction.guildId) {
-      await interaction.reply({ content: "❌ This panel can only be used in a server.", ephemeral: true });
+      await interaction.reply({ content: "❌ This panel can only be used in a server.", flags: MessageFlags.Ephemeral });
       return;
     }
     const guildId: string = interaction.guild.id;
@@ -863,11 +863,11 @@ export async function handleSupportComponent(interaction: any): Promise<void> {
       case "report_pick": {
         const targetId = interaction.values?.[0];
         if (!targetId) {
-          await interaction.reply({ content: "❌ No member selected.", ephemeral: true });
+          await interaction.reply({ content: "❌ No member selected.", flags: MessageFlags.Ephemeral });
           return;
         }
         if (targetId === interaction.user.id) {
-          await interaction.reply({ content: "❌ You cannot report yourself.", ephemeral: true });
+          await interaction.reply({ content: "❌ You cannot report yourself.", flags: MessageFlags.Ephemeral });
           return;
         }
         await interaction.showModal(buildReportModal(targetId));
@@ -969,7 +969,7 @@ export async function handleSupportComponent(interaction: any): Promise<void> {
       case "assignpick": {
         const staffId = interaction.values?.[0];
         if (!staffId) {
-          await interaction.reply({ content: "❌ No member selected.", ephemeral: true });
+          await interaction.reply({ content: "❌ No member selected.", flags: MessageFlags.Ephemeral });
           return;
         }
         const config = loadGuildConfig(guildId);
@@ -983,7 +983,7 @@ export async function handleSupportComponent(interaction: any): Promise<void> {
         if (!isStaffMember) {
           await interaction.reply({
             content: "❌ That member does not have a configured staff role.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -1026,7 +1026,7 @@ export async function handleSupportComponent(interaction: any): Promise<void> {
 export async function handleSupportModal(interaction: any): Promise<void> {
   try {
     if (!interaction.guildId) {
-      await interaction.reply({ content: "❌ Must be used in a server.", ephemeral: true });
+      await interaction.reply({ content: "❌ Must be used in a server.", flags: MessageFlags.Ephemeral });
       return;
     }
     const parts = String(interaction.customId).split(":");
