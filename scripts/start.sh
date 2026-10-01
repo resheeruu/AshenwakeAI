@@ -151,6 +151,42 @@ for asset in "${REQUIRED_ASSETS[@]}"; do
 done
 echo "[start] All required asset directories present"
 
+# --- Anime GIF library verification ---
+echo "[start] Verifying local GIF library..."
+GIF_ROOT="${ROOT_DIR}/data/anime-gifs"
+GIF_SEED="${ROOT_DIR}/anime-gifs-seed"
+
+if [[ ! -d "${GIF_ROOT}" ]]; then
+    echo "[start] GIF library directory missing, creating..."
+    mkdir -p "${GIF_ROOT}"
+fi
+
+# Seed from baked-in seed if directory is empty
+if [[ -d "${GIF_SEED}" ]] && [[ -z "$(ls -A "${GIF_ROOT}" 2>/dev/null)" ]]; then
+    echo "[start] Seeding GIF library from baked-in seed..."
+    cp -r "${GIF_SEED}/." "${GIF_ROOT}/"
+    echo "[start] GIF library seeded successfully"
+fi
+
+# Verify GIF library has assets
+GIF_COUNT=$(find "${GIF_ROOT}" -name "*.gif" -type f 2>/dev/null | wc -l)
+if [[ ${GIF_COUNT} -eq 0 ]]; then
+    echo "[start] WARNING: Local GIF library is empty (${GIF_COUNT} GIFs found)"
+    echo "[start] Ash Actions will fall back to remote providers"
+else
+    echo "[start] Local GIF library verified: ${GIF_COUNT} GIFs found"
+fi
+
+# Verify GIF library structure
+ACTIONS_DIR="${GIF_ROOT}/actions"
+if [[ ! -d "${ACTIONS_DIR}" ]]; then
+    echo "[start] WARNING: GIF actions directory missing"
+else
+    ACTION_DIRS=$(find "${ACTIONS_DIR}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+    echo "[start] GIF action categories: ${ACTION_DIRS}"
+fi
+echo "[start] All runtime assets present"
+
 # --- Resource check ---
 export APP_DIR="${ROOT_DIR}"
 if [[ -f "${ROOT_DIR}/scripts/check-resources.sh" ]]; then

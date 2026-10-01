@@ -154,15 +154,17 @@ guild state also re-check guild context in code (§9).
 Each item below was a concrete finding in this release; every one is
 covered by tests in `scripts/`:
 
-- **Support case staff gate** — every `/support case*` subcommand passes
-  `hasCaseStaffAccess` (case staff role OR admin, checked against
-  `guild_configs.staff.roleIds`; no second authorization system) before
-  any case content is shown; denials are audit-logged. Case reads/writes
-  are guild-scoped: `getCase` is `WHERE id = ? AND guild_id = ?`
+- **Support case staff gate** — every staff case action in the Support
+  Center panel (`view`, `list`, `assign`, `status`, `stats`, funneled
+  through `runStaffCaseAction`) passes `hasCaseStaffAccess` (case staff
+  role OR admin, checked against `guild_configs.staff.roleIds`; no
+  second authorization system) before any case content is shown;
+  denials are audit-logged. Case reads/writes are guild-scoped:
+  `getCase` is `WHERE id = ? AND guild_id = ?`
   (case-insensitive id), and UI actions resolve only ids that belong to
   the current guild (`src/support/case-manager.ts`, `expectedGuildId`).
-  Four subcommands that existed as registration-only stubs (no handler
-  logic) were removed.
+  Registration-only stub subcommands (no handler logic) were removed;
+  the panel only offers actions that are actually implemented.
 - **Settings audit isolation** — `/settings audit` renders only
   `getRecentAuditEntries(guildId, 10)` (this guild, parameterized);
   the process-wide log-stream reader that could mix other guilds'/process
@@ -172,11 +174,15 @@ covered by tests in `scripts/`:
   each modal validates its `st:`/`an:` session (guild, expiry, owner)
   before applying anything; expired/forged sessions get an error reply
   and no write. Message ids bound at open time are re-checked on submit.
-- **Settings reachability** — the root `/settings` command exposes
-  `panel` and `update` subcommands (a root command with subcommands
-  cannot be invoked bare on Discord; `createSettingsUpdateCommand` dead
-  code removed). Both paths, their audit entries, and their error strings
-  are asserted by `scripts/test-discord-wiring.ts` §K.
+- **Settings reachability** — the root `/settings` command exposes NO
+  subcommands: bare invocation is what opens the persistent Settings
+  Center (a root command with subcommands cannot be invoked bare on
+  Discord), and component routing lives in `src/commands/settings.ts` +
+  `src/index.ts` (`createSettingsUpdateCommand` dead code removed).
+  Permission gates (Manage Server, fail closed when
+  `memberPermissions` is missing), session expiry, audit entries, and
+  error strings are asserted by `scripts/test-discord-wiring.ts` §K and
+  `scripts/test-panels.ts`.
 - **Guild config persistence** — `GuildConfigSchema` now includes the
   `social`, `ai`, `routing`, `limits`, and `models` sections. Previously
   Zod's default strip behavior deleted these sections on every fresh DB
@@ -189,8 +195,8 @@ covered by tests in `scripts/`:
   `handleAnimeAction` *after* the rate limit (disabled replies cannot be
   spammed) and *before* parsing/help/cooldown: disabled ⇒ informational
   reply, no cooldown consumed; unreadable config ⇒ fail closed (feature
-  off) with a logged error. Reachable by admins via `/settings panel`
-  and `/settings update social animeActions <bool>`.
+  off) with a logged error. Reachable by admins via `/settings` →
+  **AI Social** → *Anime Actions* toggle in the Settings Center.
 - **Anime action target fail-closed** — mentions/replies resolve
   directly; raw ids are verified with `guild.members.fetch()`; tokens
   that look like targets but do not resolve (`@abc`, malformed

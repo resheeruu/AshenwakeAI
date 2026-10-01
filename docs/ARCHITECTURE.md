@@ -186,8 +186,9 @@ ordered migrations tracked in schema_migrations)
 | Audit trail | `src/security/audit.ts`, `src/ai/tools/audit.ts`, `src/security/audit-integrity.ts` |
 | Production tool registration (fail-fast) | `src/ai/tools/discord/bootstrap.ts` (registered + counted before preflight) |
 | Confirmation buttons (render + double-exec guard) | `src/discord/interactions/tool-confirmation-ui.ts`, `confirmation-handler.ts`, `conversational-agent.ts` (`executeUnifiedPlan`) |
-| Settings panel + modal dispatch | `src/commands/settings.ts` (`/settings panel`, `/settings update`, `st:`/`an:` modals) |
-| Support case authorization | `src/commands/support.ts` (`hasCaseStaffAccess`), `src/support/case-manager.ts` (guild-scoped) |
+| Settings panel + modal dispatch | `src/commands/settings.ts` (bare `/settings` opens the persistent panel; `st:`/`an:` modals), routed from `src/index.ts` (`isSettingsComponentCustomId`/`isSettingsModalCustomId`) |
+| Persistent control panels | `src/discord/panels/{shared,support-panel,mod-panel}.ts` (bare `/support`, `/mod`; `support:`/`mod:` components, `support:m:`/`mod:m:` modals; staff/rate gates) |
+| Support case authorization | `src/discord/panels/support-panel.ts` (`hasCaseStaffAccess`, `runStaffCaseAction`), `src/support/case-manager.ts` (guild-scoped) |
 | Anime action feature flag | `src/games/anime-actions/prefix-handler.ts` (`social.animeActions`, fail-closed) |
 | AFK (prefix `!afk`) | `src/community/afk.ts`, `src/database/afk-repo.ts` (migration v18 `afk_states`, `social.afkAutoClear` default ON) — [AFK.md](./AFK.md) |
 | Local GIF provider (local-first media) | `src/media/local-gifs.ts` (`ASHENAI_LOCAL_GIFS_DIR`, default `data/anime-gifs`; ships no GIFs) |
@@ -225,13 +226,17 @@ Verified behavior of the interaction entry points:
   `message.guildId`/interaction guild in code (`settings`, `support`,
   `moderation`, `access`, `server`, `personality`); `prompt` is
   guild-only via contexts and relies on its builder-session store.
-- **`/settings`** — the root command has two subcommands: `panel`
-  (interactive selects/modals, Admin+) and `update`
-  (`<category> <setting> <value>`, Admin+). Discord renders a root
-  command with subcommands as unusable when invoked bare; both paths are
-  reachable and covered by `scripts/test-discord-wiring.ts` §K.
-  Modal/role-select callbacks are dispatched by exact customId match
-  (`isSettingsModalCustomId`), not `startsWith`.
+- **`/settings`, `/support`, `/mod`** — all three roots have NO
+  subcommands, because Discord makes a root command with subcommands
+  unusable when invoked bare. Bare invocation opens a persistent panel
+  (Settings / Support / Moderation Center); component and modal
+  callbacks are routed globally in `src/index.ts`
+  (`isSettingsComponentCustomId`, `support:`/`mod:` prefixes;
+  modals via `isSettingsModalCustomId`, `support:m:`, `mod:m:`).
+  Settings sessions are validated (guild, expiry, owner) or rebuilt
+  from their attached panel message after a restart; expired/forged
+  sessions get an error reply and no write. Covered by
+  `scripts/test-discord-wiring.ts` §K and `scripts/test-panels.ts`.
 - **Confirmation flow** — button interactions carry a planId; the store
   verifies requester, guild, channel/session binding, expiry, and
   execution state before rendering (`verifyPlan`), and `executeUnifiedPlan`

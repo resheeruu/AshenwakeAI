@@ -1080,12 +1080,12 @@ async function p23FlagTests(): Promise<void> {
   try {
     const descriptor = getSettingById("social.animeActions");
     if (descriptor && descriptor.type === "boolean" && descriptor.category === "social" && descriptor.defaultValue === true) {
-      pass("social.animeActions is editable via the settings panel/update command");
+      pass("social.animeActions is editable via the settings descriptor");
     } else {
-      fail("social.animeActions is editable via the settings panel/update command", descriptor);
+      fail("social.animeActions is editable via the settings descriptor", descriptor);
     }
   } catch (e) {
-    fail("social.animeActions is editable via the settings panel/update command", e);
+    fail("social.animeActions is editable via the settings descriptor", e);
   }
 }
 

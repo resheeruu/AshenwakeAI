@@ -145,6 +145,55 @@ export async function executeInteractiveModeration(
     }
   }
 
+  if (action === "untimeout") {
+    if (
+      !botMember.permissions.has(
+        PermissionFlagsBits.ModerateMembers
+      )
+    ) {
+      return {
+        success: false,
+        message:
+          "❌ I don't have permission to manage timeouts.",
+      };
+    }
+
+    try {
+      await target.timeout(null, reason);
+
+      recordAudit({
+        who: requester.id,
+        whoName: requester.user.tag,
+        what: `Removed timeout for ${target.user.tag}: ${reason}`,
+        where: "discord",
+        guildId: target.guild.id,
+        result: "success",
+      });
+
+      return {
+        success: true,
+        message:
+          `🔊 **Timeout removed**\n` +
+          `Member: ${target}\n` +
+          `Reason: ${reason}`,
+      };
+    } catch {
+      recordAudit({
+        who: requester.id,
+        whoName: requester.user.tag,
+        what: `Removed timeout for ${target.user.tag} failed: Discord rejected`,
+        where: "discord",
+        guildId: target.guild.id,
+        result: "failure",
+      });
+      return {
+        success: false,
+        message:
+          "❌ Discord rejected the action. Check my role position and permissions.",
+      };
+    }
+  }
+
   return {
     success: false,
     message:

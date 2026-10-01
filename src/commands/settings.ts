@@ -76,7 +76,39 @@ export function isSettingsModalCustomId(customId: string): boolean {
   return customId.startsWith(`${P.str}:`) || customId.startsWith(`${P.num}:`);
 }
 
-const EXPIRED_PANEL_MSG = "This panel has expired. Use `/settings panel` to open a new one.";
+/**
+ * True for every settings-panel COMPONENT interaction (selects,
+ * toggles, channel/role pickers, modal-opening buttons and nav).
+ * Used by the global panel router in index.ts.
+ */
+export function isSettingsComponentCustomId(customId: string): boolean {
+  return Object.values(P).some((prefix) => customId.startsWith(`${prefix}:`));
+}
+
+/**
+ * The panel no longer relies on a 5-minute message collector: a
+ * restart (or an expired session entry) must not brick a panel that
+ * is still on screen. When no live session exists, rebuild one from
+ * the panel message the interaction is attached to — but only if
+ * that message actually carries settings-panel components.
+ */
+function messageLooksLikePanel(message: unknown): boolean {
+  const rows = (message as { components?: Array<{ components?: Array<{ customId?: string }> }> })?.components;
+  if (!Array.isArray(rows)) return false;
+  return rows.some((row) =>
+    (row?.components ?? []).some((c) => typeof c?.customId === "string" && isSettingsComponentCustomId(c.customId)),
+  );
+}
+
+function resolveSession(interaction: { message?: unknown; user: { id: string }; channelId?: string | null }, guildId: string): PanelSession | undefined {
+  const existing = getSession(guildId, interaction.user.id);
+  if (existing) return existing;
+  const message = interaction.message as { id?: string; channelId?: string } | undefined;
+  if (!message?.id || !messageLooksLikePanel(message)) return undefined;
+  return registerSession(guildId, interaction.user.id, message.channelId ?? interaction.channelId ?? "", message.id);
+}
+
+const EXPIRED_PANEL_MSG = "This panel has expired. Use `/settings` to open a new one.";
 const NO_PERM_PANEL_MSG = "You need the Manage Server permission to change settings.";
 
 /**
@@ -334,10 +366,19 @@ function buildCategoryComponents(category: SettingsCategory): ActionRowBuilder<a
   return components;
 }
 
+function buildNavRow(category: SettingsCategory): ActionRowBuilder<ButtonBuilder> {
+  const onOverview = category === "overview";
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId("as:back").setLabel("← Back").setStyle(ButtonStyle.Secondary).setDisabled(onOverview),
+    new ButtonBuilder().setCustomId("as:home").setLabel("🏠 Home").setStyle(ButtonStyle.Secondary).setDisabled(onOverview),
+    new ButtonBuilder().setCustomId("as:close").setLabel("✖ Close").setStyle(ButtonStyle.Danger),
+  );
+}
+
 function buildFullMessage(category: SettingsCategory, guildId: string): { embeds: EmbedBuilder[]; components: ActionRowBuilder<any>[] } {
   const embed = buildEmbed(category, guildId);
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(buildCategorySelect());
-  return { embeds: [embed], components: [selectRow, ...buildCategoryComponents(category)] };
+  return { embeds: [embed], components: [buildNavRow(category), selectRow, ...buildCategoryComponents(category)] };
 }
 
 function buildNumberModal(setting: SettingDescriptor, currentValue: unknown): ModalBuilder {
@@ -361,9 +402,9 @@ function buildStringModal(setting: SettingDescriptor, currentValue: unknown): Mo
 }
 
 async function handleToggle(interaction: any, settingId: string, guildId: string): Promise<void> {
-  const deny = panelDenyReason(interaction, getSession(guildId, interaction.user.id), { requireMessageBinding: true });
+  const session = resolveSession(interaction, guildId);
+  const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
   if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
-  const session = getSession(guildId, interaction.user.id)!;
   const descriptor = getSettingById(settingId);
   if (!descriptor || descriptor.type !== "boolean") {
     await interaction.reply({ content: "Invalid setting.", ephemeral: true });
@@ -382,13 +423,14 @@ async function handleToggle(interaction: any, settingId: string, guildId: string
     settingId, category: descriptor.category, path: descriptor.path, label: descriptor.label,
     oldValue: currentValue, newValue, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
   }, interaction.user.id, interaction.user.tag);
-  await interaction.update(buildFullMessage(session.currentCategory, guildId));
+  if (session) session.currentCategory = descriptor.category;
+  await interaction.update(buildFullMessage(descriptor.category, guildId));
 }
 
 async function handleChannelSelect(interaction: any, settingId: string, guildId: string): Promise<void> {
-  const deny = panelDenyReason(interaction, getSession(guildId, interaction.user.id), { requireMessageBinding: true });
+  const session = resolveSession(interaction, guildId);
+  const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
   if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
-  const session = getSession(guildId, interaction.user.id)!;
   const descriptor = getSettingById(settingId);
   if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
   const config = loadGuildConfig(guildId);
@@ -400,13 +442,14 @@ async function handleChannelSelect(interaction: any, settingId: string, guildId:
     settingId, category: descriptor.category, path: descriptor.path, label: descriptor.label,
     oldValue: currentValue, newValue, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
   }, interaction.user.id, interaction.user.tag);
-  await interaction.update(buildFullMessage(session.currentCategory, guildId));
+  if (session) session.currentCategory = descriptor.category;
+  await interaction.update(buildFullMessage(descriptor.category, guildId));
 }
 
 async function handleRoleSelect(interaction: any, guildId: string): Promise<void> {
-  const deny = panelDenyReason(interaction, getSession(guildId, interaction.user.id), { requireMessageBinding: true });
+  const session = resolveSession(interaction, guildId);
+  const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
   if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
-  const session = getSession(guildId, interaction.user.id)!;
   const config = loadGuildConfig(guildId);
   ensureConfigSections(config);
   const selectedRoles = (interaction.values ?? []).filter((id: string) => id !== guildId);
@@ -416,13 +459,14 @@ async function handleRoleSelect(interaction: any, guildId: string): Promise<void
     settingId: "staff.roleIds", category: "staff", path: "staff.roleIds", label: "Staff Roles",
     oldValue: oldRoles, newValue: selectedRoles, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
   }, interaction.user.id, interaction.user.tag);
-  await interaction.update(buildFullMessage(session.currentCategory, guildId));
+  if (session) session.currentCategory = "staff";
+  await interaction.update(buildFullMessage("staff", guildId));
 }
 
 async function handleNumberModalSubmit(interaction: ModalSubmitInteraction, settingId: string, guildId: string): Promise<void> {
-  const deny = panelDenyReason(interaction, getSession(guildId, interaction.user.id), { requireMessageBinding: true });
+  const session = resolveSession(interaction, guildId);
+  const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
   if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
-  const session = getSession(guildId, interaction.user.id)!;
   const descriptor = getSettingById(settingId);
   if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
   const rawValue = interaction.fields.getTextInputValue("value");
@@ -437,13 +481,14 @@ async function handleNumberModalSubmit(interaction: ModalSubmitInteraction, sett
     settingId, category: descriptor.category, path: descriptor.path, label: descriptor.label,
     oldValue: currentValue, newValue: validation.normalized, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
   }, interaction.user.id, interaction.user.tag);
-  await interaction.reply({ ...buildFullMessage(session.currentCategory, guildId), ephemeral: true });
+  if (session) session.currentCategory = descriptor.category;
+  await interaction.reply({ ...buildFullMessage(descriptor.category, guildId), ephemeral: true });
 }
 
 async function handleStringModalSubmit(interaction: ModalSubmitInteraction, settingId: string, guildId: string): Promise<void> {
-  const deny = panelDenyReason(interaction, getSession(guildId, interaction.user.id), { requireMessageBinding: true });
+  const session = resolveSession(interaction, guildId);
+  const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
   if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
-  const session = getSession(guildId, interaction.user.id)!;
   const descriptor = getSettingById(settingId);
   if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
   const rawValue = interaction.fields.getTextInputValue("value");
@@ -458,7 +503,8 @@ async function handleStringModalSubmit(interaction: ModalSubmitInteraction, sett
     settingId, category: descriptor.category, path: descriptor.path, label: descriptor.label,
     oldValue: currentValue, newValue: validation.normalized, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
   }, interaction.user.id, interaction.user.tag);
-  await interaction.reply({ ...buildFullMessage(session.currentCategory, guildId), ephemeral: true });
+  if (session) session.currentCategory = descriptor.category;
+  await interaction.reply({ ...buildFullMessage(descriptor.category, guildId), ephemeral: true });
 }
 
 export function createSettingsCommand(): AshenCommand {
@@ -467,128 +513,25 @@ export function createSettingsCommand(): AshenCommand {
       .setName("settings")
       .setDescription("Interactive server settings panel for AshenAI")
       .setContexts(InteractionContextType.Guild)
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
       /*
-       * Discord: "Using subcommands … will make your base command
-       * unusable." When `update` was added as the ONLY subcommand,
-       * bare `/settings` became un-sendable and the interactive
-       * panel (session + collector + st:/an: modals) went dead.
-       * Both documented modes are explicit subcommands now.
+       * NO subcommands: Discord makes a command WITH subcommands
+       * impossible to invoke bare, and the bare invocation is what
+       * opens the persistent Settings Center panel. The legacy
+       * `/settings update <category> <setting> <value>` path moved
+       * into the panel (select → toggle/modal) in this same module.
        */
-      .addSubcommand((sub) =>
-        sub
-          .setName("panel")
-          .setDescription("Open the interactive settings panel")
-      )
-      .addSubcommand((sub) =>
-        sub
-          .setName("update")
-          .setDescription("Update a specific setting (advanced/manual)")
-          .addStringOption((opt) =>
-            opt
-              .setName("category")
-              .setDescription("Settings category")
-              .setRequired(true)
-              .addChoices(
-                { name: "Overview", value: "overview" },
-                { name: "Moderation", value: "moderation" },
-                { name: "Support", value: "support" },
-                { name: "Reports", value: "reports" },
-                { name: "Appeals", value: "appeals" },
-                { name: "AI", value: "ai" },
-                { name: "Social", value: "social" },
-                { name: "Personality", value: "personality" },
-                { name: "Logging", value: "logging" },
-                { name: "Staff", value: "staff" },
-                { name: "Audit", value: "audit" },
-              )
-          )
-          .addStringOption((opt) =>
-            opt.setName("setting").setDescription("Setting name to update").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("value").setDescription("New value (true/false, channel ID, role ID, or number)").setRequired(true)
-          )
-      ),
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       try {
         if (!interaction.guild) { await interaction.editReply("This command can only be used in a server."); return; }
-        if (interaction.options.getSubcommand() === "update") {
-          const guildId = interaction.guild.id;
-          const category = interaction.options.getString("category", true) as SettingsCategory;
-          const settingName = interaction.options.getString("setting", true).toLowerCase();
-          const rawValue = interaction.options.getString("value", true);
-          const settings = getSettingsByCategory(category);
-          const descriptor = settings.find((s) => {
-            const parts = s.id.split(".");
-            return parts[parts.length - 1].toLowerCase() === settingName || s.id.toLowerCase().includes(settingName);
-          });
-          if (!descriptor) {
-            await interaction.editReply(`Unknown setting \`${settingName}\` for category \`${category}\`. Use \`/settings panel\` for the interactive panel.`);
-            return;
-          }
-          const validation = validateSettingValue(descriptor, rawValue, guildId);
-          if (!validation.valid) { await interaction.editReply(validation.error ?? "Invalid value."); return; }
-          const config = loadGuildConfig(guildId);
-          ensureConfigSections(config);
-          const currentValue = applySettingValue(config, descriptor.id);
-          applySettingValue(config, descriptor.id, validation.normalized);
-          saveSettingChange(config, {
-            settingId: descriptor.id, category: descriptor.category, path: descriptor.path, label: descriptor.label,
-            oldValue: currentValue, newValue: validation.normalized, guildId, userId: interaction.user.id, userName: interaction.user.tag, timestamp: Date.now(),
-          }, interaction.user.id, interaction.user.tag);
-          await interaction.editReply(`Updated **${descriptor.label}**: ${formatValue(currentValue)} \u2192 ${formatValue(validation.normalized)}`);
-          return;
-        }
         const guildId = interaction.guild.id;
         const userId = interaction.user.id;
+        removeSession(guildId, userId);
         registerSession(guildId, userId, interaction.channelId, "");
         const { embeds, components } = buildFullMessage("overview", guildId);
         const response = await interaction.editReply({ embeds, components });
         const session = getSession(guildId, userId);
-        if (session) session.messageId = response.id;
-        const collector = response.createMessageComponentCollector({ filter: (i: any) => i.user.id === userId, time: 300_000 });
-        collector.on("collect", async (i: any) => {
-          try {
-            if (!i.guild || i.guild.id !== guildId) { await i.reply({ content: "Wrong server.", ephemeral: true }); return; }
-            const customId = i.customId;
-            if (customId === `${P.cat}:select` && i.isStringSelectMenu()) {
-              const cat = i.values[0] as SettingsCategory;
-              const sess = getSession(guildId, userId);
-              if (sess) sess.currentCategory = cat;
-              await i.update(buildFullMessage(cat, guildId));
-              return;
-            }
-            if (customId.startsWith(`${P.tog}:`)) { await handleToggle(i, customId.slice(P.tog.length + 1), guildId); return; }
-            if (customId.startsWith(`${P.ch}:`)) { await handleChannelSelect(i, customId.slice(P.ch.length + 1), guildId); return; }
-            if (customId === `${P.rl}:staff`) { await handleRoleSelect(i, guildId); return; }
-            if (customId.startsWith(`${P.num}:`)) {
-              const settingId = customId.slice(P.num.length + 1);
-              const descriptor = getSettingById(settingId);
-              if (!descriptor) { await i.reply({ content: "Invalid setting.", ephemeral: true }); return; }
-              const config = loadGuildConfig(guildId);
-              const currentValue = applySettingValue(config, settingId);
-              await i.showModal(buildNumberModal(descriptor, currentValue));
-              return;
-            }
-            if (customId.startsWith(`${P.str}:`)) {
-              const settingId = customId.slice(P.str.length + 1);
-              const descriptor = getSettingById(settingId);
-              if (!descriptor) { await i.reply({ content: "Invalid setting.", ephemeral: true }); return; }
-              const config = loadGuildConfig(guildId);
-              const currentValue = applySettingValue(config, settingId);
-              await i.showModal(buildStringModal(descriptor, currentValue));
-              return;
-            }
-          } catch (error) {
-            logger.error("Settings panel error:", error instanceof Error ? error.message : String(error));
-            try { if (!i.replied && !i.deferred) await i.reply({ content: "An error occurred.", ephemeral: true }); } catch {}
-          }
-        });
-        collector.on("end", async () => {
-          removeSession(guildId, userId);
-          try { await interaction.editReply({ components: [] }).catch(() => {}); } catch {}
-        });
+        if (session && response?.id) session.messageId = response.id;
         recordAudit({ who: interaction.user.id, whoName: interaction.user.tag, what: "Opened /settings panel", where: "discord", guildId, result: "success" });
       } catch (error) {
         logger.error("/settings failed:", error instanceof Error ? error.message : String(error));
@@ -596,6 +539,94 @@ export function createSettingsCommand(): AshenCommand {
       }
     },
   };
+}
+
+/**
+ * Global component router for the settings panel (buttons, selects,
+ * modal-opening inputs). Replaces the old 5-minute message
+ * collector: panels now persist until closed and survive restarts
+ * because the session is rebuilt from the panel message.
+ */
+export async function handleSettingsComponent(interaction: any): Promise<void> {
+  try {
+    const guildId = interaction.guildId as string | null;
+    if (!guildId) {
+      await interaction.reply({ content: "Must be used in a server.", ephemeral: true });
+      return;
+    }
+    const customId: string = interaction.customId;
+    const session = resolveSession(interaction, guildId);
+    const deny = panelDenyReason(interaction, session, { requireMessageBinding: true });
+    if (deny) { await interaction.reply({ content: deny, ephemeral: true }); return; }
+
+    // Nav first: `as:home`/`as:back`/`as:close` share the `as:` prefix.
+    if (customId === "as:close") {
+      removeSession(guildId, interaction.user.id);
+      await interaction.update({ embeds: [closedSettingsPanelEmbed()], components: [] });
+      return;
+    }
+    if (customId === "as:home") {
+      if (session) session.currentCategory = "overview";
+      await interaction.update(buildFullMessage("overview", guildId));
+      return;
+    }
+    if (customId === "as:back") {
+      const target = session?.previousCategory ?? "overview";
+      if (session) { session.previousCategory = session.currentCategory; session.currentCategory = target; }
+      await interaction.update(buildFullMessage(target, guildId));
+      return;
+    }
+    if (customId === `${P.cat}:select` && interaction.isStringSelectMenu()) {
+      const cat = interaction.values[0] as SettingsCategory;
+      if (session) { session.previousCategory = session.currentCategory; session.currentCategory = cat; }
+      await interaction.update(buildFullMessage(cat, guildId));
+      return;
+    }
+    if (customId.startsWith(`${P.tog}:`)) { await handleToggle(interaction, customId.slice(P.tog.length + 1), guildId); return; }
+    if (customId.startsWith(`${P.ch}:`)) { await handleChannelSelect(interaction, customId.slice(P.ch.length + 1), guildId); return; }
+    if (customId === `${P.rl}:staff`) { await handleRoleSelect(interaction, guildId); return; }
+    if (customId.startsWith(`${P.num}:`)) {
+      const settingId = customId.slice(P.num.length + 1);
+      const descriptor = getSettingById(settingId);
+      if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+      const config = loadGuildConfig(guildId);
+      const currentValue = applySettingValue(config, settingId);
+      await interaction.showModal(buildNumberModal(descriptor, currentValue));
+      return;
+    }
+    if (customId.startsWith(`${P.str}:`)) {
+      const settingId = customId.slice(P.str.length + 1);
+      const descriptor = getSettingById(settingId);
+      if (!descriptor) { await interaction.reply({ content: "Invalid setting.", ephemeral: true }); return; }
+      const config = loadGuildConfig(guildId);
+      const currentValue = applySettingValue(config, settingId);
+      await interaction.showModal(buildStringModal(descriptor, currentValue));
+      return;
+    }
+  } catch (error) {
+    logger.error("Settings panel error:", error instanceof Error ? error.message : String(error));
+    await replyPanelError(interaction);
+  }
+}
+
+/** Log-safe error reply that also follows up on already-deferred interactions. */
+async function replyPanelError(interaction: { replied?: boolean; deferred?: boolean; reply?: (p: any) => Promise<unknown>; editReply?: (p: any) => Promise<unknown> }): Promise<void> {
+  try {
+    if (interaction.deferred && !interaction.replied) {
+      await interaction.editReply?.("An error occurred.");
+    } else if (!interaction.replied) {
+      await interaction.reply?.({ content: "An error occurred.", ephemeral: true });
+    }
+  } catch {
+    // Interaction may have expired
+  }
+}
+
+function closedSettingsPanelEmbed(): EmbedBuilder {
+  return new EmbedBuilder()
+    .setTitle("🔒 Settings panel closed")
+    .setDescription("Panel closed. Re-run `/settings` to open it again.")
+    .setColor(0x6b7280);
 }
 
 export async function handleSettingsModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
@@ -615,6 +646,6 @@ export async function handleSettingsModalSubmit(interaction: ModalSubmitInteract
     await handleNumberModalSubmit(interaction, settingId, guildId);
   } catch (error) {
     logger.error("Settings modal error:", error instanceof Error ? error.message : String(error));
-    try { if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: "An error occurred.", ephemeral: true }); } catch {}
+    await replyPanelError(interaction);
   }
 }

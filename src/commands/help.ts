@@ -35,10 +35,10 @@ const COMMAND_METADATA: Record<string, { description: string; category: string; 
   reset:  { description: "Reset your conversation memory", category: "ai" },
   prompt: { description: "AI-powered server builder — describe what you want in natural language", category: "server" },
   server: { description: "Server info, member info, and role management", category: "server" },
-  mod: { description: "Warn, timeout, and manage members", category: "moderation", modOnly: true },
-  support: { description: "Tickets, reports, appeals, and case management", category: "support" },
+  mod: { description: "Moderation Center — warn, timeout, warnings, and history", category: "moderation", modOnly: true },
+  support: { description: "Support Center — tickets, reports, appeals, and case management", category: "support" },
   send: { description: "Send a message as AshenAI (trusted users, owners)", category: "system" },
-  settings: { description: "Server settings panel", category: "system", adminOnly: true },
+  settings: { description: "Server Settings Center — interactive panel", category: "system", adminOnly: true },
   status:  { description: "Show system status and your AI usage", category: "system" },
 };
 

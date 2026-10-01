@@ -9,6 +9,7 @@ COPY tsconfig.json ./
 COPY src/ src/
 COPY scripts/ scripts/
 COPY assets/ assets/
+COPY data/anime-gifs/ data/anime-gifs/
 
 RUN npm run build
 
@@ -29,9 +30,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/assets ./assets
+COPY --from=builder /app/data/anime-gifs ./anime-gifs-seed/
 
 # Create writable data volume only for application data
-RUN mkdir -p data backups && chown -R ashenu:ashenu /app/data /app/backups
+RUN mkdir -p data backups && chown -R ashenu:ashenu /app/data /app/backups /app/anime-gifs-seed
 
 # Security hardening
 USER ashenu

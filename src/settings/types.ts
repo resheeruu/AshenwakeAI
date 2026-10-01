@@ -72,6 +72,8 @@ export interface PanelSession {
   messageId: string;
   createdAt: number;
   currentCategory: SettingsCategory;
+  /** Previous category, used by the panel's Back button */
+  previousCategory?: SettingsCategory;
 }
 
 /** Extract a nested value from a GuildConfig by dot-path */

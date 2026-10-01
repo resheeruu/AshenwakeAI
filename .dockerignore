@@ -6,6 +6,7 @@ dist
 .env
 .env.*
 data/
+!data/anime-gifs/
 backups/
 scripts/test-*.ts
 scripts/run-all-tests.ts

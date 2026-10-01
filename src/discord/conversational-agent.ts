@@ -2999,7 +2999,7 @@ async function handleSupportTicket(
   if (!supportConfig.enabled) {
     return {
       shouldReply: true,
-      reply: "Support tickets are not currently enabled on this server. Ask an admin to enable them with `/settings panel`.",
+      reply: "Support tickets are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
       executed: false,
       requiresConfirmation: false,
     };
@@ -3007,7 +3007,7 @@ async function handleSupportTicket(
 
   return {
     shouldReply: true,
-    reply: "🎫 **Support Tickets**\n\nYou can create a ticket using:\n• `/ticket support` — General help\n• `/ticket report` — Report a user\n• `/ticket appeal` — Ban appeal\n\nOr describe your issue and I'll help you directly!",
+    reply: "🎫 **Support Tickets**\n\nOpen the Support Center with `/support`:\n• **Create Ticket** — General help\n• **Report** — Report a user\n• **Appeal** — Ban appeal\n\nOr describe your issue and I'll help you directly!",
     executed: false,
     requiresConfirmation: false,
   };
@@ -3031,7 +3031,7 @@ async function handleSupportReport(
   if (!reportsConfig.enabled) {
     return {
       shouldReply: true,
-      reply: "Reports are not currently enabled on this server. Ask an admin to enable them with `/settings panel`.",
+      reply: "Reports are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
       executed: false,
       requiresConfirmation: false,
     };
@@ -3053,11 +3053,9 @@ async function handleSupportReport(
     }
   }
 
-  const reportedTag = reportedUserId ? `<@${reportedUserId}>` : "unknown user";
-
   return {
     shouldReply: true,
-    reply: `🚨 **Report a User**\n\nUse \`/report\` for a structured report:\n• \`/report user:@${reportedTag} reason:...\`\n\nOr tell me:\n• Who are you reporting?\n• What did they do?\n• Any evidence (message IDs, screenshots)?`,
+    reply: `🚨 **Report a User**\n\nOpen the Support Center with \`/support\` and choose **Report**:\n• Pick the reported member, then give a reason and any evidence\n\nOr tell me:\n• Who are you reporting?\n• What did they do?\n• Any evidence (message IDs, screenshots)?`,
     executed: false,
     requiresConfirmation: false,
   };
@@ -3080,7 +3078,7 @@ async function handleSupportAppeal(
   if (!appealsConfig.enabled) {
     return {
       shouldReply: true,
-      reply: "Appeals are not currently enabled on this server. Ask an admin to enable them with `/settings panel`.",
+      reply: "Appeals are not currently enabled on this server. Ask an admin to enable them with `/settings`.",
       executed: false,
       requiresConfirmation: false,
     };
@@ -3088,7 +3086,7 @@ async function handleSupportAppeal(
 
   return {
     shouldReply: true,
-    reply: "🔨 **Ban Appeal**\n\nUse \`/appeal\` to submit a formal appeal:\n• \`/appeal reason:Why your action should be reversed\`\n\nPlease include:\n• What action you're appealing\n• Why you believe it should be reversed\n• Any additional context for staff",
+    reply: "🔨 **Ban Appeal**\n\nOpen the Support Center with \`/support\` and choose **Appeal**:\n• Describe the action you're appealing and why it should be reversed\n\nPlease include:\n• What action you're appealing\n• Why you believe it should be reversed\n• Any additional context for staff",
     executed: false,
     requiresConfirmation: false,
   };
@@ -3142,11 +3140,10 @@ async function handleHelp(
     "• \"Show me what you'll change\" (preview pending plan)",
     "",
     "🎫 **Support & Reports:**",
-    "• `/ticket` — Create a support ticket",
-    "• `/report` — Report a user",
-    "• `/appeal` — Submit a ban appeal",
-    "• `/case` — View and manage cases",
-    "• `/settings panel` — Configure support systems",
+    "• `/support` — Open the Support Center (tickets, reports, appeals, your cases)",
+    "• `\"Report @user for spamming\"` — natural-language reports",
+    "• `\"Appeal my timeout\"` — natural-language appeals",
+    "• `/settings` — Configure support systems",
     "",
     "🛡️ **Moderation (Natural Language):**",
     "• \"ban @user\" or reply to a message and say \"ban\"",

@@ -11,10 +11,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { ChatInputCommandInteraction } from "discord.js";
 
 import { SupportCaseManager } from "../src/support/case-manager";
-import { createSupportCommand } from "../src/commands/support";
+import { runStaffCaseAction } from "../src/discord/panels/support-panel";
 import { loadGuildConfig, saveGuildConfig } from "../src/core/guild-config";
 import { getAuditLog } from "../src/security/audit";
 
@@ -94,10 +93,11 @@ if (c) {
 }
 
 /* ================================================================
- * B. /support case staff gate (behavioral via real command entry)
+ * B. Support Center staff gate (behavioral via the real staff
+ *    action entry — the panel funnel runStaffCaseAction)
  * ================================================================ */
 
-console.log("\n=== B. /support case staff gate ===");
+console.log("\n=== B. Support Center staff gate ===");
 
 const GUILD_S = `authz_cmd_guild_${Date.now()}`;
 const STAFF_ROLE = "900000000000000001";
@@ -126,44 +126,63 @@ function memberMock(opts: { roleIds: string[]; bot?: boolean }): {
   };
 }
 
-interface MockInteraction extends Partial<ChatInputCommandInteraction> {
+interface MockStaffCtx {
   replies: unknown[];
+  action: "view" | "list" | "assign" | "status" | "stats";
+  ctx: {
+    user: { id: string; tag: string };
+    guild: { id: string; members: { fetch: () => Promise<unknown> } };
+  };
+  guildId: string;
+  getStringValue?: string;
 }
 
 function mkInteraction(opts: {
-  subcommand: string;
+  subcommand: "view" | "list" | "assign" | "status" | "stats";
   userId: string;
   guildId: string;
   member: unknown;
   getStringValue?: string;
-}): MockInteraction & { execute: () => Promise<void> } {
-  const replies: unknown[] = [];
-  const interaction = {
-    user: { id: opts.userId, tag: `${opts.userId}#0001` },
-    guild: {
-      id: opts.guildId,
-      members: {
-        fetch: async () => opts.member,
+}): MockStaffCtx {
+  return {
+    replies: [],
+    action: opts.subcommand,
+    guildId: opts.guildId,
+    getStringValue: opts.getStringValue,
+    ctx: {
+      user: { id: opts.userId, tag: `${opts.userId}#0001` },
+      guild: {
+        id: opts.guildId,
+        members: {
+          fetch: async () => opts.member,
+        },
       },
     },
-    options: {
-      getSubcommand: () => opts.subcommand,
-      getSubcommandGroup: () => "case",
-      getString: () => opts.getStringValue ?? "T-0000-0000-xxxx",
-      getUser: () => ({ id: "someone" }),
-    },
-    editReply: async (payload: unknown) => {
-      replies.push(payload);
-      return payload;
-    },
-    replies,
   };
-  return interaction as unknown as MockInteraction & { execute: () => Promise<void> };
 }
 
-async function runCaseCommand(m: MockInteraction): Promise<void> {
-  const command = createSupportCommand();
-  await command.execute(m as unknown as ChatInputCommandInteraction);
+/** Strip a panel payload down to its text for assertions. */
+function textOf(payload: unknown): string {
+  if (typeof payload === "string") return payload;
+  if (payload && typeof payload === "object") {
+    const p = payload as { content?: string };
+    if (typeof p.content === "string") return p.content;
+  }
+  return "";
+}
+
+async function runCaseCommand(m: MockStaffCtx): Promise<void> {
+  const res = {
+    deny: async (content: string) => {
+      m.replies.push(content);
+    },
+    show: async (payload: unknown) => {
+      m.replies.push(payload);
+    },
+  };
+  await runStaffCaseAction(m.action, m.ctx, m.guildId, res, {
+    id: m.getStringValue ?? "T-0000-0000-xxxx",
+  });
 }
 
 async function main(): Promise<void> {
@@ -253,30 +272,23 @@ async function main(): Promise<void> {
   );
 
   // B6: member resolution failure → deny (fail closed)
-  const m6 = {
-    user: { id: "user-flaky", tag: "flaky#0001" },
-    guild: {
-      id: GUILD_S,
-      members: {
-        fetch: async () => {
-          throw new Error("fetch failed");
+  const m6: MockStaffCtx = {
+    replies: [],
+    action: "list",
+    guildId: GUILD_S,
+    ctx: {
+      user: { id: "user-flaky", tag: "flaky#0001" },
+      guild: {
+        id: GUILD_S,
+        members: {
+          fetch: async () => {
+            throw new Error("fetch failed");
+          },
         },
       },
     },
-    options: {
-      getSubcommand: () => "list",
-      getSubcommandGroup: () => "case",
-      getString: () => "x",
-      getUser: () => ({ id: "y" }),
-    },
-    editReply: async (payload: unknown) => {
-      m6.replies.push(payload);
-      return payload;
-    },
-    replies: [] as unknown[],
   };
-  const command6 = createSupportCommand();
-  await command6.execute(m6 as unknown as ChatInputCommandInteraction);
+  await runCaseCommand(m6);
   assert(
     typeof m6.replies[0] === "string" && (m6.replies[0] as string).includes("staff role"),
     "B6 member fetch failure → deny (fail closed)",
@@ -295,7 +307,7 @@ async function main(): Promise<void> {
   await runCaseCommand(m7);
   const r7 = m7.replies[0];
   assert(
-    typeof r7 === "string" && r7.includes("not found"),
+    textOf(r7).includes("not found"),
     "B7 staff guild B cannot view guild A case id",
   );
 
@@ -332,24 +344,26 @@ async function main(): Promise<void> {
   console.log("\n=== C. Static wiring (callers + gate) ===");
 
   const supportSrc = src("src/commands/support.ts");
+  const supportPanelSrc = src("src/discord/panels/support-panel.ts");
   assert(
-    supportSrc.includes("interaction.options.getSubcommandGroup()") &&
-      supportSrc.includes('subcommandGroup === "case"'),
-    "C1 execute routes the case GROUP (getSubcommand returns the leaf, not \"case\")",
+    !supportSrc.includes("addSubcommand") &&
+      supportSrc.includes("openSupportPanel") &&
+      supportPanelSrc.includes("runStaffCaseAction"),
+    "C1 /support is subcommand-free; staff actions route through the panel funnel",
   );
   assert(
-    !supportSrc.includes('"AI-generated case summary"') &&
-      !supportSrc.includes('"Get AI recommendation for a case"') &&
-      !supportSrc.includes('"View case message timeline"') &&
-      !supportSrc.includes('"View collected evidence"'),
+    !supportPanelSrc.includes('"AI-generated case summary"') &&
+      !supportPanelSrc.includes('"Get AI recommendation for a case"') &&
+      !supportPanelSrc.includes('"View case message timeline"') &&
+      !supportPanelSrc.includes('"View collected evidence"'),
     "C2 unimplemented case subcommands removed from the builder",
   );
-  assert(supportSrc.includes("config.staff?.roleIds ?? []"), "C3 gate reads guild_configs.staff.roleIds");
-  assert(supportSrc.includes("Denied /support case"), "C4 denied attempts audited");
-  assert(supportSrc.includes("if (staffRoleIds.length === 0) return false"), "C5 unconfigured staff roles fail closed");
+  assert(supportPanelSrc.includes("config.staff?.roleIds ?? []"), "C3 gate reads guild_configs.staff.roleIds");
+  assert(supportPanelSrc.includes("Denied /support case"), "C4 denied attempts audited");
+  assert(supportPanelSrc.includes("if (staffRoleIds.length === 0) return false"), "C5 unconfigured staff roles fail closed");
   assert(
-    supportSrc.includes("if (!(await hasCaseStaffAccess(interaction, guildId)))"),
-    "C5b handleCase gates EVERY case subcommand (unconditional)",
+    supportPanelSrc.includes("if (!(await hasCaseStaffAccess(ctx, guildId)))"),
+    "C5b runStaffCaseAction gates EVERY staff action (unconditional)",
   );
 
   const cmSrc = src("src/support/case-manager.ts");

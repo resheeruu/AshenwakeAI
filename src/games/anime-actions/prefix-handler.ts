@@ -289,7 +289,7 @@ async function handleGameCommand(
       if (!enabled) {
         await safeReply(
           message,
-          "🚫 Games are disabled in this server. A server admin can enable them in `/settings panel` (AI Social → Anime Actions).",
+          "🚫 Games are disabled in this server. A server admin can enable them in `/settings` (AI Social → Anime Actions).",
         );
         return true;
       }
@@ -731,7 +731,7 @@ export async function handleAnimeAction(
     if (!enabled) {
       await safeReply(
         message,
-        "🚫 Anime actions are disabled in this server. A server admin can enable them in `/settings panel` (AI Social \u2192 Anime Actions) or with `/settings update social animeActions true`.",
+        "🚫 Anime actions are disabled in this server. A server admin can enable them in `/settings` (AI Social \u2192 Anime Actions).",
       );
       return true;
     }

@@ -35,23 +35,24 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 - `/prompt <request>` - AI-powered server builder — describe what you want in natural language.
 
 ### Moderation Commands (Moderator+)
-- `/mod warn <user> <reason>` - Issue a formal warning to a member.
-- `/mod warnings <user>` - View warnings for a member.
-- `/mod timeout <user> <minutes> <reason>` - Timeout a member (1-40320 minutes).
-- `/mod untimeout <user> <reason>` - Remove timeout from a member.
+- `/mod` - Open the Moderation Center panel: pick a member, then issue a
+  formal warning, apply a timeout (1-40320 minutes), remove a timeout,
+  or view that member's warnings and moderation history. Hidden from
+  members without Moderate Members; every action is re-checked
+  server-side and rate limited (5 opens/minute per user).
 
 ### Support Commands
-- `/support ticket` - Create a support ticket.
-- `/support report` - Report a user for rule violations.
-- `/support appeal` - Appeal a ban or moderation action.
-- `/support case view/list/assign/status/stats` - Manage support cases.
+- `/support` - Open the Support Center panel: FAQ, create a support
+  ticket, report a user, appeal a moderation action, view your own
+  cases — and for case staff: view/list/assign cases, set status, and
+  see case stats.
 
 ### Send Command (Owner/Trusted Users)
 - `/send <message>` - Send a message as AshenAI (trusted users, server owner, bot owner).
 
 ### System Commands
 - `/status` - Show system status and AI usage.
-- `/settings panel` - Interactive server settings panel (Admin+).
+- `/settings` - Open the interactive server settings panel (Admin+).
 - `/help` - Show all available commands.
 
 ### Ash Games (Any member)
@@ -65,9 +66,9 @@ AshenAI is a secure Discord AI assistant and server management bot. It provides:
 - `ash <action> @user` - Fictional roleplay interactions (32 actions,
   e.g. `ash hug @user`, `ash punch @rival`). Full list and rules:
   [ASH-ACTIONS.md](./ASH-ACTIONS.md).
-- **Disable/enable**: `/settings panel` → **AI Social** → *Anime Actions*,
-  or `/settings update social animeActions true|false` (Admin+, per server).
-  When disabled members get a short notice; no action runs.
+- **Disable/enable**: `/settings` → **AI Social** → *Anime Actions*
+  toggle (Admin+, per server). When disabled members get a short
+  notice; no action runs.
 - Rate limits: 15 `ash` messages per user per 60s, plus a per-action
   cooldown (5–10s).
 

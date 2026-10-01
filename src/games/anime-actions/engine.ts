@@ -121,6 +121,12 @@ export async function buildDiscordResponse(
       const attachment = new AttachmentBuilder(local.buffer, {
         name: `anime.${ext}`,
       });
+
+      // Structured logging for Discord delivery tracking
+      logger.info(
+        `DISCORD_SEND_STARTED action=${result.animationSource ?? "unknown"} source=local mediaKey=${result.localMediaAsset.key} sha256=${result.localMediaAsset.relPath} bytes=${local.buffer.byteLength} contentType=${local.contentType}`
+      );
+
       return { content: result.text, files: [attachment] };
     }
 
@@ -163,6 +169,11 @@ export async function buildDiscordResponse(
   const attachment = new AttachmentBuilder(media.buffer, {
     name: `anime.${ext}`,
   });
+
+  // Structured logging for Discord delivery tracking
+  logger.info(
+    `DISCORD_SEND_STARTED action=${result.animationSource ?? "unknown"} source=remote mediaUrl=${result.animationUrl} bytes=${media.buffer.byteLength} contentType=${media.contentType}`
+  );
 
   return {
     content: result.text,

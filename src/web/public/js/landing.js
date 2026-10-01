@@ -89,7 +89,7 @@ function initHeroTyping() {
     'Message #general',
     '/ask what changed in the raid policy?',
     'ash mine 50',
-    '/settings panel',
+    '/settings',
     'ash battle @rival'
   ];
 

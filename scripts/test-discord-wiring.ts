@@ -461,14 +461,14 @@ async function main(): Promise<void> {
   const j7 = mkModal("st:ai.responseStyle", "guild-wiring-test");
   await handleSettingsModalSubmit(j7);
   assert(
-    repliesOf(j7)[0]?.content === "This panel has expired. Use `/settings panel` to open a new one.",
+    repliesOf(j7)[0]?.content === "This panel has expired. Use `/settings` to open a new one.",
     "J7 st: modal with no live session replies (not dropped)",
   );
 
   const j8 = mkModal("an:moderation.automod", "guild-wiring-test");
   await handleSettingsModalSubmit(j8);
   assert(
-    repliesOf(j8)[0]?.content === "This panel has expired. Use `/settings panel` to open a new one.",
+    repliesOf(j8)[0]?.content === "This panel has expired. Use `/settings` to open a new one.",
     "J8 an: modal with no live session replies identically (P2-2 regression)",
   );
 
@@ -508,12 +508,12 @@ async function main(): Promise<void> {
     "J14 staff role select filters out the @everyone role (guild id)");
 
   /* ================================================================
-   * K. P2-5 — /settings panel reachability (Discord subcommand rule)
+   * K. Panel reachability (Discord subcommand rule)
    *
-   * Discord: a command WITH subcommands cannot be invoked bare, so
-   * when `update` was the only subcommand the interactive panel
-   * (session + collector + modals) was unreachable. Both documented
-   * modes must be explicit subcommands.
+   * Discord: a command WITH subcommands cannot be invoked bare. The
+   * persistent Settings Center opens from the bare `/settings`
+   * invocation, so the builder must expose NO subcommands, and
+   * component routing must live in the global panel listener.
    * ================================================================ */
 
   console.log("\n=== K. Settings panel reachability (dynamic builder) ===");
@@ -526,20 +526,29 @@ async function main(): Promise<void> {
     .filter((o) => o.type === 1)
     .map((o) => o.name);
   assert(
-    subNames.includes("panel") && subNames.includes("update"),
-    `K1 /settings exposes BOTH modes as subcommands (got: ${JSON.stringify(subNames)})`,
+    subNames.length === 0,
+    `K1 /settings is subcommand-free so bare invocation opens the panel (got: ${JSON.stringify(subNames)})`,
   );
   assert(
     !indexSrc.includes("createSettingsUpdateCommand"),
     "K2 index.ts does not import the removed createSettingsUpdateCommand",
   );
   assert(
-    settingsCmdSrc.includes('getSubcommand() === "update"'),
-    "K3 execute routes the update subcommand and lets panel fall through",
+    !settingsCmdSrc.includes("getSubcommand(") &&
+      settingsCmdSrc.includes("handleSettingsComponent"),
+    "K3 execute no longer routes subcommands; components route through handleSettingsComponent",
   );
   assert(
     settingsCmdSrc.includes('what: "Opened /settings panel"'),
     "K4 panel path still audits its opening",
+  );
+  assert(
+    indexSrc.includes("isSettingsComponentCustomId(id)"),
+    "K5 index.ts routes settings COMPONENTS through the shared predicate",
+  );
+  assert(
+    indexSrc.includes('startsWith("support:")') && indexSrc.includes('startsWith("mod:")'),
+    "K6 index.ts routes Support/Moderation Center components",
   );
 
   /* ================================================================ */

@@ -16,8 +16,7 @@ anything on the server. See §7.
 The feature is controlled by the guild flag `social.animeActions`
 (**default: enabled**):
 
-- Interactive panel: `/settings panel` → **AI Social** → *Anime Actions* toggle.
-- Manual: `/settings update social animeActions true` (or `false`).
+- Interactive panel: `/settings` → **AI Social** → *Anime Actions* toggle.
 - Per-server; DMs are unaffected (there is no guild config in DMs).
 - When disabled, every `ash` message replies with a clear "disabled" notice
   (no cooldown is consumed, no provider or media work happens).

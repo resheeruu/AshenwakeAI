@@ -108,7 +108,21 @@ import { createModCommand } from "./commands/mod";
 import { createSupportCommand } from "./commands/support";
 import { createSendCommand } from "./commands/send";
 import { createPromptCommand, processBuilderMessage, getBuilderSession, cleanupExpiredSessions } from "./commands/prompt";
-import { createSettingsCommand, handleSettingsModalSubmit, isSettingsModalCustomId } from "./commands/settings";
+import {
+  createSettingsCommand,
+  handleSettingsModalSubmit,
+  handleSettingsComponent,
+  isSettingsModalCustomId,
+  isSettingsComponentCustomId,
+} from "./commands/settings";
+import {
+  handleSupportComponent,
+  handleSupportModal,
+} from "./discord/panels/support-panel";
+import {
+  handleModComponent,
+  handleModModal,
+} from "./discord/panels/mod-panel";
 import {
   startSupportAutomation,
   stopSupportAutomation,
@@ -2437,15 +2451,66 @@ client.on(
 );
 
 /* =====================================================
-   SETTINGS MODAL SUBMISSIONS
+   PERSISTENT CONTROL PANELS (settings / support / mod)
    ===================================================== */
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isModalSubmit()) return;
-  // BOTH settings modal types: `st:` (string) and `an:` (number).
-  // A single hardcoded prefix silently dropped every st: submission.
-  if (!isSettingsModalCustomId(interaction.customId)) return;
-  await handleSettingsModalSubmit(interaction);
+  try {
+    if (interaction.isModalSubmit()) {
+      // BOTH settings modal types: `st:` (string) and `an:` (number).
+      // A single hardcoded prefix silently dropped every st: submission.
+      if (isSettingsModalCustomId(interaction.customId)) {
+        await handleSettingsModalSubmit(interaction);
+        return;
+      }
+      if (interaction.customId.startsWith("support:m:")) {
+        await handleSupportModal(interaction);
+        return;
+      }
+      if (interaction.customId.startsWith("mod:m:")) {
+        await handleModModal(interaction);
+        return;
+      }
+      return;
+    }
+
+    if (
+      interaction.isButton() ||
+      interaction.isStringSelectMenu() ||
+      interaction.isUserSelectMenu() ||
+      interaction.isChannelSelectMenu() ||
+      interaction.isRoleSelectMenu()
+    ) {
+      const id = interaction.customId;
+      if (isSettingsComponentCustomId(id)) {
+        await handleSettingsComponent(interaction);
+        return;
+      }
+      if (id.startsWith("support:")) {
+        await handleSupportComponent(interaction);
+        return;
+      }
+      if (id.startsWith("mod:")) {
+        await handleModComponent(interaction);
+        return;
+      }
+    }
+  } catch (error) {
+    logger.error(
+      "❌ Panel interaction failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    try {
+      if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "❌ Something went wrong. Please try again.",
+          ephemeral: true,
+        });
+      }
+    } catch {
+      // Interaction may have expired
+    }
+  }
 });
 
 /* =====================================================
