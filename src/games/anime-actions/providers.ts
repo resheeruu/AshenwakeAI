@@ -900,7 +900,27 @@ export async function fetchAnimation(
   const startedAt = Date.now();
 
   try {
-    // 1) REMOTE URL CACHE — validated remote URLs survive local-cache
+    // 1) LOCAL CACHE FIRST — check local filesystem before any provider calls
+    // This ensures cached media works even when providers are unavailable
+    if (ALLOW_REMOTE_FALLBACK && options.localGifs !== null) {
+      try {
+        const resolver = options.localGifs?.resolve ?? resolveLocalGif;
+        const local = await resolver(`actions:${action}`);
+        if (local) {
+          logger.info(
+            `ANIME_MEDIA_CACHE_HIT action=${action} provider=local license=${local.license} elapsed=${Date.now() - startedAt}ms`
+          );
+          return { localAsset: local, source: "local" };
+        }
+      } catch (error) {
+        // Local provider failure must never break the chain.
+        logger.warn(
+          `anime_action action=${action} provider=local result=local_error detail=${error instanceof Error ? error.message : "unknown"} fallback=provider`
+        );
+      }
+    }
+
+    // 2) REMOTE URL CACHE — validated remote URLs survive local-cache
     // failures and short-circuit the provider chain (zero HTTP on hit).
     const cacheKey = `anime:${action}`;
     const cachedUrl = cache.get(cacheKey);
@@ -912,7 +932,7 @@ export async function fetchAnimation(
       return { url: cachedUrl.urls[idx], source: cachedUrl.source };
     }
 
-    // 2) REMOTE PROVIDER CHAIN — fetch, download, validate, cache locally
+    // 3) REMOTE PROVIDER CHAIN — fetch, download, validate, cache locally
     const httpClient = options.httpClient ?? ((req: AnimeHttpRequest) => hardenedAnimeHttpClient({ ...req, signal: ac.signal }));
     const providers = buildProviders(httpClient);
     const providerChainStartedAt = Date.now();
@@ -966,7 +986,7 @@ export async function fetchAnimation(
       }
     }
 
-    // 3) At least one validated remote URL was seen but could not be
+    // 4) At least one validated remote URL was seen but could not be
     // cached locally — serve it from the URL pool.
     const remembered = cache.get(cacheKey);
     if (remembered && remembered.urls.length > 0) {
@@ -977,7 +997,7 @@ export async function fetchAnimation(
       return { url: remembered.urls[idx], source: remembered.source };
     }
 
-    // 4) ALL PROVIDERS FAILED — Local cache fallback (if enabled)
+    // 5) ALL PROVIDERS FAILED — Local cache fallback (if enabled)
     if (ALLOW_REMOTE_FALLBACK && options.localGifs !== null) {
       try {
         const resolver = options.localGifs?.resolve ?? resolveLocalGif;

@@ -58,6 +58,7 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Tasks", file: "scripts/test-tasks.ts", category: "core" },
   { name: "Settlement", file: "scripts/test-settlement.ts", category: "core" },
   { name: "Game Integrity", file: "scripts/test-game-integrity.ts", category: "core" },
+  { name: "Correctness Regression", file: "scripts/test-correctness-regression.ts", category: "core" },
 
   // Security
   { name: "Security", file: "scripts/test-security.ts", category: "security" },

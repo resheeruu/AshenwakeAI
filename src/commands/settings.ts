@@ -394,10 +394,11 @@ function buildNumberModal(setting: SettingDescriptor, currentValue: unknown): Mo
 
 function buildStringModal(setting: SettingDescriptor, currentValue: unknown): ModalBuilder {
   const modal = new ModalBuilder().setCustomId(`${P.str}:${setting.id}`).setTitle(`Set ${setting.label}`);
+  const maxLength = Math.min(setting.max ?? 100, 4000); // Discord modal text input limit
   const input = new TextInputBuilder().setCustomId("value").setLabel(setting.description).setStyle(TextInputStyle.Short)
-    .setPlaceholder(`Current: ${formatValue(currentValue)}${setting.min !== undefined ? ` (${setting.min}-${setting.max} chars)` : ""}`)
+    .setPlaceholder(`Current: ${formatValue(currentValue)}${setting.min !== undefined ? ` (${setting.min}-${maxLength} chars)` : ""}`)
     .setRequired(true);
-  if (setting.min !== undefined) { input.setMinLength(1); input.setMaxLength(setting.max ?? 100); }
+  if (setting.min !== undefined) { input.setMinLength(1); input.setMaxLength(maxLength); }
   modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
   return modal;
 }

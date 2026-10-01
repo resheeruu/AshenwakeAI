@@ -126,18 +126,20 @@ export async function safeReply(
   content: string | { content?: string; files?: unknown; components?: unknown },
   surface = "prefix",
   command = "action",
+  requestId?: string,
 ): Promise<boolean> {
   const payload = typeof content === "string" ? { content } : { ...content };
   const guildId = message.guildId ?? null;
-  const meta = `surface=${surface} command=${command} guildId=${guildId ?? "dm"} author=${message.author?.id ?? "unknown"}`;
+  const meta = `surface=${surface} command=${command} guildId=${guildId ?? "dm"} author=${message.author?.id ?? "unknown"}${requestId ? ` requestId=${requestId}` : ""}`;
   logger.debug(`DISCORD_SEND_STARTED ${meta} sendType=reply`);
   try {
     await message.reply({ ...payload, allowedMentions: { parse: [] } } as never);
     logger.debug(`DISCORD_SEND_SUCCESS ${meta} sendType=reply`);
     return true;
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "unknown";
     logger.warn(
-      `DISCORD_SEND_FAILURE ${meta} sendType=reply reason=${err instanceof Error ? err.message : "unknown"}`,
+      `DISCORD_SEND_FAILURE ${meta} sendType=reply reason=${reason}`,
     );
     try {
       const textContent = typeof content === "string" ? content : (content.content ?? "");
@@ -267,6 +269,7 @@ function isGameCommand(content: string): boolean {
 async function handleGameCommand(
   message: Message,
   client: Client,
+  requestId?: string,
 ): Promise<boolean> {
   const { game, rest } = await parseGameCommand(message.content);
   const authorId = message.author.id;
@@ -277,7 +280,7 @@ async function handleGameCommand(
   const rateLimit = actionRateLimiter.check(message.author.id);
   if (!rateLimit.allowed) {
     const retrySeconds = Math.ceil((rateLimit.retryAfterMs ?? 1000) / 1000);
-    await safeReply(message, `Slow down! Try again in ${retrySeconds}s.`);
+    await safeReply(message, `Slow down! Try again in ${retrySeconds}s.`, "prefix", "game", requestId);
     return true;
   }
 
@@ -294,7 +297,7 @@ async function handleGameCommand(
         return true;
       }
     } catch {
-      await safeReply(message, "🚫 Games are currently unavailable in this server.");
+      await safeReply(message, "🚫 Games are currently unavailable in this server.", "prefix", "game", requestId);
       return true;
     }
   }
@@ -303,12 +306,12 @@ async function handleGameCommand(
     if (rest.length > 0) {
       const requested = rest[0].toLowerCase();
       if (GAME_NAMES.includes(requested as GameCommandName)) {
-        await safeReply(message, `\`ash ${requested}\` — see \`ash games\` for full list.`);
+        await safeReply(message, `\`ash ${requested}\` — see \`ash games\` for full list.`, "prefix", "game", requestId);
       } else {
-        await safeReply(message, `Unknown game: \`${requested}\`. Type \`ash games\` for the list.`);
+        await safeReply(message, `Unknown game: \`${requested}\`. Type \`ash games\` for the list.`, "prefix", "game", requestId);
       }
     } else {
-      await safeReply(message, buildGamesHelp());
+      await safeReply(message, buildGamesHelp(), "prefix", "game", requestId);
     }
     return true;
   }
@@ -383,34 +386,34 @@ async function handleGameCommand(
       if (subcmd === "cancel") {
         const existing = getMinesGame(player.userId);
         if (!existing) {
-          await safeReply(message, "💣 No active Mines game to cancel.");
+          await safeReply(message, "💣 No active Mines game to cancel.", "prefix", "game", requestId);
           return true;
         }
         cancelMines(player.userId);
-        await safeReply(message, "💣 Mines game cancelled.");
+        await safeReply(message, "💣 Mines game cancelled.", "prefix", "game", requestId);
         return true;
       }
 
       if (subcmd === "reveal") {
         const existing = getMinesGame(player.userId);
         if (!existing) {
-          await safeReply(message, "💣 No active Mines game. Type `ash mine <bet>` to start.");
+          await safeReply(message, "💣 No active Mines game. Type `ash mine <bet>` to start.", "prefix", "game", requestId);
           return true;
         }
         const tileStr = rest[1];
         if (!tileStr || !Number.isInteger(Number(tileStr))) {
-          await safeReply(message, "💣 Usage: `ash mine reveal <tile>`");
+          await safeReply(message, "💣 Usage: `ash mine reveal <tile>`", "prefix", "game", requestId);
           return true;
         }
         const tile = Number(tileStr);
         if (tile < 0 || tile >= MINES_GRID_SIZE) {
-          await safeReply(message, `💣 Tile must be 0-${MINES_GRID_SIZE - 1}.`);
+          await safeReply(message, `💣 Tile must be 0-${MINES_GRID_SIZE - 1}.`, "prefix", "game", requestId);
           return true;
         }
         try {
           const result = await revealMinesTile(player.userId, player.username, existing, tile);
           if (result.mine) {
-            await safeReply(message, `💣 💥 MINE! Game over. You lost your ${existing.bet} coins.`);
+            await safeReply(message, `💣 💥 MINE! Game over. You lost your ${existing.bet} coins.`, "prefix", "game", requestId);
           } else {
             await safeReply(
               message,
@@ -419,7 +422,7 @@ async function handleGameCommand(
           }
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
-          await safeReply(message, `💣 ${msg}`);
+          await safeReply(message, `💣 ${msg}`, "prefix", "game", requestId);
         }
         return true;
       }
@@ -427,7 +430,7 @@ async function handleGameCommand(
       if (subcmd === "cashout") {
         const existing = getMinesGame(player.userId);
         if (!existing) {
-          await safeReply(message, "💣 No active Mines game. Type `ash mine <bet>` to start.");
+          await safeReply(message, "💣 No active Mines game. Type `ash mine <bet>` to start.", "prefix", "game", requestId);
           return true;
         }
         try {
@@ -438,7 +441,7 @@ async function handleGameCommand(
           );
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
-          await safeReply(message, `💣 ${msg}`);
+          await safeReply(message, `💣 ${msg}`, "prefix", "game", requestId);
         }
         return true;
       }
@@ -447,14 +450,14 @@ async function handleGameCommand(
       if (subcmd) {
         const parsed = Number(subcmd);
         if (!Number.isInteger(parsed) || parsed < MINES_MIN_BET || parsed > MINES_MAX_BET) {
-          await safeReply(message, `Mines bet must be between ${MINES_MIN_BET} and ${MINES_MAX_BET} coins.`);
+          await safeReply(message, `Mines bet must be between ${MINES_MIN_BET} and ${MINES_MAX_BET} coins.`, "prefix", "game", requestId);
           return true;
         }
         bet = parsed;
       }
       try {
         if (getMinesGame(player.userId)) {
-          await safeReply(message, "💣 You already have an active Mines game. Type `ash mine cancel` to abort.");
+          await safeReply(message, "💣 You already have an active Mines game. Type `ash mine cancel` to abort.", "prefix", "game", requestId);
           return true;
         }
         const started = await startMines(player.userId, player.username, bet);
@@ -465,11 +468,11 @@ async function handleGameCommand(
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg === "NOT_ENOUGH_COINS") {
-          await safeReply(message, "💣 Not enough coins to play Mines.");
+          await safeReply(message, "💣 Not enough coins to play Mines.", "prefix", "game", requestId);
         } else if (msg === "MINES_ALREADY_ACTIVE") {
-          await safeReply(message, "💣 You already have an active Mines game.");
+          await safeReply(message, "💣 You already have an active Mines game.", "prefix", "game", requestId);
         } else {
-          await safeReply(message, `💣 ${msg}`);
+          await safeReply(message, `💣 ${msg}`, "prefix", "game", requestId);
         }
       }
       return true;
@@ -486,9 +489,9 @@ async function handleGameCommand(
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg === "NOT_ENOUGH_COINS") {
-          await safeReply(message, "⚔️ Not enough coins to battle (cost: 15 coins).");
+          await safeReply(message, "⚔️ Not enough coins to battle (cost: 15 coins).", "prefix", "game", requestId);
         } else {
-          await safeReply(message, `⚔️ ${msg}`);
+          await safeReply(message, `⚔️ ${msg}`, "prefix", "game", requestId);
         }
       }
       return true;
@@ -505,9 +508,9 @@ async function handleGameCommand(
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg === "NOT_ENOUGH_COINS") {
-          await safeReply(message, "🗒️ Not enough coins to buy a lottery ticket (cost: 20 coins).");
+          await safeReply(message, "🗒️ Not enough coins to buy a lottery ticket (cost: 20 coins).", "prefix", "game", requestId);
         } else {
-          await safeReply(message, `🗒️ ${msg}`);
+          await safeReply(message, `🗒️ ${msg}`, "prefix", "game", requestId);
         }
       }
       return true;
@@ -525,9 +528,9 @@ async function handleGameCommand(
         const msg = error instanceof Error ? error.message : String(error);
         if (msg.startsWith("HUNT_COOLDOWN")) {
           const remaining = Math.ceil(parseInt(msg.split(":")[1]) / 1000);
-          await safeReply(message, `🎯 Hunting cooldown active. Try again in ${remaining}s.`);
+          await safeReply(message, `🎯 Hunting cooldown active. Try again in ${remaining}s.`, "prefix", "game", requestId);
         } else {
-          await safeReply(message, `🎯 ${msg}`);
+          await safeReply(message, `🎯 ${msg}`, "prefix", "game", requestId);
         }
       }
       return true;
@@ -543,9 +546,9 @@ async function handleGameCommand(
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg === "NOT_ENOUGH_COINS") {
-          await safeReply(message, "🎰 Not enough coins to play Slots (cost: 10 coins).");
+          await safeReply(message, "🎰 Not enough coins to play Slots (cost: 10 coins).", "prefix", "game", requestId);
         } else {
-          await safeReply(message, `🎰 ${msg}`);
+          await safeReply(message, `🎰 ${msg}`, "prefix", "game", requestId);
         }
       }
       return true;
@@ -556,11 +559,11 @@ async function handleGameCommand(
       if (subcmd === "hit" || subcmd === "stand") {
         const existing = getBlackjackGame(player.userId);
         if (!existing) {
-          await safeReply(message, "🃏 You don't have an active Blackjack game. Type `ash blackjack <bet>` to start.");
+          await safeReply(message, "🃏 You don't have an active Blackjack game. Type `ash blackjack <bet>` to start.", "prefix", "game", requestId);
           return true;
         }
         if (existing.playerId !== player.userId) {
-          await safeReply(message, "🃏 This Blackjack game belongs to another player.");
+          await safeReply(message, "🃏 This Blackjack game belongs to another player.", "prefix", "game", requestId);
           return true;
         }
         try {
@@ -580,10 +583,10 @@ async function handleGameCommand(
                   { name: "✨ XP", value: `+${result.xp}`, inline: true },
                   { name: "🪙 Balance", value: `${player.coins}`, inline: true },
                 );
-              await safeReply(message, `🃏 ${result.result === "blackjack" ? "🎉 BLACKJACK!" : "💀 Bust!"}`);
+              await safeReply(message, `🃏 ${result.result === "blackjack" ? "🎉 BLACKJACK!" : "💀 Bust!"}`, "prefix", "game", requestId);
               return true;
             }
-            await safeReply(message, `🃏 Hit! Total: ${playerTotal}. ${handText(existing.playerCards)}`);
+            await safeReply(message, `🃏 Hit! Total: ${playerTotal}. ${handText(existing.playerCards)}`, "prefix", "game", requestId);
           } else {
             const result = await standBlackjack(player.userId, player.username, existing);
             const embed = new EmbedBuilder()
@@ -597,11 +600,11 @@ async function handleGameCommand(
                 { name: "✨ XP", value: `+${result.xp}`, inline: true },
                 { name: "🪙 Balance", value: `${player.coins}`, inline: true },
               );
-            await safeReply(message, `🃏 **Result:** ${result.result}. Payout: ${result.payout} coins.`);
+            await safeReply(message, `🃏 **Result:** ${result.result}. Payout: ${result.payout} coins.`, "prefix", "game", requestId);
           }
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
-          await safeReply(message, `🃏 ${msg}`);
+          await safeReply(message, `🃏 ${msg}`, "prefix", "game", requestId);
         }
         return true;
       }
@@ -609,12 +612,12 @@ async function handleGameCommand(
       const bet = rest[0] ? Number(rest[0]) : 20;
       try {
         if (!Number.isInteger(bet) || bet < 10) {
-          await safeReply(message, "🃏 Blackjack bet must be at least 10 coins.");
+          await safeReply(message, "🃏 Blackjack bet must be at least 10 coins.", "prefix", "game", requestId);
           return true;
         }
         const { game, immediateResult } = await startBlackjack(player.userId, player.username, bet);
         if (immediateResult) {
-          await safeReply(message, `🃏 Blackjack result: ${immediateResult.result}. ${immediateResult.result === "blackjack" ? "🎉 BLACKJACK!" : ""}`);
+          await safeReply(message, `🃏 Blackjack result: ${immediateResult.result}. ${immediateResult.result === "blackjack" ? "🎉 BLACKJACK!" : ""}`, "prefix", "game", requestId);
           return true;
         }
         await safeReply(message, {
@@ -624,11 +627,11 @@ async function handleGameCommand(
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg === "NOT_ENOUGH_COINS") {
-          await safeReply(message, "🃏 Not enough coins to play Blackjack (cost: 10+ coins).");
+          await safeReply(message, "🃏 Not enough coins to play Blackjack (cost: 10+ coins).", "prefix", "game", requestId);
         } else if (msg === "BLACKJACK_ALREADY_ACTIVE") {
-          await safeReply(message, "🃏 You already have an active Blackjack game.");
+          await safeReply(message, "🃏 You already have an active Blackjack game.", "prefix", "game", requestId);
         } else {
-          await safeReply(message, `🃏 ${msg}`);
+          await safeReply(message, `🃏 ${msg}`, "prefix", "game", requestId);
         }
       }
       return true;
@@ -637,7 +640,7 @@ async function handleGameCommand(
     case "quickdraw": {
       try {
         if (getQuickDraw(player.userId)) {
-          await safeReply(message, "⚡ You already have an active QuickDraw game.");
+          await safeReply(message, "⚡ You already have an active QuickDraw game.", "prefix", "game", requestId);
           return true;
         }
         const game = startQuickDraw(player.userId);
@@ -647,7 +650,7 @@ async function handleGameCommand(
         });
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        await safeReply(message, `⚡ ${msg}`);
+        await safeReply(message, `⚡ ${msg}`, "prefix", "game", requestId);
       }
       return true;
     }
@@ -693,13 +696,13 @@ export async function handleAnimeAction(
   if (!isAnimeActionPrefix(content)) return false;
 
   if (isGameCommand(content)) {
-    return handleGameCommand(message, client);
+    return handleGameCommand(message, client, requestId);
   }
 
   const rateLimit = actionRateLimiter.check(message.author.id);
   if (!rateLimit.allowed) {
     const retrySeconds = Math.ceil((rateLimit.retryAfterMs ?? 1000) / 1000);
-    await safeReply(message, `Slow down! Try again in ${retrySeconds}s.`);
+    await safeReply(message, `Slow down! Try again in ${retrySeconds}s.`, "prefix", "game", requestId);
     return true;
   }
 
@@ -741,19 +744,19 @@ export async function handleAnimeAction(
 
   const afterPrefix = content.slice(3).trim();
   if (!afterPrefix) {
-    await safeReply(message, buildActionsHelp());
+    await safeReply(message, buildActionsHelp(), "prefix", "game", requestId);
     return true;
   }
 
   if (afterPrefix.toLowerCase() === "actions") {
-    await safeReply(message, buildActionsHelp());
+    await safeReply(message, buildActionsHelp(), "prefix", "game", requestId);
     return true;
   }
 
   const parts = afterPrefix.split(/\s+/);
   const actionName = parts[0]?.toLowerCase();
   if (!actionName) {
-    await safeReply(message, buildActionsHelp());
+    await safeReply(message, buildActionsHelp(), "prefix", "game", requestId);
     return true;
   }
 
@@ -829,7 +832,7 @@ export async function handleAnimeAction(
     const emoteStr = action.emoteName
       ? animeEmote(action.emoteName as AnimeEmoteName)
       : action.emoji;
-    await safeReply(message, `${emoteStr} You can't use \`${actionName}\` on yourself!`);
+    await safeReply(message, `${emoteStr} You can't use \`${actionName}\` on yourself!`, "prefix", "game", requestId);
     return true;
   }
 
@@ -837,7 +840,7 @@ export async function handleAnimeAction(
     const emoteStr = action.emoteName
       ? animeEmote(action.emoteName as AnimeEmoteName)
       : action.emoji;
-    await safeReply(message, `${emoteStr} AshenAI refuses to be a target for that!`);
+    await safeReply(message, `${emoteStr} AshenAI refuses to be a target for that!`, "prefix", "game", requestId);
     return true;
   }
 
@@ -848,7 +851,7 @@ export async function handleAnimeAction(
     result = await runner(action.name, message, targetId, botId);
     if (!result) {
       logger.warn(`ANIME_ACTION_NO_RESULT requestId=${requestId} action=${action.name}`);
-      await safeReply(message, `Unknown action: \`${actionName}\`.`);
+      await safeReply(message, `Unknown action: \`${actionName}\`.`, "prefix", "game", requestId);
       return true;
     }
 
@@ -860,7 +863,7 @@ export async function handleAnimeAction(
         `DISCORD_MEDIA_SEND_STARTED requestId=${requestId} action=${action.name} mediaKey=${action.mediaKey} source=${result.animationSource ?? "unknown"}`
       );
     }
-    const sendOk = await safeReply(message, response);
+    const sendOk = await safeReply(message, response, "prefix", "action", requestId);
     if (hasMedia) {
       if (sendOk) {
         logger.info(`DISCORD_MEDIA_SEND_SUCCESS requestId=${requestId} action=${action.name}`);
@@ -871,7 +874,7 @@ export async function handleAnimeAction(
     logger.info(`ANIME_ACTION_COMPLETE requestId=${requestId} action=${action.name} sendOk=${sendOk}`);
   } catch (error) {
     logger.error(`ANIME_ACTION_ERROR requestId=${requestId} action=${action.name} error=${error instanceof Error ? error.message : String(error)}`);
-    await safeReply(message, result?.text ?? "An error occurred while processing your action. Please try again.");
+    await safeReply(message, result?.text ?? "An error occurred while processing your action. Please try again.", "prefix", "action", requestId);
   }
 
   return true;

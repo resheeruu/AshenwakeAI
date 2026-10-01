@@ -2264,8 +2264,8 @@ async function providerExpansionTests(): Promise<void> {
     }
   }
 
-  // X10: provider-first with 5 providers — local fallback only after
-  // all five are attempted (hug is mapped on every provider).
+  // X10: CACHE-FIRST with injected localGifs — local asset returned immediately
+  // without calling any providers.
   clearAnimationCache();
   resetProviderHealth();
   {
@@ -2282,10 +2282,11 @@ async function providerExpansionTests(): Promise<void> {
       license: "unspecified",
     };
     const r = await fetchAnimation("hug", { httpClient: client, localGifs: { resolve: async () => fake } });
-    if (r && r.localAsset === fake && r.source === "local" && calls === 5) {
-      pass("X10 5 providers attempted before local fallback");
+    // Cache-first: localGifs resolver provides asset immediately, providers NOT called
+    if (r && r.localAsset === fake && r.source === "local" && calls === 0) {
+      pass("X10 cache-first: localGifs provides asset immediately, 0 providers called");
     } else {
-      fail("X10 provider-first x5", { r, calls });
+      fail("X10 cache-first x5", { r, calls });
     }
   }
 }
@@ -2946,8 +2947,7 @@ async function localMediaTests(): Promise<void> {
     }
   }
 
-  // Y3 — PROVIDER-FIRST: local asset exists but provider chain is
-  // still attempted; when all providers fail we fall back to local.
+  // Y3 — CACHE-FIRST: no local asset (localGifs:null disables local); providers tried; no local fallback
   clearAnimationCache();
   {
     let calls = 0;
@@ -2955,12 +2955,13 @@ async function localMediaTests(): Promise<void> {
       calls++;
       return { ok: false, status: 0, body: "", failure: "network" };
     };
-    const r = await fetchAnimation("hug", { httpClient: client });
+    const r = await fetchAnimation("hug", { httpClient: client, localGifs: null });
     const stats = getAnimationCacheStats();
-    if (r && r.source === "local" && r.localAsset && !r.url && calls === 5 && stats.size === 0) {
-      pass("Y3 provider-first: providers attempted, local fallback used, remote cache untouched");
+    // Cache-first with local disabled: try 5 providers (all fail), return null
+    if (!r && calls === 5 && stats.size === 0) {
+      pass("Y3 cache-first: local disabled, 5 providers attempted, no fallback, returns null");
     } else {
-      fail("Y3 provider-first", { r, calls, cacheSize: stats.size });
+      fail("Y3 cache-first", { r, calls, cacheSize: stats.size });
     }
   }
 
@@ -2997,8 +2998,8 @@ async function localMediaTests(): Promise<void> {
     }
   }
 
-  // Y6 — injected resolver seam: provider chain attempted first;
-  // when providers fail, deterministic local fallback asset is used.
+  // Y6 — injected resolver seam: CACHE-FIRST checks local immediately, returns local asset
+  // without calling providers (providers only used on cache miss).
   clearAnimationCache();
   {
     let calls = 0;
@@ -3014,10 +3015,11 @@ async function localMediaTests(): Promise<void> {
       license: "unspecified",
     };
     const r = await fetchAnimation("hug", { httpClient: client, localGifs: { resolve: async () => fake } });
-    if (r && r.localAsset === fake && r.source === "local" && calls === 5) {
-      pass("Y6 provider-first with injected localGifs fallback (providers attempted)");
+    // Cache-first: localGifs resolver provides asset immediately, providers NOT called
+    if (r && r.localAsset === fake && r.source === "local" && calls === 0) {
+      pass("Y6 cache-first with injected localGifs fallback (providers NOT called)");
     } else {
-      fail("Y6 injected resolver", { r, calls });
+      fail("Y6 cache-first injected resolver", { r, calls });
     }
   }
 

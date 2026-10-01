@@ -1300,7 +1300,7 @@ async function sectionI(): Promise<void> {
   const afkTable = reopened
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='afk_states'")
     .get();
-  if (maxVersion === 18 && afkTable) {
+  if (maxVersion >= 18 && afkTable) {
     pass("I2 migration v18 applied; afk_states present");
   } else {
     fail("I2 migration state", { maxVersion, afkTable });
@@ -1334,13 +1334,13 @@ async function sectionI(): Promise<void> {
     env: { ...process.env, NODE_OPTIONS: "" },
   });
   const out = `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
-  if (
+if (
     proc.status === 0 &&
-    out.includes("FRESH_VERSION=18") &&
-    out.includes("FRESH_COUNT=18") &&
+    out.includes("FRESH_VERSION=19") &&
+    out.includes("FRESH_COUNT=19") &&
     out.includes("FRESH_TABLE=1")
   ) {
-    pass("I3 fresh DB runs all 18 migrations incl. v18 afk_states");
+    pass("I3 fresh DB runs all 19 migrations incl. v18 afk_states");
   } else {
     fail("I3 fresh migration sequence", { status: proc.status, out: out.slice(-800) });
   }
@@ -1640,8 +1640,8 @@ function sectionK(): void {
     fail("K16 identity scoping", identityPaths);
   }
 
-  // K17 migration v18 registered
-  if (dbSrc.includes("version: 18") && dbSrc.includes("afk_states")) {
+// K17 migration v18 registered (now v19 with message_processing table added)
+  if (dbSrc.includes('version: 18') && dbSrc.includes("AFK")) {
     pass("K17 migration v18 (afk_states) registered in database.ts");
   } else {
     fail("K17 migration v18 missing");

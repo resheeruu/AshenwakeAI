@@ -518,6 +518,26 @@ function getMigrations(): Array<{ version: number; description: string; sql: str
         CREATE INDEX IF NOT EXISTS idx_afk_states_started ON afk_states(started_at);
       `,
     },
+    {
+      version: 19,
+      description: "Message processing idempotency",
+      sql: `
+        CREATE TABLE IF NOT EXISTS message_processing (
+          message_id TEXT PRIMARY KEY,
+          state TEXT NOT NULL CHECK(state IN ('PROCESSING', 'COMPLETED', 'FAILED_RETRYABLE', 'FAILED_FINAL')),
+          request_id TEXT,
+          guild_id TEXT,
+          channel_id TEXT,
+          author_id TEXT,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          lease_until INTEGER,
+          result TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_message_processing_state ON message_processing(state);
+        CREATE INDEX IF NOT EXISTS idx_message_processing_lease ON message_processing(lease_until);
+      `,
+    },
   ];
 }
 

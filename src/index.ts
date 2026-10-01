@@ -48,7 +48,7 @@ import {
   handleConversation,
   classifyIntent,
 } from "./discord/conversational-agent";
-import { closeDatabase, getDatabaseStats } from "./database";
+import { closeDatabase, getDatabaseStats, tryClaimMessageProcessing, completeMessageProcessing, getMessageProcessingRecord } from "./database";
 import { isAnimeActionPrefix, handleAnimeAction } from "./games/anime-actions";
 import { parseAfkCommand, handleAfkCommand, processAfkOnMessage } from "./community/afk";
 import { initializeLocalGifs } from "./media/local-gifs";
@@ -1508,6 +1508,27 @@ setInterval(() => {
   processedMessages.clear();
 }, MESSAGE_DEDUP_TTL_MS).unref();
 
+/* ================================================================
+ * MESSAGE INGRESS FORENSIC LOGGING
+ * ================================================================ */
+function logMessageEvent(
+  event: string,
+  message: { id: string; author: { id: string; bot: boolean }; channelId: string; guildId: string | null; content: string },
+  extra: Record<string, unknown> = {},
+): void {
+  const base = {
+    messageId: message.id,
+    authorId: message.author.id,
+    channelId: message.channelId,
+    guildId: message.guildId ?? "",
+    handler: "main",
+    contentLength: message.content.length,
+    timestamp: Date.now(),
+    ...extra,
+  };
+  logger.debug(`MESSAGE_EVENT_${event}`, base);
+}
+
 client.on(
   Events.MessageCreate,
   async (message) => {
@@ -1518,12 +1539,39 @@ client.on(
     let usageCheck: { allowed: boolean; reason?: string; credits: number; retryAfterMs?: number } = { allowed: true, credits: 0 };
     let replySent = false;
 
+    logMessageEvent("RECEIVED", message);
+
     try {
-      // Deduplication: skip if this message was already processed
+      // Persistent idempotency: try to claim this message for processing
+      const requestId = `${message.id}-${Date.now()}`;
+      const claimed = tryClaimMessageProcessing(
+        message.id,
+        requestId,
+        guildId || null,
+        channelId,
+        userId,
+        60_000,
+      );
+
+      if (!claimed) {
+        // Message is already being processed or completed
+        const existing = getMessageProcessingRecord(message.id);
+        logMessageEvent("IDEMPOTENCY_SKIP", message, {
+          existingState: existing?.state,
+          existingRequestId: existing?.requestId,
+        });
+        return;
+      }
+
+      logMessageEvent("CLAIMED", message, { requestId });
+
+      // Also keep in-memory dedup for fast-path within same process
       if (processedMessages.has(message.id)) {
+        logMessageEvent("DEDUP_HIT", message, { inMemory: true });
         return;
       }
       processedMessages.add(message.id);
+      logMessageEvent("DEDUP_NEW", message, { inMemory: true });
 
       t.mark("dedup");
 
@@ -1582,6 +1630,19 @@ client.on(
       }
 
       /*
+       * Builder thread exclusion: if this is a builder thread with an active session,
+       * let the builder handler process it. This prevents duplicate processing
+       * between the main handler and the builder thread handler.
+       */
+      if (!isDM && message.guild && message.channel.isThread()) {
+        const builderSession = getBuilderSession(message.guild.id, userId);
+        if (builderSession && builderSession.threadId === channelId) {
+          logMessageEvent("BUILDER_THREAD_DEFER", message, { sessionKey: `${builderSession.guildId}:${builderSession.userId}` });
+          return;
+        }
+      }
+
+      /*
        * Check whether this message is replying
        * directly to AshenAI.
        */
@@ -1632,6 +1693,7 @@ client.on(
        * Intercept before the normal trigger check.
        */
       if (isAnimeActionPrefix(message.content)) {
+        logMessageEvent("ANIME_ACTION_PREFIX_DETECTED", message, { content: message.content.slice(0, 100) });
         try {
           await handleAnimeAction(message, client);
         } catch (error) {
@@ -1640,6 +1702,7 @@ client.on(
             await message.reply({ content: "⚠️ An unexpected error occurred while processing your action. Please try again.", allowedMentions: { parse: [] } });
           } catch { /* unable to deliver fallback */ }
         }
+        logMessageEvent("ANIME_ACTION_HANDLED", message);
         return;
       }
 
@@ -1655,8 +1718,11 @@ client.on(
         !isMention &&
         !isReplyToBot
       ) {
+        logMessageEvent("TRIGGER_CHECK_FAILED", message, { isDM, isMention, isReplyToBot });
         return;
       }
+
+      logMessageEvent("TRIGGER_CHECK_PASSED", message, { isDM, isMention, isReplyToBot });
 
       // Record only messages that AshenAI actually handles.
       // Deferred to after response — no sync I/O in critical path.
@@ -1766,6 +1832,8 @@ client.on(
             mentionedBotIds,
             botId
           );
+
+          logMessageEvent("RIVALRY_CHECK", message, { isRivalry: trigger.isRivalry, keywords: trigger.rivalryKeywords, mentionedBotIdsCount: mentionedBotIds.length });
 
           if (
             trigger.isRivalry &&
@@ -2275,6 +2343,10 @@ client.on(
       logger.debug(
         `✅ Interactive reply sent using ${response.provider} in ${response.latencyMs}ms.`
       );
+
+      // Mark message processing as completed
+      completeMessageProcessing(message.id, "COMPLETED");
+      logMessageEvent("COMPLETED", message);
     } catch (error) {
       usageStats.recordFailure(
         message.author.id,
@@ -2288,6 +2360,12 @@ client.on(
         credits: usageCheck?.credits || 0,
         success: false,
       });
+
+      // Mark message processing as failed (retryable for transient errors)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const isRetryable = errorMsg.includes("timeout") || errorMsg.includes("ECONNRESET") || errorMsg.includes("ENOTFOUND");
+      completeMessageProcessing(message.id, isRetryable ? "FAILED_RETRYABLE" : "FAILED_FINAL", errorMsg);
+      logMessageEvent("FAILED", message, { error: errorMsg, retryable: isRetryable });
 
       logger.error(
         "❌ Interactive message response failed:",
@@ -2322,16 +2400,39 @@ client.on(
    BUILDER THREAD MESSAGE HANDLER
    ===================================================== */
 
+function logBuilderEvent(
+  event: string,
+  message: { id: string; author: { id: string; bot: boolean }; channelId: string; guildId: string | null; content: string },
+  extra: Record<string, unknown> = {},
+): void {
+  const base = {
+    messageId: message.id,
+    authorId: message.author.id,
+    channelId: message.channelId,
+    guildId: message.guildId ?? "",
+    handler: "builder",
+    contentLength: message.content.length,
+    timestamp: Date.now(),
+    ...extra,
+  };
+  logger.debug(`BUILDER_EVENT_${event}`, base);
+}
+
 client.on(
   Events.MessageCreate,
   async (message) => {
+    logBuilderEvent("RECEIVED", message);
+
     if (message.author.bot) return;
     if (!message.guild) return;
     if (!message.channel.isThread()) return;
 
+    logBuilderEvent("FILTER_PASSED", message, { isThread: true, isBot: message.author.bot });
+
     // Check if this is a builder thread
     const session = getBuilderSession(message.guild.id, message.author.id);
     if (!session) {
+      logBuilderEvent("NO_SESSION", message, { threadName: message.channel.name });
       // Session may have expired — notify the user
       if (message.channel.isThread()) {
         // If the thread looks like a builder thread, send expiry notice
@@ -2341,7 +2442,38 @@ client.on(
       }
       return;
     }
-    if (session.threadId !== message.channel.id) return;
+    logBuilderEvent("SESSION_FOUND", message, { sessionKey: `${session.guildId}:${session.userId}`, threadId: session.threadId });
+
+    if (session.threadId !== message.channel.id) {
+      logBuilderEvent("THREAD_MISMATCH", message, { sessionThreadId: session.threadId, messageThreadId: message.channel.id });
+      return;
+    }
+
+    const channelId = message.channel.id;
+
+    // Try to claim this message for processing (persistent idempotency)
+    const builderRequestId = `builder-${message.id}-${Date.now()}`;
+    const claimed = tryClaimMessageProcessing(
+      message.id,
+      builderRequestId,
+      message.guildId || null,
+      channelId,
+      message.author.id,
+      60_000,
+    );
+
+    if (!claimed) {
+      const existing = getMessageProcessingRecord(message.id);
+      logBuilderEvent("IDEMPOTENCY_SKIP", message, {
+        existingState: existing?.state,
+        existingRequestId: existing?.requestId,
+      });
+      return;
+    }
+
+    logBuilderEvent("CLAIMED", message, { requestId: builderRequestId });
+
+    logBuilderEvent("PROCESSING_START", message, { sessionKey: `${session.guildId}:${session.userId}` });
 
     // Serialize message processing per session to prevent race conditions
     // on session.pendingPlan, session.serverState, and DB writes
@@ -2350,6 +2482,7 @@ client.on(
       const sessionLockKey = `builder-process:${session.guildId}:${session.userId}`;
 
       await withLock(sessionLockKey, async () => {
+        logBuilderEvent("LOCK_ACQUIRED", message, { sessionKey: `${session.guildId}:${session.userId}` });
         await processBuilderMessage(
           client,
           message.channel,
@@ -2357,6 +2490,9 @@ client.on(
           message.content,
           message.author,
         );
+        logBuilderEvent("PROCESSING_COMPLETE", message, { sessionKey: `${session.guildId}:${session.userId}` });
+        completeMessageProcessing(message.id, "COMPLETED");
+        logBuilderEvent("COMPLETED", message);
       }, 30000); // 30s timeout for message processing
     } catch (error) {
       if (error instanceof Error && error.message.includes("LOCK_TIMEOUT")) {

@@ -1354,7 +1354,17 @@ function buildSummary(
       details.push(`${rOk}/${required.length} req`);
     }
     if (optional.length > 0) {
-      details.push(`${optional.length} opt`);
+      const oFailed = optional.filter(
+        (c) => c.status === "FAILED" || c.status === "BLOCKED",
+      ).length;
+      const oOk = optional.filter(
+        (c) =>
+          c.status === "READY" ||
+          c.status === "HEALTHY" ||
+          c.status === "CONFIGURED" ||
+          c.status === "INSTALLED",
+      ).length;
+      details.push(`${oOk}/${optional.length} opt${oFailed > 0 ? ` (${oFailed} failed)` : ""}`);
     }
 
     lines.push(
@@ -1365,8 +1375,8 @@ function buildSummary(
   // Provider count summary
   const providerChecks = checks.filter((c) => c.category === "provider");
   if (providerChecks.length > 0) {
-    const healthy = providerChecks.filter(
-      (c) => c.status === "HEALTHY",
+    const live = providerChecks.filter(
+      (c) => c.status === "HEALTHY" || c.status === "LIVE",
     ).length;
     const degraded = providerChecks.filter(
       (c) => c.status === "DEGRADED",
@@ -1374,8 +1384,29 @@ function buildSummary(
     const quarantined = providerChecks.filter(
       (c) => c.status === "QUARANTINED",
     ).length;
+    const untested = providerChecks.filter(
+      (c) => c.status === "CONFIGURED" || c.status === "UNVERIFIED",
+    ).length;
     lines.push(
-      `  ${"providers".padEnd(14)} ${healthy} live / ${degraded} degraded / ${quarantined} quarantined`,
+      `  ${"providers".padEnd(14)} ${live} live / ${degraded} degraded / ${quarantined} quarantined / ${untested} untested`,
+    );
+  }
+
+  // Optional checks summary
+  const optionalChecks = checks.filter((c) => !c.required);
+  if (optionalChecks.length > 0) {
+    const oFailed = optionalChecks.filter(
+      (c) => c.status === "FAILED" || c.status === "BLOCKED",
+    ).length;
+    const oOk = optionalChecks.filter(
+      (c) =>
+        c.status === "READY" ||
+        c.status === "HEALTHY" ||
+        c.status === "CONFIGURED" ||
+        c.status === "INSTALLED",
+    ).length;
+    lines.push(
+      `  ${"optional".padEnd(14)} ${oOk}/${optionalChecks.length} ok${oFailed > 0 ? ` (${oFailed} failed)` : ""}`,
     );
   }
 
@@ -1435,8 +1466,11 @@ function logReport(
   // Log summary
   logger.info(`\nPreflight summary:\n${report.summary}`);
 
-  // Log overall status
-  const readyCount = report.checks.filter(
+  // Log overall status - separate required and optional
+  const requiredChecks = report.checks.filter((c) => c.required);
+  const optionalChecks = report.checks.filter((c) => !c.required);
+  
+  const reqReady = requiredChecks.filter(
     (c) =>
       c.status === "READY" ||
       c.status === "HEALTHY" ||
@@ -1444,23 +1478,40 @@ function logReport(
       c.status === "INSTALLED" ||
       c.status === "LIVE",
   ).length;
-  const degradedCount = report.checks.filter(
+  const reqDegraded = requiredChecks.filter(
     (c) =>
       c.status === "DEGRADED" ||
       c.status === "QUARANTINED" ||
       c.status === "RECOVERING",
   ).length;
-  const failedCount = report.checks.filter(
+  const reqFailed = requiredChecks.filter(
     (c) =>
       c.status === "FAILED" || c.status === "BLOCKED",
   ).length;
-  const optionalCount = report.checks.filter(
-    (c) => c.status === "OPTIONAL",
+  
+  const optReady = optionalChecks.filter(
+    (c) =>
+      c.status === "READY" ||
+      c.status === "HEALTHY" ||
+      c.status === "CONFIGURED" ||
+      c.status === "INSTALLED" ||
+      c.status === "LIVE",
+  ).length;
+  const optDegraded = optionalChecks.filter(
+    (c) =>
+      c.status === "DEGRADED" ||
+      c.status === "QUARANTINED" ||
+      c.status === "RECOVERING",
+  ).length;
+  const optFailed = optionalChecks.filter(
+    (c) =>
+      c.status === "FAILED" || c.status === "BLOCKED",
   ).length;
 
   logger.info(
     `\nStartup readiness: ${report.overall} ` +
-      `(${readyCount} ready, ${degradedCount} degraded, ${failedCount} failed, ${optionalCount} optional)`,
+      `(required: ${reqReady} ready, ${reqDegraded} degraded, ${reqFailed} failed` +
+      `; optional: ${optReady} ok, ${optDegraded} degraded, ${optFailed} failed)`,
   );
 
   // Log failed required checks as errors

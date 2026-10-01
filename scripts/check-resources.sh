@@ -60,6 +60,10 @@ RAM_CRITICAL_PCT="${ASHENAI_RESOURCE_RAM_CRITICAL_PERCENT:-90}"
 
 CPU_WARN_LOAD="${ASHENAI_RESOURCE_CPU_WARN_LOAD:-4}"
 
+# Per-filesystem overrides (path=WARN_MB:WARN_PCT:CRIT_MB:CRIT_PCT)
+# Example: /tmp=10:50:5:80
+DISK_FS_OVERRIDES="${ASHENAI_RESOURCE_DISK_FS_OVERRIDES:-}"
+
 # ---------- Defaults for exports ----------
 
 export ASHENAI_RESOURCE_DISK_STATE="UNAVAILABLE"
@@ -74,24 +78,70 @@ log() {
 }
 
 # Classify disk state based on free MB and free percent (awk; no bc needed)
+# Usage: classify_disk <free_mb> <free_pct> [<path>]
 float_lt() {
   awk -v a="$1" -v b="$2" 'BEGIN{exit !(a+0 < b+0)}'
 }
 float_gt() {
   awk -v a="$1" -v b="$2" 'BEGIN{exit !(a+0 > b+0)}'
 }
+# Parse per-filesystem overrides: path=WARN_MB:WARN_PCT:CRIT_MB:CRIT_PCT
+get_fs_thresholds() {
+  local path="$1"
+  local warn_mb="$DISK_WARN_MB"
+  local warn_pct="$DISK_WARN_PCT"
+  local crit_mb="$DISK_CRITICAL_MB"
+  local crit_pct="$DISK_CRITICAL_PCT"
+  
+  if [ -n "$DISK_FS_OVERRIDES" ]; then
+    local overrides="$DISK_FS_OVERRIDES"
+    # Replace commas with newlines for iteration
+    overrides=$(echo "$overrides" | tr ',' '\n')
+    while IFS= read -r override; do
+      [ -z "$override" ] && continue
+      local fs_path=$(echo "$override" | cut -d'=' -f1)
+      local thresholds=$(echo "$override" | cut -d'=' -f2)
+      if [ "$path" = "$fs_path" ] || [ "$fs_path" = "*" ]; then
+        warn_mb=$(echo "$thresholds" | cut -d':' -f1)
+        warn_pct=$(echo "$thresholds" | cut -d':' -f2)
+        crit_mb=$(echo "$thresholds" | cut -d':' -f3)
+        crit_pct=$(echo "$thresholds" | cut -d':' -f4)
+        break
+      fi
+    done <<EOF
+$overrides
+EOF
+  fi
+  
+  echo "$warn_mb:$warn_pct:$crit_mb:$crit_pct"
+}
+
 classify_disk() {
   local free_mb="$1"
   local free_pct="$2"
+  local path="${3:-}"
+  local thresholds=""
+  local warn_mb="$DISK_WARN_MB"
+  local warn_pct="$DISK_WARN_PCT"
+  local crit_mb="$DISK_CRITICAL_MB"
+  local crit_pct="$DISK_CRITICAL_PCT"
+  
+  if [ -n "$path" ]; then
+    thresholds=$(get_fs_thresholds "$path")
+    warn_mb=$(echo "$thresholds" | cut -d':' -f1)
+    warn_pct=$(echo "$thresholds" | cut -d':' -f2)
+    crit_mb=$(echo "$thresholds" | cut -d':' -f3)
+    crit_pct=$(echo "$thresholds" | cut -d':' -f4)
+  fi
 
   # Critical: either absolute or percentage threshold
-  if [ "$free_mb" -lt "$DISK_CRITICAL_MB" ] || float_lt "$free_pct" "$DISK_CRITICAL_PCT"; then
+  if [ "$free_mb" -lt "$crit_mb" ] || float_lt "$free_pct" "$crit_pct"; then
     echo "CRITICAL"
     return
   fi
 
   # Warning: either absolute or percentage threshold
-  if [ "$free_mb" -lt "$DISK_WARN_MB" ] || float_lt "$free_pct" "$DISK_WARN_PCT"; then
+  if [ "$free_mb" -lt "$warn_mb" ] || float_lt "$free_pct" "$warn_pct"; then
     echo "WARN"
     return
   fi
@@ -191,17 +241,45 @@ $home_path"
 $npm_cache_path"; fi
   if [ "$tmp_path" != "/tmp" ]; then cands="$cands
 /tmp"; fi
+  
   local min_free_mb="" min_free_pct="100" min_path="" min_dev="" min_mnt=""
   local sum_total_mb="0" sum_free_mb="0" sum_free_pct="100" probed=0
   local cand
+  local worst_state="OK"
+  local worst_path=""
+  
   while IFS= read -r cand; do
     [ -z "$cand" ] && continue
     if probe_disk_path "$cand"; then
       probed=1
-      log "Disk detail: path=${cand} device=${_PD_DEVICE} mount=${_PD_MOUNT} free=$((_PD_FREE_MB))MB/ $((_PD_TOTAL_MB))MB (${_PD_FREE_PCT}%) inodes_free=${_PD_INO_FREE} (${_PD_INO_PCT})"
+      local fs_state
+      fs_state=$(classify_disk "$_PD_FREE_MB" "$_PD_FREE_PCT" "$cand")
+      
+      local total_fmt free_fmt
+      total_fmt=$(format_bytes "$((_PD_TOTAL_MB * 1048576))")
+      free_fmt=$(format_bytes "$((_PD_FREE_MB * 1048576))")
+      log "Disk: ${cand}: ${free_fmt} free / ${total_fmt} (${_PD_FREE_PCT}%) ${fs_state}"
+      
       if [ "$cand" = "$target_path" ]; then
         sum_total_mb="$_PD_TOTAL_MB"; sum_free_mb="$_PD_FREE_MB"; sum_free_pct="$_PD_FREE_PCT"
       fi
+      
+      # Track worst state for overall summary
+      case "$fs_state" in
+        CRITICAL)
+          if [ "$worst_state" != "CRITICAL" ]; then
+            worst_state="CRITICAL"
+            worst_path="$cand"
+          fi
+          ;;
+        WARN)
+          if [ "$worst_state" = "OK" ]; then
+            worst_state="WARN"
+            worst_path="$cand"
+          fi
+          ;;
+      esac
+      
       if [ -z "$min_free_mb" ] || [ "$_PD_FREE_MB" -lt "$min_free_mb" ]; then
         min_free_mb="$_PD_FREE_MB"; min_free_pct="$_PD_FREE_PCT"
         min_path="$cand"; min_dev="$_PD_DEVICE"; min_mnt="$_PD_MOUNT"
@@ -211,22 +289,27 @@ $npm_cache_path"; fi
         min_path="$cand (inodes exhausted)"; min_dev="$_PD_DEVICE"; min_mnt="$_PD_MOUNT"
       fi
     else
-      log "Disk detail: path=${cand} (unavailable)"
+      log "Disk: ${cand}: unavailable"
     fi
   done <<CANDS_EOF
 $cands
 CANDS_EOF
+  
   if [ "$probed" -eq 1 ] && [ -n "$min_free_mb" ]; then
     export ASHENAI_RESOURCE_DISK_FREE_MB="$min_free_mb"
-    ASHENAI_RESOURCE_DISK_STATE=$(classify_disk "$min_free_mb" "$min_free_pct")
+    # Overall disk state based on worst filesystem
+    ASHENAI_RESOURCE_DISK_STATE="$worst_state"
     export ASHENAI_RESOURCE_DISK_STATE
+    
     local total_fmt free_fmt
     total_fmt=$(format_bytes "$((sum_total_mb * 1048576))")
     free_fmt=$(format_bytes "$((sum_free_mb * 1048576))")
-    log "Disk: ${free_fmt} free / ${total_fmt} (${sum_free_pct}%) ${ASHENAI_RESOURCE_DISK_STATE} (container-visible; app path)"
-    if [ "$min_path" != "$target_path" ]; then
-      log "Disk: most constrained path: ${min_path} (${min_free_mb} MB free on ${min_dev} at ${min_mnt})"
+    log "Disk summary: ${free_fmt} free / ${total_fmt} (${sum_free_pct}%) ${ASHENAI_RESOURCE_DISK_STATE} (container-visible; app path)"
+    
+    if [ -n "$worst_path" ] && [ "$worst_path" != "$target_path" ]; then
+      log "Disk: most constrained path: ${worst_path} (${min_free_mb} MB free on ${min_dev} at ${min_mnt})"
     fi
+    
     log "Disk note: df/statfs show container-visible capacity, NOT hosting account/server quota."
     log "Actual Wispbyte storage quota could not be verified from inside the container."
     return
@@ -396,9 +479,52 @@ check_ram() {
 
 # ---------- CPU Check ----------
 
+get_cpu_count() {
+  local cpu_count=""
+  
+  # Try /proc/cpuinfo (Linux)
+  if [ -f "/proc/cpuinfo" ]; then
+    cpu_count=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo "0")
+  fi
+  
+  # Try nproc (Linux)
+  if [ -z "$cpu_count" ] || [ "$cpu_count" -eq 0 ] 2>/dev/null; then
+    cpu_count=$(nproc 2>/dev/null || echo "")
+  fi
+  
+  # Try sysctl (BSD/macOS)
+  if [ -z "$cpu_count" ] || [ "$cpu_count" -eq 0 ] 2>/dev/null; then
+    cpu_count=$(sysctl -n hw.ncpu 2>/dev/null || echo "")
+  fi
+  
+  # Try Node.js
+  if [ -z "$cpu_count" ] || [ "$cpu_count" -eq 0 ] 2>/dev/null; then
+    if command -v node >/dev/null 2>&1; then
+      cpu_count=$(node -e "console.log(require('os').cpus().length)" 2>/dev/null || echo "")
+    fi
+  fi
+  
+  # Default to 1 if unknown
+  [ -z "$cpu_count" ] || [ "$cpu_count" -eq 0 ] 2>/dev/null && cpu_count=1
+  
+  echo "$cpu_count"
+}
+
+# Classify CPU state based on normalized load average (awk; no bc needed)
+classify_cpu() {
+  local normalized_load="$1"
+  
+  if float_gt "$normalized_load" "$CPU_WARN_LOAD"; then
+    echo "WARN"
+    return
+  fi
+
+  echo "OK"
+}
+
 check_cpu() {
   local load=""
-
+  
   # Try /proc/loadavg (Linux standard)
   if [ -f "/proc/loadavg" ]; then
     load=$(awk '{print $1}' /proc/loadavg 2>/dev/null || echo "")
@@ -410,9 +536,19 @@ check_cpu() {
   fi
 
   if [ -n "$load" ]; then
-    ASHENAI_RESOURCE_CPU_STATE=$(classify_cpu "$load")
+    local cpu_count
+    cpu_count=$(get_cpu_count)
+    # Validate cpu_count is a positive integer
+    if ! echo "$cpu_count" | grep -q '^[1-9][0-9]*$'; then
+      cpu_count=1
+    fi
+    local normalized_load
+    # Use if/else in awk instead of ternary operator for compatibility
+    normalized_load=$(awk -v l="$load" -v c="$cpu_count" 'BEGIN{if(c>0) printf "%.2f", l/c; else printf "%.2f", l}')
+    
+    ASHENAI_RESOURCE_CPU_STATE=$(classify_cpu "$normalized_load")
     export ASHENAI_RESOURCE_CPU_STATE
-    log "CPU: load ${load} ${ASHENAI_RESOURCE_CPU_STATE}"
+    log "CPU: load=${load} cpus=${cpu_count} normalized=${normalized_load} ${ASHENAI_RESOURCE_CPU_STATE}"
   else
     log "CPU: unavailable"
     export ASHENAI_RESOURCE_CPU_STATE="UNAVAILABLE"

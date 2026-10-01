@@ -1286,7 +1286,8 @@ export class AIRouter {
     request: AIRequest
   ): Promise<AIResponse> {
     const t0 = Date.now();
-    const requestId = request.userId ? crypto.randomUUID() : undefined;
+    // Always generate a requestId for correlation, even when userId is not available
+    const requestId = crypto.randomUUID();
 
     const traceCtx = startTrace("ai-generate", "ai", {
       model: request.model,
@@ -1303,10 +1304,10 @@ export class AIRouter {
     const cached = getCachedResponse(systemPrompt, chatMessages, modelName, request.guildId, request.userId);
     if (cached) {
       logger.debug(`🧠 Cache hit — returning cached response for model=${modelName}`);
-      if (requestId && request.userId) {
+      if (requestId) {
         insertAIUsageDB({
           requestId,
-          userId: request.userId,
+          userId: request.userId ?? "unknown",
           guildId: request.guildId || "",
           channelId: request.channelId || "",
           source: "cache",
@@ -1428,10 +1429,10 @@ export class AIRouter {
         );
 
         // Record user-facing AI usage
-        if (requestId && request.userId) {
+        if (requestId) {
           insertAIUsageDB({
             requestId,
-            userId: request.userId,
+            userId: request.userId ?? "unknown",
             guildId: request.guildId || "",
             channelId: request.channelId || "",
             source: request.source || "ai",
