@@ -16,6 +16,7 @@ export const BRAND = 0x7c3aed;
 export const PANEL_PREFIXES = {
   support: "support:",
   mod: "mod:",
+  server: "server:",
 } as const;
 
 export type PanelPrefix = (typeof PANEL_PREFIXES)[keyof typeof PANEL_PREFIXES];
@@ -23,7 +24,8 @@ export type PanelPrefix = (typeof PANEL_PREFIXES)[keyof typeof PANEL_PREFIXES];
 export function isPanelCustomId(customId: string): boolean {
   return (
     customId.startsWith(PANEL_PREFIXES.support) ||
-    customId.startsWith(PANEL_PREFIXES.mod)
+    customId.startsWith(PANEL_PREFIXES.mod) ||
+    customId.startsWith(PANEL_PREFIXES.server)
   );
 }
 

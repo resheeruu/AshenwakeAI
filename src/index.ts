@@ -124,6 +124,9 @@ import {
   handleModModal,
 } from "./discord/panels/mod-panel";
 import {
+  handleServerComponent,
+} from "./discord/panels/server-panel";
+import {
   startSupportAutomation,
   stopSupportAutomation,
   startConversationCleanup,
@@ -2628,6 +2631,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       if (id.startsWith("mod:")) {
         await handleModComponent(interaction);
+        return;
+      }
+      if (id.startsWith("server:")) {
+        await handleServerComponent(interaction);
         return;
       }
     }
