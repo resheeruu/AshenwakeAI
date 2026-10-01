@@ -2123,28 +2123,6 @@ app.get("/api/guilds/:guildId/analytics", requireAuth, requireGuildAuth, (_req: 
   res.json({ ok: true, usage });
 });
 
-// System health
-app.get("/api/system/health", requireAuth, requireRole("admin"), (_req: Request, res: Response) => {
-  res.json({ ok: true, health: getHealth() });
-});
-
-// SSE stream for real-time logs
-app.get("/api/logs/stream", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
-  res.status(200);
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-
-  const send = (entry: ReturnType<typeof getRecentLogs>[number]) => {
-    res.write(`event: log\ndata: ${JSON.stringify(entry)}\n\n`);
-  };
-  for (const entry of getRecentLogs(100)) send(entry);
-  const unsubscribe = subscribeLogs(send);
-  const heartbeat = setInterval(() => { res.write(": heartbeat\n\n"); }, 15000);
-  req.on("close", () => { clearInterval(heartbeat); unsubscribe(); res.end(); });
-});
-
 /* ==================== AI CONTROL CENTER ==================== */
 
 app.get("/api/guilds/:guildId/ai", requireAuth, requireGuildAuth, (req: Request, res: Response) => {

@@ -177,6 +177,10 @@ async function main(): Promise<void> {
 
   function resetManager(): void {
     um.__resetUpdateManagerForTests();
+    // Clear persisted update record to avoid "previously failed" skips
+    try {
+      fs.rmSync(path.join(DATA_DIR, "update-record.json"), { force: true });
+    } catch {}
     selfHeal.resetSelfHealMetrics();
     scheduledRestarts.length = 0;
     pullCalls = 0;
@@ -737,6 +741,115 @@ async function main(): Promise<void> {
     pass("12b. Failed rollback resumes healer and closes lifecycle");
   } catch (error) {
     fail("12b. Failed rollback resumes healer and closes lifecycle", error);
+  } finally {
+    resetManager();
+  }
+
+  /* ================================================================
+   * TEST 13: repair-active quiesce — repair in progress when update
+   *          starts → update quiesces until repair completes,
+   *          then suspends healer
+   * ================================================================ */
+  try {
+    resetManager();
+
+    let repairDone = false;
+    const repairGate = new Promise<void>((resolve) => {
+      const check = () => {
+        if (repairDone) resolve();
+        else setTimeout(check, 10);
+      };
+      check();
+    });
+
+    installRunners({
+      gitPull: async () => {
+        await repairGate;
+        return true;
+      },
+    });
+
+    // Start a repair DIRECTLY (bypassing scan scheduling) BEFORE the update
+    let repairPromise: Promise<boolean> | null = null;
+    const slowRepairCallback = async (
+      _filePath: string,
+      _errorOutput: string,
+    ): Promise<boolean> => {
+      await new Promise((r) => setTimeout(r, 50));
+      repairDone = true;
+      return true;
+    };
+
+    selfHeal.stopSelfHealer();
+    selfHeal.startSelfHealer(slowRepairCallback);
+
+    // Trigger a repair directly — this adds to `repairing` set immediately
+    repairPromise = selfHeal.repairFile("scripts/.selfheal-race/a.ts", "fake error");
+    // Give the repair a moment to register in `repairing` set
+    await sleep(50);
+
+    // Now trigger update — should quiesce for repair
+    const updatePromise = um.performUpdate({ quiesceTimeoutMs: 5000 });
+
+    // Wait for repair to complete
+    await repairGate;
+    const ok = await updatePromise;
+
+    assertEqual(ok, true, "update succeeded after waiting for repair");
+    assertEqual(
+      selfHeal.isSelfHealerSuspended(),
+      true,
+      "suspended after repair completes",
+    );
+    assertEqual(pullCalls, 1, "git pull ran after quiesce");
+
+    pass("13. Repair-active quiesce: update waits for repair, then suspends");
+  } catch (error) {
+    fail("13. Repair-active quiesce: update waits for repair, then suspends", error);
+  } finally {
+    resetManager();
+  }
+
+  /* ================================================================
+   * TEST 14: repeated-trigger re-entry — performUpdate called while
+   *          another update is in progress → second call rejected
+   * ================================================================ */
+  try {
+    resetManager();
+
+    let firstUpdateDone = false;
+
+    installRunners({
+      runCriticalTests: async () => {
+        await new Promise((r) => setTimeout(r, 100));
+        firstUpdateDone = true;
+        return true;
+      },
+    });
+
+    // Start first update (don't await yet)
+    const firstPromise = um.performUpdate();
+
+    // Immediately try second update — should be rejected
+    const secondResult = await um.performUpdate();
+
+    // Wait for first to complete
+    await firstPromise;
+
+    assertEqual(firstUpdateDone, true, "first update completed");
+    assertEqual(secondResult, false, "second update rejected (isUpdating)");
+
+    const record = um.getUpdateRecord();
+    assertEqual(record?.state, "RESTART_PENDING", "first update state");
+    assertEqual(
+      selfHeal.isSelfHealerSuspended(),
+      true,
+      "healer suspended by first update",
+    );
+
+    pass("14. Repeated-trigger re-entry: second update rejected while first in progress");
+  } catch (error) {
+    fail("14. Repeated-trigger re-entry: second update rejected while first in progress", error);
   } finally {
     resetManager();
   }

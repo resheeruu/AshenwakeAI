@@ -57,6 +57,7 @@ const MANDATORY_SUITES: TestSuite[] = [
   { name: "Rate Limit", file: "scripts/test-rate-limit.ts", category: "core" },
   { name: "Tasks", file: "scripts/test-tasks.ts", category: "core" },
   { name: "Settlement", file: "scripts/test-settlement.ts", category: "core" },
+  { name: "Game Integrity", file: "scripts/test-game-integrity.ts", category: "core" },
 
   // Security
   { name: "Security", file: "scripts/test-security.ts", category: "security" },

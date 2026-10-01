@@ -179,16 +179,16 @@ Failures degrade to text-only replies (logged as `anime_media result=…`).
 ### 8.1 Provider chain, fallback, and cache
 
 ```
-local index hit → remote cache hit → Gifukai API → OtakuGIFs API → text-only reply
+URL cache hit → provider chain (Gifukai → OtakuGIFs → NekosBest → Purrbot → NekosLife) → remembered pool → local cache fallback
 ```
 
-- **Local first, always.** Before any cache or network work the engine
-  resolves `actions:<mediaKey>` against the local GIF index
-  (`src/media/local-gifs.ts`). A hit is attached with **zero** provider
-  calls and is never written into the remote URL cache (Y3); no remote
-  media URL is ever substituted for it. A miss — including a machine
-  with no `data/anime-gifs` directory — falls through to the remote
-  chain (Y4), so behaviour is unchanged for operators who ship no GIFs.
+- **Provider-first with layered fallback.** The engine resolves
+  `actions:<mediaKey>` through a layered chain:
+  1. **URL LRU cache** (`providers.ts:940-968`) — recent remote hits served instantly.
+  2. **Provider chain** (`providers.ts:803-811`) — Gifukai → OtakuGIFs → NekosBest → Purrbot → NekosLife, each through hardened outbound fetch.
+  3. **Remembered pool** (`providers.ts:969-980`) — previously successful remote URLs cached by action+index.
+  4. **Local cache fallback** (`providers.ts:981-990`) — `data/anime-gifs` directory; only used when all remote layers miss.
+- A local index hit is **not** the first step; it is the final fallback. This ensures fresh, varied media from providers while retaining offline capability.
 - The seam is `FetchAnimationOptions.localGifs`: `undefined` = shared
   singleton (production), `null` = local lookup disabled (used by the
   remote-chain tests), object = injected resolver (Y5, Y6). Local

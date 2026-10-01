@@ -3,6 +3,15 @@
  * CREATE TEST GIF - Generates valid animated GIFs for testing
  * ================================================================ */
 
+// SAFETY: Require explicit opt-in to prevent accidental production writes.
+// Set ASHEN_ALLOW_TEST_GIFS=true to run. Without it, this script exits.
+if (process.env.ASHEN_ALLOW_TEST_GIFS !== "true") {
+  console.error("❌ Refusing to run: ASHEN_ALLOW_TEST_GIFS=true required.");
+  console.error("   This script writes to data/anime-gifs which in production");
+  console.error("   is the live GIF library. Use a test data dir instead.");
+  process.exit(1);
+}
+
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as crypto from "node:crypto";

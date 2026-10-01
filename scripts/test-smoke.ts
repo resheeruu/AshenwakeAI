@@ -7,6 +7,13 @@
  * ================================================================ */
 
 import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
+
+// Set test-isolated data dir BEFORE any module imports
+const testDataDir = join(tmpdir(), `ashenai-smoke-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+process.env.ASHENAI_DATA_DIR = testDataDir;
 
 let passed = 0;
 let failed = 0;
@@ -186,6 +193,13 @@ async function main(): Promise<void> {
   console.log(`\n${"=".repeat(50)}`);
   console.log(`Production Smoke Test: ${passed}/${total} passed, ${failed} failed`);
   console.log(`${"=".repeat(50)}\n`);
+
+  // Cleanup test database
+  try {
+    rmSync(testDataDir, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
 
   if (failed > 0) {
     process.exit(1);

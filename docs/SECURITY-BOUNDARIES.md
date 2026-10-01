@@ -108,9 +108,9 @@ Secret-file access from these paths is rejected by `isSecretPath()`.
   messages (no user enumeration);
 - password hashing: PBKDF2 with per-account 64-hex-char salt, constant-time
   comparison;
-- sessions carry a CSRF token required by owner endpoints; issued on success,
-  **rotated** on `/api/session`, destroyed on logout, expiry, and on privilege
-  change (role mismatch ⇒ destroy);
+- sessions carry a CSRF token required by owner endpoints; issued on login
+  (POST /auth/login) and returned with authenticated session responses,
+  destroyed on logout, expiry, and on privilege change (role mismatch ⇒ destroy);
 - cookies set via `setSessionCookie` (`HttpOnly`, `SameSite`);
 - owner endpoints require `requireAuth` + owner role + CSRF
   (`src/web/server.ts`); there is **no public registration path** — accounts

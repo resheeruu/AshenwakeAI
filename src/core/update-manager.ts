@@ -714,6 +714,7 @@ export async function performUpdate(options?: {
       logger.warn(
         "[UpdateManager] self-healer still busy after quiesce timeout — aborting update, will retry next check"
       );
+      isUpdating = false;
       return false;
     }
 
